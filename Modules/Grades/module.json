@@ -1,0 +1,11 @@
+{
+    "name": "Grades",
+    "alias": "grades",
+    "description": "",
+    "keywords": [],
+    "priority": 0,
+    "providers": [
+        "Modules\\Grades\\Providers\\GradesServiceProvider"
+    ],
+    "files": []
+}

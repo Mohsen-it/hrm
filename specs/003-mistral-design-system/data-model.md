@@ -1,0 +1,373 @@
+# Phase 1 — Data Model (Design Tokens & Components)
+
+**Feature:** 003-mistral-design-system
+**Date:** 2026-07-15
+
+This document describes the **design system entities** — tokens (CSS variables) and component contracts — that the HRM system will adopt. It is the contract between the design intent (`mistral.ai\DESIGN.md`) and the implementation (`resources\css\app.css` + `resources\js\Components\**`).
+
+---
+
+## Entity 1: Color Tokens
+
+### Definition
+
+All color tokens are CSS variables declared in `resources\css\app.css` inside the Tailwind 4 `@theme {}` directive. They are globally available as both CSS variables (`var(--color-mistral-primary)`) and Tailwind utility classes (`bg-mistral-primary`).
+
+### Schema
+
+| Variable | Value | Type | Usage |
+|----------|-------|------|-------|
+| `--color-mistral-primary` | `#fa520f` | brand | Primary CTAs, active states, link color |
+| `--color-mistral-primary-deep` | `#cc3a05` | brand | Pressed state, deep orange text |
+| `--color-mistral-on-primary` | `#ffffff` | brand | Text on `primary` background |
+| `--color-mistral-sunshine-300` | `#ffd06a` | accent | Decorative gradient stop (light) |
+| `--color-mistral-sunshine-500` | `#ffb83e` | accent | Decorative gradient stop (mid) |
+| `--color-mistral-sunshine-700` | `#ffa110` | accent | Decorative gradient stop (deep) |
+| `--color-mistral-sunshine-800` | `#ff8105` | accent | Decorative gradient stop (deeper) |
+| `--color-mistral-sunshine-900` | `#ff8a00` | accent | Decorative gradient stop (deepest) |
+| `--color-mistral-yellow-saturated` | `#ffd900` | accent | Brand yellow in sunset gradient |
+| `--color-mistral-cream` | `#fff8e0` | surface | Cream form panels, feature cards |
+| `--color-mistral-cream-light` | `#fffaeb` | surface | Lighter cream variant |
+| `--color-mistral-cream-deeper` | `#fff0c2` | surface | Cream badge background |
+| `--color-mistral-beige-deep` | `#e6d5a8` | border | Cream surface 1px border |
+| `--color-mistral-block-5` | `#ffe295` | accent | Sunset gradient stop |
+| `--color-mistral-block-6` | `#ffd900` | accent | Sunset gradient stop |
+| `--color-mistral-block-7` | `#ff8105` | accent | Sunset gradient stop |
+| `--color-mistral-ink` | `#1f1f1f` | text | Primary text, headlines |
+| `--color-mistral-ink-tint` | `#3d3d3d` | text | Slightly softer black |
+| `--color-mistral-charcoal` | `#2c2c2c` | text | Body emphasis |
+| `--color-mistral-slate` | `#4a4a4a` | text | Secondary text |
+| `--color-mistral-steel` | `#6a6a6a` | text | Tertiary text, captions |
+| `--color-mistral-stone` | `#8a8a8a` | text | Muted labels |
+| `--color-mistral-muted` | `#a8a8a8` | text | Disabled, placeholders |
+| `--color-mistral-on-dark` | `#ffffff` | text | White text on dark surfaces |
+| `--color-mistral-on-dark-muted` | `#a8a8a8` | text | Reduced-opacity white |
+| `--color-mistral-on-cream` | `#1f1f1f` | text | Ink text on cream surfaces |
+| `--color-mistral-canvas` | `#ffffff` | surface | Page background, card surface |
+| `--color-mistral-surface` | `#fafafa` | surface | Subtle quieter background |
+| `--color-mistral-surface-cream` | `#fff8e0` | surface | Cream-tinted surface |
+| `--color-mistral-surface-cream-soft` | `#fffaeb` | surface | Lighter cream surface |
+| `--color-mistral-surface-code` | `#1c1c1e` | surface | Code block, IDE mockup |
+| `--color-mistral-hairline` | `#e5e5e5` | border | 1px borders |
+| `--color-mistral-hairline-soft` | `#ededed` | border | Quieter dividers |
+| `--color-mistral-hairline-strong` | `#c7c7c7` | border | Stronger 1px border (inputs) |
+| `--color-mistral-footer-cream` | `#fff8e0` | surface | Footer background |
+| `--color-mistral-link` | `#fa520f` | semantic | Inline link color |
+| `--color-mistral-success` | `#16a34a` | semantic | Success state |
+| `--color-mistral-success-bg` | `#dcfce7` | semantic | Success background |
+| `--color-mistral-warning` | `#d97706` | semantic | Warning state |
+| `--color-mistral-warning-bg` | `#fef3c7` | semantic | Warning background |
+| `--color-mistral-danger` | `#cc3a05` | semantic | Error state (uses primary-deep) |
+| `--color-mistral-danger-bg` | `#fee2e2` | semantic | Error background |
+
+### Backward-Compat Aliases (1 release)
+
+| Old Variable | Alias To | Sunset |
+|--------------|----------|--------|
+| `--color-primary` | `--color-mistral-primary` | spec 004 |
+| `--color-primary-hover` | `--color-mistral-primary-deep` | spec 004 |
+| `--color-on-primary` | `--color-mistral-on-primary` | spec 004 |
+| `--color-canvas` | `--color-mistral-canvas` | spec 004 |
+| `--color-canvas-soft` | `--color-mistral-surface` | spec 004 |
+| `--color-ink` | `--color-mistral-ink` | spec 004 |
+| `--color-ink-mute` | `--color-mistral-steel` | spec 004 |
+| `--color-ink-faint` | `--color-mistral-stone` | spec 004 |
+| `--color-hairline` | `--color-mistral-hairline` | spec 004 |
+| `--color-hairline-strong` | `--color-mistral-hairline-strong` | spec 004 |
+
+### Validation Rules
+
+- Every `--color-mistral-*` token must have a corresponding Tailwind utility (auto-generated by `@theme`).
+- Every alias must be visually identical to its canonical name (same value).
+- Removed tokens (`--color-teal-deep`, `--color-violet-soft`) must be deleted with no alias.
+
+---
+
+## Entity 2: Typography Tokens
+
+### Definition
+
+Typography tokens are composite (font + size + weight + line-height + spacing). Defined in `app.css` as `--font-*` and `--text-*` variables.
+
+### Schema
+
+| Token | Font | Size | Weight | Line-Height | Letter-Spacing | Usage |
+|-------|------|------|--------|-------------|----------------|-------|
+| `font-display` | 'Georgia', 'Times New Roman', serif | — | — | — | — | Editorial display (fallback for PP Editorial Old) |
+| `font-sans` | 'Tajawal', 'Cairo', 'Noto Sans Arabic', 'Inter', sans-serif | — | — | — | — | UI body, navigation |
+| `font-mono` | 'IBM Plex Mono', 'JetBrains Mono', monospace | — | — | — | — | Code blocks |
+| `text-hero-display` | font-display | 64px | 400 | 1.05 | -1.5px | Hero headers (HRM marketing only) |
+| `text-display-lg` | font-display | 52px | 400 | 1.10 | -1px | Section openers |
+| `text-heading-1` | font-sans | 28px | 600 | 1.20 | -0.5px | Page titles |
+| `text-heading-2` | font-sans | 22px | 600 | 1.25 | 0 | Section subheaders |
+| `text-heading-3` | font-sans | 18px | 600 | 1.30 | 0 | Card titles |
+| `text-heading-4` | font-sans | 16px | 600 | 1.35 | 0 | Small card titles |
+| `text-subtitle` | font-sans | 18px | 400 | 1.50 | 0 | Lead body |
+| `text-body-md` | font-sans | 14px | 400 | 1.55 | 0 | Primary body |
+| `text-body-md-medium` | font-sans | 14px | 500 | 1.55 | 0 | Body emphasis |
+| `text-body-sm` | font-sans | 13px | 400 | 1.50 | 0 | Secondary body |
+| `text-body-sm-medium` | font-sans | 13px | 500 | 1.50 | 0 | Active nav, button labels |
+| `text-caption` | font-sans | 12px | 400 | 1.40 | 0 | Helper text |
+| `text-caption-bold` | font-sans | 12px | 600 | 1.40 | 0 | Badge labels |
+| `text-micro` | font-sans | 11px | 500 | 1.40 | 0 | Footer microcopy |
+| `text-micro-uppercase` | font-sans | 10px | 600 | 1.40 | 1px | Section eyebrows (uppercase) |
+| `text-button-md` | font-sans | 13px | 500 | 1.30 | 0 | Button labels |
+| `text-code-md` | font-mono | 13px | 400 | 1.50 | 0 | Code blocks |
+
+### Validation Rules
+
+- Arabic text must use `font-sans` (Tajawal family) for body and headings.
+- Latin text in HRM internal pages must use `font-sans` (Inter family fallback).
+- Hero displays only on marketing surfaces; HRM uses `text-heading-1` instead.
+
+---
+
+## Entity 3: Spacing Tokens
+
+### Definition
+
+Spacing follows a 4px base unit. Tokens defined as `--spacing-*` in `app.css`.
+
+### Schema
+
+| Token | Value | Usage |
+|-------|-------|-------|
+| `--spacing-xxs` | 4px | Smallest internal padding |
+| `--spacing-xs` | 8px | Related elements gap |
+| `--spacing-sm` | 12px | Field padding, table cell padding |
+| `--spacing-md` | 16px | Default gap, small card padding |
+| `--spacing-lg` | 24px | Medium card padding, section internal |
+| `--spacing-xl` | 32px | Large card padding, panel padding |
+| `--spacing-xxl` | 48px | Form panel padding, section gap |
+| `--spacing-section-sm` | 64px | Section gap (compact) |
+| `--spacing-section` | 96px | Section gap (default) |
+| `--spacing-section-lg` | 120px | Section gap (marketing) |
+
+### Validation Rules
+
+- All margin/padding in Vue components must use one of these tokens.
+- No hard-coded pixel values except `1px` for borders.
+- Tailwind 4's default spacing scale (4, 8, 12, 16, 20, 24, 32, 40, 48, 64) is **overridden** by the Mistral scale.
+
+---
+
+## Entity 4: Radius Tokens
+
+### Definition
+
+| Token | Value | Usage |
+|-------|-------|-------|
+| `--radius-xs` | 4px | Small chips, micro-controls |
+| `--radius-sm` | 6px | Compact UI elements |
+| `--radius-md` | 8px | **Buttons, inputs, search** |
+| `--radius-lg` | 12px | **Cards, modals, panels** |
+| `--radius-xl` | 16px | Larger feature panels |
+| `--radius-xxl` | 20px | Featured emphasis cards |
+| `--radius-full` | 9999px | **Badges only** |
+
+### Validation Rules
+
+- Buttons MUST use `--radius-md` (8px), not `--radius-full`.
+- Cards MUST use `--radius-lg` (12px).
+- `--radius-full` is reserved for badges, status pills, toggle switches.
+- CI lint rejects any `rounded-full` class on a `<button>` or `<a>` that is not a badge or toggle.
+
+---
+
+## Entity 5: Elevation Tokens
+
+### Definition
+
+| Token | Value | Usage |
+|-------|-------|-------|
+| `--shadow-level-0` | none | Default cards, table rows, inputs |
+| `--shadow-level-1` | `0 1px 2px rgba(0,0,0,0.04)` | Subtle hover elevation |
+| `--shadow-level-2` | `0 4px 12px rgba(0,0,0,0.04)` | Standard feature cards |
+| `--shadow-level-3` | `0 12px 24px -4px rgba(0,0,0,0.08)` | IDE mockups, code editor |
+| `--shadow-level-4` | `0 16px 48px -8px rgba(0,0,0,0.12)` | Modals, dropdowns, popovers |
+
+### Validation Rules
+
+- Most HRM surfaces are flat (Level 0).
+- Modals and dropdowns are the only Level 4.
+- Cards in HRM use Level 0 by default; only `card-feature-product` uses Level 2.
+
+---
+
+## Entity 6: Component Catalog
+
+### Existing Components (Updated)
+
+| Component | File | Variants |
+|-----------|------|----------|
+| `Alert` | `Components/ui/Alert.vue` | success, info, warning, danger |
+| `Badge` | `Components/ui/Badge.vue` | orange, cream, dark, success, inactive, pending, danger, info |
+| `ConfirmDialog` | `Components/ui/ConfirmDialog.vue` | default, danger |
+| `DataTable` | `Components/ui/DataTable.vue` | default, striped |
+| `EmptyState` | `Components/ui/EmptyState.vue` | default, compact |
+| `FormInput` | `Components/ui/FormInput.vue` | default, error, disabled |
+| `FormModal` | `Components/ui/FormModal.vue` | default, danger |
+| `FormSelect` | `Components/ui/FormSelect.vue` | default, error, disabled |
+| `FormTextarea` | `Components/ui/FormTextarea.vue` | default, error, disabled |
+| `LoadingSpinner` | `Components/ui/LoadingSpinner.vue` | sm, md, lg |
+| `PageHeader` | `Components/ui/PageHeader.vue` | default |
+| `SearchInput` | `Components/ui/SearchInput.vue` | default |
+| `Sidebar` | `Components/layout/Sidebar.vue` | default, collapsed |
+| `SidebarGroup` | `Components/layout/SidebarGroup.vue` | default |
+| `SidebarItem` | `Components/layout/SidebarItem.vue` | default, active, with-badge |
+| `Navbar` | `Components/layout/Navbar.vue` | default |
+| `AppLayout` | `Layouts/AppLayout.vue` | default |
+
+### New Components (Created)
+
+| Component | File | Variants | Purpose |
+|-----------|------|----------|---------|
+| `Button` | `Components/ui/Button.vue` | primary, secondary, cream, dark, on-cream, link, danger, ghost, icon | Replaces `.btn-*` CSS classes |
+| `Card` | `Components/ui/Card.vue` | base, feature, cream, cream-soft, feature-product, stat | Replaces `.card` class |
+| `FormCheckbox` | `Components/ui/FormCheckbox.vue` | default, checked, disabled, indeterminate | Custom-styled checkbox |
+| `FormRadio` | `Components/ui/FormRadio.vue` | default, checked, disabled | Custom-styled radio |
+| `FormSwitch` | `Components/ui/FormSwitch.vue` | off, on, disabled | Toggle switch |
+| `FormGroup` | `Components/ui/FormGroup.vue` | default, horizontal, inline | Wraps label + field + error |
+| `Tabs` | `Components/ui/Tabs.vue` | pill, segmented | Tab navigation |
+| `StatCard` | `Components/ui/StatCard.vue` | default, with-trend | Dashboard stat tiles |
+| `SunsetStripeBand` | `Components/layout/SunsetStripeBand.vue` | default | Brand signature element |
+| `Breadcrumb` | `Components/ui/Breadcrumb.vue` | default | RTL-aware breadcrumb |
+| `Pagination` | `Components/ui/Pagination.vue` | default, simple | Page navigation for tables |
+| `Avatar` | `Components/ui/Avatar.vue` | default, with-initials, with-image | User avatar in lists |
+| `IconButton` | `Components/ui/IconButton.vue` | default, ghost, danger | Icon-only buttons |
+| `FormDatepicker` | `Components/ui/FormDatepicker.vue` | default, range | Date input |
+
+### Component Validation Rules
+
+- Every component MUST accept a `dir` prop with default `'rtl'`.
+- Every component MUST use Tailwind utility classes mapped to Mistral tokens (no hard-coded hex).
+- Every component MUST be exportable from `Components/ui/index.js`.
+- Every component MUST have a `defineProps` type definition.
+
+---
+
+## Entity 7: Style Variants (Buttons)
+
+### Schema
+
+| Variant | Background | Text | Border | Padding | Radius | Use |
+|---------|-----------|------|--------|---------|--------|-----|
+| `primary` | mistral-primary | mistral-on-primary | none | 10px 20px | radius-md | Primary CTAs |
+| `primary-pressed` | mistral-primary-deep | mistral-on-primary | none | 10px 20px | radius-md | Pressed state |
+| `primary-disabled` | mistral-hairline | mistral-muted | none | 10px 20px | radius-md | Disabled |
+| `secondary` | transparent | mistral-ink | 1px mistral-hairline-strong | 10px 20px | radius-md | Secondary action |
+| `cream` | mistral-cream | mistral-ink | 1px mistral-beige-deep | 10px 20px | radius-md | On cream surface |
+| `dark` | mistral-ink | mistral-on-dark | none | 10px 20px | radius-md | CTA on cream surface |
+| `on-cream` | mistral-canvas | mistral-ink | 1px mistral-beige-deep | 10px 20px | radius-md | White on cream |
+| `link` | transparent | mistral-primary | none | 0 | none | Inline link |
+| `danger` | mistral-danger | mistral-on-primary | none | 10px 20px | radius-md | Destructive action |
+| `ghost` | transparent | mistral-ink | none | 8px 12px | radius-md | Toolbar button |
+| `icon` | transparent | mistral-ink | none | 8px | radius-md | Icon-only |
+
+### Validation
+
+- `variant` prop is required.
+- `disabled` prop disables pointer events and applies disabled state.
+- `loading` prop shows spinner and disables interaction.
+- `size` prop: `sm` (32px), `md` (40px), `lg` (44px).
+
+---
+
+## Entity 8: Page Type Templates
+
+### Index Page (List View)
+
+```text
+[PageHeader with title + "Add New" button (Button primary)]
+[Alert (success/error flash messages)]
+[Filter bar: SearchInput + Filter Selects + Filter Pills]
+[DataTable with columns and slots]
+[Pagination at bottom]
+```
+
+### Create/Edit Page (Form)
+
+```text
+[PageHeader with title + Back button]
+[FormPanel (Card cream variant) containing:
+  [FormSection "Basic Info"]
+    [FormGroup: FormInput]
+    [FormGroup: FormSelect]
+  [FormSection "Address"]
+    [FormGroup: FormInput × 3]
+  [FormActions: Button secondary (cancel) + Button primary (save)]
+]
+```
+
+### Show Page (Detail)
+
+```text
+[PageHeader with title + Edit button]
+[Breadcrumb]
+[Hero Card (Card base): primary info (name, code, status)]
+[Tabs (segmented or pill): Overview / History / Settings]
+[Stat Cards row]
+[Detail cards: activity, related items]
+```
+
+### Dashboard
+
+```text
+[PageHeader greeting + date]
+[Stat Cards row (4-5 cards)]
+[Charts area: Card feature-product × 2-3]
+[Recent activity: DataTable compact]
+[Quick actions: Pill tabs or icon buttons]
+[SunsetStripeBand at bottom]
+```
+
+### Login Page
+
+```text
+[Centered Card cream (~520px max-width)]
+  [Logo]
+  [Heading 1 "Welcome"]
+  [FormGroup: FormInput email]
+  [FormGroup: FormInput password]
+  [FormGroup: FormCheckbox "Remember me"]
+  [Button primary "Sign in" (full width)]
+[SunsetStripeBand at bottom]
+```
+
+---
+
+## Entity 9: State Transitions
+
+### Button States
+
+```text
+default → hover (subtle bg darken 5%) → pressed (primary-deep) → focus (2px outline)
+disabled (gray, no events)
+loading (spinner replaces icon, no events)
+```
+
+### Form Field States
+
+```text
+default (1px hairline-strong) → focus (2px primary) → filled → error (2px primary-deep)
+disabled (surface bg, muted text)
+```
+
+### Toggle States
+
+```text
+off (hairline bg, knob left in LTR / right in RTL)
+on (primary bg, knob right in LTR / left in RTL)
+disabled (muted, knob faded)
+```
+
+### Modal States
+
+```text
+closed → opening (fade-in 150ms) → open (focus trap active)
+open → closing (fade-out 150ms) → closed
+```
+
+---
+
+*Last updated: 2026-07-15*

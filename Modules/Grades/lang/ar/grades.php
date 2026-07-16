@@ -1,0 +1,25 @@
+<?php
+
+return [
+    'title' => 'الدرجات الوظيفية',
+    'company' => 'الشركة',
+    'code' => 'رمز الدرجة',
+    'name' => 'اسم الدرجة',
+    'level' => 'المستوى',
+    'min_salary' => 'الحد الأدنى للراتب',
+    'max_salary' => 'الحد الأقصى للراتب',
+    'salary_range' => 'نطاق الراتب',
+    'description' => 'الوصف',
+    'add_new' => 'إضافة درجة',
+    'edit_grade' => 'تعديل درجة',
+    'view_grade' => 'عرض الدرجة',
+    'index_description' => 'إدارة الدرجات الوظيفية داخل الشركات المسجلة في النظام',
+    'create_description' => 'أدخل بيانات الدرجة الوظيفية الجديدة',
+    'delete_confirm_title' => 'تأكيد الحذف',
+    'delete_confirm_message' => 'هل أنت متأكد من حذف الدرجة ":name"؟ لا يمكن التراجع عن هذا الإجراء.',
+    'created_successfully' => 'تم إنشاء الدرجة بنجاح',
+    'updated_successfully' => 'تم تحديث الدرجة بنجاح',
+    'deleted_successfully' => 'تم حذف الدرجة بنجاح',
+    'select_company' => 'اختر الشركة',
+    'employees_count' => 'عدد الموظفين',
+];

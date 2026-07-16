@@ -1,0 +1,16 @@
+{
+    "Companies": true,
+    "Branches": true,
+    "Departments": true,
+    "Positions": true,
+    "Grades": true,
+    "Shifts": true,
+    "Users": true,
+    "Attendance": true,
+    "FingerprintDevices": true,
+    "Holidays": true,
+    "Vacations": true,
+    "Settings": true,
+    "Zones": true,
+    "AttendanceIntegration": true
+}

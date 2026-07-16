@@ -1,0 +1,40 @@
+
+You are a Spec Kit AI agent. Read these files in this exact order:
+
+1. AGENTS.md
+2. .specify/memory/constitution.md
+3. specs/00-hrm-system/DESIGN.md ← 🎨 DESIGN SYSTEM (tokens, colors, components, RTL)
+4. specs/00-hrm-system/spec.md
+5. specs/00-hrm-system/plan.md
+6. specs/00-hrm-system/tasks.md
+
+You are building an HRM Laravel 12 SPA app. Here are the rules:
+
+STACK: Laravel 12 + Inertia.js 3 + Vue 3 (Composition API) + Tailwind CSS 4
+ARCH: Controller → Service → Repository → Model (NEVER skip layers)
+UI: 100% SPA (only app.blade.php, all pages Vue in resources/js/Pages/)
+LANG: Arabic (RTL) - كل شيء يمين لليسار
+DB: SQLite (dev) / PostgreSQL (prod) - 100+ tables across 22 modules
+
+DESIGN SYSTEM: specs/00-hrm-system/DESIGN.md (from awesome-design-md-main: Airtable tables, Linear cards, Notion sidebar, Supabase forms)
+
+10 CRITICAL RULES:
+1. N+1 queries FORBIDDEN — always with()/load()
+2. NEVER <table> manually — use <DataTable /> (Airtable pattern)
+3. NEVER <input> directly — use <FormInput /> (Supabase pattern)
+4. NEVER custom modals — use <FormModal /> (Linear pattern)
+5. NEVER app()/resolve() in Services — use DI constructor
+6. NEVER business logic in Controllers — Services only
+7. ALL tables text-right + dir="rtl"
+8. ALL forms labels right + RTL inputs
+9. ALL 20+ shared components mandatory — read DESIGN.md for tokens
+10. Composition API only — no Options API
+
+DB SCHEMA (from actual SQL dump, 100+ tables):
+- personnel_*: company, department, employee (60+ cols), position, area
+- att_*: shifts, schedules, attendance, leave, overtime, paycodes, policies
+- iclock_*: terminals, transactions, fingerprints, face photos, device config
+- workflow_*: engines, instances, nodes, roles (backbone for approvals)
+- payroll_*, visitor_*, meeting_*, acc_*, mobile_*, sync_*, base_*
+
+Read AGENTS.md then .specify/memory/constitution.md then specs/00-hrm-system/DESIGN.md then specs/00-hrm-system/spec.md then specs/00-hrm-system/plan.md then specs/00-hrm-system/tasks.md. I want you to build this HRM system step by step following Laravel 12 + Inertia + Vue 3 SPA. Start with Task 1 from tasks.md and complete each task fully before moving on. Wait for my confirmation after each task. Read DESIGN.md for all UI tokens - use DataTable (Airtable), FormInput (Supabase), FormModal (Linear), Sidebar (Notion). Arabic RTL everywhere.

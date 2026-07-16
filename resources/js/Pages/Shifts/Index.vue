@@ -1,0 +1,243 @@
+<script setup>
+import { ref, computed } from 'vue';
+import { router, Link, usePage } from '@inertiajs/vue3';
+import AppLayout from '@/Layouts/AppLayout.vue';
+import PageHeader from '@/Components/ui/PageHeader.vue';
+import DataTable from '@/Components/ui/DataTable.vue';
+import SearchInput from '@/Components/ui/SearchInput.vue';
+import ConfirmDialog from '@/Components/ui/ConfirmDialog.vue';
+import Badge from '@/Components/ui/Badge.vue';
+import Button from '@/Components/ui/Button.vue';
+import Card from '@/Components/ui/Card.vue';
+import IconButton from '@/Components/ui/IconButton.vue';
+import FormSelect from '@/Components/ui/FormSelect.vue';
+import Alert from '@/Components/ui/Alert.vue';
+import { useTranslations } from '@/composables/useTranslations';
+
+const { t } = useTranslations();
+const page = usePage();
+
+const props = defineProps({
+    shifts: { type: Object, default: () => ({ data: [], links: [] }) },
+    filters: { type: Object, default: () => ({}) },
+    companies: { type: Array, default: () => [] },
+    branches: { type: Array, default: () => [] },
+});
+
+const search = ref(props.filters?.search || '');
+const showDelete = ref(false);
+const selectedShift = ref(null);
+
+const dayLabels = computed(() => [
+    { value: 0, label: t('shifts.sunday') },
+    { value: 1, label: t('shifts.monday') },
+    { value: 2, label: t('shifts.tuesday') },
+    { value: 3, label: t('shifts.wednesday') },
+    { value: 4, label: t('shifts.thursday') },
+    { value: 5, label: t('shifts.friday') },
+    { value: 6, label: t('shifts.saturday') },
+]);
+
+function formatDays(days) {
+    if (!Array.isArray(days) || days.length === 0) return t('shifts.no_days_selected');
+    const sorted = [...days].sort((a, b) => a - b);
+    return sorted.map((d) => {
+        const found = dayLabels.value.find((l) => l.value === Number(d));
+        return found ? found.label : null;
+    }).filter(Boolean).join(' - ');
+}
+
+const columns = computed(() => [
+    { key: 'shift_code', label: t('shifts.code'), sortable: true },
+    { key: 'shift_name', label: t('shifts.name'), sortable: true },
+    { key: 'company', label: t('shifts.company') },
+    { key: 'branch', label: t('shifts.branch') },
+    { key: 'time_range', label: t('shifts.time_range') },
+    { key: 'work_days', label: t('shifts.work_days') },
+    { key: 'status', label: t('common.status'), cellClass: 'text-center' },
+    { key: 'actions', label: t('common.actions'), cellClass: 'text-center w-[160px]' },
+]);
+
+const companyOptions = computed(() => [
+    { value: '', label: t('shifts.select_company') },
+    ...props.companies.map((c) => ({ value: c.id, label: c.company_name })),
+]);
+
+const branchOptions = computed(() => [
+    { value: '', label: t('shifts.select_branch') },
+    ...props.branches.map((b) => ({ value: b.id, label: b.branch_name })),
+]);
+
+function onSearch(value) {
+    router.get(
+        route('shifts.index'),
+        { ...props.filters, search: value },
+        { preserveState: true, preserveScroll: true, replace: true },
+    );
+}
+
+function applyFilter(key, value) {
+    const next = { ...props.filters };
+    if (value === '' || value === null || value === undefined) {
+        delete next[key];
+    } else {
+        next[key] = value;
+    }
+    router.get(
+        route('shifts.index'),
+        next,
+        { preserveState: true, preserveScroll: true, replace: true },
+    );
+}
+
+function confirmDelete(shift) {
+    selectedShift.value = shift;
+    showDelete.value = true;
+}
+
+function performDelete() {
+    if (!selectedShift.value) return;
+    router.delete(route('shifts.destroy', selectedShift.value.id), {
+        preserveScroll: true,
+    });
+}
+
+const flashSuccess = computed(() => page.props.flash?.success);
+const flashError = computed(() => page.props.flash?.error);
+</script>
+
+<template>
+    <AppLayout :title="t('shifts.title')">
+        <PageHeader
+            :title="t('shifts.title')"
+            :description="t('shifts.index_description')"
+        >
+            <template #actions>
+                <Button variant="primary" icon="fas fa-plus" :href="route('shifts.create')">
+                    {{ t('shifts.add_new') }}
+                </Button>
+            </template>
+        </PageHeader>
+
+        <Alert v-if="flashSuccess" type="success" :message="flashSuccess" class="mb-4" />
+        <Alert v-if="flashError" type="danger" :message="flashError" class="mb-4" />
+
+        <nav class="flex items-center gap-0 border-b border-mistral-hairline-soft overflow-x-auto mb-6" role="tablist">
+            <Link
+                :href="route('users.index')"
+                class="px-4 py-2.5 text-[13px] font-medium transition-colors border-b-2 text-mistral-steel border-transparent hover:text-mistral-ink"
+                role="tab"
+                aria-selected="false"
+            >
+                {{ t('users.title') }}
+            </Link>
+            <Link
+                :href="route('shift-categories.index')"
+                class="px-4 py-2.5 text-[13px] font-medium transition-colors border-b-2 text-mistral-steel border-transparent hover:text-mistral-ink"
+                role="tab"
+                aria-selected="false"
+            >
+                {{ t('shifts.shift_categories') }}
+            </Link>
+            <Link
+                :href="route('time-schedules.index')"
+                class="px-4 py-2.5 text-[13px] font-medium transition-colors border-b-2 text-mistral-steel border-transparent hover:text-mistral-ink"
+                role="tab"
+                aria-selected="false"
+            >
+                {{ t('shifts.time_schedules_title') }}
+            </Link>
+            <Link
+                :href="route('shifts.index')"
+                class="px-4 py-2.5 text-[13px] font-medium transition-colors border-b-2 text-mistral-primary border-mistral-primary"
+                role="tab"
+                aria-selected="true"
+            >
+                {{ t('shifts.title') }}
+            </Link>
+            <Link
+                :href="route('shift-assignments.index')"
+                class="px-4 py-2.5 text-[13px] font-medium transition-colors border-b-2 text-mistral-steel border-transparent hover:text-mistral-ink"
+                role="tab"
+                aria-selected="false"
+            >
+                {{ t('shifts.shift_assignments') }}
+            </Link>
+        </nav>
+
+        <div class="card p-6 mb-4">
+            <div class="flex items-center justify-between flex-wrap gap-3">
+                <div class="flex items-center gap-3 flex-wrap">
+                    <SearchInput
+                        v-model="search"
+                        :placeholder="t('common.search')"
+                        @search="onSearch"
+                    />
+                    <FormSelect
+                        :model-value="filters.company_id ?? ''"
+                        :options="companyOptions"
+                        class="max-w-[220px]"
+                        @update:model-value="(v) => applyFilter('company_id', v)"
+                    />
+                    <FormSelect
+                        :model-value="filters.branch_id ?? ''"
+                        :options="branchOptions"
+                        class="max-w-[220px]"
+                        @update:model-value="(v) => applyFilter('branch_id', v)"
+                    />
+                    <FormSelect
+                        :model-value="filters.status ?? ''"
+                        :options="[
+                            { value: '', label: t('common.all_statuses') },
+                            { value: '1', label: t('common.active') },
+                            { value: '0', label: t('common.inactive') },
+                        ]"
+                        class="max-w-[180px]"
+                        @update:model-value="(v) => applyFilter('status', v)"
+                    />
+                </div>
+            </div>
+        </div>
+
+        <DataTable :columns="columns" :data="shifts">
+            <template #cell-company="{ row }">
+                <span>{{ row.company?.company_name || '—' }}</span>
+            </template>
+
+            <template #cell-branch="{ row }">
+                <span>{{ row.branch?.branch_name || '—' }}</span>
+            </template>
+
+            <template #cell-time_range="{ row }">
+                <span dir="ltr">{{ row.start_time }} - {{ row.end_time }}</span>
+            </template>
+
+            <template #cell-work_days="{ row }">
+                <span class="text-[12px]">{{ formatDays(row.work_days) }}</span>
+            </template>
+
+            <template #cell-status="{ row }">
+                <Badge v-if="row.status === 1" :text="t('common.active')" variant="active" />
+                <Badge v-else :text="t('common.inactive')" variant="inactive" />
+            </template>
+
+            <template #cell-actions="{ row }">
+                <div class="flex items-center justify-center gap-1">
+                    <IconButton icon="fas fa-eye" :aria-label="t('common.view')" :href="route('shifts.show', row.id)" />
+                    <IconButton icon="fas fa-edit" :aria-label="t('common.edit')" :href="route('shifts.edit', row.id)" />
+                    <IconButton icon="fas fa-trash" :aria-label="t('common.delete')" variant="danger" @click="confirmDelete(row)" />
+                </div>
+            </template>
+        </DataTable>
+
+        <ConfirmDialog
+            v-model="showDelete"
+            :title="t('shifts.delete_confirm_title')"
+            :message="t('shifts.delete_confirm_message', { name: selectedShift?.shift_name })"
+            :confirm-text="t('common.delete')"
+            :cancel-text="t('common.cancel')"
+            confirm-variant="danger"
+            @confirm="performDelete"
+        />
+    </AppLayout>
+</template>

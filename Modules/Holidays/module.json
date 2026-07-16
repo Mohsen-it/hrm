@@ -1,0 +1,11 @@
+{
+    "name": "Holidays",
+    "alias": "holidays",
+    "description": "Public and company holidays with optional recurrence.",
+    "keywords": [],
+    "priority": 0,
+    "providers": [
+        "Modules\\Holidays\\Providers\\HolidaysServiceProvider"
+    ],
+    "files": []
+}

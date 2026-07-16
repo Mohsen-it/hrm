@@ -1,0 +1,28 @@
+{
+    "name": "nwidart/zones",
+    "description": "Geographic and operational zones for branches.",
+    "authors": [
+        {
+            "name": "Nicolas Widart",
+            "email": "n.widart@gmail.com"
+        }
+    ],
+    "extra": {
+        "laravel": {
+            "providers": [],
+            "aliases": {}
+        }
+    },
+    "autoload": {
+        "psr-4": {
+            "Modules\\Zones\\": "app/",
+            "Modules\\Zones\\Database\\Factories\\": "database/factories/",
+            "Modules\\Zones\\Database\\Seeders\\": "database/seeders/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Modules\\Zones\\Tests\\": "tests/"
+        }
+    }
+}

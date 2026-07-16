@@ -1,0 +1,30 @@
+{
+    "name": "hrm/attendance-integration",
+    "description": "Vendor-independent attendance device integration layer",
+    "keywords": ["laravel", "attendance", "fingerprint", "integration"],
+    "type": "library",
+    "license": "proprietary",
+    "autoload": {
+        "psr-4": {
+            "Modules\\AttendanceIntegration\\": "app/",
+            "Database\\Factories\\": "database/factories/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Modules\\AttendanceIntegration\\Tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Modules\\AttendanceIntegration\\Providers\\AttendanceIntegrationServiceProvider"
+            ]
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "require": {
+        "php": "^8.3"
+    }
+}

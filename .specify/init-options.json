@@ -1,0 +1,6 @@
+{
+  "ai": "opencode",
+  "integration": "opencode",
+  "script": "ps",
+  "speckit_version": "0.12.12.dev0"
+}

@@ -1,0 +1,25 @@
+<?php
+
+return [
+    'title' => 'Grades',
+    'company' => 'Company',
+    'code' => 'Grade Code',
+    'name' => 'Grade Name',
+    'level' => 'Level',
+    'min_salary' => 'Min Salary',
+    'max_salary' => 'Max Salary',
+    'salary_range' => 'Salary Range',
+    'description' => 'Description',
+    'add_new' => 'Add Grade',
+    'edit_grade' => 'Edit Grade',
+    'view_grade' => 'View Grade',
+    'index_description' => 'Manage job grades inside registered companies',
+    'create_description' => 'Enter new grade details',
+    'delete_confirm_title' => 'Confirm Deletion',
+    'delete_confirm_message' => 'Are you sure you want to delete ":name"? This action cannot be undone.',
+    'created_successfully' => 'Grade created successfully',
+    'updated_successfully' => 'Grade updated successfully',
+    'deleted_successfully' => 'Grade deleted successfully',
+    'select_company' => 'Select Company',
+    'employees_count' => 'Employees',
+];

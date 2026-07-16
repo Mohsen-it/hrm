@@ -1,0 +1,11 @@
+{
+    "name": "Attendance",
+    "alias": "attendance",
+    "description": "Attendance tracking — sessions, raw device logs, and daily summaries.",
+    "keywords": [],
+    "priority": 0,
+    "providers": [
+        "Modules\\Attendance\\Providers\\AttendanceServiceProvider"
+    ],
+    "files": []
+}

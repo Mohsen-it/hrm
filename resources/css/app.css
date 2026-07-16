@@ -1,0 +1,648 @@
+@import 'tailwindcss';
+
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../storage/framework/views/*.php';
+@source '../js/**/*.{vue,js}';
+
+/*
+|--------------------------------------------------------------------------
+| HRM Design System — Mistral-Inspired (single source of truth)
+|--------------------------------------------------------------------------
+| Canonical reference: mistral.ai\DESIGN.md
+|
+| Design language: Mistral AI's editorial sunset palette — saturated orange
+| primary, warm cream surfaces, ink text, and a horizontal "sunset stripe"
+| gradient closing band. Sober, editorial geometry: 8px buttons, 12px cards,
+| pills reserved for badges only.
+|
+| Arabic (primary) and English (secondary). RTL by default.
+*/
+
+@theme {
+    /* --- Fonts --- */
+    --font-display: 'Georgia', 'Times New Roman', serif;
+    --font-sans: 'Tajawal', 'Cairo', 'Noto Sans Arabic', 'Inter', sans-serif;
+    --font-latin: 'Inter', 'SF Pro Display', -apple-system, sans-serif;
+    --font-monospace: 'IBM Plex Mono', 'JetBrains Mono', 'Courier New', monospace;
+
+    /* --- Brand & Accent (Mistral) --- */
+    --color-mistral-primary: #fa520f;
+    --color-mistral-primary-deep: #cc3a05;
+    --color-mistral-on-primary: #ffffff;
+
+    /* --- Sunset gradient stops --- */
+    --color-mistral-sunshine-300: #ffd06a;
+    --color-mistral-sunshine-500: #ffb83e;
+    --color-mistral-sunshine-700: #ffa110;
+    --color-mistral-sunshine-800: #ff8105;
+    --color-mistral-sunshine-900: #ff8a00;
+    --color-mistral-yellow-saturated: #ffd900;
+    --color-mistral-block-5: #ffe295;
+    --color-mistral-block-6: #ffd900;
+    --color-mistral-block-7: #ff8105;
+
+    /* --- Cream / Neutral warm --- */
+    --color-mistral-cream: #fff8e0;
+    --color-mistral-cream-light: #fffaeb;
+    --color-mistral-cream-deeper: #fff0c2;
+    --color-mistral-beige-deep: #e6d5a8;
+    --color-mistral-footer-cream: #fff8e0;
+
+    /* --- Surface --- */
+    --color-mistral-canvas: #ffffff;
+    --color-mistral-surface: #fafafa;
+    --color-mistral-surface-cream: #fff8e0;
+    --color-mistral-surface-cream-soft: #fffaeb;
+    --color-mistral-surface-code: #1c1c1e;
+
+    /* --- Hairlines --- */
+    --color-mistral-hairline: #e5e5e5;
+    --color-mistral-hairline-soft: #ededed;
+    --color-mistral-hairline-strong: #c7c7c7;
+
+    /* --- Text (Ink scale) --- */
+    --color-mistral-ink: #1f1f1f;
+    --color-mistral-ink-tint: #3d3d3d;
+    --color-mistral-charcoal: #2c2c2c;
+    --color-mistral-slate: #4a4a4a;
+    --color-mistral-steel: #6a6a6a;
+    --color-mistral-stone: #8a8a8a;
+    --color-mistral-muted: #a8a8a8;
+    --color-mistral-on-dark: #ffffff;
+    --color-mistral-on-dark-muted: #a8a8a8;
+    --color-mistral-on-cream: #1f1f1f;
+    --color-mistral-link: #fa520f;
+
+    /* --- Semantic --- */
+    --color-mistral-success: #16a34a;
+    --color-mistral-success-bg: #dcfce7;
+    --color-mistral-warning: #d97706;
+    --color-mistral-warning-bg: #fef3c7;
+    --color-mistral-danger: #cc3a05;
+    --color-mistral-danger-bg: #fee2e2;
+    --color-mistral-info: #2563eb;
+    --color-mistral-info-bg: #dbeafe;
+
+    /* --- Status Badge --- */
+    --color-mistral-status-active: #16a34a;
+    --color-mistral-status-inactive: #94a3b8;
+    --color-mistral-status-pending: #d97706;
+    --color-mistral-status-absent: #cc3a05;
+    --color-mistral-status-overtime: #7c3aed;
+    --color-mistral-status-vacation: #0891b2;
+
+    /* --- Border Radius --- */
+    --radius-xs: 4px;
+    --radius-sm: 6px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --radius-xl: 16px;
+    --radius-xxl: 20px;
+    --radius-full: 9999px;
+
+    /* --- Elevation / Shadows --- */
+    --shadow-level-0: none;
+    --shadow-level-1: 0 1px 2px rgba(0, 0, 0, 0.04);
+    --shadow-level-2: 0 4px 12px rgba(0, 0, 0, 0.04);
+    --shadow-level-3: 0 12px 24px -4px rgba(0, 0, 0, 0.08);
+    --shadow-level-4: 0 16px 48px -8px rgba(0, 0, 0, 0.12);
+
+    /* --- Spacing (4px base unit) --- */
+    --spacing-xxs: 4px;
+    --spacing-xs: 8px;
+    --spacing-sm: 12px;
+    --spacing-md: 16px;
+    --spacing-lg: 24px;
+    --spacing-xl: 32px;
+    --spacing-xxl: 48px;
+    --spacing-section: 64px;
+    --spacing-section-lg: 96px;
+    --spacing-page: 24px;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Backward-Compat Aliases (1 release cycle)
+|--------------------------------------------------------------------------
+| Old variable names -> new mistral names. Remove in spec 004.
+*/
+@layer base {
+    :root {
+        --color-primary: var(--color-mistral-primary);
+        --color-primary-hover: var(--color-mistral-primary-deep);
+        --color-on-primary: var(--color-mistral-on-primary);
+        --color-canvas: var(--color-mistral-canvas);
+        --color-canvas-soft: var(--color-mistral-surface);
+        --color-ink: var(--color-mistral-ink);
+        --color-ink-mute: var(--color-mistral-steel);
+        --color-ink-muted: var(--color-mistral-steel);
+        --color-ink-faint: var(--color-mistral-stone);
+        --color-ink-disabled: var(--color-mistral-muted);
+        --color-ink-subtle: var(--color-mistral-stone);
+        --color-hairline: var(--color-mistral-hairline);
+        --color-hairline-strong: var(--color-mistral-hairline-strong);
+        --color-hairline-dark: var(--color-mistral-ink);
+        --color-success: var(--color-mistral-success);
+        --color-success-bg: var(--color-mistral-success-bg);
+        --color-warning: var(--color-mistral-warning);
+        --color-warning-bg: var(--color-mistral-warning-bg);
+        --color-danger: var(--color-mistral-danger);
+        --color-danger-bg: var(--color-mistral-danger-bg);
+        --color-info: var(--color-mistral-info);
+        --color-info-bg: var(--color-mistral-info-bg);
+        --color-inverse: var(--color-mistral-on-dark);
+        --color-surface-1: var(--color-mistral-surface);
+        --color-surface-2: var(--color-mistral-surface);
+        --color-surface-3: var(--color-mistral-hairline-soft);
+    }
+}
+
+/*
+|--------------------------------------------------------------------------
+| RTL Base — إلزامي (Arabic Right-to-Left)
+|--------------------------------------------------------------------------
+*/
+
+[dir='rtl'] {
+    direction: rtl;
+    text-align: right;
+}
+
+[dir='rtl'] .rtl-flip {
+    transform: scaleX(-1);
+}
+
+[dir='rtl'] .icon-flip {
+    transform: scaleX(-1);
+}
+
+/*
+|--------------------------------------------------------------------------
+| Global Base Styles
+|--------------------------------------------------------------------------
+*/
+
+html {
+    font-family: var(--font-sans);
+    background-color: var(--color-mistral-canvas);
+    color: var(--color-mistral-ink);
+}
+
+body {
+    margin: 0;
+    min-height: 100vh;
+}
+
+/* Scrollbar — RTL aware */
+[dir='rtl'] ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+[dir='rtl'] ::-webkit-scrollbar-track {
+    background: var(--color-mistral-surface);
+}
+
+[dir='rtl'] ::-webkit-scrollbar-thumb {
+    background: var(--color-mistral-hairline-strong);
+    border-radius: var(--radius-md);
+}
+
+[dir='rtl'] ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-mistral-stone);
+}
+
+/*
+|--------------------------------------------------------------------------
+| Component Utility Classes (DEPRECATED — use Vue components instead)
+|--------------------------------------------------------------------------
+| These shim classes are kept for one release to support migration.
+| They will be removed in spec 004. Use <Button>, <Card>, <FormInput> instead.
+*/
+
+/* Card — Mistral-inspired */
+.card {
+    background-color: var(--color-mistral-canvas);
+    border: 1px solid var(--color-mistral-hairline-soft);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-level-1);
+}
+
+.card-cream {
+    background-color: var(--color-mistral-cream);
+    border: 1px solid var(--color-mistral-beige-deep);
+    border-radius: var(--radius-lg);
+}
+
+.card-feature-product {
+    background-color: var(--color-mistral-canvas);
+    border: 1px solid var(--color-mistral-hairline-soft);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-level-2);
+}
+
+/* Hairline divider */
+.hairline {
+    border-color: var(--color-mistral-hairline);
+}
+
+/* Focus ring — primary */
+.focus-ring {
+    outline: 2px solid var(--color-mistral-primary);
+    outline-offset: 2px;
+}
+
+/* Table base */
+.table-row {
+    height: 48px;
+    border-bottom: 1px solid var(--color-mistral-hairline-soft);
+}
+
+.table-row:nth-child(even) {
+    background-color: var(--color-mistral-surface);
+}
+
+.table-row:hover {
+    background-color: var(--color-mistral-surface-cream-soft);
+}
+
+/* Button base — DEPRECATED: use <Button> Vue component */
+.btn {
+    height: 40px;
+    padding: 10px 20px;
+    border-radius: var(--radius-md);
+    font-weight: 500;
+    font-size: 13px;
+    line-height: 1.3;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+    border: 1px solid transparent;
+}
+
+.btn-primary {
+    background-color: var(--color-mistral-primary);
+    color: var(--color-mistral-on-primary);
+}
+
+.btn-primary:hover {
+    background-color: var(--color-mistral-primary-deep);
+}
+
+.btn-primary:disabled,
+.btn-primary[aria-disabled='true'] {
+    background-color: var(--color-mistral-hairline);
+    color: var(--color-mistral-muted);
+    cursor: not-allowed;
+}
+
+.btn-secondary {
+    background-color: var(--color-mistral-canvas);
+    color: var(--color-mistral-ink);
+    border-color: var(--color-mistral-hairline-strong);
+}
+
+.btn-secondary:hover {
+    background-color: var(--color-mistral-surface);
+}
+
+.btn-cream {
+    background-color: var(--color-mistral-cream);
+    color: var(--color-mistral-ink);
+    border-color: var(--color-mistral-beige-deep);
+}
+
+.btn-dark {
+    background-color: var(--color-mistral-ink);
+    color: var(--color-mistral-on-dark);
+}
+
+.btn-danger {
+    background-color: var(--color-mistral-danger);
+    color: var(--color-mistral-on-primary);
+}
+
+.btn-danger:hover {
+    background-color: var(--color-mistral-primary-deep);
+}
+
+.btn-ghost {
+    background-color: transparent;
+    color: var(--color-mistral-ink);
+    padding: 8px 12px;
+}
+
+.btn-ghost:hover {
+    background-color: var(--color-mistral-surface);
+}
+
+.btn-link {
+    background-color: transparent;
+    color: var(--color-mistral-primary);
+    padding: 0;
+    height: auto;
+    text-decoration: none;
+}
+
+.btn-link:hover {
+    text-decoration: underline;
+}
+
+.btn-icon {
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border-radius: var(--radius-md);
+    background-color: transparent;
+    color: var(--color-mistral-ink);
+}
+
+.btn-icon:hover {
+    background-color: var(--color-mistral-surface);
+}
+
+/* Form input base — Mistral-inspired */
+.form-input {
+    height: 44px;
+    width: 100%;
+    background-color: var(--color-mistral-canvas);
+    border: 1px solid var(--color-mistral-hairline-strong);
+    border-radius: var(--radius-md);
+    padding: 0 12px;
+    font-size: 14px;
+    color: var(--color-mistral-ink);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.form-input::placeholder {
+    color: var(--color-mistral-muted);
+}
+
+.form-input:focus {
+    outline: none;
+    border-color: var(--color-mistral-primary);
+    box-shadow: 0 0 0 2px rgba(250, 82, 15, 0.15);
+}
+
+.form-input:disabled {
+    background-color: var(--color-mistral-surface);
+    color: var(--color-mistral-muted);
+    cursor: not-allowed;
+}
+
+/* Form checkbox — Mistral primary */
+.form-checkbox {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--color-mistral-primary);
+    cursor: pointer;
+    border-radius: var(--radius-xs);
+}
+
+.form-checkbox:focus {
+    outline: 2px solid var(--color-mistral-primary);
+    outline-offset: 2px;
+}
+
+/* Form select native — arrow icon */
+.select-with-arrow {
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%236a6a6a'%3e%3cpath d='M5.23 7.21a.75.75 0 011.06.02L10 11.06l3.71-3.83a.75.75 0 111.08 1.04l-4.25 4.39a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z'/%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 16px;
+    padding-right: 36px;
+}
+
+[dir='rtl'] .select-with-arrow {
+    background-position: left 12px center;
+    padding-right: 12px;
+    padding-left: 36px;
+}
+
+/* Badge — Mistral-inspired */
+.badge {
+    display: inline-flex;
+    align-items: center;
+    height: 22px;
+    padding: 2px 10px;
+    border-radius: var(--radius-full);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.4;
+}
+
+.badge-orange {
+    background-color: var(--color-mistral-primary);
+    color: var(--color-mistral-on-primary);
+}
+
+.badge-cream {
+    background-color: var(--color-mistral-cream-deeper);
+    color: var(--color-mistral-ink);
+}
+
+.badge-dark {
+    background-color: var(--color-mistral-ink);
+    color: var(--color-mistral-on-dark);
+}
+
+.badge-success {
+    background-color: var(--color-mistral-success-bg);
+    color: var(--color-mistral-success);
+}
+
+.badge-inactive {
+    background-color: var(--color-mistral-surface);
+    color: var(--color-mistral-status-inactive);
+}
+
+.badge-pending {
+    background-color: var(--color-mistral-warning-bg);
+    color: var(--color-mistral-warning);
+}
+
+.badge-danger {
+    background-color: var(--color-mistral-danger-bg);
+    color: var(--color-mistral-danger);
+}
+
+.badge-info {
+    background-color: var(--color-mistral-info-bg);
+    color: var(--color-mistral-info);
+}
+
+/* Sidebar — uses Mistral tokens now (was Superhuman) */
+.sidebar {
+    width: 260px;
+    background-color: var(--color-mistral-canvas);
+    border-left: 1px solid var(--color-mistral-hairline-soft);
+    color: var(--color-mistral-ink);
+    font-family: var(--font-sans);
+}
+
+[dir='rtl'] .sidebar {
+    border-left: 1px solid var(--color-mistral-hairline-soft);
+    border-right: none;
+}
+
+[dir='ltr'] .sidebar {
+    border-right: 1px solid var(--color-mistral-hairline-soft);
+    border-left: none;
+}
+
+.sidebar-section-title {
+    padding: var(--spacing-md) var(--spacing-md) var(--spacing-xs);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--color-mistral-stone);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.sidebar-item {
+    position: relative;
+    min-height: 40px;
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    color: var(--color-mistral-ink);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease;
+    gap: 12px;
+    text-decoration: none;
+}
+
+.sidebar-item:hover {
+    background-color: var(--color-mistral-surface);
+    color: var(--color-mistral-ink);
+}
+
+.sidebar-item:focus-visible {
+    outline: 2px solid var(--color-mistral-primary);
+    outline-offset: 2px;
+}
+
+.sidebar-item-active {
+    background-color: var(--color-mistral-cream);
+    color: var(--color-mistral-ink);
+    font-weight: 600;
+}
+
+.sidebar-item-active::before {
+    content: '';
+    position: absolute;
+    top: 8px;
+    bottom: 8px;
+    inset-inline-end: 0;
+    width: 3px;
+    border-radius: 2px;
+    background-color: var(--color-mistral-primary);
+}
+
+.sidebar-item-badge {
+    margin-inline-start: auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 22px;
+    height: 22px;
+    padding: 0 8px;
+    border-radius: var(--radius-full);
+    background-color: var(--color-mistral-primary);
+    color: var(--color-mistral-on-primary);
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1;
+}
+
+.sidebar-backdrop {
+    position: fixed;
+    inset: 0;
+    background-color: rgba(31, 31, 31, 0.5);
+    z-index: 35;
+}
+
+/* Navbar */
+.navbar {
+    height: 56px;
+    background-color: var(--color-mistral-canvas);
+    border-bottom: 1px solid var(--color-mistral-hairline-soft);
+}
+
+/* Alert — Mistral-inspired */
+.alert {
+    padding: 12px 16px;
+    border-radius: var(--radius-md);
+    border-right: 4px solid;
+    font-size: 14px;
+}
+
+[dir='rtl'] .alert {
+    border-right: 4px solid;
+    border-left: none;
+}
+
+.alert-success {
+    background-color: var(--color-mistral-success-bg);
+    border-color: var(--color-mistral-success);
+    color: var(--color-mistral-success);
+}
+
+.alert-warning {
+    background-color: var(--color-mistral-warning-bg);
+    border-color: var(--color-mistral-warning);
+    color: var(--color-mistral-warning);
+}
+
+.alert-danger {
+    background-color: var(--color-mistral-danger-bg);
+    border-color: var(--color-mistral-danger);
+    color: var(--color-mistral-danger);
+}
+
+.alert-info {
+    background-color: var(--color-mistral-info-bg);
+    border-color: var(--color-mistral-info);
+    color: var(--color-mistral-info);
+}
+
+/* Modal overlay */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background-color: rgba(31, 31, 31, 0.5);
+    z-index: 50;
+}
+
+/* Sunset Stripe Band — brand signature */
+.sunset-stripe-band {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(
+        to right,
+        var(--color-mistral-primary) 0%,
+        var(--color-mistral-sunshine-700) 33%,
+        var(--color-mistral-yellow-saturated) 66%,
+        var(--color-mistral-cream) 100%
+    );
+    z-index: 30;
+    pointer-events: none;
+}
+
+/* Inertia progress bar — matches Mistral primary */
+#nprogress .bar {
+    background: var(--color-mistral-primary) !important;
+}
+
+#nprogress .peg {
+    box-shadow: 0 0 10px var(--color-mistral-primary), 0 0 5px var(--color-mistral-primary) !important;
+}

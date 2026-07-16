@@ -1,0 +1,30 @@
+{
+    "name": "nwidart/grades",
+    "description": "",
+    "authors": [
+        {
+            "name": "Nicolas Widart",
+            "email": "n.widart@gmail.com"
+        }
+    ],
+    "extra": {
+        "laravel": {
+            "providers": [],
+            "aliases": {
+
+            }
+        }
+    },
+    "autoload": {
+        "psr-4": {
+            "Modules\\Grades\\": "app/",
+            "Modules\\Grades\\Database\\Factories\\": "database/factories/",
+            "Modules\\Grades\\Database\\Seeders\\": "database/seeders/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Modules\\Grades\\Tests\\": "tests/"
+        }
+    }
+}

@@ -1,0 +1,16 @@
+{
+    "name": "AttendanceIntegration",
+    "alias": "attendanceintegration",
+    "description": "Vendor-independent attendance device integration layer",
+    "version": "1.0.0",
+    "keywords": [],
+    "priority": 0,
+    "providers": [
+        "Modules\\AttendanceIntegration\\Providers\\AttendanceIntegrationServiceProvider"
+    ],
+    "files": [],
+    "requires": [
+        "Attendance",
+        "FingerprintDevices"
+    ]
+}

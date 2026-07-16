@@ -1,0 +1,11 @@
+{
+    "name": "Vacations",
+    "alias": "vacations",
+    "description": "Vacation types, balance tracking, and request lifecycle.",
+    "keywords": [],
+    "priority": 0,
+    "providers": [
+        "Modules\\Vacations\\Providers\\VacationsServiceProvider"
+    ],
+    "files": []
+}

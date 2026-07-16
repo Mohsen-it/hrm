@@ -1,0 +1,11 @@
+{
+    "name": "Zones",
+    "alias": "zones",
+    "description": "Geographic / organizational zones grouping branches.",
+    "keywords": [],
+    "priority": 0,
+    "providers": [
+        "Modules\\Zones\\Providers\\ZonesServiceProvider"
+    ],
+    "files": []
+}

@@ -1,0 +1,9 @@
+{
+    "project_name": "hrm_alepair",
+    "integration": "copilot",
+    "specs_dir": "specs",
+    "memory_dir": ".specify/memory",
+    "templates_dir": ".specify/templates",
+    "constitution_file": ".specify/memory/constitution.md",
+    "version": "3.0.0"
+}

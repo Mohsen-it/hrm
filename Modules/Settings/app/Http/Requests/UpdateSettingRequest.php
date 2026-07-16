@@ -1,0 +1,43 @@
+<?php
+
+namespace Modules\Settings\Http\Requests;
+
+use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
+
+/**
+ * UpdateSettingRequest — validation for the update-setting payload.
+ */
+class UpdateSettingRequest extends FormRequest
+{
+    public function authorize(): bool
+    {
+        return $this->user() !== null;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function rules(): array
+    {
+        $types = ['string', 'int', 'integer', 'float', 'bool', 'boolean', 'json', 'array'];
+        $groups = ['general', 'attendance', 'branding', 'security', 'integrations'];
+
+        $id = (int) $this->route('setting');
+
+        return [
+            'value' => ['nullable'],
+            'type' => ['nullable', 'string', Rule::in($types)],
+            'group' => ['nullable', 'string', Rule::in($groups)],
+            'name_ar' => ['nullable', 'string', 'max:200'],
+            'name_en' => ['nullable', 'string', 'max:200'],
+            'description' => ['nullable', 'string', 'max:2000'],
+            'is_public' => ['nullable', 'boolean'],
+            'is_encrypted' => ['nullable', 'boolean'],
+            'sort_order' => ['nullable', 'integer'],
+            // The key is intentionally not editable.
+            '_key' => ['sometimes'],
+            'key' => ['sometimes', 'string', 'max:150', 'regex:/^[a-z0-9_.\-]+$/i', 'unique:settings,key,'.$id],
+        ];
+    }
+}

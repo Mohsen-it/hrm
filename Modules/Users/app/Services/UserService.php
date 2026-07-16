@@ -464,19 +464,19 @@ class UserService
     protected function validateUserData(array $data, ?int $ignoreId = null): array
     {
         $rules = [
-            'employee_code' => [
-                'nullable', 'string', 'max:50',
+            'employee_code' => array_merge(
+                ['nullable', 'string', 'max:50'],
                 $this->uniqueEmployeeCodeRule($ignoreId),
-            ],
+            ),
             'name' => ['required', 'string', 'max:255'],
             'first_name' => ['nullable', 'string', 'max:100'],
             'last_name' => ['nullable', 'string', 'max:100'],
             'full_name_ar' => ['nullable', 'string', 'max:255'],
             'full_name_en' => ['nullable', 'string', 'max:255'],
-            'email' => [
-                'required', 'email', 'max:255',
+            'email' => array_merge(
+                ['required', 'email', 'max:255'],
                 $this->uniqueEmailRule($ignoreId),
-            ],
+            ),
             'password' => [$ignoreId ? 'nullable' : 'required', 'string', 'min:8', 'max:255'],
             'national_id' => ['nullable', 'string', 'max:30'],
             'phone' => ['nullable', 'string', 'max:20'],
@@ -543,11 +543,11 @@ class UserService
      */
     protected function uniqueEmailRule(?int $ignoreId): array
     {
-        $table = 'users';
-        $column = 'email';
-        $ignore = $ignoreId ? (string) $ignoreId : 'NULL';
+        if ($ignoreId) {
+            return ["unique:users,email,{$ignoreId},id"];
+        }
 
-        return ["unique:{$table},{$column},{$ignore},id"];
+        return ['unique:users,email'];
     }
 
     /**
@@ -557,11 +557,11 @@ class UserService
      */
     protected function uniqueEmployeeCodeRule(?int $ignoreId): array
     {
-        $table = 'users';
-        $column = 'employee_code';
-        $ignore = $ignoreId ? (string) $ignoreId : 'NULL';
+        if ($ignoreId) {
+            return ["unique:users,employee_code,{$ignoreId},id"];
+        }
 
-        return ["unique:{$table},{$column},{$ignore},id"];
+        return ['unique:users,employee_code'];
     }
 
     /**

@@ -4,8 +4,10 @@ namespace Modules\Shifts\Services;
 
 use Carbon\Carbon;
 use Modules\Shifts\Models\EmployeeShiftCategory;
+use Modules\Shifts\Models\RotationAssignment;
 use Modules\Shifts\Models\ShiftCategory;
 use Modules\Shifts\Repositories\EmployeeShiftCategoryRepository;
+use Modules\Shifts\Repositories\RotationAssignmentRepository;
 use Modules\Shifts\Repositories\ShiftExceptionRepository;
 use Modules\Vacations\Models\UserVacationRequest;
 
@@ -44,6 +46,8 @@ class ScheduleResolverService
         private EmployeeShiftCategoryRepository $assignmentRepository,
         private ShiftExceptionRepository $exceptionRepository,
         private CyclicScheduleCalculator $cyclicCalculator,
+        private RotationAssignmentRepository $rotationAssignmentRepository,
+        private RotationEngine $rotationEngine,
     ) {}
 
     /**
@@ -72,6 +76,13 @@ class ScheduleResolverService
         $assignment = $this->assignmentRepository->getAssignmentForDate($employeeId, $dateStr);
 
         if (! $assignment) {
+            // --- Step 1b: Check rotation assignment ---------------------
+            $rotationResult = $this->resolveRotation($employeeId, $dateStr);
+
+            if ($rotationResult !== null) {
+                return $rotationResult;
+            }
+
             return $this->contract(
                 employeeId: $employeeId,
                 date: $dateStr,
@@ -245,5 +256,63 @@ class ScheduleResolverService
         }
 
         return optional($category->timeSchedule?->out_time)->format('H:i');
+    }
+
+    /**
+     * Resolve employee schedule from rotation assignment.
+     *
+     * Checks for an active rotation assignment, verifies leave/exception
+     * interceptors, then delegates to the RotationEngine.
+     */
+    private function resolveRotation(int $employeeId, string $dateStr): ?array
+    {
+        $rotationAssignment = $this->rotationAssignmentRepository->getAssignmentForDate($employeeId, $dateStr);
+
+        if (! $rotationAssignment) {
+            return null;
+        }
+
+        // Leave / Exception Interceptor (same fail-fast as shift category)
+        $exception = $this->exceptionRepository->findIntercepting($employeeId, $dateStr);
+
+        if ($exception && $exception->intercepts()) {
+            return $this->contract(
+                employeeId: $employeeId,
+                date: $dateStr,
+                isWorkDay: false,
+                status: $exception->exception_type === 'swap' ? self::STATUS_SWAP : self::STATUS_LEAVE_EXCUSED,
+                exceptionId: $exception->id,
+                source: 'rotation_exception'
+            );
+        }
+
+        $hasVacation = UserVacationRequest::where('user_id', $employeeId)
+            ->where('status', UserVacationRequest::STATUS_APPROVED)
+            ->where('start_date', '<=', $dateStr)
+            ->where('end_date', '>=', $dateStr)
+            ->exists();
+
+        if ($hasVacation) {
+            return $this->contract(
+                employeeId: $employeeId,
+                date: $dateStr,
+                isWorkDay: false,
+                status: self::STATUS_LEAVE_EXCUSED,
+                source: 'rotation_vacation'
+            );
+        }
+
+        $rotation = $rotationAssignment->rotation;
+        $group = $rotationAssignment->rotationGroup;
+        $times = $this->rotationEngine->resolveTimes($rotationAssignment);
+
+        return $this->rotationEngine->resolve(
+            employeeId: $employeeId,
+            rotation: $rotation,
+            group: $group,
+            targetDate: $dateStr,
+            expectedCheckIn: $times['check_in'],
+            expectedCheckOut: $times['check_out'],
+        );
     }
 }

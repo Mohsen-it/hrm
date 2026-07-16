@@ -38,4 +38,6 @@ return [
     'attendance_groups' => 'Attendance Groups',
     'attendance_shifts' => 'Attendance Shifts',
     'group_schedules' => 'Group Schedules',
+    'rotations' => 'Rotations',
+    'rotation_assignments' => 'Rotation Assignments',
 ];

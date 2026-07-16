@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use Modules\Shifts\Http\Controllers\RotationsController;
 use Modules\Shifts\Http\Controllers\ScheduleCalendarController;
 use Modules\Shifts\Http\Controllers\SchedulesController;
 use Modules\Shifts\Http\Controllers\ShiftCategoriesController;
@@ -114,4 +115,66 @@ Route::middleware(['auth'])
             ->name('my-calendar');
         Route::get('my-absence', [SmartAbsenceController::class, 'myAbsence'])
             ->name('my-absence');
+    });
+
+// Rotations
+Route::middleware(['auth', 'permission:create-rotations'])
+    ->group(function () {
+        Route::get('rotations/create', [RotationsController::class, 'create'])
+            ->name('rotations.create');
+        Route::post('rotations', [RotationsController::class, 'store'])
+            ->name('rotations.store');
+    });
+
+Route::middleware(['auth', 'permission:view-rotations'])
+    ->group(function () {
+        Route::get('rotations', [RotationsController::class, 'index'])
+            ->name('rotations.index');
+        Route::get('rotations/{id}/preview', [RotationsController::class, 'preview'])
+            ->name('rotations.preview');
+        Route::get('rotations/{id}/groups', [RotationsController::class, 'getGroups'])
+            ->name('rotations.groups');
+        Route::get('rotations/{id}', [RotationsController::class, 'show'])
+            ->name('rotations.show');
+    });
+
+Route::middleware(['auth', 'permission:edit-rotations'])
+    ->group(function () {
+        Route::get('rotations/{id}/edit', [RotationsController::class, 'edit'])
+            ->name('rotations.edit');
+        Route::put('rotations/{id}', [RotationsController::class, 'update'])
+            ->name('rotations.update');
+        Route::post('rotations/{rotationId}/groups', [RotationsController::class, 'addGroup'])
+            ->name('rotations.groups.add');
+        Route::put('rotations/groups/{groupId}', [RotationsController::class, 'updateGroup'])
+            ->name('rotations.groups.update');
+        Route::delete('rotations/groups/{groupId}', [RotationsController::class, 'deleteGroup'])
+            ->name('rotations.groups.delete');
+    });
+
+Route::middleware(['auth', 'permission:delete-rotations'])
+    ->group(function () {
+        Route::delete('rotations/{id}', [RotationsController::class, 'destroy'])
+            ->name('rotations.destroy');
+    });
+
+// Rotation Assignments
+Route::middleware(['auth', 'permission:view-rotations'])
+    ->group(function () {
+        Route::get('rotation-assignments', [RotationsController::class, 'assignPage'])
+            ->name('rotations.assign');
+    });
+
+Route::middleware(['auth', 'permission:assign-employees-to-rotation'])
+    ->group(function () {
+        Route::post('rotation-assignments/assign', [RotationsController::class, 'assign'])
+            ->name('rotations.assign.store');
+        Route::post('rotation-assignments/bulk-assign', [RotationsController::class, 'bulkAssign'])
+            ->name('rotations.assign.bulk');
+        Route::post('rotation-assignments/transfer', [RotationsController::class, 'transfer'])
+            ->name('rotations.assign.transfer');
+        Route::post('rotation-assignments/unassign', [RotationsController::class, 'unassign'])
+            ->name('rotations.assign.unassign');
+        Route::get('rotations/search-employees', [RotationsController::class, 'searchEmployees'])
+            ->name('rotations.search-employees');
     });

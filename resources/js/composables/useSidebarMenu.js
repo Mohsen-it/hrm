@@ -45,13 +45,15 @@ export function useSidebarMenu() {
             }
         }
 
-        if (has('view-users', 'view-shifts', 'view-shift-categories', 'view-time-schedules')) {
+        if (has('view-users', 'view-shifts', 'view-shift-categories', 'view-time-schedules', 'view-rotations')) {
             const items = [];
             if (has('view-users')) items.push({ label: 'menu.users', route: 'users.index', icon: 'fas fa-users' });
             if (has('view-shift-categories')) items.push({ label: 'menu.shift_categories', route: 'shift-categories.index', icon: 'fas fa-layer-group' });
             if (has('view-time-schedules')) items.push({ label: 'menu.time_schedules', route: 'time-schedules.index', icon: 'fas fa-calendar-alt' });
             if (has('view-shifts')) items.push({ label: 'menu.shifts', route: 'shifts.index', icon: 'fas fa-clock' });
+            if (has('view-rotations')) items.push({ label: 'menu.rotations', route: 'rotations.index', icon: 'fas fa-sync-alt' });
             if (has('view-shift-categories')) items.push({ label: 'menu.shift_assignments', route: 'shift-assignments.index', icon: 'fas fa-user-check' });
+            if (has('view-rotations')) items.push({ label: 'menu.rotation_assignments', route: 'rotations.assign', icon: 'fas fa-users-cog' });
             if (has('view-shift-categories')) items.push({ label: 'menu.schedules', route: 'schedules.index', icon: 'fas fa-calendar-check' });
             if (items.length) {
                 groups.push({

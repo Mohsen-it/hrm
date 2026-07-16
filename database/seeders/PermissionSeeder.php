@@ -58,6 +58,11 @@ class PermissionSeeder extends Seeder
         'delete-time-schedules',
         'assign-employees-to-category',
         'view-attendance-by-schedule',
+        'view-rotations',
+        'create-rotations',
+        'edit-rotations',
+        'delete-rotations',
+        'assign-employees-to-rotation',
     ];
 
     /**

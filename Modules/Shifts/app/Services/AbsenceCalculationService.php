@@ -9,13 +9,16 @@ use Modules\Holidays\Models\Holiday;
 use Modules\Shifts\Models\EmployeeShiftCategory;
 use Modules\Shifts\Models\ShiftException;
 use Modules\Shifts\Repositories\EmployeeShiftCategoryRepository;
+use Modules\Shifts\Repositories\RotationAssignmentRepository;
 use Modules\Vacations\Models\UserVacationRequest;
 
 class AbsenceCalculationService
 {
     public function __construct(
         private EmployeeShiftCategoryRepository $assignmentRepository,
-        private CyclicScheduleCalculator $cyclicCalculator
+        private CyclicScheduleCalculator $cyclicCalculator,
+        private RotationAssignmentRepository $rotationAssignmentRepository,
+        private RotationEngine $rotationEngine,
     ) {}
 
     /**
@@ -25,12 +28,28 @@ class AbsenceCalculationService
      */
     public function getExpectedEmployees(Carbon $date): Collection
     {
-        $assignments = $this->assignmentRepository->getAssignmentsForDate($date->toDateString());
+        $dateStr = $date->toDateString();
+
+        // From shift category assignments
+        $assignments = $this->assignmentRepository->getAssignmentsForDate($dateStr);
         $expectedIds = collect();
 
         foreach ($assignments as $assignment) {
             if ($this->isEmployeeExpectedToWork($assignment->employee_id, $date)) {
                 $expectedIds->push($assignment->employee_id);
+            }
+        }
+
+        // From rotation assignments
+        $rotationAssignments = $this->rotationAssignmentRepository->getAssignmentsForDate($dateStr);
+        foreach ($rotationAssignments as $rotationAssignment) {
+            if (! $expectedIds->contains($rotationAssignment->employee_id)) {
+                $rotation = $rotationAssignment->rotation;
+                $group = $rotationAssignment->rotationGroup;
+
+                if ($this->rotationEngine->isWorkDay($rotation, $group->group_index, $date)) {
+                    $expectedIds->push($rotationAssignment->employee_id);
+                }
             }
         }
 
@@ -110,19 +129,33 @@ class AbsenceCalculationService
         $endOfMonth = $startOfMonth->copy()->endOfMonth();
         $result = [];
 
+        // Check shift category assignment
         $assignment = $this->assignmentRepository->getActiveAssignment($employeeId);
 
-        if (! $assignment) {
+        // Check rotation assignment
+        $rotationAssignment = $this->rotationAssignmentRepository->getActiveAssignment($employeeId);
+
+        if (! $assignment && ! $rotationAssignment) {
             return [];
         }
-
-        $category = $assignment->shiftCategory;
 
         $current = $startOfMonth->copy();
         while ($current->lte($endOfMonth)) {
             $dateStr = $current->toDateString();
+            $isExpected = false;
 
-            if ($this->isExpectedViaCategory($category, $assignment->start_date, $current)) {
+            if ($assignment) {
+                $category = $assignment->shiftCategory;
+                $isExpected = $this->isExpectedViaCategory($category, $assignment->start_date, $current);
+            }
+
+            if (! $isExpected && $rotationAssignment) {
+                $rotation = $rotationAssignment->rotation;
+                $group = $rotationAssignment->rotationGroup;
+                $isExpected = $this->rotationEngine->isWorkDay($rotation, $group->group_index, $current);
+            }
+
+            if ($isExpected) {
                 $hasPunch = DB::table('iclock_transaction')
                     ->where('emp_id', $employeeId)
                     ->whereDate('punch_time', $dateStr)
@@ -165,15 +198,26 @@ class AbsenceCalculationService
      */
     public function isEmployeeExpectedToWork(int $employeeId, Carbon $date): bool
     {
+        // Check shift category assignment first
         $assignment = $this->assignmentRepository->getActiveAssignment($employeeId);
 
-        if (! $assignment) {
-            return false;
+        if ($assignment) {
+            $category = $assignment->shiftCategory;
+
+            return $this->isExpectedViaCategory($category, $assignment->start_date, $date);
         }
 
-        $category = $assignment->shiftCategory;
+        // Fallback: check rotation assignment
+        $rotationAssignment = $this->rotationAssignmentRepository->getActiveAssignment($employeeId);
 
-        return $this->isExpectedViaCategory($category, $assignment->start_date, $date);
+        if ($rotationAssignment) {
+            $rotation = $rotationAssignment->rotation;
+            $group = $rotationAssignment->rotationGroup;
+
+            return $this->rotationEngine->isWorkDay($rotation, $group->group_index, $date);
+        }
+
+        return false;
     }
 
     /**

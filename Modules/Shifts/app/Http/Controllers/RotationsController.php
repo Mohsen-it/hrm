@@ -14,6 +14,7 @@ use Modules\Shifts\Http\Requests\StoreRotationRequest;
 use Modules\Shifts\Http\Requests\UpdateRotationRequest;
 use Modules\Shifts\Http\Resources\RotationGroupResource;
 use Modules\Shifts\Http\Resources\RotationResource;
+use Modules\Shifts\Models\RotationAssignment;
 use Modules\Shifts\Models\RotationGroup;
 use Modules\Shifts\Services\RotationService;
 use Modules\Shifts\Services\TimeScheduleService;
@@ -377,6 +378,124 @@ class RotationsController extends Controller
 
         return response()->json([
             'groups' => RotationGroupResource::collection($rotation->groups),
+        ]);
+    }
+
+    /**
+     * Show the manage assignments page.
+     */
+    public function manageAssignments(Request $request): Response
+    {
+        $this->authorize('assign-employees-to-rotation');
+
+        return Inertia::render('Shifts/Rotations/ManageAssignments', [
+            'rotations' => fn () => RotationResource::collection($this->rotationService->getAllList()),
+            'departments' => fn () => Department::orderBy('department_name')->get(['id', 'department_name']),
+            'preselected_rotation_id' => $request->input('rotation') ? (int) $request->input('rotation') : null,
+        ]);
+    }
+
+    /**
+     * Get all employees assigned to a rotation with their group info (AJAX endpoint).
+     */
+    public function getRotationEmployees(int|string $id, Request $request)
+    {
+        $this->authorize('view-rotations');
+
+        $rotation = $this->rotationService->getById($id);
+
+        if (! $rotation) {
+            return response()->json(['employees' => []], 404);
+        }
+
+        $departmentId = $request->input('department_id');
+        $search = $request->input('search', '');
+
+        $query = User::query()
+            ->active()
+            ->withoutSuperAdmin()
+            ->select('id', 'employee_code', 'name', 'first_name', 'last_name', 'department_id');
+
+        if ($departmentId) {
+            $query->where('department_id', $departmentId);
+        }
+
+        if ($search) {
+            $query->where(function ($q) use ($search): void {
+                $q->where('name', 'like', "%{$search}%")
+                    ->orWhere('first_name', 'like', "%{$search}%")
+                    ->orWhere('last_name', 'like', "%{$search}%")
+                    ->orWhere('employee_code', 'like', "%{$search}%");
+            });
+        }
+
+        $employees = $query->orderBy('name')->get();
+
+        $employeeIds = $employees->pluck('id')->toArray();
+
+        $assignments = RotationAssignment::query()
+            ->with(['rotationGroup'])
+            ->where('rotation_id', $id)
+            ->whereIn('employee_id', $employeeIds)
+            ->whereNull('end_date')
+            ->get()
+            ->keyBy('employee_id');
+
+        $result = $employees->map(function ($emp) use ($assignments) {
+            $assignment = $assignments->get($emp->id);
+
+            return [
+                'id' => $emp->id,
+                'employee_code' => $emp->employee_code,
+                'name' => $emp->name,
+                'first_name' => $emp->first_name,
+                'last_name' => $emp->last_name,
+                'full_name' => trim(($emp->first_name ?? '').' '.($emp->last_name ?? '')),
+                'department_id' => $emp->department_id,
+                'rotation_group_id' => $assignment?->rotation_group_id,
+                'rotation_group_name' => $assignment?->rotationGroup?->name,
+                'start_date' => $assignment?->start_date,
+            ];
+        });
+
+        return response()->json([
+            'employees' => $result,
+        ]);
+    }
+
+    /**
+     * Bulk transfer employees between groups (AJAX endpoint).
+     */
+    public function bulkTransfer(Request $request)
+    {
+        $this->authorize('assign-employees-to-rotation');
+
+        $request->validate([
+            'assignments' => ['required', 'array'],
+            'assignments.*.employee_id' => ['required', 'integer', 'exists:users,id'],
+            'assignments.*.rotation_group_id' => ['required', 'integer', 'exists:att_rotation_groups,id'],
+            'effective_date' => ['required', 'date'],
+        ]);
+
+        $count = 0;
+
+        foreach ($request->assignments as $assignment) {
+            $group = RotationGroup::find($assignment['rotation_group_id']);
+            if ($group) {
+                $this->rotationService->transferEmployee(
+                    $assignment['employee_id'],
+                    $group->rotation_id,
+                    $assignment['rotation_group_id'],
+                    $request->effective_date
+                );
+                $count++;
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => __('shifts.rotation_employees_transferred_count', ['count' => $count]),
+            'count' => $count,
         ]);
     }
 }

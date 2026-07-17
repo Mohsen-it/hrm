@@ -109,6 +109,9 @@ const nextMonth = () => {
                 <Button variant="secondary" :href="route('rotations.edit', rotation.id)" icon="fas fa-edit">
                     {{ t('common.edit') }}
                 </Button>
+                <Button variant="secondary" :href="route('rotations.assign.manage', { rotation: rotation.id })" icon="fas fa-users-cog">
+                    {{ t('shifts.manage_assignments') }}
+                </Button>
                 <Button variant="primary" :href="route('rotations.assign', { rotation: rotation.id })" icon="fas fa-user-plus">
                     {{ t('shifts.assign_employee') }}
                 </Button>

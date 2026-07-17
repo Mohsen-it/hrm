@@ -3,7 +3,6 @@
 namespace Modules\Shifts\Http\Controllers;
 
 use App\Http\Controllers\Controller;
-use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -13,9 +12,9 @@ use Modules\Shifts\Http\Requests\AssignRotationRequest;
 use Modules\Shifts\Http\Requests\BulkAssignRotationRequest;
 use Modules\Shifts\Http\Requests\StoreRotationRequest;
 use Modules\Shifts\Http\Requests\UpdateRotationRequest;
-use Modules\Shifts\Http\Resources\RotationAssignmentResource;
 use Modules\Shifts\Http\Resources\RotationGroupResource;
 use Modules\Shifts\Http\Resources\RotationResource;
+use Modules\Shifts\Models\RotationGroup;
 use Modules\Shifts\Services\RotationService;
 use Modules\Shifts\Services\TimeScheduleService;
 use Modules\Users\Models\User;
@@ -172,7 +171,7 @@ class RotationsController extends Controller
 
         $this->rotationService->updateGroup($groupId, $request->only(['name', 'time_schedule_id']));
 
-        $group = \Modules\Shifts\Models\RotationGroup::find($groupId);
+        $group = RotationGroup::find($groupId);
 
         return redirect()->route('rotations.show', $group->rotation_id)
             ->with('success', __('shifts.rotation_group_updated'));
@@ -185,7 +184,7 @@ class RotationsController extends Controller
     {
         $this->authorize('edit-rotations');
 
-        $group = \Modules\Shifts\Models\RotationGroup::find($groupId);
+        $group = RotationGroup::find($groupId);
         $rotationId = $group?->rotation_id;
 
         $this->rotationService->deleteGroup($groupId);
@@ -203,6 +202,21 @@ class RotationsController extends Controller
 
         return Inertia::render('Shifts/Rotations/Assign', [
             'rotations' => fn () => RotationResource::collection($this->rotationService->getAllList()),
+            'preselected_rotation_id' => $request->input('rotation') ? (int) $request->input('rotation') : null,
+            'preselected_group_id' => $request->input('group') ? (int) $request->input('group') : null,
+        ]);
+    }
+
+    /**
+     * Show the bulk assignment page.
+     */
+    public function bulkAssignPage(Request $request): Response
+    {
+        $this->authorize('assign-employees-to-rotation');
+
+        return Inertia::render('Shifts/Rotations/BulkAssign', [
+            'rotations' => fn () => RotationResource::collection($this->rotationService->getAllList()),
+            'departments' => fn () => Department::orderBy('department_name')->get(['id', 'department_name']),
             'preselected_rotation_id' => $request->input('rotation') ? (int) $request->input('rotation') : null,
             'preselected_group_id' => $request->input('group') ? (int) $request->input('group') : null,
         ]);

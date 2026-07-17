@@ -126,6 +126,12 @@ Route::middleware(['auth', 'permission:create-rotations'])
             ->name('rotations.store');
     });
 
+Route::middleware(['auth', 'permission:assign-employees-to-rotation'])
+    ->group(function () {
+        Route::get('rotations/search-employees', [RotationsController::class, 'searchEmployees'])
+            ->name('rotations.search-employees');
+    });
+
 Route::middleware(['auth', 'permission:view-rotations'])
     ->group(function () {
         Route::get('rotations', [RotationsController::class, 'index'])
@@ -159,10 +165,12 @@ Route::middleware(['auth', 'permission:delete-rotations'])
     });
 
 // Rotation Assignments
-Route::middleware(['auth', 'permission:view-rotations'])
+Route::middleware(['auth', 'permission:assign-employees-to-rotation'])
     ->group(function () {
         Route::get('rotation-assignments', [RotationsController::class, 'assignPage'])
             ->name('rotations.assign');
+        Route::get('rotation-assignments/bulk', [RotationsController::class, 'bulkAssignPage'])
+            ->name('rotations.assign.bulk-page');
     });
 
 Route::middleware(['auth', 'permission:assign-employees-to-rotation'])
@@ -175,6 +183,4 @@ Route::middleware(['auth', 'permission:assign-employees-to-rotation'])
             ->name('rotations.assign.transfer');
         Route::post('rotation-assignments/unassign', [RotationsController::class, 'unassign'])
             ->name('rotations.assign.unassign');
-        Route::get('rotations/search-employees', [RotationsController::class, 'searchEmployees'])
-            ->name('rotations.search-employees');
     });

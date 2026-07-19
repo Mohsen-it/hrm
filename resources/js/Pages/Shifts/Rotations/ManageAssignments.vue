@@ -210,18 +210,21 @@ const unassignSelected = async () => {
     saving.value = true;
 
     try {
-        for (const empId of selectedEmployees.value) {
-            await fetch(route('rotations.assign.unassign'), {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'X-XSRF-TOKEN': decodeURIComponent(document.cookie.match(/XSRF-TOKEN=([^;]+)/)?.[1] || ''),
-                },
-                body: JSON.stringify({
-                    employee_id: empId,
-                }),
-            });
+        const response = await fetch(route('rotations.assign.bulk-unassign'), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-XSRF-TOKEN': decodeURIComponent(document.cookie.match(/XSRF-TOKEN=([^;]+)/)?.[1] || ''),
+            },
+            body: JSON.stringify({
+                employee_ids: selectedEmployees.value,
+            }),
+        });
+
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            throw new Error(data.message || 'Failed');
         }
 
         selectedEmployees.value = [];

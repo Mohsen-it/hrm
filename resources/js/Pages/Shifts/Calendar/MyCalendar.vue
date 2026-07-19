@@ -4,7 +4,6 @@ import { router } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import { PageHeader, Card, Button } from '@/Components/ui'
 import CalendarLegend from '@/Pages/Shifts/Partials/CalendarLegend.vue'
-import CyclicDaysDisplay from '@/Pages/Shifts/Partials/CyclicDaysDisplay.vue'
 import { useTranslations } from '@/composables/useTranslations'
 
 const { t } = useTranslations()

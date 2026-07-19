@@ -138,6 +138,8 @@ Route::middleware(['auth', 'permission:view-rotations'])
             ->name('rotations.index');
         Route::get('rotations/{id}/preview', [RotationsController::class, 'preview'])
             ->name('rotations.preview');
+        Route::get('rotations/{id}/timeline', [RotationsController::class, 'timeline'])
+            ->name('rotations.timeline');
         Route::get('rotations/{id}/groups', [RotationsController::class, 'getGroups'])
             ->name('rotations.groups');
         Route::get('rotations/{id}', [RotationsController::class, 'show'])
@@ -185,6 +187,8 @@ Route::middleware(['auth', 'permission:assign-employees-to-rotation'])
             ->name('rotations.assign.transfer');
         Route::post('rotation-assignments/unassign', [RotationsController::class, 'unassign'])
             ->name('rotations.assign.unassign');
+        Route::post('rotation-assignments/bulk-unassign', [RotationsController::class, 'bulkUnassign'])
+            ->name('rotations.assign.bulk-unassign');
         Route::post('rotation-assignments/bulk-transfer', [RotationsController::class, 'bulkTransfer'])
             ->name('rotations.assign.bulk-transfer');
     });

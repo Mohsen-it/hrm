@@ -19,6 +19,7 @@ class BulkAssignRotationRequest extends FormRequest
             'rotation_id' => ['required', 'integer', 'exists:att_rotations,id'],
             'rotation_group_id' => ['required', 'integer', 'exists:att_rotation_groups,id'],
             'start_date' => ['required', 'date'],
+            'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
         ];
     }
 }

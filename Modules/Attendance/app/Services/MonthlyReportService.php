@@ -4,6 +4,7 @@ namespace Modules\Attendance\Services;
 
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Modules\Users\Models\User;
 
 /**
@@ -206,7 +207,7 @@ class MonthlyReportService
 
     /**
      * Number of working days in the supplied month (Mon–Fri).
-     * Excludes public holidays — the holiday service can be wired in later.
+     * Subtracts public holidays that fall on working days.
      */
     protected function workingDays(int $year, int $month): int
     {
@@ -214,12 +215,68 @@ class MonthlyReportService
         $start = CarbonImmutable::create($year, $month, 1)->startOfMonth();
         $end = $start->endOfMonth();
 
+        // Collect all holiday dates for this month
+        $holidayDates = $this->getHolidayDatesForRange($start->toDateString(), $end->toDateString());
+
         for ($d = $start; $d->lessThanOrEqualTo($end); $d = $d->addDay()) {
             if (! in_array((int) $d->format('N'), [5, 6], true)) {
-                $count++;
+                if (! in_array($d->toDateString(), $holidayDates)) {
+                    $count++;
+                }
             }
         }
 
         return $count;
+    }
+
+    /**
+     * Get all holiday dates within a date range, considering duration_days.
+     *
+     * @return array<int, string> Y-m-d strings
+     */
+    protected function getHolidayDatesForRange(string $from, string $to): array
+    {
+        if (! Schema::hasTable('holidays')) {
+            return [];
+        }
+
+        $holidays = DB::table('holidays')
+            ->where('is_active', true)
+            ->whereNull('deleted_at')
+            ->get();
+
+        $dates = [];
+        foreach ($holidays as $holiday) {
+            $duration = max(1, (int) ($holiday->duration_days ?? 1));
+
+            if (! $holiday->is_recurring && $holiday->date) {
+                $anchor = is_string($holiday->date) ? $holiday->date : date('Y-m-d', strtotime($holiday->date));
+                for ($i = 0; $i < $duration; $i++) {
+                    $holidayDate = date('Y-m-d', strtotime("+{$i} day", strtotime($anchor)));
+                    if ($holidayDate >= $from && $holidayDate <= $to) {
+                        $dates[] = $holidayDate;
+                    }
+                }
+            }
+
+            if ($holiday->is_recurring && $holiday->recurring_month && $holiday->recurring_day) {
+                $startTs = strtotime($from);
+                $endTs = strtotime($to);
+                for ($ts = $startTs; $ts <= $endTs; $ts = strtotime('+1 day', $ts)) {
+                    $m = (int) date('n', $ts);
+                    $d = (int) date('j', $ts);
+                    if ($m === (int) $holiday->recurring_month && $d === (int) $holiday->recurring_day) {
+                        for ($i = 0; $i < $duration; $i++) {
+                            $holidayDate = date('Y-m-d', strtotime("+{$i} day", $ts));
+                            if ($holidayDate >= $from && $holidayDate <= $to) {
+                                $dates[] = $holidayDate;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        return array_values(array_unique($dates));
     }
 }

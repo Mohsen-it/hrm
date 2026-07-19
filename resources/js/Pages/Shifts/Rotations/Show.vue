@@ -2,7 +2,7 @@
 import { ref, computed } from 'vue';
 import { Head, Link } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
-import { PageHeader, Button, Card, Badge, DataTable } from '@/Components/ui';
+import { PageHeader, Button, Card, Badge, DataTable, LoadingSpinner } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
@@ -13,6 +13,9 @@ const props = defineProps({
     preview_from: { type: String, required: true },
     preview_to: { type: String, required: true },
 });
+
+const previewData = ref(props.preview);
+const loadingPreview = ref(false);
 
 const currentMonth = ref(new Date(props.preview_from).getMonth());
 const currentYear = ref(new Date(props.preview_from).getFullYear());
@@ -52,7 +55,7 @@ const monthSchedule = computed(() => {
 
     for (let d = 1; d <= lastDay.getDate(); d++) {
         const dateStr = `${currentYear.value}-${String(currentMonth.value + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-        const previewDay = props.preview.find(p => p.date === dateStr);
+        const previewDay = previewData.value.find(p => p.date === dateStr);
 
         days.push({
             date: dateStr,
@@ -74,6 +77,19 @@ const chunkedDays = computed(() => {
     return chunks;
 });
 
+async function fetchPreview(from, to) {
+    loadingPreview.value = true;
+    try {
+        const response = await fetch(route('rotations.preview', props.rotation.id) + `?from=${from}&to=${to}`);
+        const data = await response.json();
+        previewData.value = data.preview;
+    } catch (e) {
+        console.error('Failed to fetch preview:', e);
+    } finally {
+        loadingPreview.value = false;
+    }
+}
+
 const prevMonth = () => {
     if (currentMonth.value === 0) {
         currentMonth.value = 11;
@@ -81,6 +97,7 @@ const prevMonth = () => {
     } else {
         currentMonth.value--;
     }
+    prefetchIfNeeded();
 };
 
 const nextMonth = () => {
@@ -90,7 +107,21 @@ const nextMonth = () => {
     } else {
         currentMonth.value++;
     }
+    prefetchIfNeeded();
 };
+
+function prefetchIfNeeded() {
+    const monthStart = `${currentYear.value}-${String(currentMonth.value + 1).padStart(2, '0')}-01`;
+    const lastDay = new Date(currentYear.value, currentMonth.value + 1, 0).getDate();
+    const monthEnd = `${currentYear.value}-${String(currentMonth.value + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+
+    const hasData = previewData.value.some(p => p.date >= monthStart && p.date <= monthEnd);
+    if (!hasData) {
+        const from = `${currentYear.value}-${String(currentMonth.value + 1).padStart(2, '0')}-01`;
+        const to = `${currentYear.value}-${String(currentMonth.value + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+        fetchPreview(from, to);
+    }
+}
 
 const groupColumns = computed(() => [
     { key: 'name', label: t('shifts.group_name') },
@@ -126,6 +157,9 @@ const groupsData = computed(() => ({
                 </Button>
                 <Button variant="secondary" :href="route('rotations.assign.manage', { rotation: rotation.id })" icon="fas fa-users-cog">
                     {{ t('shifts.manage_assignments') }}
+                </Button>
+                <Button variant="secondary" :href="route('rotations.timeline', rotation.id)" icon="fas fa-project-diagram">
+                    {{ t('shifts.timeline') }}
                 </Button>
                 <Button variant="primary" :href="route('rotations.assign', { rotation: rotation.id })" icon="fas fa-user-plus">
                     {{ t('shifts.assign_employee') }}
@@ -245,6 +279,7 @@ const groupsData = computed(() => ({
                     <div class="flex items-center gap-2">
                         <Button variant="ghost" size="sm" @click="prevMonth" icon="fas fa-chevron-right" />
                         <Button variant="ghost" size="sm" @click="nextMonth" icon="fas fa-chevron-left" />
+                        <LoadingSpinner v-if="loadingPreview" size="sm" />
                     </div>
                 </div>
             </template>

@@ -98,6 +98,14 @@ const formatDate = (dateStr) => {
     const date = new Date(dateStr);
     return date.toLocaleDateString('ar-SA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 };
+
+const chunkedDays = computed(() => {
+    const chunks = [];
+    for (let i = 0; i < monthSchedule.value.length; i += 7) {
+        chunks.push(monthSchedule.value.slice(i, i + 7));
+    }
+    return chunks;
+});
 </script>
 
 <template>
@@ -273,17 +281,3 @@ const formatDate = (dateStr) => {
         </Card>
     </AppLayout>
 </template>
-
-<script>
-export default {
-    computed: {
-        chunkedDays() {
-            const chunks = [];
-            for (let i = 0; i < this.monthSchedule.length; i += 7) {
-                chunks.push(this.monthSchedule.slice(i, i + 7));
-            }
-            return chunks;
-        }
-    }
-}
-</script>

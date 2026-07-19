@@ -285,7 +285,7 @@ class DailyAttendanceSummaryService
         if (! $holiday->is_recurring && $holiday->date) {
             $anchor = is_string($holiday->date) ? $holiday->date : date('Y-m-d', strtotime($holiday->date));
             if ($date >= $anchor) {
-                $endDate = date('Y-m-d', strtotime("+".($duration - 1)." day", strtotime($anchor)));
+                $endDate = date('Y-m-d', strtotime('+'.($duration - 1).' day', strtotime($anchor)));
                 if ($date <= $endDate) {
                     return true;
                 }

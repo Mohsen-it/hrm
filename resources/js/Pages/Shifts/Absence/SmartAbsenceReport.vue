@@ -1,8 +1,8 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { router } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
-import { PageHeader, Card, Button, DataTable, FormInput, FormSelect } from '@/Components/ui'
+import { PageHeader, Card, Button, DataTable, FormInput, FormSelect, LoadingSpinner } from '@/Components/ui'
 import CalendarLegend from '@/Pages/Shifts/Partials/CalendarLegend.vue'
 import { useTranslations } from '@/composables/useTranslations'
 
@@ -20,11 +20,58 @@ const selectedMonth = ref(props.filters?.month || new Date().getMonth() + 1)
 const selectedYear = ref(props.filters?.year || new Date().getFullYear())
 const selectedEmployeeId = ref(props.filters?.employee_id || null)
 
+const employeeSearch = ref('')
+const employeeResults = ref([])
+const searchingEmployees = ref(false)
+const showEmployeeDropdown = ref(false)
+const selectedEmployeeName = ref('')
+
 const columns = computed(() => [
     { key: 'name', label: t('shifts.employee_name'), sortable: true, filterable: true },
     { key: 'employee_code', label: t('shifts.code'), sortable: true, filterable: true },
     { key: 'department_id', label: t('shifts.department'), sortable: true, filterable: true },
 ])
+
+let searchTimeout = null
+
+async function searchEmployees(query) {
+    if (!query || query.length < 2) {
+        employeeResults.value = []
+        return
+    }
+    searchingEmployees.value = true
+    try {
+        const response = await fetch(route('rotations.search-employees') + `?search=${encodeURIComponent(query)}`)
+        const data = await response.json()
+        employeeResults.value = data.employees || []
+    } catch (e) {
+        employeeResults.value = []
+    } finally {
+        searchingEmployees.value = false
+    }
+}
+
+function onEmployeeSearchInput(value) {
+    employeeSearch.value = value
+    showEmployeeDropdown.value = true
+    clearTimeout(searchTimeout)
+    searchTimeout = setTimeout(() => searchEmployees(value), 300)
+}
+
+function selectEmployee(emp) {
+    selectedEmployeeId.value = emp.id
+    selectedEmployeeName.value = emp.name || emp.full_name
+    employeeSearch.value = emp.name || emp.full_name
+    showEmployeeDropdown.value = false
+    employeeResults.value = []
+}
+
+function clearEmployeeSelection() {
+    selectedEmployeeId.value = null
+    selectedEmployeeName.value = ''
+    employeeSearch.value = ''
+    showEmployeeDropdown.value = false
+}
 
 function loadDaily() {
     router.get(route('smart-absence.daily'), {
@@ -121,13 +168,49 @@ const monthOptions = computed(() =>
             <Card variant="base" padding="none" class="mb-6">
                 <div class="p-5 sm:p-6">
                     <div class="flex items-end gap-4 flex-wrap">
-                        <FormInput
-                            v-model.number="selectedEmployeeId"
-                            type="number"
-                            :label="t('shifts.employee_id')"
-                            name="employee_id"
-                            :placeholder="t('shifts.employee_id')"
-                        />
+                        <div class="relative">
+                            <label class="block text-[12px] font-semibold text-mistral-slate uppercase tracking-wider mb-1">
+                                {{ t('shifts.employee') }}
+                            </label>
+                            <div class="flex items-center gap-2">
+                                <input
+                                    type="text"
+                                    :value="employeeSearch"
+                                    @input="onEmployeeSearchInput($event.target.value)"
+                                    @focus="showEmployeeDropdown = true"
+                                    :placeholder="t('shifts.search_employee')"
+                                    class="form-input text-sm border border-mistral-hairline rounded-lg px-3 py-2 w-64"
+                                />
+                                <LoadingSpinner v-if="searchingEmployees" size="sm" />
+                                <button
+                                    v-if="selectedEmployeeId"
+                                    @click="clearEmployeeSelection"
+                                    class="text-mistral-steel hover:text-mistral-danger text-sm"
+                                >
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                            <div
+                                v-if="showEmployeeDropdown && employeeResults.length > 0"
+                                class="absolute z-50 mt-1 w-full bg-white border border-mistral-hairline rounded-lg shadow-lg max-h-60 overflow-auto"
+                            >
+                                <button
+                                    v-for="emp in employeeResults"
+                                    :key="emp.id"
+                                    @click="selectEmployee(emp)"
+                                    class="w-full text-left px-3 py-2 hover:bg-mistral-cream-light text-sm border-b border-mistral-hairline-soft last:border-0"
+                                >
+                                    <div class="font-medium">{{ emp.name }}</div>
+                                    <div class="text-xs text-mistral-steel">{{ emp.employee_code }}</div>
+                                </button>
+                            </div>
+                            <div
+                                v-if="showEmployeeDropdown && employeeSearch.length >= 2 && employeeResults.length === 0 && !searchingEmployees"
+                                class="absolute z-50 mt-1 w-full bg-white border border-mistral-hairline rounded-lg shadow-lg p-3 text-sm text-mistral-steel"
+                            >
+                                {{ t('common.no_results') }}
+                            </div>
+                        </div>
                         <FormSelect
                             v-model="selectedMonth"
                             :label="t('shifts.month')"

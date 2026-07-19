@@ -109,10 +109,10 @@ class ShiftReportsService
         return $query
             ->select(
                 'user_id',
-                DB::raw("SUM(CASE WHEN status IN ('present','late') THEN 1 ELSE 0 END) as days_worked"),
+                DB::raw("SUM(CASE WHEN status IN ('present','late','early_leave') THEN 1 ELSE 0 END) as days_worked"),
                 DB::raw('SUM(late_minutes) as total_late_minutes'),
                 DB::raw("SUM(CASE WHEN status = 'absent' THEN 1 ELSE 0 END) as unexcused_absences"),
-                DB::raw("SUM(CASE WHEN status IN ('on_leave','excused','leave_excused') THEN 1 ELSE 0 END) as approved_leave_days"),
+                DB::raw("SUM(CASE WHEN status IN ('vacation','on_leave','excused','leave_excused') THEN 1 ELSE 0 END) as approved_leave_days"),
                 DB::raw("SUM(CASE WHEN status = 'late' THEN 1 ELSE 0 END) as late_days"),
             )
             ->groupBy('user_id')

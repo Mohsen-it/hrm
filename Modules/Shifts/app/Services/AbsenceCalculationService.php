@@ -38,7 +38,21 @@ class AbsenceCalculationService
             }
         }
 
-        return $expectedIds->unique()->values();
+        $expectedIds = $expectedIds->unique()->values();
+
+        if ($expectedIds->isEmpty()) {
+            return $expectedIds;
+        }
+
+        return DB::table('users')
+            ->whereIn('id', $expectedIds->toArray())
+            ->where('status', 1)
+            ->where('is_active_employee', true)
+            ->where(function ($q) use ($dateStr) {
+                $q->whereNull('termination_date')
+                    ->orWhere('termination_date', '>=', $dateStr);
+            })
+            ->pluck('id');
     }
 
     /**
@@ -108,6 +122,16 @@ class AbsenceCalculationService
         $endOfMonth = $startOfMonth->copy()->endOfMonth();
         $result = [];
 
+        $employee = DB::table('users')
+            ->where('id', $employeeId)
+            ->where('status', 1)
+            ->where('is_active_employee', true)
+            ->first();
+
+        if (! $employee) {
+            return [];
+        }
+
         $rotationAssignment = $this->rotationAssignmentRepository->getActiveAssignment($employeeId);
 
         if (! $rotationAssignment) {
@@ -165,6 +189,16 @@ class AbsenceCalculationService
      */
     public function isEmployeeExpectedToWork(int $employeeId, Carbon $date): bool
     {
+        $employee = DB::table('users')
+            ->where('id', $employeeId)
+            ->where('status', 1)
+            ->where('is_active_employee', true)
+            ->first();
+
+        if (! $employee) {
+            return false;
+        }
+
         $rotationAssignment = $this->rotationAssignmentRepository->getActiveAssignment($employeeId);
 
         if ($rotationAssignment) {

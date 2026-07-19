@@ -116,11 +116,6 @@ function submit() {
         },
     });
 }
-
-const scheduleOptions = computed(() => {
-    const items = Array.isArray(props.timeSchedules) ? props.timeSchedules : (props.timeSchedules?.data || []);
-    return items.map((s) => ({ value: s.id, label: s.name }));
-});
 </script>
 
 <template>

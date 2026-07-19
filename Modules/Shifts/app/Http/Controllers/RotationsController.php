@@ -3,6 +3,7 @@
 namespace Modules\Shifts\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -16,6 +17,7 @@ use Modules\Shifts\Http\Resources\RotationGroupResource;
 use Modules\Shifts\Http\Resources\RotationResource;
 use Modules\Shifts\Models\RotationAssignment;
 use Modules\Shifts\Models\RotationGroup;
+use Modules\Shifts\Services\RotationEngine;
 use Modules\Shifts\Services\RotationService;
 use Modules\Shifts\Services\TimeScheduleService;
 use Modules\Users\Models\User;
@@ -24,6 +26,7 @@ class RotationsController extends Controller
 {
     public function __construct(
         private RotationService $rotationService,
+        private RotationEngine $rotationEngine,
         private TimeScheduleService $timeScheduleService,
     ) {}
 
@@ -203,24 +206,20 @@ class RotationsController extends Controller
 
         return Inertia::render('Shifts/Rotations/Assign', [
             'rotations' => fn () => RotationResource::collection($this->rotationService->getAllList()),
+            'departments' => fn () => Department::orderBy('department_name')->get(['id', 'department_name']),
             'preselected_rotation_id' => $request->input('rotation') ? (int) $request->input('rotation') : null,
             'preselected_group_id' => $request->input('group') ? (int) $request->input('group') : null,
         ]);
     }
 
     /**
-     * Show the bulk assignment page.
+     * Redirect bulk assignment page to unified assignment page.
      */
-    public function bulkAssignPage(Request $request): Response
+    public function bulkAssignPage(Request $request): RedirectResponse
     {
         $this->authorize('assign-employees-to-rotation');
 
-        return Inertia::render('Shifts/Rotations/BulkAssign', [
-            'rotations' => fn () => RotationResource::collection($this->rotationService->getAllList()),
-            'departments' => fn () => Department::orderBy('department_name')->get(['id', 'department_name']),
-            'preselected_rotation_id' => $request->input('rotation') ? (int) $request->input('rotation') : null,
-            'preselected_group_id' => $request->input('group') ? (int) $request->input('group') : null,
-        ]);
+        return redirect()->route('rotations.assign', $request->only(['rotation', 'group']));
     }
 
     /**
@@ -254,7 +253,8 @@ class RotationsController extends Controller
                 $employeeId,
                 $request->rotation_id,
                 $request->rotation_group_id,
-                $request->start_date
+                $request->start_date,
+                $request->end_date
             );
         }
 
@@ -303,6 +303,31 @@ class RotationsController extends Controller
     }
 
     /**
+     * Bulk unassign employees from their rotation (AJAX endpoint).
+     */
+    public function bulkUnassign(Request $request)
+    {
+        $this->authorize('assign-employees-to-rotation');
+
+        $request->validate([
+            'employee_ids' => ['required', 'array'],
+            'employee_ids.*' => ['required', 'integer', 'exists:users,id'],
+        ]);
+
+        $count = 0;
+        foreach ($request->employee_ids as $employeeId) {
+            $this->rotationService->unassignEmployee($employeeId, now()->toDateString());
+            $count++;
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => __('shifts.rotation_employees_unassigned_count', ['count' => $count]),
+            'count' => $count,
+        ]);
+    }
+
+    /**
      * Get schedule preview data (AJAX endpoint).
      */
     public function preview(int|string $id, Request $request)
@@ -316,6 +341,73 @@ class RotationsController extends Controller
 
         return response()->json([
             'preview' => $preview,
+            'from' => $from,
+            'to' => $to,
+        ]);
+    }
+
+    /**
+     * Display the rotation timeline (Gantt-style view).
+     */
+    public function timeline(int|string $id, Request $request): Response
+    {
+        $this->authorize('view-rotations');
+        $id = (int) $id;
+
+        $rotation = $this->rotationService->getById($id);
+
+        if (! $rotation) {
+            abort(404);
+        }
+
+        $from = $request->get('from', now()->startOfMonth()->toDateString());
+        $to = $request->get('to', now()->addDays(90)->toDateString());
+
+        $groups = $rotation->groups()->orderBy('group_index')->get();
+
+        $assignments = RotationAssignment::query()
+            ->with(['employee:id,name,employee_code,department_id', 'rotationGroup:id,name,rotation_id,group_index'])
+            ->where('rotation_id', $id)
+            ->whereNull('end_date')
+            ->get();
+
+        $timeline = [];
+        foreach ($assignments as $assignment) {
+            $employee = $assignment->employee;
+            if (! $employee) {
+                continue;
+            }
+
+            $groupIndex = $assignment->rotationGroup?->group_index ?? 0;
+            $days = [];
+
+            $current = Carbon::parse($from)->startOfDay();
+            $end = Carbon::parse($to)->startOfDay();
+
+            while ($current->lte($end)) {
+                $days[] = [
+                    'date' => $current->format('Y-m-d'),
+                    'is_work_day' => $this->rotationEngine->isWorkDay($rotation, $groupIndex, $current),
+                ];
+                $current->addDay();
+            }
+
+            $timeline[] = [
+                'employee_id' => $employee->id,
+                'employee_name' => $employee->name,
+                'employee_code' => $employee->employee_code,
+                'group_id' => $assignment->rotation_group_id,
+                'group_name' => $assignment->rotationGroup?->name,
+                'group_index' => $groupIndex,
+                'start_date' => $assignment->start_date,
+                'days' => $days,
+            ];
+        }
+
+        return Inertia::render('Shifts/Rotations/Timeline', [
+            'rotation' => fn () => new RotationResource($rotation),
+            'groups' => fn () => $groups,
+            'timeline' => fn () => $timeline,
             'from' => $from,
             'to' => $to,
         ]);

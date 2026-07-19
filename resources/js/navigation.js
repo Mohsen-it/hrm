@@ -141,41 +141,9 @@ export const navigationGroups = [
     key: 'shifts',
     label: 'common.shifts',
     items: [
-      {
-        id: 'shifts.shifts',
-        label: 'menu.shifts',
-        route: 'shifts.index',
-        icon: 'fa-solid fa-arrows-left-right',
-        permissions: ['view-shifts'],
-      },
-      {
-        id: 'shifts.categories',
-        label: 'menu.shift_categories',
-        route: 'shift-categories.index',
-        icon: 'fa-solid fa-tags',
-        permissions: ['view-shift-categories'],
-      },
-      {
-        id: 'shifts.time-schedules',
-        label: 'menu.time_schedules',
-        route: 'time-schedules.index',
-        icon: 'fa-solid fa-clock',
-        permissions: ['view-time-schedules'],
-      },
-      {
-        id: 'shifts.assignments',
-        label: 'menu.shift_assignments',
-        route: 'shift-assignments.index',
-        icon: 'fa-solid fa-user-plus',
-        permissions: ['view-shift-categories'],
-      },
-      {
-        id: 'shifts.schedules',
-        label: 'menu.schedules',
-        route: 'schedules.index',
-        icon: 'fa-solid fa-calendar-days',
-        permissions: ['view-shift-categories'],
-      },
+    
+ 
+    
       {
         id: 'shifts.rotations',
         label: 'menu.rotations',
@@ -189,6 +157,13 @@ export const navigationGroups = [
         route: 'rotations.assign',
         icon: 'fa-solid fa-people-arrows',
         permissions: ['assign-employees-to-rotation'],
+      },
+        {
+        id: 'shifts.schedules',
+        label: 'menu.schedules',
+        route: 'schedules.index',
+        icon: 'fa-solid fa-calendar-days',
+        permissions: ['view-shift-categories'],
       },
     ],
   },

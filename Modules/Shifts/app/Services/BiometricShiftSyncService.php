@@ -4,6 +4,7 @@ namespace Modules\Shifts\Services;
 
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
+use Modules\Attendance\Models\AttendanceSession;
 use Modules\Attendance\Models\DailyAttendanceSummary;
 use Modules\Shifts\Repositories\RotationAssignmentRepository;
 
@@ -98,9 +99,8 @@ class BiometricShiftSyncService
     {
         $dateStr = $date->toDateString();
 
-        $sameDay = DB::table('iclock_transaction')
-            ->where('emp_id', $employeeId)
-            ->whereDate('punch_time', $dateStr)
+        $sameDay = AttendanceSession::onDate($dateStr)
+            ->where('user_id', $employeeId)
             ->exists();
 
         if ($sameDay) {
@@ -113,10 +113,9 @@ class BiometricShiftSyncService
         if ($in && $out && $out < $in) {
             $prev = $date->copy()->subDay()->toDateString();
 
-            return DB::table('iclock_transaction')
-                ->where('emp_id', $employeeId)
-                ->whereDate('punch_time', $prev)
-                ->whereTime('punch_time', '>=', $in.':00')
+            return AttendanceSession::where('user_id', $employeeId)
+                ->whereDate('check_in_at', $prev)
+                ->whereTime('check_in_at', '>=', $in.':00')
                 ->exists();
         }
 

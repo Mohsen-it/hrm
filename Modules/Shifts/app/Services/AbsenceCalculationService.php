@@ -5,6 +5,7 @@ namespace Modules\Shifts\Services;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Modules\Attendance\Models\AttendanceSession;
 use Modules\Holidays\Models\Holiday;
 use Modules\Shifts\Models\ShiftException;
 use Modules\Shifts\Repositories\RotationAssignmentRepository;
@@ -79,11 +80,10 @@ class AbsenceCalculationService
 
         $dateStr = $date->toDateString();
 
-        $punchedIds = DB::table('iclock_transaction')
-            ->whereIn('emp_id', $expected->toArray())
-            ->whereDate('punch_time', $dateStr)
+        $punchedIds = AttendanceSession::onDate($dateStr)
+            ->whereIn('user_id', $expected->toArray())
             ->distinct()
-            ->pluck('emp_id');
+            ->pluck('user_id');
 
         $absent = $expected->diff($punchedIds)->values();
 
@@ -147,9 +147,8 @@ class AbsenceCalculationService
             $isExpected = $this->rotationEngine->isWorkDay($rotation, $group->group_index, $current);
 
             if ($isExpected) {
-                $hasPunch = DB::table('iclock_transaction')
-                    ->where('emp_id', $employeeId)
-                    ->whereDate('punch_time', $dateStr)
+                $hasPunch = AttendanceSession::onDate($dateStr)
+                    ->where('user_id', $employeeId)
                     ->exists();
 
                 $approvedLeave = UserVacationRequest::where('status', UserVacationRequest::STATUS_APPROVED)

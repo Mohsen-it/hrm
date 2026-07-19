@@ -5,6 +5,7 @@ namespace Modules\Shifts\Services;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Modules\Attendance\Models\AttendanceSession;
 use Modules\Shifts\Repositories\RotationAssignmentRepository;
 
 /**
@@ -47,13 +48,12 @@ class ShiftReportsService
             return [];
         }
 
-        $punches = DB::table('iclock_transaction')
-            ->whereIn('emp_id', $employeeIds)
-            ->whereDate('punch_time', $dateStr)
-            ->select('emp_id', DB::raw('MIN(punch_time) as first_punch'), DB::raw('MAX(punch_time) as last_punch'))
-            ->groupBy('emp_id')
+        $punches = AttendanceSession::onDate($dateStr)
+            ->whereIn('user_id', $employeeIds)
+            ->select('user_id', DB::raw('MIN(check_in_at) as first_punch'), DB::raw('MAX(check_out_at) as last_punch'))
+            ->groupBy('user_id')
             ->get()
-            ->keyBy('emp_id');
+            ->keyBy('user_id');
 
         $rows = [];
         foreach ($employeeIds as $employeeId) {

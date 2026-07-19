@@ -7,11 +7,11 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
-use Inertia\Response;
+use Modules\Attendance\Models\AttendanceSession;
 use Modules\Holidays\Models\Holiday;
+use Modules\Shifts\Models\ShiftCategory;
 use Modules\Shifts\Services\AbsenceCalculationService;
-use Modules\Shifts\Services\CyclicScheduleCalculator;
-use Modules\Shifts\Services\ShiftCategoryAssignmentService;
+use Modules\Shifts\Services\ScheduleResolverService;
 use Modules\Vacations\Models\UserVacationRequest;
 
 class ScheduleCalendarController extends Controller
@@ -65,9 +65,8 @@ class ScheduleCalendarController extends Controller
                 'name' => $emp->name,
                 'employee_code' => $emp->employee_code,
                 'is_expected' => app(AbsenceCalculationService::class)->isEmployeeExpectedToWork($emp->id, $date),
-                'has_punch' => DB::table('iclock_transaction')
-                    ->where('emp_id', $emp->id)
-                    ->whereDate('punch_time', $dateStr)
+                'has_punch' => AttendanceSession::onDate($dateStr)
+                    ->where('user_id', $emp->id)
                     ->exists(),
             ];
         }
@@ -192,9 +191,8 @@ class ScheduleCalendarController extends Controller
                 $isWorkDay = true;
             }
 
-            $hasPunch = DB::table('iclock_transaction')
-                ->where('emp_id', $userId)
-                ->whereDate('punch_time', $dateStr)
+            $hasPunch = AttendanceSession::onDate($dateStr)
+                ->where('user_id', $userId)
                 ->exists();
 
             $approvedLeave = UserVacationRequest::where('status', 'approved')

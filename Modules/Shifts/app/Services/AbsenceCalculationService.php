@@ -3,7 +3,7 @@
 namespace Modules\Shifts\Services;
 
 use Carbon\Carbon;
-use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Modules\Holidays\Models\Holiday;
 use Modules\Shifts\Models\ShiftException;

@@ -111,7 +111,9 @@ class DailyAttendanceSummaryService
 
         $computed = $this->aggregateSessions($sessions);
 
-        $status = $this->resolveExternalStatus($userId, $date)
+        $employee = User::select('id', 'branch_id', 'department_id')->find($userId);
+
+        $status = $this->resolveExternalStatus($userId, $date, $employee)
             ?? $this->determineStatus($sessions, $resolved, $userId, $date);
 
         $payload = array_merge($computed, [
@@ -223,9 +225,9 @@ class DailyAttendanceSummaryService
      * Determine whether an external module (Vacations / Holidays) has
      * already set the day's status.
      */
-    protected function resolveExternalStatus(int $userId, string $date): ?string
+    protected function resolveExternalStatus(int $userId, string $date, ?User $employee = null): ?string
     {
-        if (Schema::hasTable('holidays') && $this->isHoliday($date)) {
+        if (Schema::hasTable('holidays') && $this->isHoliday($date, $employee)) {
             return 'holiday';
         }
 
@@ -237,31 +239,95 @@ class DailyAttendanceSummaryService
     }
 
     /**
-     * Return true when an active holiday matches the supplied date.
+     * Return true when an active holiday matches the supplied date,
+     * scoped to the employee's branch/department when applicable.
+     *
+     * Supports multi-day holidays via duration_days.
      */
-    protected function isHoliday(string $date): bool
+    protected function isHoliday(string $date, ?User $employee = null): bool
     {
-        $ts = strtotime($date);
-        if ($ts === false) {
+        $query = DB::table('holidays')
+            ->where('is_active', true)
+            ->whereNull('deleted_at');
+
+        // Scope by branch/department when employee context is available
+        if ($employee) {
+            $query->where(function ($q) use ($employee): void {
+                $q->where('applies_to_all', true)
+                    ->orWhere(function ($sub) use ($employee): void {
+                        $sub->whereJsonContains('applies_to_branches', $employee->branch_id);
+                    })
+                    ->orWhere(function ($sub) use ($employee): void {
+                        $sub->whereJsonContains('applies_to_departments', $employee->department_id);
+                    });
+            });
+        }
+
+        // Check if the date falls within any holiday's range (fixed or recurring)
+        $holidays = $query->get();
+
+        foreach ($holidays as $holiday) {
+            if ($this->dateFallsInHolidayRange($date, $holiday)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Check if a specific date falls within a holiday's duration range.
+     */
+    protected function dateFallsInHolidayRange(string $date, \stdClass $holiday): bool
+    {
+        $duration = max(1, (int) ($holiday->duration_days ?? 1));
+
+        if (! $holiday->is_recurring && $holiday->date) {
+            $anchor = is_string($holiday->date) ? $holiday->date : date('Y-m-d', strtotime($holiday->date));
+            if ($date >= $anchor) {
+                $endDate = date('Y-m-d', strtotime("+".($duration - 1)." day", strtotime($anchor)));
+                if ($date <= $endDate) {
+                    return true;
+                }
+            }
+
             return false;
         }
 
-        $month = (int) date('n', $ts);
-        $day = (int) date('j', $ts);
+        if ($holiday->is_recurring && $holiday->recurring_month && $holiday->recurring_day) {
+            $ts = strtotime($date);
+            if ($ts === false) {
+                return false;
+            }
+            $month = (int) date('n', $ts);
+            $day = (int) date('j', $ts);
 
-        return DB::table('holidays')
-            ->where('is_active', true)
-            ->whereNull('deleted_at')
-            ->where(function ($q) use ($date, $month, $day): void {
-                $q->where(function ($fixed) use ($date): void {
-                    $fixed->where('is_recurring', false)->where('date', $date);
-                })->orWhere(function ($recur) use ($month, $day): void {
-                    $recur->where('is_recurring', true)
-                        ->where('recurring_month', $month)
-                        ->where('recurring_day', $day);
-                });
-            })
-            ->exists();
+            // Check if the date matches the anchor or falls within duration_days after it
+            $anchorMonth = (int) $holiday->recurring_month;
+            $anchorDay = (int) $holiday->recurring_day;
+
+            if ($month === $anchorMonth && $day >= $anchorDay) {
+                $dayOffset = $day - $anchorDay;
+                if ($dayOffset < $duration) {
+                    return true;
+                }
+            }
+
+            // Handle month boundary for multi-day recurring holidays
+            if ($duration > 1 && $month === $anchorMonth && $day >= $anchorDay) {
+                // Already covered above
+            } elseif ($duration > 1) {
+                // Check if date is within duration_days of the anchor across month boundary
+                $anchorTs = strtotime(date('Y').'-'.str_pad((string) $anchorMonth, 2, '0', STR_PAD_LEFT).'-'.str_pad((string) $anchorDay, 2, '0', STR_PAD_LEFT));
+                $targetTs = strtotime($date);
+                $diffDays = (int) (($targetTs - $anchorTs) / 86400);
+                if ($diffDays >= 0 && $diffDays < $duration) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /**

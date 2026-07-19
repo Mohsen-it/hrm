@@ -2,10 +2,7 @@
 import { ref, computed } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
-import PageHeader from '@/Components/ui/PageHeader.vue';
-import Button from '@/Components/ui/Button.vue';
-import Card from '@/Components/ui/Card.vue';
-import StatCard from '@/Components/StatCard.vue';
+import { PageHeader, Button, Card, StatCard, FormInput, Alert, DataTable } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
@@ -30,6 +27,38 @@ function applyFilters() {
 }
 
 const flashSuccess = computed(() => page.props.flash?.success);
+
+const monthlyColumns = [
+    { key: 'month', label: t('attendance.fields.month') },
+    { key: 'records', label: t('attendance.monthly_page.records') },
+    { key: 'present', label: t('attendance.kpis.present') },
+    { key: 'absent', label: t('attendance.kpis.absent') },
+    { key: 'late', label: t('attendance.kpis.late') },
+    { key: 'work_minutes', label: t('attendance.monthly_page.work_minutes') },
+    { key: 'overtime_minutes', label: t('attendance.monthly_page.overtime_minutes') },
+];
+
+const userColumns = [
+    { key: 'name', label: t('attendance.fields.user') },
+    { key: 'present_days', label: t('attendance.reports_page.present_days') },
+    { key: 'absent_days', label: t('attendance.reports_page.absent_days') },
+    { key: 'late_days', label: t('attendance.reports_page.late_days') },
+    { key: 'work_minutes', label: t('attendance.monthly_page.work_minutes') },
+    { key: 'overtime_minutes', label: t('attendance.monthly_page.overtime_minutes') },
+];
+
+const deptColumns = [
+    { key: 'department_name', label: t('attendance.fields.department') },
+    { key: 'employees', label: t('attendance.reports_page.employees') },
+    { key: 'present_days', label: t('attendance.reports_page.present_days') },
+    { key: 'absent_days', label: t('attendance.reports_page.absent_days') },
+    { key: 'late_days', label: t('attendance.reports_page.late_days') },
+    { key: 'overtime_minutes', label: t('attendance.monthly_page.overtime_minutes') },
+];
+
+const monthlyData = computed(() => ({ data: props.months, links: [] }));
+const userData = computed(() => ({ data: props.users, links: [] }));
+const deptData = computed(() => ({ data: props.departments, links: [] }));
 </script>
 
 <template>
@@ -39,22 +68,27 @@ const flashSuccess = computed(() => page.props.flash?.success);
             :description="t('attendance.yearly_page.description')"
         />
 
-        <div v-if="flashSuccess" class="alert alert-success flex items-center gap-2 mb-4">
-            <i class="fas fa-check-circle"></i>
-            <span>{{ flashSuccess }}</span>
-        </div>
+        <Alert v-if="flashSuccess" type="success" :message="flashSuccess" class="mb-4" />
 
-        <div class="card p-4 mb-4 flex items-center gap-3 flex-wrap">
-            <label class="flex items-center gap-2 text-[12px]">
-                <span>{{ t('attendance.fields.year') }}</span>
-                <input v-model.number="year" type="number" min="2000" max="2100" class="form-input max-w-[120px]" />
-            </label>
-            <Button variant="primary" icon="fas fa-search" @click="applyFilters">
-                {{ t('common.search') }}
-            </Button>
-        </div>
+        <Card variant="base" padding="none" class="mb-4">
+            <div class="p-5 sm:p-6">
+                <div class="flex items-center gap-3 flex-wrap">
+                    <FormInput
+                        v-model.number="year"
+                        type="number"
+                        :label="t('attendance.fields.year')"
+                        min="2000"
+                        max="2100"
+                        class="max-w-[120px]"
+                    />
+                    <Button variant="primary" icon="fas fa-search" @click="applyFilters" class="self-end">
+                        {{ t('common.search') }}
+                    </Button>
+                </div>
+            </div>
+        </Card>
 
-        <h3 class="text-[16px] font-semibold mt-4 mb-2 text-[var(--color-ink)]">
+        <h3 class="text-[16px] font-semibold mt-4 mb-2 text-mistral-ink">
             {{ t('attendance.yearly_page.yearly_kpis') }}
         </h3>
         <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
@@ -64,101 +98,68 @@ const flashSuccess = computed(() => page.props.flash?.success);
             <StatCard :label="t('attendance.monthly_page.overtime_minutes')" :value="kpis.totals?.overtime_minutes || 0" color="warning" icon="fas fa-hourglass-half" />
         </div>
 
-        <h3 class="text-[16px] font-semibold mt-4 mb-2 text-[var(--color-ink)]">
+        <h3 class="text-[16px] font-semibold mt-4 mb-2 text-mistral-ink">
             {{ t('attendance.yearly_page.monthly_breakdown') }}
         </h3>
-        <div class="card p-4 mb-6 overflow-x-auto">
-            <table class="w-full text-right border-collapse text-[13px]">
-                <thead>
-                    <tr class="bg-[var(--color-surface-1)]">
-                        <th class="px-2 py-2">{{ t('attendance.fields.month') }}</th>
-                        <th class="px-2 py-2">{{ t('attendance.monthly_page.records') }}</th>
-                        <th class="px-2 py-2">{{ t('attendance.kpis.present') }}</th>
-                        <th class="px-2 py-2">{{ t('attendance.kpis.absent') }}</th>
-                        <th class="px-2 py-2">{{ t('attendance.kpis.late') }}</th>
-                        <th class="px-2 py-2">{{ t('attendance.monthly_page.work_minutes') }}</th>
-                        <th class="px-2 py-2">{{ t('attendance.monthly_page.overtime_minutes') }}</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr v-for="m in months" :key="m.month" class="border-b border-[var(--color-hairline)]">
-                        <td class="px-2 py-2" dir="ltr">{{ String(m.month).padStart(2, '0') }}</td>
-                        <td class="px-2 py-2">{{ m.records }}</td>
-                        <td class="px-2 py-2">{{ m.present }}</td>
-                        <td class="px-2 py-2">{{ m.absent }}</td>
-                        <td class="px-2 py-2">{{ m.late }}</td>
-                        <td class="px-2 py-2">{{ m.work_minutes }}</td>
-                        <td class="px-2 py-2">{{ m.overtime_minutes }}</td>
-                    </tr>
-                    <tr v-if="months.length === 0">
-                        <td colspan="7" class="text-center text-[var(--color-ink-muted)] py-4">—</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
+        <Card variant="base" padding="none" class="mb-6">
+            <DataTable
+                :columns="monthlyColumns"
+                :data="monthlyData"
+                storage-key="yearly-monthly"
+                :enable-search="false"
+                :enable-filters="false"
+                :enable-pagination="false"
+                :enable-export="false"
+                :enable-density="false"
+                :enable-column-visibility="false"
+                :selectable="false"
+            >
+                <template #cell-month="{ value }">
+                    <span dir="ltr">{{ String(value).padStart(2, '0') }}</span>
+                </template>
+            </DataTable>
+        </Card>
 
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div class="card p-4">
-                <h3 class="text-[16px] font-semibold mb-3 text-[var(--color-ink)]">
-                    {{ t('attendance.yearly_page.user_table') }}
-                </h3>
-                <table class="w-full text-right border-collapse text-[13px]">
-                    <thead>
-                        <tr class="bg-[var(--color-surface-1)]">
-                            <th class="px-2 py-2">{{ t('attendance.fields.user') }}</th>
-                            <th class="px-2 py-2">{{ t('attendance.reports_page.present_days') }}</th>
-                            <th class="px-2 py-2">{{ t('attendance.reports_page.absent_days') }}</th>
-                            <th class="px-2 py-2">{{ t('attendance.reports_page.late_days') }}</th>
-                            <th class="px-2 py-2">{{ t('attendance.monthly_page.work_minutes') }}</th>
-                            <th class="px-2 py-2">{{ t('attendance.monthly_page.overtime_minutes') }}</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr v-for="u in users" :key="u.user_id" class="border-b border-[var(--color-hairline)]">
-                            <td class="px-2 py-2">{{ u.name }}</td>
-                            <td class="px-2 py-2">{{ u.present_days }}</td>
-                            <td class="px-2 py-2">{{ u.absent_days }}</td>
-                            <td class="px-2 py-2">{{ u.late_days }}</td>
-                            <td class="px-2 py-2">{{ u.work_minutes }}</td>
-                            <td class="px-2 py-2">{{ u.overtime_minutes }}</td>
-                        </tr>
-                        <tr v-if="users.length === 0">
-                            <td colspan="6" class="text-center text-[var(--color-ink-muted)] py-4">—</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
+            <Card variant="base" padding="none">
+                <div class="px-5 py-3 border-b border-mistral-hairline-soft">
+                    <h3 class="text-[16px] font-semibold text-mistral-ink">
+                        {{ t('attendance.yearly_page.user_table') }}
+                    </h3>
+                </div>
+                <DataTable
+                    :columns="userColumns"
+                    :data="userData"
+                    storage-key="yearly-users"
+                    :enable-search="false"
+                    :enable-filters="false"
+                    :enable-pagination="false"
+                    :enable-export="false"
+                    :enable-density="false"
+                    :enable-column-visibility="false"
+                    :selectable="false"
+                />
+            </Card>
 
-            <div class="card p-4">
-                <h3 class="text-[16px] font-semibold mb-3 text-[var(--color-ink)]">
-                    {{ t('attendance.yearly_page.department_table') }}
-                </h3>
-                <table class="w-full text-right border-collapse text-[13px]">
-                    <thead>
-                        <tr class="bg-[var(--color-surface-1)]">
-                            <th class="px-2 py-2">{{ t('attendance.fields.department') }}</th>
-                            <th class="px-2 py-2">{{ t('attendance.reports_page.employees') }}</th>
-                            <th class="px-2 py-2">{{ t('attendance.reports_page.present_days') }}</th>
-                            <th class="px-2 py-2">{{ t('attendance.reports_page.absent_days') }}</th>
-                            <th class="px-2 py-2">{{ t('attendance.reports_page.late_days') }}</th>
-                            <th class="px-2 py-2">{{ t('attendance.monthly_page.overtime_minutes') }}</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr v-for="d in departments" :key="d.department_id" class="border-b border-[var(--color-hairline)]">
-                            <td class="px-2 py-2">{{ d.department_name || '—' }}</td>
-                            <td class="px-2 py-2">{{ d.employees }}</td>
-                            <td class="px-2 py-2">{{ d.present_days }}</td>
-                            <td class="px-2 py-2">{{ d.absent_days }}</td>
-                            <td class="px-2 py-2">{{ d.late_days }}</td>
-                            <td class="px-2 py-2">{{ d.overtime_minutes }}</td>
-                        </tr>
-                        <tr v-if="departments.length === 0">
-                            <td colspan="6" class="text-center text-[var(--color-ink-muted)] py-4">—</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
+            <Card variant="base" padding="none">
+                <div class="px-5 py-3 border-b border-mistral-hairline-soft">
+                    <h3 class="text-[16px] font-semibold text-mistral-ink">
+                        {{ t('attendance.yearly_page.department_table') }}
+                    </h3>
+                </div>
+                <DataTable
+                    :columns="deptColumns"
+                    :data="deptData"
+                    storage-key="yearly-departments"
+                    :enable-search="false"
+                    :enable-filters="false"
+                    :enable-pagination="false"
+                    :enable-export="false"
+                    :enable-density="false"
+                    :enable-column-visibility="false"
+                    :selectable="false"
+                />
+            </Card>
         </div>
     </AppLayout>
 </template>

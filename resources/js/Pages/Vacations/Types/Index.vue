@@ -2,14 +2,7 @@
 import { ref, computed } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
-import PageHeader from '@/Components/ui/PageHeader.vue';
-import Button from '@/Components/ui/Button.vue';
-import Card from '@/Components/ui/Card.vue';
-import DataTable from '@/Components/ui/DataTable.vue';
-import SearchInput from '@/Components/ui/SearchInput.vue';
-import ConfirmDialog from '@/Components/ui/ConfirmDialog.vue';
-import Badge from '@/Components/ui/Badge.vue';
-import IconButton from '@/Components/ui/IconButton.vue';
+import { PageHeader, DataTable, ConfirmDialog, Badge, Button, IconButton, Alert } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
@@ -20,7 +13,6 @@ const props = defineProps({
     filters: { type: Object, default: () => ({}) },
 });
 
-const search = ref(props.filters?.search || '');
 const showDelete = ref(false);
 const selectedType = ref(null);
 
@@ -36,6 +28,14 @@ const columns = computed(() => [
 
 function onSearch(value) {
     router.get(route('vacations.types.index'), { ...props.filters, search: value }, { preserveState: true, preserveScroll: true, replace: true });
+}
+
+function onPageChange(page) {
+    router.get(route('vacations.types.index'), { ...props.filters, page }, { preserveState: true, preserveScroll: true, replace: true });
+}
+
+function onPerPageChange(perPage) {
+    router.get(route('vacations.types.index'), { ...props.filters, per_page: perPage, page: 1 }, { preserveState: true, preserveScroll: true, replace: true });
 }
 
 function confirmDelete(type) {
@@ -61,19 +61,19 @@ const flashSuccess = computed(() => page.props.flash?.success);
             </template>
         </PageHeader>
 
-        <div v-if="flashSuccess" class="alert alert-success flex items-center gap-2 mb-4">
-            <i class="fas fa-check-circle"></i>
-            <span>{{ flashSuccess }}</span>
-        </div>
+        <Alert v-if="flashSuccess" type="success" :message="flashSuccess" class="mb-4" />
 
-        <div class="card p-4 mb-4">
-            <SearchInput v-model="search" :placeholder="t('common.search')" @search="onSearch" />
-        </div>
-
-        <DataTable :columns="columns" :data="types">
+        <DataTable
+            :columns="columns"
+            :data="types"
+            storage-key="vacation-types"
+            @search="onSearch"
+            @page-change="onPageChange"
+            @per-page-change="onPerPageChange"
+        >
             <template #cell-is_paid="{ row }">
                 <Badge v-if="row.is_paid" :text="t('common.yes')" variant="active" />
-                <span v-else class="text-[var(--color-ink-subtle)]">—</span>
+                <span v-else class="text-mistral-stone">—</span>
             </template>
 
             <template #cell-is_active="{ row }">
@@ -83,8 +83,8 @@ const flashSuccess = computed(() => page.props.flash?.success);
 
             <template #cell-actions="{ row }">
                 <div class="flex items-center justify-center gap-1.5">
-                    <IconButton icon="fas fa-eye" :aria-label="t('common.view')" variant="info" :href="route('vacations.types.show', row.id)" />
-                    <IconButton icon="fas fa-edit" :aria-label="t('common.edit')" variant="primary" :href="route('vacations.types.edit', row.id)" />
+                    <IconButton icon="fas fa-eye" :aria-label="t('common.view')" :href="route('vacations.types.show', row.id)" />
+                    <IconButton icon="fas fa-pen" :aria-label="t('common.edit')" :href="route('vacations.types.edit', row.id)" />
                     <IconButton icon="fas fa-trash" :aria-label="t('common.delete')" variant="danger" @click="confirmDelete(row)" />
                 </div>
             </template>

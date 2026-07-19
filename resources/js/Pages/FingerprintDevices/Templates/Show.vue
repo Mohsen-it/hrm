@@ -47,55 +47,57 @@ const fields = computed(() => [
             </template>
         </PageHeader>
 
-        <div class="card p-6">
-            <div class="flex items-center gap-4 mb-6 pb-6 border-b border-[var(--color-hairline)]">
-                <div class="w-20 h-20 rounded-md bg-[var(--color-surface-2)] flex items-center justify-center border border-[var(--color-hairline)]">
-                    <i class="fas fa-fingerprint text-[32px] text-[var(--color-ink-subtle)]"></i>
+        <Card variant="base" padding="none">
+            <div class="p-5 sm:p-6">
+                <div class="flex items-center gap-4 mb-6 pb-6 border-b border-mistral-hairline-soft">
+                    <div class="w-20 h-20 rounded-lg bg-mistral-surface flex items-center justify-center border border-mistral-hairline-soft">
+                        <i class="fas fa-fingerprint text-[32px] text-mistral-stone"></i>
+                    </div>
+                    <div>
+                        <h2 class="text-[20px] font-semibold text-mistral-ink">
+                            {{ template.user?.name || '—' }}
+                        </h2>
+                        <p class="text-[13px] text-mistral-steel mt-1">
+                            {{ template.device?.name || '—' }}
+                        </p>
+                        <div class="mt-2 flex items-center gap-2">
+                            <Badge
+                                v-if="template.is_master"
+                                :text="t('fingerprint_devices.is_master')"
+                                variant="active"
+                            />
+                            <Badge
+                                v-else
+                                :text="t('fingerprint_devices.standard')"
+                                variant="inactive"
+                            />
+                        </div>
+                    </div>
                 </div>
-                <div>
-                    <h2 class="text-[20px] font-semibold text-[var(--color-ink)]">
-                        {{ template.user?.name || '—' }}
-                    </h2>
-                    <p class="text-[13px] text-[var(--color-ink-muted)] mt-1">
-                        {{ template.device?.name || '—' }}
+
+                <dl class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3">
+                    <div v-for="(field, idx) in fields" :key="idx" class="flex flex-col text-end">
+                        <dt class="text-[12px] font-semibold text-mistral-stone uppercase tracking-wider">
+                            {{ field.label }}
+                        </dt>
+                        <dd class="text-[14px] text-mistral-ink mt-1 break-words">
+                            {{ field.value }}
+                        </dd>
+                    </div>
+                </dl>
+
+                <div class="mt-6 pt-6 border-t border-mistral-hairline-soft">
+                    <p class="text-[12px] text-mistral-steel mb-2">
+                        {{ t('fingerprint_devices.template_data_label') }}
                     </p>
-                    <div class="mt-2 flex items-center gap-2">
-                        <Badge
-                            v-if="template.is_master"
-                            :text="t('fingerprint_devices.is_master')"
-                            variant="active"
-                        />
-                        <Badge
-                            v-else
-                            :text="t('fingerprint_devices.standard')"
-                            variant="inactive"
-                        />
+                    <div class="bg-mistral-surface border border-mistral-hairline-soft rounded-lg p-3 font-mono text-[11px] text-mistral-steel break-all max-h-40 overflow-auto">
+                        <template v-if="template.template_data">
+                            {{ template.template_data.substring(0, 200) }}{{ template.template_data.length > 200 ? '...' : '' }}
+                        </template>
+                        <span v-else>—</span>
                     </div>
                 </div>
             </div>
-
-            <dl class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3">
-                <div v-for="(field, idx) in fields" :key="idx" class="flex flex-col text-right">
-                    <dt class="text-[12px] font-semibold text-[var(--color-ink-subtle)] uppercase tracking-wider">
-                        {{ field.label }}
-                    </dt>
-                    <dd class="text-[14px] text-[var(--color-ink)] mt-1 break-words">
-                        {{ field.value }}
-                    </dd>
-                </div>
-            </dl>
-
-            <div class="mt-6 pt-6 border-t border-[var(--color-hairline)]">
-                <p class="text-[12px] text-[var(--color-ink-muted)] mb-2">
-                    {{ t('fingerprint_devices.template_data_label') }}
-                </p>
-                <div class="bg-[var(--color-surface-1)] border border-[var(--color-hairline)] rounded-md p-3 font-mono text-[11px] text-[var(--color-ink-muted)] break-all max-h-40 overflow-auto">
-                    <template v-if="template.template_data">
-                        {{ template.template_data.substring(0, 200) }}{{ template.template_data.length > 200 ? '...' : '' }}
-                    </template>
-                    <span v-else>—</span>
-                </div>
-            </div>
-        </div>
+        </Card>
     </AppLayout>
 </template>

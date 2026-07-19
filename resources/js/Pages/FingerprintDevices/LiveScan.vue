@@ -25,10 +25,10 @@ let pollHandle = null;
 const POLL_INTERVAL = 3000;
 
 const statCards = computed(() => [
-    { label: t('fingerprint_devices.total_devices'), value: stats.value.total ?? 0, color: 'var(--color-primary)', icon: 'fas fa-fingerprint' },
-    { label: t('fingerprint_devices.online'), value: stats.value.online ?? 0, color: 'var(--color-success)', icon: 'fas fa-wifi' },
-    { label: t('fingerprint_devices.offline'), value: stats.value.offline ?? 0, color: 'var(--color-danger)', icon: 'fas fa-power-off' },
-    { label: t('fingerprint_devices.maintenance'), value: stats.value.maintenance ?? 0, color: 'var(--color-warning)', icon: 'fas fa-wrench' },
+    { label: t('fingerprint_devices.total_devices'), value: stats.value.total ?? 0, color: 'primary', icon: 'fas fa-fingerprint' },
+    { label: t('fingerprint_devices.online'), value: stats.value.online ?? 0, color: 'success', icon: 'fas fa-wifi' },
+    { label: t('fingerprint_devices.offline'), value: stats.value.offline ?? 0, color: 'danger', icon: 'fas fa-power-off' },
+    { label: t('fingerprint_devices.maintenance'), value: stats.value.maintenance ?? 0, color: 'warning', icon: 'fas fa-wrench' },
 ]);
 
 function formatTime(iso) {
@@ -96,78 +96,84 @@ function punchVariant(type) {
         >
             <template #actions>
                 <Button variant="secondary" :href="route('fingerprint-devices.index')">{{ t('fingerprint_devices.title') }}</Button>
-                <button
-                    type="button"
-                    class="btn"
-                    :class="isPaused ? 'btn-warning' : 'btn-secondary'"
+                <Button
+                    :variant="isPaused ? 'secondary' : 'secondary'"
+                    :icon="isPaused ? 'fas fa-play' : 'fas fa-pause'"
                     @click="isPaused = !isPaused"
                 >
-                    <i :class="isPaused ? 'fas fa-play' : 'fas fa-pause'"></i>
-                    <span>{{ isPaused ? t('common.continue') || 'Continue' : t('common.pause') || 'Pause' }}</span>
+                    {{ isPaused ? t('common.continue') || 'Continue' : t('common.pause') || 'Pause' }}
                 </Button>
             </template>
         </PageHeader>
 
         <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-            <div
+            <Card
                 v-for="(card, idx) in statCards"
                 :key="idx"
-                class="card p-3 flex items-center gap-3"
+                variant="base"
+                padding="sm"
             >
-                <div
-                    class="w-10 h-10 rounded-md flex items-center justify-center shrink-0"
-                    :style="{ backgroundColor: card.color + '15', color: card.color }"
-                >
-                    <i :class="card.icon" class="text-[18px]"></i>
+                <div class="flex items-center gap-3">
+                    <div
+                        class="w-10 h-10 rounded-lg flex items-center justify-center shrink-0"
+                        :class="{
+                            'bg-mistral-primary/15 text-mistral-primary': card.color === 'primary',
+                            'bg-mistral-success/15 text-mistral-success': card.color === 'success',
+                            'bg-mistral-danger/15 text-mistral-danger': card.color === 'danger',
+                            'bg-mistral-warning/15 text-mistral-warning': card.color === 'warning',
+                        }"
+                    >
+                        <i :class="card.icon" class="text-[18px]"></i>
+                    </div>
+                    <div>
+                        <p class="text-[20px] font-bold text-mistral-ink leading-tight">{{ card.value }}</p>
+                        <p class="text-[11px] text-mistral-steel">{{ card.label }}</p>
+                    </div>
                 </div>
-                <div>
-                    <p class="text-[20px] font-bold text-[var(--color-ink)] leading-tight">{{ card.value }}</p>
-                    <p class="text-[11px] text-[var(--color-ink-muted)]">{{ card.label }}</p>
-                </div>
-            </div>
+            </Card>
         </div>
 
-        <div class="card overflow-hidden">
-            <div class="flex items-center justify-between p-3 border-b border-[var(--color-hairline)]">
+        <Card variant="base" padding="none" class="overflow-hidden">
+            <div class="flex items-center justify-between p-3 border-b border-mistral-hairline-soft">
                 <div class="flex items-center gap-2">
                     <span
                         class="inline-block w-2 h-2 rounded-full"
-                        :class="isPaused ? 'bg-[var(--color-warning)]' : 'bg-[var(--color-success)] animate-pulse'"
+                        :class="isPaused ? 'bg-mistral-warning' : 'bg-mistral-success animate-pulse'"
                     />
-                    <span class="text-[13px] text-[var(--color-ink-muted)]">
+                    <span class="text-[13px] text-mistral-steel">
                         {{ isPaused ? t('common.paused') || 'Paused' : t('fingerprint_devices.live_scan_hint') }}
                     </span>
                 </div>
-                <div class="text-[12px] text-[var(--color-ink-subtle)]">
+                <div class="text-[12px] text-mistral-steel">
                     <span v-if="lastUpdate">{{ formatTime(lastUpdate.toISOString()) }}</span>
                 </div>
             </div>
 
             <div v-if="punches.length === 0" class="p-12 text-center">
-                <i class="fas fa-fingerprint text-[40px] text-[var(--color-ink-subtle)] mb-3"></i>
-                <p class="text-[14px] text-[var(--color-ink-muted)]">{{ t('fingerprint_devices.live_scan_empty') }}</p>
+                <i class="fas fa-fingerprint text-[40px] text-mistral-stone mb-3"></i>
+                <p class="text-[14px] text-mistral-steel">{{ t('fingerprint_devices.live_scan_empty') }}</p>
             </div>
 
-            <ul v-else class="divide-y divide-[var(--color-hairline)]">
+            <ul v-else class="divide-y divide-mistral-hairline-soft">
                 <li
                     v-for="(punch, idx) in punches"
                     :key="punch.session_id + ':' + idx"
-                    class="p-3 flex items-center gap-3 hover:bg-[var(--color-surface-1)] transition-colors"
+                    class="p-3 flex items-center gap-3 hover:bg-mistral-surface transition-colors"
                 >
                     <div
                         class="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
-                        :style="{
-                            backgroundColor: (punch.punch_type === 'check_in' ? 'var(--color-success)' : 'var(--color-warning)') + '15',
-                            color: punch.punch_type === 'check_in' ? 'var(--color-success)' : 'var(--color-warning)',
+                        :class="{
+                            'bg-mistral-success/15 text-mistral-success': punch.punch_type === 'check_in',
+                            'bg-mistral-warning/15 text-mistral-warning': punch.punch_type !== 'check_in',
                         }"
                     >
                         <i :class="punch.punch_type === 'check_in' ? 'fas fa-sign-in-alt' : 'fas fa-sign-out-alt'"></i>
                     </div>
                     <div class="flex-1 min-w-0">
-                        <p class="text-[14px] font-medium text-[var(--color-ink)] truncate">
+                        <p class="text-[14px] font-medium text-mistral-ink truncate">
                             {{ punch.user?.name || '—' }}
                         </p>
-                        <p class="text-[12px] text-[var(--color-ink-muted)] truncate">
+                        <p class="text-[12px] text-mistral-steel truncate">
                             <span v-if="punch.user?.employee_code">{{ punch.user.employee_code }} · </span>
                             {{ punch.device?.name || punch.device?.serial_number || '—' }}
                         </p>
@@ -177,13 +183,13 @@ function punchVariant(type) {
                             :text="punch.punch_type === 'check_in' ? t('fingerprint_devices.live_punch_in') : t('fingerprint_devices.live_punch_out')"
                             :variant="punchVariant(punch.punch_type)"
                         />
-                        <p class="text-[12px] text-[var(--color-ink-muted)] mt-1">
+                        <p class="text-[12px] text-mistral-steel mt-1">
                             {{ formatTime(punch.punched_at) }}
-                            <span class="text-[var(--color-ink-subtle)]">({{ formatRelative(punch.punched_at) }})</span>
+                            <span class="text-mistral-stone">({{ formatRelative(punch.punched_at) }})</span>
                         </p>
                     </div>
                 </li>
             </ul>
-        </div>
+        </Card>
     </AppLayout>
 </template>

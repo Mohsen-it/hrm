@@ -43,11 +43,16 @@ function go(page) {
             <button
                 type="button"
                 :disabled="meta.current === 1"
-                :class="['h-9 min-w-[36px] px-2 text-[13px] font-medium rounded-md transition-colors', meta.current === 1 ? 'text-mistral-muted cursor-not-allowed' : 'text-mistral-ink hover:bg-mistral-surface cursor-pointer']"
+                :class="[
+                    'h-8 min-w-[32px] px-2 text-[13px] font-medium rounded-lg transition-all duration-150',
+                    meta.current === 1
+                        ? 'text-mistral-muted cursor-not-allowed'
+                        : 'text-mistral-steel hover:text-mistral-ink hover:bg-mistral-surface cursor-pointer',
+                ]"
                 @click="go(meta.current - 1)"
             >
-                <i :class="[dir === 'rtl' ? 'fas fa-chevron-right' : 'fas fa-chevron-left', 'rtl-flip']" aria-hidden="true"></i>
-            </Button>
+                <i :class="[dir === 'rtl' ? 'fas fa-chevron-right' : 'fas fa-chevron-left', 'rtl-flip text-[10px]']" aria-hidden="true"></i>
+            </button>
 
             <template v-if="!simple">
                 <button
@@ -56,25 +61,34 @@ function go(page) {
                     type="button"
                     :aria-current="page === meta.current ? 'page' : undefined"
                     :class="[
-                        'h-9 min-w-[36px] px-2 text-[13px] font-medium rounded-md transition-colors hidden sm:inline-flex',
+                        'h-8 min-w-[32px] px-2 text-[13px] font-medium rounded-lg transition-all duration-150 hidden sm:inline-flex',
                         page === meta.current
-                            ? 'bg-mistral-primary text-mistral-on-primary'
-                            : 'text-mistral-ink hover:bg-mistral-surface cursor-pointer',
+                            ? 'bg-mistral-primary text-white shadow-sm'
+                            : 'text-mistral-steel hover:text-mistral-ink hover:bg-mistral-surface cursor-pointer',
                     ]"
                     @click="go(page)"
                 >
                     {{ page }}
-                </Button>
+                </button>
             </template>
+
+            <span v-if="!simple" class="text-[12px] text-mistral-stone sm:hidden">
+                {{ meta.current }} / {{ meta.last }}
+            </span>
 
             <button
                 type="button"
                 :disabled="meta.current === meta.last"
-                :class="['h-9 min-w-[36px] px-2 text-[13px] font-medium rounded-md transition-colors', meta.current === meta.last ? 'text-mistral-muted cursor-not-allowed' : 'text-mistral-ink hover:bg-mistral-surface cursor-pointer']"
+                :class="[
+                    'h-8 min-w-[32px] px-2 text-[13px] font-medium rounded-lg transition-all duration-150',
+                    meta.current === meta.last
+                        ? 'text-mistral-muted cursor-not-allowed'
+                        : 'text-mistral-steel hover:text-mistral-ink hover:bg-mistral-surface cursor-pointer',
+                ]"
                 @click="go(meta.current + 1)"
             >
-                <i :class="[dir === 'rtl' ? 'fas fa-chevron-left' : 'fas fa-chevron-right', 'rtl-flip']" aria-hidden="true"></i>
-            </Button>
+                <i :class="[dir === 'rtl' ? 'fas fa-chevron-left' : 'fas fa-chevron-right', 'rtl-flip text-[10px]']" aria-hidden="true"></i>
+            </button>
         </div>
     </nav>
 </template>

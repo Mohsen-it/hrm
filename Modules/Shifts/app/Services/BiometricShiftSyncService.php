@@ -5,7 +5,7 @@ namespace Modules\Shifts\Services;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Modules\Attendance\Models\DailyAttendanceSummary;
-use Modules\Shifts\Repositories\EmployeeShiftCategoryRepository;
+use Modules\Shifts\Repositories\RotationAssignmentRepository;
 
 /**
  * BiometricShiftSyncService — Step 3 conflict-free sync.
@@ -18,14 +18,6 @@ use Modules\Shifts\Repositories\EmployeeShiftCategoryRepository;
  *   - is_work_day == true and no punch on the device
  *         -> final status "absent".
  *
- * Edge cases handled cleanly:
- *   - Overnight shifts (is_multi_day / out < in) — the overnight check-in on
- *     the PREVIOUS day is recognised so the employee is not falsely "absent".
- *   - Timezone drift — dates are matched with `whereDate` on the device's
- *     stored `punch_time`, avoiding per-row PHP timezone conversion.
- *   - Duplicate rows — daily summaries use a unique (user_id, summary_date)
- *     key, so writes are idempotent via `updateOrInsert`.
- *
  * The service is ADDITIVE: it only forces "excused" rows (the explicit
  * requirement) and otherwise only *reports* absences, leaving the Attendance
  * module's own auto-calculation as the owner of present/late rows.
@@ -34,7 +26,7 @@ class BiometricShiftSyncService
 {
     public function __construct(
         private ScheduleResolverService $resolver,
-        private EmployeeShiftCategoryRepository $assignmentRepository,
+        private RotationAssignmentRepository $rotationAssignmentRepository,
     ) {}
 
     /**
@@ -47,7 +39,7 @@ class BiometricShiftSyncService
         $date = Carbon::parse($targetDate)->startOfDay();
         $dateStr = $date->toDateString();
 
-        $assignmentIds = $this->assignmentRepository->getAssignmentsForDate($dateStr)
+        $assignmentIds = $this->rotationAssignmentRepository->getAssignmentsForDate($dateStr)
             ->pluck('employee_id')
             ->unique()
             ->values()
@@ -79,8 +71,7 @@ class BiometricShiftSyncService
 
     /**
      * Sync a date: write "excused" summary rows for intercepted employees and
-     * return the full resolved matrix. Present/late rows are left to the
-     * Attendance module's auto-calculation to avoid double ownership.
+     * return the full resolved matrix.
      */
     public function syncDate(Carbon|string $targetDate, bool $writeExcused = true): array
     {
@@ -101,8 +92,7 @@ class BiometricShiftSyncService
     }
 
     /**
-     * Determine whether the employee produced a biometric punch for the day,
-     * recognising overnight shifts that check in on the previous calendar day.
+     * Determine whether the employee produced a biometric punch for the day.
      */
     private function hasPunch(int $employeeId, Carbon $date, array $resolved): bool
     {
@@ -117,8 +107,6 @@ class BiometricShiftSyncService
             return true;
         }
 
-        // Overnight shift: out_time earlier than in_time means the cycle
-        // crosses midnight. Accept a previous-day check-in at/after in_time.
         $in = $resolved['expected_check_in'];
         $out = $resolved['expected_check_out'];
 
@@ -136,7 +124,7 @@ class BiometricShiftSyncService
     }
 
     /**
-     * Idempotently write an "excused" daily summary row — bypassing absence.
+     * Idempotently write an "excused" daily summary row.
      */
     private function upsertExcused(int $employeeId, string $dateStr, array $resolved): void
     {

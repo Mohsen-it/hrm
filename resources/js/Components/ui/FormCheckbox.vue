@@ -28,7 +28,7 @@ const isChecked = computed(() => {
 });
 
 const sizeClass = computed(() => {
-    return { sm: 'w-[14px] h-[14px]', md: 'w-4 h-4', lg: 'w-5 h-5' }[props.size] || 'w-4 h-4';
+    return { sm: 'w-3.5 h-3.5', md: 'w-4 h-4', lg: 'w-5 h-5' }[props.size] || 'w-4 h-4';
 });
 
 function onChange(e) {
@@ -48,7 +48,7 @@ function onChange(e) {
 
 <template>
     <div class="w-full" :dir="dir">
-        <div class="flex items-start gap-2">
+        <div class="flex items-start gap-2.5">
             <div class="relative flex items-center justify-center pt-0.5">
                 <input
                     :id="inputId"
@@ -60,9 +60,11 @@ function onChange(e) {
                     :aria-invalid="!!error"
                     :aria-describedby="error ? `${inputId}-error` : hint ? `${inputId}-hint` : undefined"
                     :class="[
-                        'appearance-none cursor-pointer border-2 rounded-xs transition-colors',
+                        'appearance-none cursor-pointer border-2 rounded-[4px] transition-all duration-150',
                         sizeClass,
-                        isChecked ? 'bg-mistral-primary border-mistral-primary' : 'bg-mistral-canvas border-mistral-hairline-strong',
+                        isChecked
+                            ? 'bg-mistral-primary border-mistral-primary'
+                            : 'bg-white border-mistral-hairline-strong hover:border-mistral-stone',
                         disabled ? 'cursor-not-allowed opacity-50' : '',
                         error ? 'border-mistral-danger' : '',
                         'focus-visible:outline-2 focus-visible:outline-mistral-primary focus-visible:outline-offset-2',
@@ -71,31 +73,38 @@ function onChange(e) {
                 />
                 <i
                     v-if="isChecked && !indeterminate"
-                    :class="['fas fa-check absolute text-mistral-on-primary pointer-events-none', sizeClass === 'w-4 h-4' ? 'text-[10px]' : 'text-[12px]']"
+                    :class="[
+                        'fas fa-check absolute text-white pointer-events-none font-bold',
+                        sizeClass === 'w-4 h-4' ? 'text-[9px]' : 'text-[10px]',
+                    ]"
                     aria-hidden="true"
                 ></i>
                 <i
                     v-else-if="indeterminate"
-                    :class="['fas fa-minus absolute text-mistral-on-primary pointer-events-none', sizeClass === 'w-4 h-4' ? 'text-[10px]' : 'text-[12px]']"
+                    :class="[
+                        'fas fa-minus absolute text-white pointer-events-none font-bold',
+                        sizeClass === 'w-4 h-4' ? 'text-[9px]' : 'text-[10px]',
+                    ]"
                     aria-hidden="true"
                 ></i>
             </div>
             <label
                 v-if="label || $slots.default"
                 :for="inputId"
-                :class="['text-[14px] text-mistral-ink cursor-pointer flex-1', disabled ? 'cursor-not-allowed opacity-50' : '']"
+                :class="['text-[13px] text-mistral-ink cursor-pointer flex-1 leading-relaxed', disabled ? 'cursor-not-allowed opacity-50' : '']"
             >
                 <span>
                     {{ label }}
-                    <span v-if="required" class="text-mistral-primary" aria-hidden="true">*</span>
+                    <span v-if="required" class="text-mistral-danger ms-0.5" aria-hidden="true">*</span>
                 </span>
                 <slot />
-                <span v-if="hint" :id="`${inputId}-hint`" class="block text-[12px] text-mistral-stone mt-1">
+                <span v-if="hint" :id="`${inputId}-hint`" class="block text-[12px] text-mistral-stone mt-0.5">
                     {{ hint }}
                 </span>
             </label>
         </div>
-        <p v-if="error" :id="`${inputId}-error`" class="text-[12px] text-mistral-danger mt-1 ms-6" role="alert">
+        <p v-if="error" :id="`${inputId}-error`" class="text-[12px] text-mistral-danger mt-1 ms-6 flex items-center gap-1" role="alert">
+            <i class="fas fa-exclamation-circle text-[10px]" aria-hidden="true"></i>
             {{ error }}
         </p>
     </div>

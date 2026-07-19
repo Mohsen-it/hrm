@@ -6,7 +6,6 @@ import PageHeader from '@/Components/ui/PageHeader.vue';
 import Button from '@/Components/ui/Button.vue';
 import Card from '@/Components/ui/Card.vue';
 import DataTable from '@/Components/ui/DataTable.vue';
-import SearchInput from '@/Components/ui/SearchInput.vue';
 import FormSelect from '@/Components/ui/FormSelect.vue';
 import FormDatepicker from '@/Components/ui/FormDatepicker.vue';
 import Badge from '@/Components/ui/Badge.vue';
@@ -14,7 +13,6 @@ import ConfirmDialog from '@/Components/ui/ConfirmDialog.vue';
 import FormModal from '@/Components/ui/FormModal.vue';
 import IconButton from '@/Components/ui/IconButton.vue';
 import Alert from '@/Components/ui/Alert.vue';
-import Pagination from '@/Components/ui/Pagination.vue';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
@@ -27,7 +25,6 @@ const props = defineProps({
     departments: { type: Array, default: () => [] },
 });
 
-const search = ref(props.filters?.search || '');
 const showUnassign = ref(false);
 const selectedAssignment = ref(null);
 
@@ -50,7 +47,6 @@ const departmentOptions = computed(() =>
 );
 
 const statusOptions = [
-    { value: '', label: t('shifts.status') },
     { value: 'active', label: t('shifts.active') },
     { value: 'closed', label: t('shifts.closed') },
 ];
@@ -70,8 +66,8 @@ const typeLabel = (type) => {
 };
 
 const columns = computed(() => [
-    { key: 'employee', label: t('shifts.employee') },
-    { key: 'category', label: t('shifts.category'), cellClass: 'text-center' },
+    { key: 'employee', label: t('shifts.employee'), sortable: true },
+    { key: 'category', label: t('shifts.category'), cellClass: 'text-center', filterable: true, filterType: 'select', filterOptions: categoryOptions.value },
     { key: 'start_date', label: t('shifts.start_date'), cellClass: 'text-center' },
     { key: 'end_date', label: t('shifts.end_date'), cellClass: 'text-center' },
     { key: 'actions', label: t('common.actions'), cellClass: 'text-center w-[140px]' },
@@ -95,6 +91,27 @@ function applyFilter(key, value) {
     router.get(
         route('shift-assignments.index'),
         next,
+        { preserveState: true, preserveScroll: true, replace: true },
+    );
+}
+
+function onFilterChange({ key, value }) {
+    const filterKey = key === 'category' ? 'category_id' : key;
+    applyFilter(filterKey, value);
+}
+
+function onPageChange(page) {
+    router.get(
+        route('shift-assignments.index'),
+        { ...props.filters, page },
+        { preserveState: true, preserveScroll: true, replace: true },
+    );
+}
+
+function onPerPageChange(perPage) {
+    router.get(
+        route('shift-assignments.index'),
+        { ...props.filters, per_page: perPage },
         { preserveState: true, preserveScroll: true, replace: true },
     );
 }
@@ -228,37 +245,15 @@ const flashError = computed(() => page.props.flash?.error);
             </Link>
         </nav>
 
-        <Card variant="base" padding="sm" class="mb-6">
-            <div class="flex items-center justify-between flex-wrap gap-3">
-                <div class="flex items-center gap-3 flex-wrap">
-                    <SearchInput
-                        v-model="search"
-                        :placeholder="t('common.search')"
-                        @search="onSearch"
-                    />
-                    <FormSelect
-                        :options="categoryOptions"
-                        :model-value="filters.category_id ?? ''"
-                        :placeholder="t('shifts.shift_category')"
-                        @update:modelValue="applyFilter('category_id', $event)"
-                    />
-                    <FormSelect
-                        :options="departmentOptions"
-                        :model-value="filters.department_id ?? ''"
-                        :placeholder="t('shifts.department')"
-                        @update:modelValue="applyFilter('department_id', $event)"
-                    />
-                    <FormSelect
-                        :options="statusOptions"
-                        :model-value="filters.status ?? ''"
-                        :placeholder="t('shifts.status')"
-                        @update:modelValue="applyFilter('status', $event)"
-                    />
-                </div>
-            </div>
-        </Card>
-
-        <DataTable :columns="columns" :data="assignments">
+        <DataTable
+            :columns="columns"
+            :data="assignments"
+            storage-key="shift-assignments"
+            @search="onSearch"
+            @filter-change="onFilterChange"
+            @page-change="onPageChange"
+            @per-page-change="onPerPageChange"
+        >
             <template #cell-employee="{ row }">
                 <div class="flex flex-col">
                     <span class="text-[14px] font-medium text-mistral-ink">
@@ -316,10 +311,6 @@ const flashError = computed(() => page.props.flash?.error);
                         @click="confirmUnassign(row)"
                     />
                 </div>
-            </template>
-
-            <template #footer>
-                <Pagination :data="assignments" />
             </template>
         </DataTable>
 

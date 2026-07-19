@@ -75,6 +75,12 @@ class HandleInertiaRequests extends Middleware
         $paths = [
             lang_path("{$locale}/common.php"),
             lang_path("{$locale}/menu.php"),
+            lang_path("{$locale}/dashboard.php"),
+            lang_path("{$locale}/components.php"),
+            lang_path("{$locale}/permissions.php"),
+            lang_path("{$locale}/roles.php"),
+            lang_path("{$locale}/actions.php"),
+            lang_path("{$locale}/general.php"),
             lang_path("{$locale}/validation.php"),
         ];
 

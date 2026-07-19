@@ -2,13 +2,7 @@
 import { ref, reactive, computed, watch } from 'vue';
 import { router, Head } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
-import PageHeader from '@/Components/ui/PageHeader.vue';
-import Button from '@/Components/ui/Button.vue';
-import Card from '@/Components/ui/Card.vue';
-import FormInput from '@/Components/ui/FormInput.vue';
-import FormSelect from '@/Components/ui/FormSelect.vue';
-import FormDatepicker from '@/Components/ui/FormDatepicker.vue';
-import EmptyState from '@/Components/ui/EmptyState.vue';
+import { PageHeader, Button, Card, FormInput, FormSelect, FormDatepicker, EmptyState, ErrorSummary, FormSection, FormActions } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
@@ -131,132 +125,136 @@ watch(employeeSearch, searchEmployees);
             </template>
         </PageHeader>
 
-        <Card variant="base" padding="md" as="form" @submit.prevent="submit" class="max-w-3xl">
-            <section>
-                <h3 class="text-[14px] text-mistral-ink mb-3 font-medium">{{ t('shifts.assignment_info') }}</h3>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormSelect
-                        v-model="form.department_id"
-                        name="department_id"
-                        :label="t('shifts.filter_by_department')"
-                        :options="departmentOptions"
-                        :placeholder="t('shifts.select_department')"
-                        :error="errorFor('department_id')"
-                    />
-                    <FormSelect
-                        v-model="form.shift_category_id"
-                        name="shift_category_id"
-                        :label="t('shifts.shift_category')"
-                        :options="categoryOptions"
-                        :placeholder="t('shifts.select_category')"
-                        :error="errorFor('shift_category_id')"
-                        required
-                    />
-                    <FormDatepicker
-                        v-model="form.start_date"
-                        name="start_date"
-                        :label="t('shifts.start_date')"
-                        :error="errorFor('start_date')"
-                        required
-                    />
-                </div>
-            </section>
+        <form class="space-y-6" @submit.prevent="submit">
+            <ErrorSummary :errors="errors" />
 
-            <section class="mt-6">
-                <div class="flex items-center justify-between mb-3">
-                    <h3 class="text-[14px] text-mistral-ink font-medium">{{ t('shifts.search_employees') }}</h3>
+            <FormSection :title="t('shifts.assignment_info')" :description="t('shifts.bulk_assign_description')">
+                <div class="max-w-3xl">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <FormSelect
+                            v-model="form.department_id"
+                            name="department_id"
+                            :label="t('shifts.filter_by_department')"
+                            :options="departmentOptions"
+                            :placeholder="t('shifts.select_department')"
+                            :error="errorFor('department_id')"
+                        />
+                        <FormSelect
+                            v-model="form.shift_category_id"
+                            name="shift_category_id"
+                            :label="t('shifts.shift_category')"
+                            :options="categoryOptions"
+                            :placeholder="t('shifts.select_category')"
+                            :error="errorFor('shift_category_id')"
+                            required
+                        />
+                        <FormDatepicker
+                            v-model="form.start_date"
+                            name="start_date"
+                            :label="t('shifts.start_date')"
+                            :error="errorFor('start_date')"
+                            required
+                        />
+                    </div>
+                </div>
+            </FormSection>
+
+            <FormSection :title="t('shifts.search_employees')">
+                <template #actions>
                     <Button v-if="employees.length > 0" type="button" variant="ghost" size="sm" icon="fas fa-check-double" @click="addAllFromSearch">
                         {{ t('shifts.select_all') }} ({{ employees.length }})
                     </Button>
-                </div>
+                </template>
 
-                <div class="relative mb-4">
-                    <FormInput
-                        v-model="employeeSearch"
-                        :placeholder="t('shifts.search_employee_placeholder')"
-                    />
-                    <div
-                        v-if="searching"
-                        class="absolute top-full left-0 right-0 mt-1 p-2 bg-mistral-canvas border border-mistral-hairline rounded-md text-[13px] text-mistral-muted z-10"
-                    >
-                        <i class="fas fa-spinner fa-spin"></i> {{ t('common.search') }}...
-                    </div>
-                    <div
-                        v-else-if="employees.length > 0"
-                        class="absolute top-full left-0 right-0 mt-1 bg-mistral-canvas border border-mistral-hairline rounded-md shadow-level-2 max-h-[240px] overflow-y-auto z-10"
-                    >
-                        <button
-                            v-for="emp in employees"
-                            :key="emp.id"
-                            type="button"
-                            class="w-full text-right flex items-center justify-between p-2 hover:bg-mistral-surface border-b border-mistral-hairline-soft last:border-b-0"
-                            @click="addEmployee(emp)"
+                <div class="max-w-3xl">
+                    <div class="relative mb-4">
+                        <FormInput
+                            v-model="employeeSearch"
+                            :placeholder="t('shifts.search_employee_placeholder')"
+                        />
+                        <div
+                            v-if="searching"
+                            class="absolute top-full left-0 right-0 mt-1 p-2 bg-mistral-canvas border border-mistral-hairline rounded-md text-[13px] text-mistral-muted z-10"
                         >
-                            <div class="flex flex-col">
-                                <span class="text-[14px] text-mistral-ink">{{ emp.first_name }} {{ emp.last_name }}</span>
-                                <span class="text-[12px] text-mistral-muted">{{ emp.employee_code }}</span>
-                            </div>
-                            <i class="fas fa-plus text-mistral-primary text-[12px]"></i>
-                        </button>
-                    </div>
-                    <div
-                        v-else-if="employeeSearch.length >= 2 && !searching"
-                        class="absolute top-full left-0 right-0 mt-1 p-2 bg-mistral-canvas border border-mistral-hairline rounded-md text-[13px] text-mistral-muted z-10"
-                    >
-                        {{ t('shifts.no_employees_found') }}
+                            <i class="fas fa-spinner fa-spin"></i> {{ t('common.search') }}...
+                        </div>
+                        <div
+                            v-else-if="employees.length > 0"
+                            class="absolute top-full left-0 right-0 mt-1 bg-mistral-canvas border border-mistral-hairline rounded-md shadow-level-2 max-h-[240px] overflow-y-auto z-10"
+                        >
+                            <button
+                                v-for="emp in employees"
+                                :key="emp.id"
+                                type="button"
+                                class="w-full text-end flex items-center justify-between p-2 hover:bg-mistral-surface border-b border-mistral-hairline-soft last:border-b-0"
+                                @click="addEmployee(emp)"
+                            >
+                                <div class="flex flex-col">
+                                    <span class="text-[14px] text-mistral-ink">{{ emp.first_name }} {{ emp.last_name }}</span>
+                                    <span class="text-[12px] text-mistral-muted">{{ emp.employee_code }}</span>
+                                </div>
+                                <i class="fas fa-plus text-mistral-primary text-[12px]"></i>
+                            </button>
+                        </div>
+                        <div
+                            v-else-if="employeeSearch.length >= 2 && !searching"
+                            class="absolute top-full left-0 right-0 mt-1 p-2 bg-mistral-canvas border border-mistral-hairline rounded-md text-[13px] text-mistral-muted z-10"
+                        >
+                            {{ t('shifts.no_employees_found') }}
+                        </div>
                     </div>
                 </div>
-            </section>
+            </FormSection>
 
-            <section class="mt-6">
-                <div class="flex items-center justify-between mb-3">
-                    <h3 class="text-[14px] text-mistral-ink font-medium">{{ t('shifts.selected_employees') }} ({{ selectedEmployees.length }})</h3>
+            <FormSection :title="t('shifts.selected_employees')" :count="selectedEmployees.length">
+                <template #actions>
                     <Button v-if="selectedEmployees.length > 0" type="button" variant="ghost" size="sm" icon="fas fa-trash" @click="clearAll">
                         {{ t('shifts.unselect_all') }}
                     </Button>
-                </div>
+                </template>
 
-                <div
-                    v-if="selectedEmployees.length > 0"
-                    class="flex flex-wrap gap-2 p-3 bg-mistral-surface rounded-md min-h-[60px]"
-                >
-                    <span
-                        v-for="emp in selectedEmployees"
-                        :key="emp.id"
-                        class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-mistral-primary text-white text-[13px]"
+                <div class="max-w-3xl">
+                    <div
+                        v-if="selectedEmployees.length > 0"
+                        class="flex flex-wrap gap-2 p-3 bg-mistral-surface rounded-md min-h-[60px]"
                     >
-                        <i class="fas fa-user text-[10px]"></i>
-                        {{ emp.first_name }} {{ emp.last_name }}
-                        <button
-                            type="button"
-                            class="text-white hover:text-mistral-danger"
-                            @click="removeEmployee(emp.id)"
+                        <span
+                            v-for="emp in selectedEmployees"
+                            :key="emp.id"
+                            class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-mistral-primary text-white text-[13px]"
                         >
-                            <i class="fas fa-times text-[10px]"></i>
-                        </button>
-                    </span>
+                            <i class="fas fa-user text-[10px]"></i>
+                            {{ emp.first_name }} {{ emp.last_name }}
+                            <button
+                                type="button"
+                                class="inline-flex items-center justify-center w-4 h-4 rounded-full text-white/70 hover:text-white hover:bg-white/20 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-white focus-visible:outline-offset-1"
+                                :aria-label="t('common.remove')"
+                                @click="removeEmployee(emp.id)"
+                            >
+                                <i class="fas fa-times text-[9px]" aria-hidden="true"></i>
+                            </button>
+                        </span>
+                    </div>
+
+                    <EmptyState
+                        v-else
+                        icon="fas fa-users"
+                        :title="t('shifts.no_employees_selected')"
+                        :description="t('shifts.search_employee_placeholder')"
+                    />
+
+                    <p v-if="errorFor('employee_ids')" class="text-[12px] text-mistral-danger mt-2">
+                        {{ errors.employee_ids }}
+                    </p>
                 </div>
+            </FormSection>
 
-                <EmptyState
-                    v-else
-                    icon="fas fa-users"
-                    :title="t('shifts.no_employees_selected')"
-                    :description="t('shifts.search_employee_placeholder')"
-                />
-
-                <p v-if="errorFor('employee_ids')" class="text-[12px] text-mistral-danger mt-2">
-                    {{ errors.employee_ids }}
-                </p>
-            </section>
-
-            <div class="mt-6 flex items-center justify-start gap-2">
-                <Button type="submit" variant="primary" :loading="processing" :disabled="selectedEmployees.length === 0 || !form.shift_category_id" icon="fas fa-users">
-                    {{ t('common.save') }}
-                </Button>
-                <Button variant="secondary" :href="route('shift-assignments.index')">
-                    {{ t('common.cancel') }}
-                </Button>
-            </div>
-        </Card>
+            <FormActions
+                :save-label="t('common.save')"
+                :cancel-label="t('common.cancel')"
+                :cancel-href="route('shift-assignments.index')"
+                :saving="processing"
+            />
+        </form>
     </AppLayout>
 </template>

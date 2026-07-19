@@ -19,7 +19,7 @@ const inputId = computed(() => props.id || props.name || `radio-${Math.random().
 const isChecked = computed(() => props.modelValue === props.value);
 
 const sizeClass = computed(() => {
-    return { sm: 'w-[14px] h-[14px]', md: 'w-4 h-4', lg: 'w-5 h-5' }[props.size] || 'w-4 h-4';
+    return { sm: 'w-3.5 h-3.5', md: 'w-4 h-4', lg: 'w-5 h-5' }[props.size] || 'w-4 h-4';
 });
 
 function onChange(e) {
@@ -29,7 +29,7 @@ function onChange(e) {
 </script>
 
 <template>
-    <div class="flex items-center gap-2" :dir="dir">
+    <div class="flex items-center gap-2.5" :dir="dir">
         <div class="relative flex items-center justify-center">
             <input
                 :id="inputId"
@@ -38,9 +38,11 @@ function onChange(e) {
                 :checked="isChecked"
                 :disabled="disabled"
                 :class="[
-                    'appearance-none cursor-pointer border-2 rounded-full transition-colors',
+                    'appearance-none cursor-pointer border-2 rounded-full transition-all duration-150',
                     sizeClass,
-                    isChecked ? 'bg-mistral-canvas border-mistral-primary' : 'bg-mistral-canvas border-mistral-hairline-strong',
+                    isChecked
+                        ? 'bg-white border-mistral-primary'
+                        : 'bg-white border-mistral-hairline-strong hover:border-mistral-stone',
                     disabled ? 'cursor-not-allowed opacity-50' : '',
                     'focus-visible:outline-2 focus-visible:outline-mistral-primary focus-visible:outline-offset-2',
                 ]"
@@ -55,7 +57,7 @@ function onChange(e) {
         <label
             v-if="label"
             :for="inputId"
-            :class="['text-[14px] text-mistral-ink cursor-pointer', disabled ? 'cursor-not-allowed opacity-50' : '']"
+            :class="['text-[13px] text-mistral-ink cursor-pointer leading-relaxed', disabled ? 'cursor-not-allowed opacity-50' : '']"
         >
             {{ label }}
         </label>

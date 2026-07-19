@@ -9,6 +9,8 @@ use Inertia\Inertia;
 use Inertia\Response;
 use Modules\Branches\Services\BranchService;
 use Modules\Companies\Services\CompanyService;
+use Modules\Departments\Http\Requests\StoreDepartmentRequest;
+use Modules\Departments\Http\Requests\UpdateDepartmentRequest;
 use Modules\Departments\Http\Resources\DepartmentResource;
 use Modules\Departments\Services\DepartmentService;
 
@@ -61,11 +63,9 @@ class DepartmentsController extends Controller
     /**
      * Store a newly created department.
      */
-    public function store(Request $request): RedirectResponse
+    public function store(StoreDepartmentRequest $request): RedirectResponse
     {
-        $this->authorize('create-departments');
-
-        $this->departmentService->createDepartment($request->all());
+        $this->departmentService->createDepartment($request->validated());
 
         return redirect()->route('departments.index')
             ->with('success', __('departments.created_successfully'));
@@ -116,17 +116,15 @@ class DepartmentsController extends Controller
     /**
      * Update the specified department.
      */
-    public function update(Request $request, int $id): RedirectResponse
+    public function update(UpdateDepartmentRequest $request, int $id): RedirectResponse
     {
-        $this->authorize('edit-departments');
-
         $department = $this->departmentService->getDepartmentById($id);
 
         if (! $department) {
             abort(404);
         }
 
-        $this->departmentService->updateDepartment($department, $request->all());
+        $this->departmentService->updateDepartment($department, $request->validated());
 
         return redirect()->route('departments.index')
             ->with('success', __('departments.updated_successfully'));

@@ -2,16 +2,7 @@
 import { ref, computed } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
-import PageHeader from '@/Components/ui/PageHeader.vue';
-import DataTable from '@/Components/ui/DataTable.vue';
-import SearchInput from '@/Components/ui/SearchInput.vue';
-import ConfirmDialog from '@/Components/ui/ConfirmDialog.vue';
-import Badge from '@/Components/ui/Badge.vue';
-import Button from '@/Components/ui/Button.vue';
-import Card from '@/Components/ui/Card.vue';
-import IconButton from '@/Components/ui/IconButton.vue';
-import FormSelect from '@/Components/ui/FormSelect.vue';
-import Alert from '@/Components/ui/Alert.vue';
+import { PageHeader, DataTable, ConfirmDialog, Badge, Button, Card, IconButton, Alert } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
@@ -24,7 +15,6 @@ const props = defineProps({
     branches: { type: Array, default: () => [] },
 });
 
-const search = ref(props.filters?.search || '');
 const showDelete = ref(false);
 const selectedDevice = ref(null);
 const syncingAll = ref(false);
@@ -35,9 +25,40 @@ const columns = computed(() => [
     { key: 'name', label: t('fingerprint_devices.device_name'), sortable: true },
     { key: 'serial_number', label: t('fingerprint_devices.serial_number'), sortable: true },
     { key: 'ip_address', label: t('fingerprint_devices.ip_address') },
-    { key: 'device_type', label: t('fingerprint_devices.device_type') },
-    { key: 'branch', label: t('fingerprint_devices.branch') },
-    { key: 'status', label: t('common.status'), cellClass: 'text-center' },
+    {
+        key: 'device_type',
+        label: t('fingerprint_devices.device_type'),
+        filterable: true,
+        filterType: 'select',
+        filterOptions: [
+            { value: '', label: t('fingerprint_devices.all_types') },
+            ...props.deviceTypes.map((dt) => ({ value: dt.id, label: dt.name })),
+        ],
+    },
+    {
+        key: 'branch',
+        label: t('fingerprint_devices.branch'),
+        filterable: true,
+        filterType: 'select',
+        filterOptions: [
+            { value: '', label: t('fingerprint_devices.all_branches') },
+            ...props.branches.map((b) => ({ value: b.id, label: b.branch_name })),
+        ],
+    },
+    {
+        key: 'status',
+        label: t('common.status'),
+        cellClass: 'text-center',
+        filterable: true,
+        filterType: 'select',
+        filterOptions: [
+            { value: '', label: t('common.all_statuses') },
+            { value: 'online', label: t('fingerprint_devices.online') },
+            { value: 'offline', label: t('fingerprint_devices.offline') },
+            { value: 'maintenance', label: t('fingerprint_devices.maintenance') },
+            { value: 'deactivated', label: t('fingerprint_devices.deactivated') },
+        ],
+    },
     { key: 'last_seen_at', label: t('fingerprint_devices.last_seen'), cellClass: 'text-center' },
     { key: 'actions', label: t('common.actions'), cellClass: 'text-center w-[200px]' },
 ]);
@@ -46,23 +67,6 @@ const statusVariant = (status) => {
     const map = { online: 'active', offline: 'inactive', maintenance: 'pending', deactivated: 'inactive' };
     return map[status] || 'inactive';
 };
-
-const statusOptions = [
-    { value: 'online', label: t('fingerprint_devices.online') },
-    { value: 'offline', label: t('fingerprint_devices.offline') },
-    { value: 'maintenance', label: t('fingerprint_devices.maintenance') },
-    { value: 'deactivated', label: t('fingerprint_devices.deactivated') },
-];
-
-const deviceTypeOptions = computed(() => [
-    { value: '', label: t('fingerprint_devices.all_types') },
-    ...props.deviceTypes.map((dt) => ({ value: dt.id, label: dt.name })),
-]);
-
-const branchOptions = computed(() => [
-    { value: '', label: t('fingerprint_devices.all_branches') },
-    ...props.branches.map((b) => ({ value: b.id, label: b.branch_name })),
-]);
 
 function formatDate(value) {
     if (!value) return '—';
@@ -79,11 +83,13 @@ function onSearch(value) {
     );
 }
 
-function applyFilter(key, value) {
-    const payload = { ...props.filters, [key]: value };
-    if (value === '' || value === null || value === undefined) {
-        delete payload[key];
-    }
+function onFilterChange(filters) {
+    const payload = { ...props.filters, ...filters };
+    Object.keys(payload).forEach((key) => {
+        if (payload[key] === '' || payload[key] === null || payload[key] === undefined) {
+            delete payload[key];
+        }
+    });
     router.get(
         route('fingerprint-devices.index'),
         payload,
@@ -91,10 +97,18 @@ function applyFilter(key, value) {
     );
 }
 
-function clearFilters() {
+function onPageChange(page) {
     router.get(
         route('fingerprint-devices.index'),
-        {},
+        { ...props.filters, page },
+        { preserveState: true, preserveScroll: true, replace: true },
+    );
+}
+
+function onPerPageChange(perPage) {
+    router.get(
+        route('fingerprint-devices.index'),
+        { ...props.filters, per_page: perPage },
         { preserveState: true, preserveScroll: true, replace: true },
     );
 }
@@ -155,7 +169,7 @@ async function syncAllDevices() {
                     :loading="syncingAll"
                     @click="syncAllDevices"
                 >
-                    {{ syncingAll ? 'جاري المزامنة...' : 'مزامنة الكل' }}
+                    {{ syncingAll ? t('fingerprint_devices.syncing') : t('fingerprint_devices.sync_all') }}
                 </Button>
                 <Button variant="secondary" icon="fas fa-chart-bar" :href="route('fingerprint-devices.dashboard')">
                     {{ t('fingerprint_devices.dashboard') }}
@@ -175,54 +189,16 @@ async function syncAllDevices() {
         <Alert v-if="flashSuccess" type="success" :message="flashSuccess" class="mb-4" />
         <Alert v-if="flashError" type="danger" :message="flashError" class="mb-4" />
 
-        <div class="card p-6 mb-4">
-            <div class="flex items-center justify-between flex-wrap gap-3">
-                <div class="flex items-center gap-3 flex-wrap">
-                    <SearchInput
-                        v-model="search"
-                        :placeholder="t('common.search')"
-                        @search="onSearch"
-                    />
-                    <FormSelect
-                        :model-value="filters.status ?? ''"
-                        :options="[
-                            { value: '', label: t('common.all_statuses') },
-                            ...statusOptions,
-                        ]"
-                        class="max-w-[180px]"
-                        @update:model-value="(v) => applyFilter('status', v)"
-                    />
-                    <FormSelect
-                        v-if="deviceTypes.length"
-                        :model-value="filters.device_type_id ?? ''"
-                        :options="deviceTypeOptions"
-                        class="max-w-[180px]"
-                        @update:model-value="(v) => applyFilter('device_type_id', v)"
-                    />
-                    <FormSelect
-                        v-if="branches.length"
-                        :model-value="filters.branch_id ?? ''"
-                        :options="branchOptions"
-                        class="max-w-[180px]"
-                        @update:model-value="(v) => applyFilter('branch_id', v)"
-                    />
-                    <Button
-                        v-if="Object.keys(filters).length"
-                        variant="ghost"
-                        icon="fas fa-times"
-                        @click="clearFilters"
-                    >
-                        {{ t('common.cancel') }}
-                    </Button>
-                </div>
-            </div>
-        </div>
-
         <DataTable
             :columns="columns"
             :data="devices"
             :empty-title="t('fingerprint_devices.no_devices_title')"
             :empty-description="t('fingerprint_devices.no_devices_description')"
+            storage-key="fingerprint-devices"
+            @search="onSearch"
+            @filter-change="onFilterChange"
+            @page-change="onPageChange"
+            @per-page-change="onPerPageChange"
         >
             <template #cell-device_type="{ row }">
                 <span v-if="row.device_type">{{ row.device_type.name }}</span>
@@ -265,13 +241,13 @@ async function syncAllDevices() {
 
         <Teleport to="body">
             <div v-if="showSyncResult" class="fixed inset-0 z-[9999] flex items-center justify-center" style="background: rgba(0,0,0,0.5);">
-                <div class="card p-6 w-[520px] max-h-[85vh] overflow-y-auto mx-4 shadow-level-4 z-10">
+                <Card variant="base" padding="none" class="w-[520px] max-h-[85vh] overflow-y-auto mx-4 shadow-level-4 z-10">
                     <div class="flex items-center justify-between px-6 py-5 border-b border-mistral-hairline-soft">
-                        <h3 class="text-xl font-bold text-mistral-ink">نتائج المزامنة</h3>
+                        <h3 class="text-xl font-bold text-mistral-ink">{{ t('fingerprint_devices.sync_result_title') }}</h3>
                         <Button
                             variant="icon"
                             icon="fas fa-times"
-                            aria-label="إغلاق"
+                            :aria-label="t('fingerprint_devices.close')"
                             @click="showSyncResult = false"
                         />
                     </div>
@@ -280,22 +256,22 @@ async function syncAllDevices() {
                         <div v-if="syncResult?.success" class="space-y-5">
                             <Alert
                                 type="success"
-                                :message="`تمت المزامنة بنجاح - تم مزامنة ${syncResult.devices_synced} جهاز بصمة`"
+                                :message="t('fingerprint_devices.sync_success_message', { count: syncResult.devices_synced })"
                             />
 
                             <div class="grid grid-cols-2 gap-4">
                                 <Card variant="cream-soft" padding="md" class="text-center">
                                     <div class="text-3xl font-extrabold text-mistral-info">{{ syncResult.total_users_matched }}</div>
-                                    <div class="text-sm text-mistral-info mt-1">موظف تم مزامنتهم</div>
+                                    <div class="text-sm text-mistral-info mt-1">{{ t('fingerprint_devices.users_synced') }}</div>
                                 </Card>
                                 <Card variant="cream-soft" padding="md" class="text-center">
                                     <div class="text-3xl font-extrabold text-mistral-success">{{ syncResult.total_attendance_pulled }}</div>
-                                    <div class="text-sm text-mistral-success mt-1">سجل حضور</div>
+                                    <div class="text-sm text-mistral-success mt-1">{{ t('fingerprint_devices.attendance_records') }}</div>
                                 </Card>
                             </div>
 
                             <div v-if="syncResult.results?.length">
-                                <div class="text-sm font-semibold text-mistral-ink mb-2">تفاصيل كل جهاز:</div>
+                                <div class="text-sm font-semibold text-mistral-ink mb-2">{{ t('fingerprint_devices.device_details') }}</div>
                                 <div class="space-y-2">
                                     <div
                                         v-for="r in syncResult.results"
@@ -307,7 +283,7 @@ async function syncAllDevices() {
                                             <span class="font-semibold text-sm text-mistral-ink">{{ r.device_name }}</span>
                                         </div>
                                         <span class="text-sm text-mistral-success font-medium">
-                                            {{ r.users_matched }} موظف / {{ r.attendance_pulled }} سجل
+                                            {{ t('fingerprint_devices.device_stats', { users: r.users_matched, attendance: r.attendance_pulled }) }}
                                         </span>
                                     </div>
                                 </div>
@@ -317,10 +293,10 @@ async function syncAllDevices() {
                         <div v-else class="space-y-5">
                             <Alert
                                 type="danger"
-                                :message="`فشلت المزامنة - ${syncResult?.error || 'خطأ غير معروف'}`"
+                                :message="t('fingerprint_devices.sync_failed_message', { error: syncResult?.error || t('fingerprint_devices.unknown_error') })"
                             />
                             <div v-if="syncResult?.errors?.length">
-                                <div class="text-sm font-semibold text-mistral-ink mb-2">الأجهزة التي فشلت:</div>
+                                <div class="text-sm font-semibold text-mistral-ink mb-2">{{ t('fingerprint_devices.failed_devices') }}</div>
                                 <div class="space-y-2">
                                     <div
                                         v-for="e in syncResult.errors"
@@ -337,10 +313,10 @@ async function syncAllDevices() {
 
                     <div class="px-6 py-4 border-t border-mistral-hairline-soft flex justify-end">
                         <Button variant="primary" @click="showSyncResult = false">
-                            حسنا
+                            {{ t('fingerprint_devices.ok') }}
                         </Button>
                     </div>
-                </div>
+                </Card>
             </div>
         </Teleport>
     </AppLayout>

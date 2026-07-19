@@ -30,9 +30,8 @@ class DepartmentFactory extends Factory
         return [
             'company_id' => Company::factory(),
             'branch_id' => Branch::factory(),
-            'code' => strtoupper(Str::random(3)).fake()->unique()->numberBetween(100, 999),
-            'name_ar' => 'قسم '.fake()->word(),
-            'name_en' => fake()->unique()->word().' Dept',
+            'department_code' => strtoupper(Str::random(3)).fake()->unique()->numberBetween(100, 999),
+            'department_name' => 'قسم '.fake()->word(),
             'description' => fake()->sentence(),
             'status' => 1,
         ];

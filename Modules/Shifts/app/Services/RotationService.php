@@ -4,17 +4,20 @@ namespace Modules\Shifts\Services;
 
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
-use Modules\Companies\Models\Company;
 use Modules\Shifts\Models\Rotation;
 use Modules\Shifts\Models\RotationAssignment;
 use Modules\Shifts\Models\RotationGroup;
 use Modules\Shifts\Repositories\RotationAssignmentRepository;
 use Modules\Shifts\Repositories\RotationGroupRepository;
 use Modules\Shifts\Repositories\RotationRepository;
+use Modules\Shifts\Services\Traits\ResolvesCompanyId;
 
 class RotationService
 {
+    use ResolvesCompanyId;
+
     public function __construct(
         private RotationRepository $rotationRepository,
         private RotationGroupRepository $groupRepository,
@@ -51,21 +54,23 @@ class RotationService
      */
     public function create(array $data): Rotation
     {
-        if (empty($data['company_id'])) {
-            $data['company_id'] = $this->resolveCompanyId();
-        }
+        return DB::transaction(function () use ($data) {
+            if (empty($data['company_id'])) {
+                $data['company_id'] = $this->resolveCompanyId();
+            }
 
-        $pattern = $data['pattern'] ?? [];
-        $data['cycle_length'] = count($pattern);
-        $data['work_days_count'] = array_sum($pattern);
-        $data['rest_days_count'] = $data['cycle_length'] - $data['work_days_count'];
+            $pattern = $data['pattern'] ?? [];
+            $data['cycle_length'] = count($pattern);
+            $data['work_days_count'] = array_sum($pattern);
+            $data['rest_days_count'] = $data['cycle_length'] - $data['work_days_count'];
 
-        $rotation = $this->rotationRepository->create($data);
+            $rotation = $this->rotationRepository->create($data);
 
-        $numberOfGroups = $data['number_of_groups'] ?? 1;
-        $this->createGroups($rotation, $numberOfGroups, $data['groups'] ?? []);
+            $numberOfGroups = $data['number_of_groups'] ?? 1;
+            $this->createGroups($rotation, $numberOfGroups, $data['groups'] ?? []);
 
-        return $rotation->fresh(['groups']);
+            return $rotation->fresh(['groups']);
+        });
     }
 
     /**
@@ -337,27 +342,5 @@ class RotationService
                 'employee_id' => [__('shifts.employee_already_assigned_to_rotation')],
             ]);
         }
-    }
-
-    private function resolveCompanyId(): int
-    {
-        $user = auth()->user();
-
-        if ($user && ! empty($user->company_id)) {
-            return (int) $user->company_id;
-        }
-
-        $company = Company::query()
-            ->where('status', 1)
-            ->orderBy('id')
-            ->first();
-
-        if (! $company) {
-            throw ValidationException::withMessages([
-                'company_id' => [__('shifts.no_active_company')],
-            ]);
-        }
-
-        return (int) $company->id;
     }
 }

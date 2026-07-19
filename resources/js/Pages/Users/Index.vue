@@ -2,18 +2,7 @@
 import { ref, computed, watch } from 'vue';
 import { router, Link, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
-import PageHeader from '@/Components/ui/PageHeader.vue';
-import DataTable from '@/Components/ui/DataTable.vue';
-import SearchInput from '@/Components/ui/SearchInput.vue';
-import ConfirmDialog from '@/Components/ui/ConfirmDialog.vue';
-import Badge from '@/Components/ui/Badge.vue';
-import Button from '@/Components/ui/Button.vue';
-import Card from '@/Components/ui/Card.vue';
-import IconButton from '@/Components/ui/IconButton.vue';
-import FormSelect from '@/Components/ui/FormSelect.vue';
-import FormCheckbox from '@/Components/ui/FormCheckbox.vue';
-import Alert from '@/Components/ui/Alert.vue';
-import Avatar from '@/Components/ui/Avatar.vue';
+import { PageHeader, DataTable, SearchInput, ConfirmDialog, Badge, Button, Card, IconButton, FormSelect, FormCheckbox, Alert, Avatar } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
@@ -226,54 +215,56 @@ const flashError = computed(() => page.props.flash?.error);
             </Link>
         </nav>
 
-        <div class="card p-6 mb-4">
-            <div class="flex items-center justify-between flex-wrap gap-3">
-                <div class="flex items-center gap-3 flex-wrap">
-                    <SearchInput
-                        v-model="search"
-                        :placeholder="t('common.search')"
-                        @search="onSearch"
-                    />
-                    <FormSelect
-                        :model-value="filters.company_id ?? ''"
-                        :options="companyOptions"
-                        class="max-w-[180px]"
-                        @update:model-value="(v) => applyFilter('company_id', v)"
-                    />
-                    <FormSelect
-                        :model-value="filters.branch_id ?? ''"
-                        :options="branchOptions"
-                        class="max-w-[180px]"
-                        @update:model-value="(v) => applyFilter('branch_id', v)"
-                    />
-                    <FormSelect
-                        :model-value="filters.department_id ?? ''"
-                        :options="departmentOptions"
-                        class="max-w-[180px]"
-                        @update:model-value="(v) => applyFilter('department_id', v)"
-                    />
-                    <FormSelect
-                        :model-value="filters.employment_type ?? ''"
-                        :options="[
-                            { value: '', label: t('users.select_employment_type') },
-                            ...employmentTypeOptions,
-                        ]"
-                        class="max-w-[180px]"
-                        @update:model-value="(v) => applyFilter('employment_type', v)"
-                    />
-                    <FormSelect
-                        :model-value="filters.status ?? ''"
-                        :options="[
-                            { value: '', label: t('common.all_statuses') },
-                            { value: '1', label: t('common.active') },
-                            { value: '0', label: t('common.inactive') },
-                        ]"
-                        class="max-w-[180px]"
-                        @update:model-value="(v) => applyFilter('status', v)"
-                    />
+        <Card variant="base" padding="none" class="mb-4">
+            <div class="p-5 sm:p-6">
+                <div class="flex items-center justify-between flex-wrap gap-3">
+                    <div class="flex items-center gap-3 flex-wrap">
+                        <SearchInput
+                            v-model="search"
+                            :placeholder="t('common.search')"
+                            @search="onSearch"
+                        />
+                        <FormSelect
+                            :model-value="filters.company_id ?? ''"
+                            :options="companyOptions"
+                            class="max-w-[180px]"
+                            @update:model-value="(v) => applyFilter('company_id', v)"
+                        />
+                        <FormSelect
+                            :model-value="filters.branch_id ?? ''"
+                            :options="branchOptions"
+                            class="max-w-[180px]"
+                            @update:model-value="(v) => applyFilter('branch_id', v)"
+                        />
+                        <FormSelect
+                            :model-value="filters.department_id ?? ''"
+                            :options="departmentOptions"
+                            class="max-w-[180px]"
+                            @update:model-value="(v) => applyFilter('department_id', v)"
+                        />
+                        <FormSelect
+                            :model-value="filters.employment_type ?? ''"
+                            :options="[
+                                { value: '', label: t('users.select_employment_type') },
+                                ...employmentTypeOptions,
+                            ]"
+                            class="max-w-[180px]"
+                            @update:model-value="(v) => applyFilter('employment_type', v)"
+                        />
+                        <FormSelect
+                            :model-value="filters.status ?? ''"
+                            :options="[
+                                { value: '', label: t('common.all_statuses') },
+                                { value: '1', label: t('common.active') },
+                                { value: '0', label: t('common.inactive') },
+                            ]"
+                            class="max-w-[180px]"
+                            @update:model-value="(v) => applyFilter('status', v)"
+                        />
+                    </div>
                 </div>
             </div>
-        </div>
+        </Card>
 
         <DataTable :columns="columns" :data="users">
             <template #cell-select="{ row }">
@@ -326,7 +317,7 @@ const flashError = computed(() => page.props.flash?.error);
             <template #cell-actions="{ row }">
                 <div class="flex items-center justify-center gap-1.5">
                     <IconButton icon="fas fa-eye" :aria-label="t('common.view')" variant="info" :href="route('users.show', row.id)" />
-                    <IconButton icon="fas fa-edit" :aria-label="t('common.edit')" variant="primary" :href="route('users.edit', row.id)" />
+                    <IconButton icon="fas fa-pen" :aria-label="t('common.edit')" variant="primary" :href="route('users.edit', row.id)" />
                     <IconButton icon="fas fa-clock" :aria-label="t('users.manage_shifts')" variant="secondary" :href="route('users.shifts', row.id)" />
                     <IconButton icon="fas fa-trash" :aria-label="t('common.delete')" variant="danger" @click="confirmDelete(row)" />
                 </div>

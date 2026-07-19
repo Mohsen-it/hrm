@@ -6,14 +6,17 @@
       </Button>
     </PageHeader>
 
-    <Card>
-      <form @submit.prevent="submit" class="space-y-6">
-        <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+    <form class="space-y-6" @submit.prevent="submit">
+      <ErrorSummary :errors="form.errors" />
+
+      <FormSection :title="t('attendance.attendance_shift')" icon="fas fa-clock" :collapsible="true" :default-open="true">
+        <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
           <FormInput
             v-model="form.alias"
             :label="t('attendance.fields.alias')"
             :error="form.errors.alias"
             required
+            autofocus
           />
 
           <FormSelect
@@ -39,8 +42,10 @@
             :error="form.errors.frequency"
           />
         </div>
+      </FormSection>
 
-        <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+      <FormSection :title="t('attendance.fields.shift_details')" icon="fas fa-cog" :collapsible="true" :default-open="true">
+        <div class="grid grid-cols-1 gap-4 md:grid-cols-2 mb-6">
           <FormSwitch
             v-model="form.work_weekend"
             :label="t('attendance.fields.work_weekend')"
@@ -51,70 +56,60 @@
           />
         </div>
 
-        <div>
-          <h3 class="mb-4 text-lg font-semibold">{{ t('attendance.fields.shift_details') }}</h3>
-          <div class="space-y-4">
-            <div
-              v-for="(detail, index) in form.details"
-              :key="index"
-              class="rounded-lg border p-4"
-            >
-              <div class="grid grid-cols-1 gap-4 md:grid-cols-4">
-                <FormSelect
-                  v-model="detail.day_index"
-                  :label="t('attendance.fields.day_index')"
-                  :options="daysOfWeek"
-                />
-                <FormInput
-                  v-model="detail.in_time"
-                  :label="t('attendance.fields.in_time')"
-                  type="time"
-                />
-                <FormInput
-                  v-model="detail.out_time"
-                  :label="t('attendance.fields.out_time')"
-                  type="time"
-                />
-                <div class="flex items-end">
-                  <Button
-                    variant="danger"
-                    size="sm"
-                    type="button"
-                    @click="removeDetail(index)"
-                  >
-                    {{ t('actions.delete') }}
-                  </Button>
-                </div>
+        <div class="space-y-4">
+          <div
+            v-for="(detail, index) in form.details"
+            :key="index"
+            class="rounded-lg border p-4"
+          >
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-4">
+              <FormSelect
+                v-model="detail.day_index"
+                :label="t('attendance.fields.day_index')"
+                :options="daysOfWeek"
+              />
+              <FormInput
+                v-model="detail.in_time"
+                :label="t('attendance.fields.in_time')"
+                type="time"
+              />
+              <FormInput
+                v-model="detail.out_time"
+                :label="t('attendance.fields.out_time')"
+                type="time"
+              />
+              <div class="flex items-end">
+                <Button
+                  variant="danger"
+                  size="sm"
+                  type="button"
+                  @click="removeDetail(index)"
+                >
+                  {{ t('actions.delete') }}
+                </Button>
               </div>
             </div>
           </div>
-          <Button variant="secondary" type="button" @click="addDetail" class="mt-4">
-            {{ t('attendance.actions.add_detail') }}
-          </Button>
         </div>
+        <Button variant="secondary" type="button" @click="addDetail" class="mt-4">
+          {{ t('attendance.actions.add_detail') }}
+        </Button>
+      </FormSection>
 
-        <div class="flex justify-end gap-3">
-          <Button variant="secondary" :href="route('attendance.shifts.index')" type="button">
-            {{ t('actions.cancel') }}
-          </Button>
-          <Button variant="primary" type="submit" :disabled="form.processing">
-            {{ t('actions.save') }}
-          </Button>
-        </div>
-      </form>
-    </Card>
+      <FormActions
+        :save-label="t('actions.save')"
+        :cancel-label="t('actions.cancel')"
+        :cancel-href="route('attendance.shifts.index')"
+        :saving="form.processing"
+      />
+    </form>
   </AppLayout>
 </template>
 
 <script setup>
 import { useForm } from '@inertiajs/vue3'
-import AppLayout from '@/layouts/AppLayout.vue'
-import PageHeader from '@/Components/ui/PageHeader.vue'
-import Button from '@/Components/ui/Button.vue'
-import Card from '@/Components/ui/Card.vue'
-import FormInput from '@/Components/ui/FormInput.vue'
-import FormSelect from '@/Components/ui/FormSelect.vue'
-import FormSwitch from '@/Components/ui/FormSwitch.vue'
+import AppLayout from '@/Layouts/AppLayout.vue'
+import { PageHeader, Button, Card, FormInput, FormSelect, FormSwitch, FormSection, FormActions, ErrorSummary } from '@/Components/ui'
 import { useTranslations } from '@/composables/useTranslations'
 
 const { t } = useTranslations()

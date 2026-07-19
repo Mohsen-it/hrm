@@ -3,9 +3,11 @@ import { ref, computed } from 'vue'
 import { router } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import PageHeader from '@/Components/ui/PageHeader.vue'
+import Card from '@/Components/ui/Card.vue'
 import DataTable from '@/Components/ui/DataTable.vue'
+import FormInput from '@/Components/ui/FormInput.vue'
+import { StatCard } from '@/Components/ui'
 import Badge from '@/Components/ui/Badge.vue'
-import StatCard from '@/Components/StatCard.vue'
 import { useTranslations } from '@/composables/useTranslations'
 
 const { t } = useTranslations()
@@ -30,11 +32,11 @@ function loadData() {
 }
 
 const columns = computed(() => [
-    { key: 'name', label: 'الموظف' },
-    { key: 'department', label: 'القسم' },
-    { key: 'category', label: 'الفئة' },
-    { key: 'expected_in', label: 'وقت الحضور المتوقع', cellClass: 'text-center' },
-    { key: 'status', label: 'الحالة', cellClass: 'text-center' },
+    { key: 'name', label: t('shifts.employee_name'), sortable: true, filterable: true },
+    { key: 'department', label: t('shifts.department'), sortable: true, filterable: true },
+    { key: 'category', label: t('shifts.category'), sortable: true, filterable: true },
+    { key: 'expected_in', label: t('shifts.expected_in_time'), sortable: true, cellClass: 'text-center' },
+    { key: 'status', label: t('shifts.status'), sortable: true, filterable: true, cellClass: 'text-center' },
 ])
 
 function statusVariant(status) {
@@ -50,53 +52,61 @@ function statusVariant(status) {
 </script>
 
 <template>
-    <AppLayout :title="'غياب الفريق'">
-        <PageHeader :title="'غياب الفريق'" />
+    <AppLayout :title="t('shifts.team_absence')">
+        <PageHeader :title="t('shifts.team_absence')" />
 
         <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
             <StatCard
-                label="إجمالي أعضاء الفريق"
+                :label="t('shifts.total_team_members')"
                 :value="totalTeam"
                 icon="fas fa-users"
                 color="info"
             />
             <StatCard
-                label="الغائبون اليوم"
+                :label="t('shifts.absent_today')"
                 :value="absentCount"
                 icon="fas fa-user-times"
                 color="danger"
             />
             <StatCard
-                label="نسبة الحضور"
+                :label="t('shifts.attendance_rate')"
                 :value="totalTeam ? Math.round(((totalTeam - absentCount) / totalTeam) * 100) + '%' : '0%'"
                 icon="fas fa-chart-pie"
                 :color="absentCount > totalTeam / 2 ? 'danger' : 'success'"
             />
         </div>
 
-        <div class="card p-4 mb-4 flex items-center gap-3 flex-wrap">
-            <label class="flex items-center gap-2 text-sm">
-                <span class="text-gray-600">التاريخ:</span>
-                <input
-                    type="date"
+        <Card variant="base" padding="none" class="mb-6">
+            <div class="p-5 sm:p-6">
+                <FormInput
                     v-model="selectedDate"
-                    class="form-input max-w-[180px]"
+                    type="date"
+                    :label="t('shifts.date')"
+                    name="selected_date"
                     @change="loadData"
                 />
-            </label>
-        </div>
+            </div>
+        </Card>
 
-        <DataTable :columns="columns" :data="{ data: absent }" :empty-title="'لا توجد بيانات غياب'">
+        <DataTable
+            :columns="columns"
+            :data="{ data: absent }"
+            :empty-title="t('shifts.no_absence_data')"
+            storage-key="team-absence"
+            @search="(q) => loadData()"
+            @page-change="(p) => loadData()"
+            @per-page-change="(p) => loadData()"
+        >
             <template #cell-name="{ row }">
-                <div class="text-[14px] font-medium">{{ row.name }}</div>
+                <div class="text-[14px] font-medium text-mistral-ink">{{ row.name }}</div>
             </template>
 
             <template #cell-department="{ row }">
-                <span>{{ row.department_name || '—' }}</span>
+                <span class="text-mistral-ink">{{ row.department_name || '—' }}</span>
             </template>
 
             <template #cell-category="{ row }">
-                <span>{{ row.category_name || '—' }}</span>
+                <span class="text-mistral-ink">{{ row.category_name || '—' }}</span>
             </template>
 
             <template #cell-expected_in="{ row }">

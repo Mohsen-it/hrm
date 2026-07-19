@@ -9,15 +9,18 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
+use Modules\Attendance\Models\AttendanceEmployee;
+use Modules\Shifts\Services\RotationService;
+use Modules\Shifts\Services\ShiftCategoryAssignmentService;
 use Modules\Users\Models\User;
 use Modules\Users\Repositories\UserRepository;
-use Modules\Attendance\Models\AttendanceEmployee;
-use Modules\Attendance\Models\AttendanceGroup;
 
 class UserService
 {
     public function __construct(
-        private UserRepository $repository
+        private UserRepository $repository,
+        private RotationService $rotationService,
+        private ShiftCategoryAssignmentService $shiftCategoryAssignmentService,
     ) {}
 
     // ------------------------------------------------------------------
@@ -220,6 +223,8 @@ class UserService
         $shifts = $validated['shifts'] ?? null;
         $zones = $validated['zones'] ?? null;
         $attendanceGroupId = $validated['attendance_group_id'] ?? null;
+        $rotationAssignment = $validated['rotation_assignment'] ?? null;
+        $shiftCategoryAssignment = $validated['shift_category_assignment'] ?? null;
 
         unset(
             $validated['roles'],
@@ -227,9 +232,11 @@ class UserService
             $validated['shifts'],
             $validated['zones'],
             $validated['attendance_group_id'],
+            $validated['rotation_assignment'],
+            $validated['shift_category_assignment'],
         );
 
-        return DB::transaction(function () use ($user, $validated, $roles, $permissions, $shifts, $zones, $attendanceGroupId) {
+        return DB::transaction(function () use ($user, $validated, $roles, $permissions, $shifts, $zones, $attendanceGroupId, $rotationAssignment, $shiftCategoryAssignment) {
             $user = $this->repository->update($user, $validated);
 
             if (is_array($roles)) {
@@ -253,6 +260,14 @@ class UserService
                     ['emp_id' => $user->id],
                     ['group_id' => $attendanceGroupId]
                 );
+            }
+
+            if (is_array($rotationAssignment)) {
+                $this->handleRotationAssignment($user->id, $rotationAssignment);
+            }
+
+            if (is_array($shiftCategoryAssignment)) {
+                $this->handleShiftCategoryAssignment($user->id, $shiftCategoryAssignment);
             }
 
             return $user->fresh([
@@ -450,6 +465,59 @@ class UserService
     }
 
     // ------------------------------------------------------------------
+    // Rotation & Shift Category Assignments
+    // ------------------------------------------------------------------
+
+    /**
+     * Handle rotation assignment update from the user edit form.
+     */
+    private function handleRotationAssignment(int $employeeId, array $data): void
+    {
+        $action = $data['action'] ?? null;
+
+        if ($action === 'assign' || $action === 'transfer') {
+            $rotationId = (int) ($data['rotation_id'] ?? 0);
+            $groupId = (int) ($data['rotation_group_id'] ?? 0);
+            $startDate = $data['start_date'] ?? null;
+
+            if ($rotationId > 0 && $groupId > 0 && $startDate) {
+                if ($action === 'transfer') {
+                    $this->rotationService->transferEmployee($employeeId, $rotationId, $groupId, $startDate);
+                } else {
+                    $this->rotationService->assignEmployee($employeeId, $rotationId, $groupId, $startDate);
+                }
+            }
+        } elseif ($action === 'unassign') {
+            $endDate = $data['end_date'] ?? now()->toDateString();
+            $this->rotationService->unassignEmployee($employeeId, $endDate);
+        }
+    }
+
+    /**
+     * Handle shift category assignment update from the user edit form.
+     */
+    private function handleShiftCategoryAssignment(int $employeeId, array $data): void
+    {
+        $action = $data['action'] ?? null;
+
+        if ($action === 'assign' || $action === 'transfer') {
+            $categoryId = (int) ($data['shift_category_id'] ?? 0);
+            $startDate = $data['start_date'] ?? null;
+
+            if ($categoryId > 0 && $startDate) {
+                if ($action === 'transfer') {
+                    $this->shiftCategoryAssignmentService->transferEmployee($employeeId, $categoryId, $startDate);
+                } else {
+                    $this->shiftCategoryAssignmentService->assignEmployee($employeeId, $categoryId, $startDate, $data['end_date'] ?? null);
+                }
+            }
+        } elseif ($action === 'unassign') {
+            $endDate = $data['end_date'] ?? now()->toDateString();
+            $this->shiftCategoryAssignmentService->unassignEmployee($employeeId, $endDate);
+        }
+    }
+
+    // ------------------------------------------------------------------
     // Validation
     // ------------------------------------------------------------------
 
@@ -531,6 +599,17 @@ class UserService
             'shifts.*.effective_to' => ['nullable', 'date', 'after_or_equal:shifts.*.effective_from'],
             'shifts.*.is_primary' => ['nullable', 'boolean'],
             'zones' => ['nullable', 'array'],
+            'rotation_assignment' => ['nullable', 'array'],
+            'rotation_assignment.action' => ['nullable', 'in:assign,transfer,unassign'],
+            'rotation_assignment.rotation_id' => ['required_with:rotation_assignment', 'integer', 'exists:att_rotations,id'],
+            'rotation_assignment.rotation_group_id' => ['required_if:rotation_assignment.action,assign,transfer', 'integer', 'exists:att_rotation_groups,id'],
+            'rotation_assignment.start_date' => ['required_if:rotation_assignment.action,assign,transfer', 'date'],
+            'rotation_assignment.end_date' => ['nullable', 'date'],
+            'shift_category_assignment' => ['nullable', 'array'],
+            'shift_category_assignment.action' => ['nullable', 'in:assign,transfer,unassign'],
+            'shift_category_assignment.shift_category_id' => ['required_if:shift_category_assignment.action,assign,transfer', 'integer', 'exists:att_shift_categories,id'],
+            'shift_category_assignment.start_date' => ['required_if:shift_category_assignment.action,assign,transfer', 'date'],
+            'shift_category_assignment.end_date' => ['nullable', 'date'],
         ];
 
         return Validator::make($data, $rules)->validate();

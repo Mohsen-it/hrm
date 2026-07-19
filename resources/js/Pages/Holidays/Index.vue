@@ -2,16 +2,7 @@
 import { ref, computed } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
-import PageHeader from '@/Components/ui/PageHeader.vue';
-import DataTable from '@/Components/ui/DataTable.vue';
-import SearchInput from '@/Components/ui/SearchInput.vue';
-import ConfirmDialog from '@/Components/ui/ConfirmDialog.vue';
-import Badge from '@/Components/ui/Badge.vue';
-import Button from '@/Components/ui/Button.vue';
-import Card from '@/Components/ui/Card.vue';
-import IconButton from '@/Components/ui/IconButton.vue';
-import FormSelect from '@/Components/ui/FormSelect.vue';
-import Alert from '@/Components/ui/Alert.vue';
+import { PageHeader, DataTable, ConfirmDialog, Badge, Button, Card, IconButton, Alert } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t, locale } = useTranslations();
@@ -23,7 +14,6 @@ const props = defineProps({
     upcoming: { type: Array, default: () => [] },
 });
 
-const search = ref(props.filters?.search || '');
 const showDelete = ref(false);
 const selectedHoliday = ref(null);
 
@@ -35,7 +25,18 @@ const columns = computed(() => [
     { key: 'date', label: t('holidays.date'), sortable: true },
     { key: 'category', label: t('holidays.category') },
     { key: 'is_recurring', label: t('holidays.recurring'), cellClass: 'text-center' },
-    { key: 'is_active', label: t('common.status'), cellClass: 'text-center' },
+    {
+        key: 'is_active',
+        label: t('common.status'),
+        cellClass: 'text-center',
+        filterable: true,
+        filterType: 'select',
+        filterOptions: [
+            { value: '', label: t('common.all_statuses') },
+            { value: '1', label: t('common.active') },
+            { value: '0', label: t('common.inactive') },
+        ],
+    },
     { key: 'actions', label: t('common.actions'), cellClass: 'text-center w-[160px]' },
 ]);
 
@@ -43,8 +44,16 @@ function onSearch(value) {
     router.get(route('holidays.index'), { ...props.filters, search: value }, { preserveState: true, preserveScroll: true, replace: true });
 }
 
-function applyFilter(key, value) {
-    router.get(route('holidays.index'), { ...props.filters, [key]: value }, { preserveState: true, preserveScroll: true, replace: true });
+function onFilterChange(filters) {
+    router.get(route('holidays.index'), { ...props.filters, ...filters }, { preserveState: true, preserveScroll: true, replace: true });
+}
+
+function onPageChange(page) {
+    router.get(route('holidays.index'), { ...props.filters, page }, { preserveState: true, preserveScroll: true, replace: true });
+}
+
+function onPerPageChange(perPage) {
+    router.get(route('holidays.index'), { ...props.filters, per_page: perPage }, { preserveState: true, preserveScroll: true, replace: true });
 }
 
 function confirmDelete(holiday) {
@@ -79,40 +88,34 @@ const flashSuccess = computed(() => page.props.flash?.success);
 
         <Alert v-if="flashSuccess" type="success" :message="flashSuccess" class="mb-4" />
 
-        <Card v-if="upcoming.length > 0" variant="base" padding="md" class="mb-4">
-            <h3 class="text-[14px] font-semibold text-mistral-ink mb-3 flex items-center gap-2">
-                <i class="fas fa-calendar-day text-mistral-primary"></i>
-                {{ t('holidays.upcoming') }}
-            </h3>
-            <div class="flex flex-wrap gap-2">
-                <div
-                    v-for="h in upcoming.slice(0, 6)"
-                    :key="h.id + '-' + h.date"
-                    class="px-3 py-2 rounded-md bg-mistral-surface border border-mistral-hairline text-[13px]"
-                >
-                    <span class="font-medium">{{ displayName(h) }}</span>
-                    <span class="text-mistral-steel ms-2">{{ h.date }}</span>
+        <Card v-if="upcoming.length > 0" variant="base" padding="none" class="mb-4">
+            <div class="p-5 sm:p-6">
+                <h3 class="text-[14px] font-semibold text-mistral-ink mb-3 flex items-center gap-2">
+                    <i class="fas fa-calendar-day text-mistral-primary"></i>
+                    {{ t('holidays.upcoming') }}
+                </h3>
+                <div class="flex flex-wrap gap-2">
+                    <div
+                        v-for="h in upcoming.slice(0, 6)"
+                        :key="h.id + '-' + h.date"
+                        class="px-3 py-2 rounded-md bg-mistral-surface border border-mistral-hairline text-[13px]"
+                    >
+                        <span class="font-medium">{{ displayName(h) }}</span>
+                        <span class="text-mistral-steel ms-2">{{ h.date }}</span>
+                    </div>
                 </div>
             </div>
         </Card>
 
-        <div class="card p-6 mb-4">
-            <div class="flex items-center gap-3 flex-wrap">
-                <SearchInput v-model="search" :placeholder="t('common.search')" @search="onSearch" />
-                <FormSelect
-                    :model-value="filters.is_active ?? ''"
-                    :options="[
-                        { value: '', label: t('common.all_statuses') },
-                        { value: '1', label: t('common.active') },
-                        { value: '0', label: t('common.inactive') },
-                    ]"
-                    class="max-w-[180px]"
-                    @update:model-value="(v) => applyFilter('is_active', v)"
-                />
-            </div>
-        </div>
-
-        <DataTable :columns="columns" :data="holidays">
+        <DataTable
+            :columns="columns"
+            :data="holidays"
+            storage-key="holidays"
+            @search="onSearch"
+            @filter-change="onFilterChange"
+            @page-change="onPageChange"
+            @per-page-change="onPerPageChange"
+        >
             <template #cell-is_recurring="{ row }">
                 <Badge v-if="row.is_recurring" :text="t('holidays.yes_recurring')" variant="info" />
                 <span v-else class="text-mistral-stone">—</span>
@@ -126,7 +129,7 @@ const flashSuccess = computed(() => page.props.flash?.success);
             <template #cell-actions="{ row }">
                 <div class="flex items-center justify-center gap-1">
                     <IconButton icon="fas fa-eye" :aria-label="t('common.view')" :href="route('holidays.show', row.id)" />
-                    <IconButton icon="fas fa-edit" :aria-label="t('common.edit')" :href="route('holidays.edit', row.id)" />
+                    <IconButton icon="fas fa-pen" :aria-label="t('common.edit')" :href="route('holidays.edit', row.id)" />
                     <IconButton icon="fas fa-trash" :aria-label="t('common.delete')" variant="danger" @click="confirmDelete(row)" />
                 </div>
             </template>

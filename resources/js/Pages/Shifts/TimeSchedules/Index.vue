@@ -4,14 +4,11 @@ import { router, Link, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import PageHeader from '@/Components/ui/PageHeader.vue';
 import Button from '@/Components/ui/Button.vue';
-import Card from '@/Components/ui/Card.vue';
 import DataTable from '@/Components/ui/DataTable.vue';
-import SearchInput from '@/Components/ui/SearchInput.vue';
 import ConfirmDialog from '@/Components/ui/ConfirmDialog.vue';
 import Badge from '@/Components/ui/Badge.vue';
 import IconButton from '@/Components/ui/IconButton.vue';
 import Alert from '@/Components/ui/Alert.vue';
-import Pagination from '@/Components/ui/Pagination.vue';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
@@ -22,7 +19,6 @@ const props = defineProps({
     filters: { type: Object, default: () => ({}) },
 });
 
-const search = ref(props.filters?.search || '');
 const showDelete = ref(false);
 const selectedSchedule = ref(null);
 
@@ -41,6 +37,22 @@ function onSearch(value) {
     router.get(
         route('time-schedules.index'),
         { ...props.filters, search: value },
+        { preserveState: true, preserveScroll: true, replace: true },
+    );
+}
+
+function onPageChange(page) {
+    router.get(
+        route('time-schedules.index'),
+        { ...props.filters, page },
+        { preserveState: true, preserveScroll: true, replace: true },
+    );
+}
+
+function onPerPageChange(perPage) {
+    router.get(
+        route('time-schedules.index'),
+        { ...props.filters, per_page: perPage },
         { preserveState: true, preserveScroll: true, replace: true },
     );
 }
@@ -131,17 +143,14 @@ const flashError = computed(() => page.props.flash?.error);
             </Link>
         </nav>
 
-        <Card variant="base" padding="sm" class="mb-6">
-            <div class="flex items-center gap-3 flex-wrap">
-                <SearchInput
-                    v-model="search"
-                    :placeholder="t('common.search')"
-                    @search="onSearch"
-                />
-            </div>
-        </Card>
-
-        <DataTable :columns="columns" :data="schedules">
+        <DataTable
+            :columns="columns"
+            :data="schedules"
+            storage-key="time-schedules"
+            @search="onSearch"
+            @page-change="onPageChange"
+            @per-page-change="onPerPageChange"
+        >
             <template #cell-in_time="{ row }">
                 <span dir="ltr">{{ row.in_time ? String(row.in_time).slice(0, 5) : '—' }}</span>
             </template>
@@ -207,16 +216,12 @@ const flashError = computed(() => page.props.flash?.error);
                     />
                     <IconButton
                         icon="fas fa-trash"
-                        variant="ghost"
+                        variant="danger"
                         size="sm"
                         :aria-label="t('common.delete')"
                         @click="confirmDelete(row)"
                     />
                 </div>
-            </template>
-
-            <template #footer>
-                <Pagination :data="schedules" />
             </template>
         </DataTable>
 

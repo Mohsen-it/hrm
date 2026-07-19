@@ -7,6 +7,8 @@ import Button from '@/Components/ui/Button.vue';
 import Card from '@/Components/ui/Card.vue';
 import Badge from '@/Components/ui/Badge.vue';
 import Alert from '@/Components/ui/Alert.vue';
+import FormSelect from '@/Components/ui/FormSelect.vue';
+import FormCheckbox from '@/Components/ui/FormCheckbox.vue';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
@@ -30,7 +32,6 @@ const isRunning = ref(false);
 const result = ref(props.lastResult || null);
 const errorMessage = ref('');
 
-// Progress state
 const progress = ref(0);
 const currentStep = ref('');
 const currentMessage = ref('');
@@ -75,14 +76,14 @@ const stepIcon = (name) => {
     return map[name] || 'fas fa-cog';
 };
 
-const stepColor = (name) => {
+const stepColorClass = (name) => {
     const map = {
-        info: 'var(--color-info)',
-        users: 'var(--color-primary)',
-        fingerprints: 'var(--color-success)',
-        attendance: 'var(--color-warning)',
+        info: 'text-mistral-info',
+        users: 'text-mistral-primary',
+        fingerprints: 'text-mistral-success',
+        attendance: 'text-mistral-warning',
     };
-    return map[name] || 'var(--color-ink-muted)';
+    return map[name] || 'text-mistral-steel';
 };
 
 function pickDevice() {
@@ -106,7 +107,6 @@ function runSync() {
     currentStatus.value = '';
     stepsLog.value = [];
 
-    // Use fetch with POST + SSE-like streaming via ReadableStream
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 
     fetch(route('fingerprint-devices.sync.stream'), {
@@ -185,7 +185,6 @@ function handleSSE(event, dataRaw) {
             currentStatus.value = data.status;
             progress.value = data.percent || 0;
 
-            // Add to steps log
             const existingIdx = stepsLog.value.findIndex((s) => s.name === data.step);
             if (existingIdx >= 0) {
                 stepsLog.value[existingIdx].status = data.status;
@@ -264,291 +263,290 @@ watch(deviceId, (v) => {
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div class="card p-6 lg:col-span-1">
-                <h3 class="text-[15px] font-semibold text-[var(--color-ink)] mb-4 flex items-center gap-2">
-                    <i class="fas fa-sliders-h text-[var(--color-primary)]"></i>
-                    {{ t('fingerprint_devices.sync_settings') }}
-                </h3>
+            <Card variant="base" padding="none" class="lg:col-span-1">
+                <div class="p-5 sm:p-6">
+                    <h3 class="text-[15px] font-semibold text-mistral-ink mb-4 flex items-center gap-2">
+                        <i class="fas fa-sliders-h text-mistral-primary"></i>
+                        {{ t('fingerprint_devices.sync_settings') }}
+                    </h3>
 
-                <div class="mb-4">
-                    <label class="block text-[12px] font-semibold text-[var(--color-ink-muted)] mb-1">
-                        {{ t('fingerprint_devices.device_name') }}
-                    </label>
-                    <select v-model="deviceId" class="form-input" :disabled="isRunning || !devices.length">
-                        <option v-if="!devices.length" value="0">—</option>
-                        <option v-for="opt in deviceOptions" :key="opt.value" :value="opt.value">
-                            {{ opt.label }}
-                        </option>
-                    </select>
-                </div>
+                    <div class="mb-4">
+                        <label class="block text-[12px] font-semibold text-mistral-steel mb-1">
+                            {{ t('fingerprint_devices.device_name') }}
+                        </label>
+                        <select v-model="deviceId" class="form-input" :disabled="isRunning || !devices.length">
+                            <option v-if="!devices.length" value="0">—</option>
+                            <option v-for="opt in deviceOptions" :key="opt.value" :value="opt.value">
+                                {{ opt.label }}
+                            </option>
+                        </select>
+                    </div>
 
-                <div v-if="currentDevice" class="mb-4 flex items-center gap-2 text-[12px] text-[var(--color-ink-muted)]">
-                    <span>{{ currentDevice.serial_number }}</span>
-                    <Badge :text="t('fingerprint_devices.' + currentDevice.status)" :variant="statusVariant(currentDevice.status)" />
-                </div>
+                    <div v-if="currentDevice" class="mb-4 flex items-center gap-2 text-[12px] text-mistral-steel">
+                        <span>{{ currentDevice.serial_number }}</span>
+                        <Badge :text="t('fingerprint_devices.' + currentDevice.status)" :variant="statusVariant(currentDevice.status)" />
+                    </div>
 
-                <div class="space-y-2 mb-5">
-                    <label class="flex items-center gap-2 text-[13px] text-[var(--color-ink)]">
+                    <div class="space-y-2 mb-5">
+                        <label class="flex items-center gap-2 text-[13px] text-mistral-ink">
+                            <input
+                                v-model="options.info"
+                                type="checkbox"
+                                class="form-checkbox"
+                                :disabled="isRunning"
+                            />
+                            <i class="fas fa-info-circle text-mistral-info w-4"></i>
+                            <span>{{ t('fingerprint_devices.sync_step_info') }}</span>
+                        </label>
+                        <label class="flex items-center gap-2 text-[13px] text-mistral-ink">
+                            <input
+                                v-model="options.users"
+                                type="checkbox"
+                                class="form-checkbox"
+                                :disabled="isRunning"
+                            />
+                            <i class="fas fa-users text-mistral-primary w-4"></i>
+                            <span>{{ t('fingerprint_devices.sync_step_users') }}</span>
+                        </label>
+                        <label class="flex items-center gap-2 text-[13px] text-mistral-ink">
+                            <input
+                                v-model="options.fingerprints"
+                                type="checkbox"
+                                class="form-checkbox"
+                                :disabled="isRunning"
+                            />
+                            <i class="fas fa-fingerprint text-mistral-success w-4"></i>
+                            <span>{{ t('fingerprint_devices.sync_step_fingerprints') }}</span>
+                        </label>
+                        <label class="flex items-center gap-2 text-[13px] text-mistral-ink">
+                            <input
+                                v-model="options.attendance"
+                                type="checkbox"
+                                class="form-checkbox"
+                                :disabled="isRunning"
+                            />
+                            <i class="fas fa-clock text-mistral-warning w-4"></i>
+                            <span>{{ t('fingerprint_devices.sync_step_attendance') }}</span>
+                        </label>
+                    </div>
+
+                    <label class="flex items-center gap-2 text-[12px] text-mistral-steel mb-4">
                         <input
-                            v-model="options.info"
+                            v-model="options.clear_local_cache"
                             type="checkbox"
                             class="form-checkbox"
                             :disabled="isRunning"
                         />
-                        <i class="fas fa-info-circle text-[var(--color-info)] w-4"></i>
-                        <span>{{ t('fingerprint_devices.sync_step_info') }}</span>
+                        <span>{{ t('fingerprint_devices.sync_clear_local') }}</span>
                     </label>
-                    <label class="flex items-center gap-2 text-[13px] text-[var(--color-ink)]">
-                        <input
-                            v-model="options.users"
-                            type="checkbox"
-                            class="form-checkbox"
-                            :disabled="isRunning"
-                        />
-                        <i class="fas fa-users text-[var(--color-primary)] w-4"></i>
-                        <span>{{ t('fingerprint_devices.sync_step_users') }}</span>
-                    </label>
-                    <label class="flex items-center gap-2 text-[13px] text-[var(--color-ink)]">
-                        <input
-                            v-model="options.fingerprints"
-                            type="checkbox"
-                            class="form-checkbox"
-                            :disabled="isRunning"
-                        />
-                        <i class="fas fa-fingerprint text-[var(--color-success)] w-4"></i>
-                        <span>{{ t('fingerprint_devices.sync_step_fingerprints') }}</span>
-                    </label>
-                    <label class="flex items-center gap-2 text-[13px] text-[var(--color-ink)]">
-                        <input
-                            v-model="options.attendance"
-                            type="checkbox"
-                            class="form-checkbox"
-                            :disabled="isRunning"
-                        />
-                        <i class="fas fa-clock text-[var(--color-warning)] w-4"></i>
-                        <span>{{ t('fingerprint_devices.sync_step_attendance') }}</span>
-                    </label>
+
+                    <Button
+                        v-if="!isRunning"
+                        variant="primary"
+                        icon="fas fa-cloud-download-alt"
+                        block
+                        :disabled="!deviceId"
+                        @click="runSync"
+                    >
+                        {{ t('fingerprint_devices.sync_run') }}
+                    </Button>
+
+                    <Button
+                        v-else
+                        variant="danger"
+                        icon="fas fa-stop"
+                        block
+                        @click="cancelSync"
+                    >
+                        {{ t('fingerprint_devices.sync_cancel') }}
+                    </Button>
                 </div>
+            </Card>
 
-                <label class="flex items-center gap-2 text-[12px] text-[var(--color-ink-muted)] mb-4">
-                    <input
-                        v-model="options.clear_local_cache"
-                        type="checkbox"
-                        class="form-checkbox"
-                        :disabled="isRunning"
-                    />
-                    <span>{{ t('fingerprint_devices.sync_clear_local') }}</span>
-                </label>
+            <Card variant="base" padding="none" class="lg:col-span-2 min-h-[400px]">
+                <div class="p-5 sm:p-6">
+                    <h3 class="text-[15px] font-semibold text-mistral-ink mb-4 flex items-center gap-2">
+                        <i class="fas fa-chart-line text-mistral-primary"></i>
+                        {{ t('fingerprint_devices.sync_results') }}
+                    </h3>
 
-                <Button
-                    v-if="!isRunning"
-                    variant="primary"
-                    icon="fas fa-cloud-download-alt"
-                    block
-                    :disabled="!deviceId"
-                    @click="runSync"
-                >
-                    {{ t('fingerprint_devices.sync_run') }}
-                </Button>
-
-                <Button
-                    v-else
-                    variant="danger"
-                    icon="fas fa-stop"
-                    block
-                    @click="cancelSync"
-                >
-                    {{ t('fingerprint_devices.sync_cancel') }}
-                </Button>
-            </div>
-
-            <div class="card p-6 lg:col-span-2 min-h-[400px]">
-                <h3 class="text-[15px] font-semibold text-[var(--color-ink)] mb-4 flex items-center gap-2">
-                    <i class="fas fa-chart-line text-[var(--color-primary)]"></i>
-                    {{ t('fingerprint_devices.sync_results') }}
-                </h3>
-
-                <!-- Progress Bar Section -->
-                <div v-if="isRunning" class="mb-6">
-                    <div class="flex items-center justify-between mb-2">
-                        <span class="text-[13px] font-semibold text-[var(--color-ink)]">
-                            {{ currentMessage || t('fingerprint_devices.sync_progress') }}
-                        </span>
-                        <span class="text-[13px] font-bold text-[var(--color-primary)]">
-                            {{ progress }}%
-                        </span>
-                    </div>
-
-                    <!-- Progress bar -->
-                    <div class="w-full h-3 bg-[var(--color-surface-2)] rounded-full overflow-hidden mb-4">
-                        <div
-                            class="h-full rounded-full transition-all duration-500 ease-out"
-                            :class="{
-                                'bg-[var(--color-primary)]': currentStatus !== 'failed',
-                                'bg-[var(--color-danger)]': currentStatus === 'failed',
-                            }"
-                            :style="{ width: progress + '%' }"
-                        ></div>
-                    </div>
-
-                    <!-- Steps timeline -->
-                    <div class="space-y-2">
-                        <div
-                            v-for="(step, idx) in stepsLog"
-                            :key="step.name"
-                            class="flex items-center gap-3 p-2 rounded-md"
-                            :class="{
-                                'bg-[var(--color-surface-1)]': step.status === 'ok',
-                                'bg-[var(--color-danger-bg)]': step.status === 'failed',
-                                'bg-[var(--color-surface-2)]': step.status === 'running' || step.status === 'pending',
-                            }"
-                        >
-                            <div class="w-7 h-7 rounded-full flex items-center justify-center shrink-0">
-                                <i
-                                    v-if="step.status === 'running'"
-                                    class="fas fa-spinner fa-spin text-[12px]"
-                                    :style="{ color: stepColor(step.name) }"
-                                ></i>
-                                <i
-                                    v-else-if="step.status === 'ok'"
-                                    class="fas fa-check text-[12px] text-[var(--color-success)]"
-                                ></i>
-                                <i
-                                    v-else-if="step.status === 'failed'"
-                                    class="fas fa-times text-[12px] text-[var(--color-danger)]"
-                                ></i>
-                                <i
-                                    v-else-if="step.status === 'skipped'"
-                                    class="fas fa-minus text-[12px] text-[var(--color-ink-muted)]"
-                                ></i>
-                                <i
-                                    v-else
-                                    class="fas fa-clock text-[12px] text-[var(--color-ink-subtle)]"
-                                ></i>
-                            </div>
-                            <div class="flex-1 min-w-0">
-                                <p class="text-[12px] font-semibold text-[var(--color-ink)] capitalize">
-                                    {{ step.name }}
-                                </p>
-                                <p v-if="step.message" class="text-[11px] text-[var(--color-ink-muted)] truncate">
-                                    {{ step.message }}
-                                </p>
-                            </div>
-                            <Badge :text="step.status" :variant="stepVariant(step.status)" />
+                    <div v-if="isRunning" class="mb-6">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-[13px] font-semibold text-mistral-ink">
+                                {{ currentMessage || t('fingerprint_devices.sync_progress') }}
+                            </span>
+                            <span class="text-[13px] font-bold text-mistral-primary">
+                                {{ progress }}%
+                            </span>
                         </div>
-                    </div>
-                </div>
 
-                <!-- Empty state -->
-                <div v-else-if="!result" class="flex flex-col items-center justify-center py-16 text-center">
-                    <i class="fas fa-cloud-download-alt text-[40px] text-[var(--color-ink-subtle)] mb-3"></i>
-                    <p class="text-[14px] text-[var(--color-ink-muted)]">
-                        {{ t('fingerprint_devices.sync_empty') }}
-                    </p>
-                </div>
+                        <div class="w-full h-3 bg-mistral-surface rounded-full overflow-hidden mb-4">
+                            <div
+                                class="h-full rounded-full transition-all duration-500 ease-out"
+                                :class="{
+                                    'bg-mistral-primary': currentStatus !== 'failed',
+                                    'bg-mistral-danger': currentStatus === 'failed',
+                                }"
+                                :style="{ width: progress + '%' }"
+                            ></div>
+                        </div>
 
-                <!-- Results -->
-                <div v-else>
-                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
-                        <div class="rounded-md bg-[var(--color-surface-1)] p-3 border border-[var(--color-hairline)]">
-                            <p class="text-[11px] text-[var(--color-ink-muted)]">
-                                {{ t('fingerprint_devices.sync_total_users') }}
-                            </p>
-                            <p class="text-[20px] font-bold text-[var(--color-ink)]">
-                                {{ formatNumber(result.totals?.users_matched + result.totals?.users_unmatched) }}
-                            </p>
-                            <p class="text-[10px] text-[var(--color-ink-subtle)]">
-                                {{ formatNumber(result.totals?.users_matched) }} matched /
-                                {{ formatNumber(result.totals?.users_unmatched) }} not
-                            </p>
-                        </div>
-                        <div class="rounded-md bg-[var(--color-surface-1)] p-3 border border-[var(--color-hairline)]">
-                            <p class="text-[11px] text-[var(--color-ink-muted)]">
-                                {{ t('fingerprint_devices.sync_total_fingerprints') }}
-                            </p>
-                            <p class="text-[20px] font-bold text-[var(--color-ink)]">
-                                {{ formatNumber(result.totals?.fingerprints_saved) }}
-                            </p>
-                            <p class="text-[10px] text-[var(--color-ink-subtle)]">
-                                pulled: {{ formatNumber(result.totals?.fingerprints_pulled) }}
-                            </p>
-                        </div>
-                        <div class="rounded-md bg-[var(--color-surface-1)] p-3 border border-[var(--color-hairline)]">
-                            <p class="text-[11px] text-[var(--color-ink-muted)]">
-                                {{ t('fingerprint_devices.sync_total_attendance') }}
-                            </p>
-                            <p class="text-[20px] font-bold text-[var(--color-ink)]">
-                                {{ formatNumber(result.totals?.attendance_saved) }}
-                            </p>
-                            <p class="text-[10px] text-[var(--color-ink-subtle)]">
-                                sessions: {{ formatNumber(result.totals?.attendance_sessions) }}
-                            </p>
-                        </div>
-                        <div class="rounded-md bg-[var(--color-surface-1)] p-3 border border-[var(--color-hairline)]">
-                            <p class="text-[11px] text-[var(--color-ink-muted)]">
-                                {{ t('fingerprint_devices.sync_duration') }}
-                            </p>
-                            <p class="text-[20px] font-bold text-[var(--color-ink)]">
-                                {{ formatDuration(result.duration_seconds) }}
-                            </p>
-                            <p class="text-[10px] text-[var(--color-ink-subtle)]">
-                                {{ result.started_at }}
-                            </p>
-                        </div>
-                    </div>
-
-                    <ul class="space-y-2 mb-5">
-                        <li
-                            v-for="step in result.steps || []"
-                            :key="step.name"
-                            class="flex items-center justify-between p-3 rounded-md border border-[var(--color-hairline)] bg-[var(--color-surface-1)]"
-                        >
-                            <div class="flex items-center gap-3 min-w-0">
-                                <Badge :text="step.status" :variant="stepVariant(step.status)" />
-                                <div class="min-w-0">
-                                    <p class="text-[13px] font-medium text-[var(--color-ink)] capitalize">
+                        <div class="space-y-2">
+                            <div
+                                v-for="(step, idx) in stepsLog"
+                                :key="step.name"
+                                class="flex items-center gap-3 p-2 rounded-lg"
+                                :class="{
+                                    'bg-mistral-surface': step.status === 'ok',
+                                    'bg-mistral-danger/10': step.status === 'failed',
+                                    'bg-mistral-surface': step.status === 'running' || step.status === 'pending',
+                                }"
+                            >
+                                <div class="w-7 h-7 rounded-full flex items-center justify-center shrink-0">
+                                    <i
+                                        v-if="step.status === 'running'"
+                                        class="fas fa-spinner fa-spin text-[12px]"
+                                        :class="stepColorClass(step.name)"
+                                    ></i>
+                                    <i
+                                        v-else-if="step.status === 'ok'"
+                                        class="fas fa-check text-[12px] text-mistral-success"
+                                    ></i>
+                                    <i
+                                        v-else-if="step.status === 'failed'"
+                                        class="fas fa-times text-[12px] text-mistral-danger"
+                                    ></i>
+                                    <i
+                                        v-else-if="step.status === 'skipped'"
+                                        class="fas fa-minus text-[12px] text-mistral-steel"
+                                    ></i>
+                                    <i
+                                        v-else
+                                        class="fas fa-clock text-[12px] text-mistral-stone"
+                                    ></i>
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <p class="text-[12px] font-semibold text-mistral-ink capitalize">
                                         {{ step.name }}
                                     </p>
-                                    <p v-if="step.message" class="text-[11px] text-[var(--color-ink-muted)] truncate">
+                                    <p v-if="step.message" class="text-[11px] text-mistral-steel truncate">
                                         {{ step.message }}
                                     </p>
                                 </div>
+                                <Badge :text="step.status" :variant="stepVariant(step.status)" />
                             </div>
-                            <div v-if="step.data" class="text-end text-[10px] text-[var(--color-ink-subtle)] shrink-0">
-                                <pre class="whitespace-pre-wrap text-left">{{ JSON.stringify(step.data, null, 0) }}</pre>
-                            </div>
-                        </li>
-                    </ul>
+                        </div>
+                    </div>
 
-                    <div
-                        v-if="result.unmatched_users && result.unmatched_users.length"
-                        class="mb-4 p-3 rounded-md border border-[var(--color-warning)] bg-[var(--color-warning-bg)]"
-                    >
-                        <p class="text-[13px] font-semibold text-[var(--color-warning)] mb-2 flex items-center gap-2">
-                            <i class="fas fa-exclamation-triangle"></i>
-                            {{ t('fingerprint_devices.sync_unmatched_title') }}
-                            ({{ result.unmatched_users.length }})
+                    <div v-else-if="!result" class="flex flex-col items-center justify-center py-16 text-center">
+                        <i class="fas fa-cloud-download-alt text-[40px] text-mistral-stone mb-3"></i>
+                        <p class="text-[14px] text-mistral-steel">
+                            {{ t('fingerprint_devices.sync_empty') }}
                         </p>
-                        <ul class="text-[12px] text-[var(--color-ink-muted)] space-y-1 max-h-40 overflow-auto">
-                            <li v-for="u in result.unmatched_users" :key="`${u.uid}-${u.user_id}`">
-                                <span class="font-mono">{{ u.user_id || '—' }}</span>
-                                — {{ u.name || '—' }}
-                                <span class="text-[var(--color-ink-subtle)]"> ({{ u.reason }})</span>
+                    </div>
+
+                    <div v-else>
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+                            <div class="rounded-lg bg-mistral-surface p-3 border border-mistral-hairline-soft">
+                                <p class="text-[11px] text-mistral-steel">
+                                    {{ t('fingerprint_devices.sync_total_users') }}
+                                </p>
+                                <p class="text-[20px] font-bold text-mistral-ink">
+                                    {{ formatNumber(result.totals?.users_matched + result.totals?.users_unmatched) }}
+                                </p>
+                                <p class="text-[10px] text-mistral-stone">
+                                    {{ formatNumber(result.totals?.users_matched) }} matched /
+                                    {{ formatNumber(result.totals?.users_unmatched) }} not
+                                </p>
+                            </div>
+                            <div class="rounded-lg bg-mistral-surface p-3 border border-mistral-hairline-soft">
+                                <p class="text-[11px] text-mistral-steel">
+                                    {{ t('fingerprint_devices.sync_total_fingerprints') }}
+                                </p>
+                                <p class="text-[20px] font-bold text-mistral-ink">
+                                    {{ formatNumber(result.totals?.fingerprints_saved) }}
+                                </p>
+                                <p class="text-[10px] text-mistral-stone">
+                                    pulled: {{ formatNumber(result.totals?.fingerprints_pulled) }}
+                                </p>
+                            </div>
+                            <div class="rounded-lg bg-mistral-surface p-3 border border-mistral-hairline-soft">
+                                <p class="text-[11px] text-mistral-steel">
+                                    {{ t('fingerprint_devices.sync_total_attendance') }}
+                                </p>
+                                <p class="text-[20px] font-bold text-mistral-ink">
+                                    {{ formatNumber(result.totals?.attendance_saved) }}
+                                </p>
+                                <p class="text-[10px] text-mistral-stone">
+                                    sessions: {{ formatNumber(result.totals?.attendance_sessions) }}
+                                </p>
+                            </div>
+                            <div class="rounded-lg bg-mistral-surface p-3 border border-mistral-hairline-soft">
+                                <p class="text-[11px] text-mistral-steel">
+                                    {{ t('fingerprint_devices.sync_duration') }}
+                                </p>
+                                <p class="text-[20px] font-bold text-mistral-ink">
+                                    {{ formatDuration(result.duration_seconds) }}
+                                </p>
+                                <p class="text-[10px] text-mistral-stone">
+                                    {{ result.started_at }}
+                                </p>
+                            </div>
+                        </div>
+
+                        <ul class="space-y-2 mb-5">
+                            <li
+                                v-for="step in result.steps || []"
+                                :key="step.name"
+                                class="flex items-center justify-between p-3 rounded-lg border border-mistral-hairline-soft bg-mistral-surface"
+                            >
+                                <div class="flex items-center gap-3 min-w-0">
+                                    <Badge :text="step.status" :variant="stepVariant(step.status)" />
+                                    <div class="min-w-0">
+                                        <p class="text-[13px] font-medium text-mistral-ink capitalize">
+                                            {{ step.name }}
+                                        </p>
+                                        <p v-if="step.message" class="text-[11px] text-mistral-steel truncate">
+                                            {{ step.message }}
+                                        </p>
+                                    </div>
+                                </div>
+                                <div v-if="step.data" class="text-end text-[10px] text-mistral-stone shrink-0">
+                                    <pre class="whitespace-pre-wrap text-left">{{ JSON.stringify(step.data, null, 0) }}</pre>
+                                </div>
                             </li>
                         </ul>
-                    </div>
 
-                    <div v-if="result.errors && result.errors.length" class="mb-4">
-                        <Alert
-                            type="warning"
-                            :message="t('fingerprint_devices.sync_partial_errors', { count: result.errors.length })"
-                        />
-                        <ul class="mt-2 text-[11px] text-[var(--color-ink-muted)] space-y-1 max-h-32 overflow-auto">
-                            <li v-for="(e, i) in result.errors" :key="i">• {{ e }}</li>
-                        </ul>
+                        <div
+                            v-if="result.unmatched_users && result.unmatched_users.length"
+                            class="mb-4 p-3 rounded-lg border border-mistral-warning bg-mistral-warning/10"
+                        >
+                            <p class="text-[13px] font-semibold text-mistral-warning mb-2 flex items-center gap-2">
+                                <i class="fas fa-exclamation-triangle"></i>
+                                {{ t('fingerprint_devices.sync_unmatched_title') }}
+                                ({{ result.unmatched_users.length }})
+                            </p>
+                            <ul class="text-[12px] text-mistral-steel space-y-1 max-h-40 overflow-auto">
+                                <li v-for="u in result.unmatched_users" :key="`${u.uid}-${u.user_id}`">
+                                    <span class="font-mono">{{ u.user_id || '—' }}</span>
+                                    — {{ u.name || '—' }}
+                                    <span class="text-mistral-stone"> ({{ u.reason }})</span>
+                                </li>
+                            </ul>
+                        </div>
+
+                        <div v-if="result.errors && result.errors.length" class="mb-4">
+                            <Alert
+                                type="warning"
+                                :message="t('fingerprint_devices.sync_partial_errors', { count: result.errors.length })"
+                            />
+                            <ul class="mt-2 text-[11px] text-mistral-steel space-y-1 max-h-32 overflow-auto">
+                                <li v-for="(e, i) in result.errors" :key="i">• {{ e }}</li>
+                            </ul>
+                        </div>
                     </div>
                 </div>
-            </div>
+            </Card>
         </div>
     </AppLayout>
 </template>

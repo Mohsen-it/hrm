@@ -138,7 +138,7 @@ class DummyDataSeeder extends Seeder
             DB::table('users')->updateOrInsert(
                 ['employee_code' => $emp['employee_code']],
                 array_merge($emp, [
-                    'email' => strtolower($emp['employee_code']) . '@hrm.local',
+                    'email' => strtolower($emp['employee_code']).'@hrm.local',
                     'password' => Hash::make('password'),
                     'status' => 1,
                     'is_active_employee' => 1,

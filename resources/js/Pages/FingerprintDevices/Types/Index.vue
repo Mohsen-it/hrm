@@ -2,13 +2,7 @@
 import { ref, computed } from 'vue';
 import { router, Link, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
-import PageHeader from '@/Components/ui/PageHeader.vue';
-import Button from '@/Components/ui/Button.vue';
-import Card from '@/Components/ui/Card.vue';
-import DataTable from '@/Components/ui/DataTable.vue';
-import SearchInput from '@/Components/ui/SearchInput.vue';
-import ConfirmDialog from '@/Components/ui/ConfirmDialog.vue';
-import Badge from '@/Components/ui/Badge.vue';
+import { PageHeader, Button, DataTable, ConfirmDialog, Badge, IconButton, Alert } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
@@ -19,7 +13,6 @@ const props = defineProps({
     filters: { type: Object, default: () => ({}) },
 });
 
-const search = ref(props.filters?.search || '');
 const showDelete = ref(false);
 const selectedType = ref(null);
 
@@ -37,6 +30,22 @@ function onSearch(value) {
     router.get(
         route('fingerprint-device-types.index'),
         { ...props.filters, search: value },
+        { preserveState: true, preserveScroll: true, replace: true },
+    );
+}
+
+function onPageChange(page) {
+    router.get(
+        route('fingerprint-device-types.index'),
+        { ...props.filters, page },
+        { preserveState: true, preserveScroll: true, replace: true },
+    );
+}
+
+function onPerPageChange(perPage) {
+    router.get(
+        route('fingerprint-device-types.index'),
+        { ...props.filters, per_page: perPage },
         { preserveState: true, preserveScroll: true, replace: true },
     );
 }
@@ -63,31 +72,23 @@ const flashSuccess = computed(() => page.props.flash?.success);
             :description="t('fingerprint_devices.types_description')"
         >
             <template #actions>
-                <Link :href="route('fingerprint-device-types.create')" class="btn btn-primary">
-                    <i class="fas fa-plus"></i>
-                    <span>{{ t('fingerprint_devices.add_type') }}</span>
-                </Link>
+                <Button variant="primary" icon="fas fa-plus" :href="route('fingerprint-device-types.create')">
+                    {{ t('fingerprint_devices.add_type') }}
+                </Button>
             </template>
         </PageHeader>
 
-        <div v-if="flashSuccess" class="alert alert-success flex items-center gap-2 mb-4">
-            <i class="fas fa-check-circle"></i>
-            <span>{{ flashSuccess }}</span>
-        </div>
-
-        <div class="card p-4 mb-4">
-            <SearchInput
-                v-model="search"
-                :placeholder="t('common.search')"
-                @search="onSearch"
-            />
-        </div>
+        <Alert v-if="flashSuccess" type="success" :message="flashSuccess" class="mb-4" />
 
         <DataTable
             :columns="columns"
             :data="deviceTypes"
             :empty-title="t('fingerprint_devices.no_types_title')"
             :empty-description="t('fingerprint_devices.no_types_description')"
+            storage-key="fingerprint-device-types"
+            @search="onSearch"
+            @page-change="onPageChange"
+            @per-page-change="onPerPageChange"
         >
             <template #cell-is_active="{ row }">
                 <Badge
@@ -100,21 +101,8 @@ const flashSuccess = computed(() => page.props.flash?.success);
 
             <template #cell-actions="{ row }">
                 <div class="flex items-center justify-center gap-1">
-                    <Link
-                        :href="route('fingerprint-device-types.edit', row.id)"
-                        class="btn-icon text-[var(--color-primary)]"
-                        :title="t('common.edit')"
-                    >
-                        <i class="fas fa-edit"></i>
-                    </Link>
-                    <button
-                        type="button"
-                        class="btn-icon text-[var(--color-danger)]"
-                        :title="t('common.delete')"
-                        @click.stop="confirmDelete(row)"
-                    >
-                        <i class="fas fa-trash"></i>
-                    </Button>
+                    <IconButton icon="fas fa-edit" :aria-label="t('common.edit')" :href="route('fingerprint-device-types.edit', row.id)" />
+                    <IconButton icon="fas fa-trash" :aria-label="t('common.delete')" variant="danger" @click.stop="confirmDelete(row)" />
                 </div>
             </template>
         </DataTable>

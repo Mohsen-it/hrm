@@ -2,13 +2,7 @@
 import { reactive, ref, computed, watch } from 'vue';
 import { router, Head } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
-import PageHeader from '@/Components/ui/PageHeader.vue';
-import Button from '@/Components/ui/Button.vue';
-import Card from '@/Components/ui/Card.vue';
-import FormInput from '@/Components/ui/FormInput.vue';
-import FormSelect from '@/Components/ui/FormSelect.vue';
-import FormSwitch from '@/Components/ui/FormSwitch.vue';
-import FormTextarea from '@/Components/ui/FormTextarea.vue';
+import { PageHeader, Button, Card, FormInput, FormSelect, FormSwitch, FormTextarea, FormSection, FormActions, ErrorSummary } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
@@ -26,7 +20,7 @@ const form = reactive({
     overtime_enabled: false,
     work_on_holidays: false,
     grace_minutes: 0,
-    color: '#fa520f',
+    color: 'var(--color-mistral-primary)',
 });
 
 const patternInput = ref('');
@@ -141,13 +135,15 @@ const scheduleOptions = computed(() => {
             </template>
         </PageHeader>
 
-        <Card variant="base" padding="md" as="form" @submit.prevent="submit" class="max-w-4xl">
-            <div v-if="generalError" class="mb-4 p-3 bg-red-50 border border-red-200 rounded-md text-[13px] text-red-700">
+        <form class="space-y-6 max-w-4xl" @submit.prevent="submit">
+            <ErrorSummary :errors="errors" />
+
+            <div v-if="generalError" class="p-3 bg-mistral-danger/10 border border-mistral-danger/20 rounded-md text-[13px] text-mistral-danger">
                 <i class="fas fa-exclamation-circle mr-1"></i>
                 {{ generalError }}
             </div>
-            <section>
-                <h3 class="text-[14px] text-mistral-ink mb-3 font-medium">{{ t('shifts.basic_info') }}</h3>
+
+            <FormSection :title="t('shifts.basic_info')" icon="fas fa-info-circle" :collapsible="true" :default-open="true">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormInput
                         v-model="form.name"
@@ -155,6 +151,7 @@ const scheduleOptions = computed(() => {
                         name="name"
                         :error="errorFor('name')"
                         required
+                        autofocus
                     />
                     <FormInput
                         v-model="form.anchor_start_date"
@@ -174,11 +171,9 @@ const scheduleOptions = computed(() => {
                         />
                     </div>
                 </div>
-            </section>
+            </FormSection>
 
-            <section class="mt-6">
-                <h3 class="text-[14px] text-mistral-ink mb-3 font-medium">{{ t('shifts.pattern_builder') }}</h3>
-
+            <FormSection :title="t('shifts.pattern_builder')" icon="fas fa-th" :collapsible="true" :default-open="true">
                 <div class="mb-4">
                     <label class="block text-[13px] text-mistral-slate mb-2">{{ t('shifts.quick_presets') }}</label>
                     <div class="flex flex-wrap gap-2">
@@ -203,8 +198,8 @@ const scheduleOptions = computed(() => {
                             type="button"
                             class="w-8 h-8 rounded-md text-[11px] font-medium transition-all border-2"
                             :class="day === 1
-                                ? 'bg-green-100 text-green-700 border-green-300 hover:bg-green-200'
-                                : 'bg-gray-100 text-gray-500 border-gray-200 hover:bg-gray-200'"
+                                ? 'bg-mistral-success/10 text-mistral-success border-mistral-success/30 hover:bg-mistral-success/20'
+                                : 'bg-mistral-surface text-mistral-steel border-mistral-hairline-soft hover:bg-mistral-surface'"
                             :title="`Day ${idx + 1}: ${day === 1 ? t('shifts.work_day') : t('shifts.rest_day')}`"
                             @click="toggleDay(idx)"
                         >
@@ -221,7 +216,7 @@ const scheduleOptions = computed(() => {
                         <button
                             v-if="form.pattern.length > 1"
                             type="button"
-                            class="w-8 h-8 rounded-md text-[11px] font-medium border-2 border-dashed border-red-300 text-red-400 hover:border-red-500 hover:text-red-500 transition-colors"
+                            class="w-8 h-8 rounded-md text-[11px] font-medium border-2 border-dashed border-mistral-danger/30 text-mistral-danger/60 hover:border-mistral-danger hover:text-mistral-danger transition-colors"
                             :title="t('shifts.remove_day')"
                             @click="removeDay"
                         >
@@ -237,11 +232,11 @@ const scheduleOptions = computed(() => {
                     </Card>
                     <Card variant="stat" padding="sm">
                         <p class="text-[11px] text-mistral-slate uppercase">{{ t('shifts.work_days_count') }}</p>
-                        <p class="text-[20px] font-bold text-green-600">{{ workDays }}</p>
+                        <p class="text-[20px] font-bold text-mistral-success">{{ workDays }}</p>
                     </Card>
                     <Card variant="stat" padding="sm">
                         <p class="text-[11px] text-mistral-slate uppercase">{{ t('shifts.rest_days_count') }}</p>
-                        <p class="text-[20px] font-bold text-gray-500">{{ restDays }}</p>
+                        <p class="text-[20px] font-bold text-mistral-steel">{{ restDays }}</p>
                     </Card>
                     <div>
                         <FormInput
@@ -255,11 +250,10 @@ const scheduleOptions = computed(() => {
                         />
                     </div>
                 </div>
-            </section>
+            </FormSection>
 
-            <section class="mt-6">
-                <h3 class="text-[14px] text-mistral-ink mb-3 font-medium">{{ t('shifts.options') }}</h3>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 p-4 bg-mistral-surface rounded-md">
+            <FormSection :title="t('shifts.options')" icon="fas fa-cog" :collapsible="true" :default-open="true">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <FormSwitch v-model="form.overtime_enabled" :label="t('shifts.overtime_enabled')" name="overtime_enabled" />
                     <FormSwitch v-model="form.work_on_holidays" :label="t('shifts.work_on_holidays')" name="work_on_holidays" />
                     <FormInput
@@ -279,16 +273,14 @@ const scheduleOptions = computed(() => {
                         :error="errorFor('color')"
                     />
                 </div>
-            </section>
+            </FormSection>
 
-            <div class="mt-6 flex items-center justify-start gap-2">
-                <Button type="submit" variant="primary" :loading="processing" icon="fas fa-save">
-                    {{ t('common.save') }}
-                </Button>
-                <Button variant="secondary" :href="route('rotations.index')">
-                    {{ t('common.cancel') }}
-                </Button>
-            </div>
-        </Card>
+            <FormActions
+                :save-label="t('common.save')"
+                :cancel-label="t('common.cancel')"
+                :cancel-href="route('rotations.index')"
+                :saving="processing"
+            />
+        </form>
     </AppLayout>
 </template>

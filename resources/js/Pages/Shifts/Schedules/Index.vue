@@ -2,15 +2,7 @@
 import { ref, computed } from 'vue';
 import { router, Link, useForm, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
-import PageHeader from '@/Components/ui/PageHeader.vue';
-import Button from '@/Components/ui/Button.vue';
-import Card from '@/Components/ui/Card.vue';
-import DataTable from '@/Components/ui/DataTable.vue';
-import FormSelect from '@/Components/ui/FormSelect.vue';
-import Badge from '@/Components/ui/Badge.vue';
-import Alert from '@/Components/ui/Alert.vue';
-import Pagination from '@/Components/ui/Pagination.vue';
-import ConfirmDialog from '@/Components/ui/ConfirmDialog.vue';
+import { PageHeader, Button, IconButton, DataTable, Badge, Alert, ConfirmDialog } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
@@ -57,14 +49,14 @@ const monthNames = computed(() => [
     t('shifts.october'), t('shifts.november'), t('shifts.december'),
 ]);
 
-const statusOptions = computed(() => [
+const statusFilterOptions = computed(() => [
     { value: '', label: t('shifts.schedule_status') },
     { value: 'draft', label: t('shifts.draft') },
     { value: 'published', label: t('shifts.published') },
     { value: 'archived', label: t('shifts.archived') },
 ]);
 
-const yearOptions = computed(() => {
+const yearFilterOptions = computed(() => {
     const years = [];
     const currentYear = new Date().getFullYear();
     for (let y = currentYear - 2; y <= currentYear + 1; y++) {
@@ -73,15 +65,15 @@ const yearOptions = computed(() => {
     return [{ value: '', label: t('common.year') }, ...years];
 });
 
-const monthOptions = computed(() => [
+const monthFilterOptions = computed(() => [
     { value: '', label: t('common.month') },
     ...monthNames.value.map((name, idx) => ({ value: idx + 1, label: name })),
 ]);
 
 const columns = computed(() => [
-    { key: 'year', label: t('common.year'), cellClass: 'text-center' },
-    { key: 'month', label: t('common.month'), cellClass: 'text-center' },
-    { key: 'status', label: t('shifts.schedule_status'), cellClass: 'text-center' },
+    { key: 'year', label: t('common.year'), cellClass: 'text-center', filterable: true, filterType: 'select', filterOptions: yearFilterOptions.value },
+    { key: 'month', label: t('common.month'), cellClass: 'text-center', filterable: true, filterType: 'select', filterOptions: monthFilterOptions.value },
+    { key: 'status', label: t('shifts.schedule_status'), cellClass: 'text-center', filterable: true, filterType: 'select', filterOptions: statusFilterOptions.value },
     { key: 'schedule_version', label: t('shifts.schedule_version'), cellClass: 'text-center' },
     { key: 'generated_by_name', label: t('shifts.generated_by') },
     { key: 'generated_at', label: t('shifts.generated_at') },
@@ -99,14 +91,32 @@ function formatDateTime(dateStr) {
     });
 }
 
-function applyFilter(key, value) {
+function onFilterChange(filters) {
     const next = { ...props.filters };
-    if (value === '' || value === null || value === undefined) {
-        delete next[key];
-    } else {
-        next[key] = value;
+    for (const [key, value] of Object.entries(filters)) {
+        if (value === '' || value === null || value === undefined) {
+            delete next[key];
+        } else {
+            next[key] = value;
+        }
     }
     router.get(route('schedules.index'), next, { preserveState: true, replace: true });
+}
+
+function onPageChange(page) {
+    router.get(
+        route('schedules.index'),
+        { ...props.filters, page },
+        { preserveState: true, preserveScroll: true, replace: true },
+    );
+}
+
+function onPerPageChange(perPage) {
+    router.get(
+        route('schedules.index'),
+        { ...props.filters, per_page: perPage },
+        { preserveState: true, preserveScroll: true, replace: true },
+    );
 }
 
 function confirmPublish(period) {
@@ -196,29 +206,14 @@ const flashError = computed(() => page.props.flash?.error);
             </Link>
         </nav>
 
-        <Card variant="base" padding="sm" class="mb-6">
-            <div class="flex items-center justify-between flex-wrap gap-3">
-                <div class="flex items-center gap-3 flex-wrap">
-                    <FormSelect
-                        :options="yearOptions"
-                        :model-value="filters.year ?? ''"
-                        @update:modelValue="applyFilter('year', $event)"
-                    />
-                    <FormSelect
-                        :options="monthOptions"
-                        :model-value="filters.month ?? ''"
-                        @update:modelValue="applyFilter('month', $event)"
-                    />
-                    <FormSelect
-                        :options="statusOptions"
-                        :model-value="filters.status ?? ''"
-                        @update:modelValue="applyFilter('status', $event)"
-                    />
-                </div>
-            </div>
-        </Card>
-
-        <DataTable :columns="columns" :data="periods">
+        <DataTable
+            :columns="columns"
+            :data="periods"
+            storage-key="schedules"
+            @filter-change="onFilterChange"
+            @page-change="onPageChange"
+            @per-page-change="onPerPageChange"
+        >
             <template #cell-month="{ row }">
                 <span class="text-[13px]">{{ formatMonth(row.month) }}</span>
             </template>
@@ -233,34 +228,30 @@ const flashError = computed(() => page.props.flash?.error);
 
             <template #cell-actions="{ row }">
                 <div class="flex items-center justify-center gap-1">
-                    <Link
-                        :href="route('schedules.show', row.id)"
-                        class="inline-flex items-center justify-center w-8 h-8 rounded-md text-mistral-steel hover:text-mistral-ink hover:bg-mistral-cream-soft transition-colors"
+                    <IconButton
+                        icon="fas fa-eye"
+                        variant="ghost"
+                        size="sm"
                         :aria-label="t('common.view')"
-                    >
-                        <i class="fas fa-eye text-sm"></i>
-                    </Link>
-                    <button
+                        :href="route('schedules.show', row.id)"
+                    />
+                    <IconButton
                         v-if="row.status === 'draft'"
-                        class="inline-flex items-center justify-center w-8 h-8 rounded-md text-mistral-steel hover:text-green-600 hover:bg-green-50 transition-colors"
+                        icon="fas fa-check-circle"
+                        variant="success"
+                        size="sm"
                         :aria-label="t('shifts.publish_schedule')"
                         @click="confirmPublish(row)"
-                    >
-                        <i class="fas fa-check-circle text-sm"></i>
-                    </button>
-                    <button
+                    />
+                    <IconButton
                         v-if="row.status === 'published'"
-                        class="inline-flex items-center justify-center w-8 h-8 rounded-md text-mistral-steel hover:text-amber-600 hover:bg-amber-50 transition-colors"
+                        icon="fas fa-sync-alt"
+                        variant="warning"
+                        size="sm"
                         :aria-label="t('shifts.regenerate_schedule')"
                         @click="confirmRegenerate(row)"
-                    >
-                        <i class="fas fa-sync-alt text-sm"></i>
-                    </button>
+                    />
                 </div>
-            </template>
-
-            <template #footer>
-                <Pagination :data="periods" />
             </template>
         </DataTable>
 

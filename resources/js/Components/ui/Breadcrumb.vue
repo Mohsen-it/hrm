@@ -1,9 +1,6 @@
 <script setup>
-import { computed } from 'vue';
-
 const props = defineProps({
     items: { type: Array, required: true },
-    separator: { type: String, default: '/' },
     dir: { type: String, default: 'rtl' },
 });
 
@@ -17,24 +14,22 @@ const isLast = (index) => index === props.items.length - 1;
                 <a
                     v-if="item.href && !isLast(index)"
                     :href="item.href"
-                    class="text-mistral-steel hover:text-mistral-primary transition-colors"
+                    class="text-mistral-stone hover:text-mistral-primary transition-colors"
                 >
                     {{ item.label }}
                 </a>
                 <span
                     v-else
-                  :class="isLast(index) ? 'text-mistral-ink font-semibold' : 'text-mistral-steel'"
-                  :aria-current="isLast(index) ? 'page' : undefined"
+                    :class="isLast(index) ? 'text-mistral-ink font-medium' : 'text-mistral-stone'"
+                    :aria-current="isLast(index) ? 'page' : undefined"
                 >
                     {{ item.label }}
                 </span>
-                <span
+                <i
                     v-if="!isLast(index)"
-                    :class="['text-mistral-stone mx-1', dir === 'rtl' ? 'rtl-flip' : '']"
+                    class="fas fa-chevron-left text-[8px] text-mistral-muted mx-0.5 rtl-flip"
                     aria-hidden="true"
-                >
-                    {{ dir === 'rtl' ? '\\' : '/' }}
-                </span>
+                ></i>
             </li>
         </ol>
     </nav>

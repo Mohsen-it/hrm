@@ -2,11 +2,7 @@
 import { reactive, computed, ref } from 'vue';
 import { router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
-import PageHeader from '@/Components/ui/PageHeader.vue';
-import Button from '@/Components/ui/Button.vue';
-import Card from '@/Components/ui/Card.vue';
-import FormInput from '@/Components/ui/FormInput.vue';
-import FormSelect from '@/Components/ui/FormSelect.vue';
+import { PageHeader, Button, FormInput, FormSelect, FormSection, FormActions, ErrorSummary } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
@@ -70,72 +66,76 @@ function submit() {
             </template>
         </PageHeader>
 
-        <Card variant="base" padding="md" as="form" @submit.prevent="submit">
-            <div class="md:col-span-2 text-[12px] text-mistral-steel">
-                {{ t('attendance.fields.user') }}: <strong>{{ session.user?.name || '—' }}</strong>
-                ({{ session.user?.employee_code || '' }})
-            </div>
+        <form class="space-y-6" @submit.prevent="submit">
+            <ErrorSummary :errors="errors" />
 
-            <FormSelect
-                v-model="form.shift_id"
-                :label="t('attendance.fields.shift')"
-                :options="shiftOptions"
-                :placeholder="t('attendance.placeholders.select_shift')"
-                :error="errorFor('shift_id')"
-            />
+            <FormSection :title="t('attendance.session_info')" icon="fas fa-clock" :collapsible="true" :default-open="true">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="md:col-span-2 text-[12px] text-mistral-steel">
+                        {{ t('attendance.fields.user') }}: <strong>{{ session.user?.name || '—' }}</strong>
+                        ({{ session.user?.employee_code || '' }})
+                    </div>
 
-            <FormInput
-                v-model="form.attendance_date"
-                :label="t('attendance.fields.attendance_date')"
-                type="date"
-                :error="errorFor('attendance_date')"
-            />
+                    <FormSelect
+                        v-model="form.shift_id"
+                        :label="t('attendance.fields.shift')"
+                        :options="shiftOptions"
+                        :placeholder="t('attendance.placeholders.select_shift')"
+                        :error="errorFor('shift_id')"
+                        autofocus
+                    />
 
-            <FormInput
-                v-model="form.check_in_at"
-                :label="t('attendance.fields.check_in_at')"
-                type="datetime-local"
-                :error="errorFor('check_in_at')"
-            />
+                    <FormInput
+                        v-model="form.attendance_date"
+                        :label="t('attendance.fields.attendance_date')"
+                        type="date"
+                        :error="errorFor('attendance_date')"
+                    />
 
-            <FormInput
-                v-model="form.check_out_at"
-                :label="t('attendance.fields.check_out_at')"
-                type="datetime-local"
-                :error="errorFor('check_out_at')"
-            />
+                    <FormInput
+                        v-model="form.check_in_at"
+                        :label="t('attendance.fields.check_in_at')"
+                        type="datetime-local"
+                        :error="errorFor('check_in_at')"
+                    />
 
-            <FormSelect
-                v-model="form.session_type"
-                :label="t('attendance.fields.session_type')"
-                :options="sessionTypeOptions"
-                :placeholder="t('attendance.placeholders.select_session_type')"
-                :error="errorFor('session_type')"
-            />
+                    <FormInput
+                        v-model="form.check_out_at"
+                        :label="t('attendance.fields.check_out_at')"
+                        type="datetime-local"
+                        :error="errorFor('check_out_at')"
+                    />
+                </div>
+            </FormSection>
 
-            <FormSelect
-                v-model="form.source"
-                :label="t('attendance.fields.source')"
-                :options="sourceOptions"
-                :placeholder="t('attendance.placeholders.select_source')"
-                :error="errorFor('source')"
-            />
+            <FormSection :title="t('attendance.details')" icon="fas fa-info-circle" :collapsible="true" :default-open="true">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FormSelect
+                        v-model="form.session_type"
+                        :label="t('attendance.fields.session_type')"
+                        :options="sessionTypeOptions"
+                        :placeholder="t('attendance.placeholders.select_session_type')"
+                        :error="errorFor('session_type')"
+                    />
 
-            <FormInput
-                v-model="form.notes"
-                :label="t('attendance.fields.notes')"
-                type="text"
-                :error="errorFor('notes')"
-            />
+                    <FormSelect
+                        v-model="form.source"
+                        :label="t('attendance.fields.source')"
+                        :options="sourceOptions"
+                        :placeholder="t('attendance.placeholders.select_source')"
+                        :error="errorFor('source')"
+                    />
 
-            <div class="md:col-span-2 flex items-center gap-2 justify-end mt-2">
-                <Button variant="secondary" :href="route('attendance.sessions.show', session.id)">
-                    {{ t('common.cancel') }}
-                </Button>
-                <Button type="submit" variant="primary" :loading="processing" icon="fas fa-save">
-                    {{ t('common.save') }}
-                </Button>
-            </div>
-        </Card>
+                    <FormInput
+                        v-model="form.notes"
+                        :label="t('attendance.fields.notes')"
+                        type="text"
+                        :error="errorFor('notes')"
+                    />
+                </div>
+            </FormSection>
+
+            <FormActions :save-label="t('common.update')" :cancel-label="t('common.cancel')" :cancel-href="route('attendance.sessions.show', session.id)" :saving="processing" />
+        </form>
     </AppLayout>
 </template>

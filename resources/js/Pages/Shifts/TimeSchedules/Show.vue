@@ -6,6 +6,7 @@ import PageHeader from '@/Components/ui/PageHeader.vue';
 import Button from '@/Components/ui/Button.vue';
 import Card from '@/Components/ui/Card.vue';
 import Badge from '@/Components/ui/Badge.vue';
+import DataTable from '@/Components/ui/DataTable.vue';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
@@ -36,6 +37,23 @@ const breaksList = computed(() => {
 });
 
 const linkedCategoryId = computed(() => props.schedule.linked_category_id || null);
+
+const breakColumns = [
+    { key: 'break_start', label: t('shifts.break_start') },
+    { key: 'break_end', label: t('shifts.break_end') },
+    { key: 'duration', label: t('shifts.break_duration') || t('shifts.duration') },
+];
+
+const breaksData = computed(() => ({
+    data: props.schedule.breaks || [],
+    links: [],
+    total: (props.schedule.breaks || []).length,
+    current_page: 1,
+    last_page: 1,
+    per_page: 1000,
+    from: 1,
+    to: (props.schedule.breaks || []).length,
+}));
 </script>
 
 <template>
@@ -104,40 +122,28 @@ const linkedCategoryId = computed(() => props.schedule.linked_category_id || nul
                 </h3>
             </template>
 
-            <div class="overflow-x-auto">
-                <table class="w-full text-right border-collapse">
-                    <thead>
-                        <tr class="bg-mistral-surface border-b border-mistral-hairline">
-                            <th class="px-4 py-2 text-[12px] font-semibold text-mistral-slate">
-                                {{ t('shifts.break_start') }}
-                            </th>
-                            <th class="px-4 py-2 text-[12px] font-semibold text-mistral-slate">
-                                {{ t('shifts.break_end') }}
-                            </th>
-                            <th class="px-4 py-2 text-[12px] font-semibold text-mistral-slate">
-                                {{ t('shifts.break_duration') || t('shifts.duration') }}
-                            </th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr
-                            v-for="b in breaksList"
-                            :key="b.id"
-                            class="border-b border-mistral-hairline last:border-b-0"
-                        >
-                            <td class="px-4 py-2 text-[13px] text-mistral-ink" dir="ltr">
-                                {{ b.break_start ? String(b.break_start).slice(0, 5) : '—' }}
-                            </td>
-                            <td class="px-4 py-2 text-[13px] text-mistral-ink" dir="ltr">
-                                {{ b.break_end ? String(b.break_end).slice(0, 5) : '—' }}
-                            </td>
-                            <td class="px-4 py-2 text-[13px] text-mistral-ink">
-                                {{ b.duration ?? '—' }}
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
+            <DataTable
+                :columns="breakColumns"
+                :data="breaksData"
+                :selectable="false"
+                :enable-search="false"
+                :enable-filters="false"
+                :enable-pagination="false"
+                :enable-export="false"
+                :enable-density="false"
+                :enable-column-visibility="false"
+                storage-key="time-schedule-breaks"
+            >
+                <template #cell-break_start="{ row }">
+                    <span dir="ltr">{{ row.break_start ? String(row.break_start).slice(0, 5) : '—' }}</span>
+                </template>
+                <template #cell-break_end="{ row }">
+                    <span dir="ltr">{{ row.break_end ? String(row.break_end).slice(0, 5) : '—' }}</span>
+                </template>
+                <template #cell-duration="{ row }">
+                    {{ row.duration ?? '—' }}
+                </template>
+            </DataTable>
         </Card>
 
         <Card v-if="linkedCategoryId" variant="cream" padding="md">

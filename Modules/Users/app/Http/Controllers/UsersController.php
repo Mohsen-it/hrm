@@ -7,16 +7,19 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
+use Modules\Attendance\Services\AttendanceGroupService;
 use Modules\Branches\Services\BranchService;
 use Modules\Companies\Services\CompanyService;
 use Modules\Departments\Services\DepartmentService;
 use Modules\Grades\Services\GradeService;
 use Modules\Positions\Services\PositionService;
+use Modules\Shifts\Services\RotationService;
 use Modules\Shifts\Services\ShiftService;
+use Modules\Users\Http\Requests\StoreUserRequest;
+use Modules\Users\Http\Requests\UpdateUserRequest;
 use Modules\Users\Http\Resources\UserResource;
 use Modules\Users\Models\User;
 use Modules\Users\Services\UserService;
-use Modules\Attendance\Services\AttendanceGroupService;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 
@@ -30,7 +33,8 @@ class UsersController extends Controller
         private PositionService $positionService,
         private GradeService $gradeService,
         private ShiftService $shiftService,
-        private AttendanceGroupService $attendanceGroupService
+        private AttendanceGroupService $attendanceGroupService,
+        private RotationService $rotationService,
     ) {}
 
     // ------------------------------------------------------------------
@@ -91,11 +95,9 @@ class UsersController extends Controller
     /**
      * Store a newly created user.
      */
-    public function store(Request $request): RedirectResponse
+    public function store(StoreUserRequest $request): RedirectResponse
     {
-        $this->authorize('create-users');
-
-        $this->userService->createUser($request->all());
+        $this->userService->createUser($request->validated());
 
         return redirect()->route('users.index')
             ->with('success', __('users.created_successfully'));
@@ -132,8 +134,30 @@ class UsersController extends Controller
             abort(404);
         }
 
+        $currentRotationAssignment = $this->rotationService->getActiveAssignment($user->id);
+
         return Inertia::render('Users/Edit', array_merge(
-            ['user' => fn () => new UserResource($user)],
+            [
+                'user' => fn () => new UserResource($user),
+                'currentRotationAssignment' => fn () => $currentRotationAssignment ? [
+                    'id' => $currentRotationAssignment->id,
+                    'rotation_id' => $currentRotationAssignment->rotation_id,
+                    'rotation_group_id' => $currentRotationAssignment->rotation_group_id,
+                    'rotation_name' => $currentRotationAssignment->rotation->name ?? null,
+                    'group_name' => $currentRotationAssignment->rotationGroup->name ?? null,
+                    'start_date' => $currentRotationAssignment->start_date?->format('Y-m-d'),
+                    'end_date' => $currentRotationAssignment->end_date?->format('Y-m-d'),
+                ] : null,
+                'rotations' => fn () => $this->rotationService->getAllList()
+                    ->map(fn ($r) => [
+                        'id' => $r->id,
+                        'name' => $r->name,
+                        'groups' => $r->groups->map(fn ($g) => [
+                            'id' => $g->id,
+                            'name' => $g->name,
+                        ])->values(),
+                    ]),
+            ],
             $this->formOptions()
         ));
     }
@@ -141,19 +165,17 @@ class UsersController extends Controller
     /**
      * Update the specified user.
      */
-    public function update(Request $request, int $id): RedirectResponse
+    public function update(UpdateUserRequest $request, int $id): RedirectResponse
     {
-        $this->authorize('edit-users');
-
         $user = $this->userService->getUserById($id);
 
         if (! $user) {
             abort(404);
         }
 
-        $this->userService->updateUser($user, $request->all());
+        $this->userService->updateUser($user, $request->validated());
 
-        return redirect()->route('users.index')
+        return redirect()->route('users.edit', $id)
             ->with('success', __('users.updated_successfully'));
     }
 
@@ -333,8 +355,6 @@ class UsersController extends Controller
                 ->map(fn ($p) => ['id' => $p->id, 'position_name' => $p->position_name]),
             'grades' => fn () => $this->gradeService->getActiveGrades()
                 ->map(fn ($g) => ['id' => $g->id, 'grade_name' => $g->grade_name]),
-            'shifts' => fn () => $this->shiftService->getActiveShifts()
-                ->map(fn ($s) => ['id' => $s->id, 'shift_name' => $s->shift_name]),
             'managers' => fn () => User::query()
                 ->where('status', 1)
                 ->orderBy('name')

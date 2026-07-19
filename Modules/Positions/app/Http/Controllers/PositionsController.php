@@ -10,6 +10,8 @@ use Inertia\Response;
 use Modules\Branches\Services\BranchService;
 use Modules\Companies\Services\CompanyService;
 use Modules\Departments\Services\DepartmentService;
+use Modules\Positions\Http\Requests\StorePositionRequest;
+use Modules\Positions\Http\Requests\UpdatePositionRequest;
 use Modules\Positions\Http\Resources\PositionResource;
 use Modules\Positions\Services\PositionService;
 
@@ -65,11 +67,9 @@ class PositionsController extends Controller
     /**
      * Store a newly created position.
      */
-    public function store(Request $request): RedirectResponse
+    public function store(StorePositionRequest $request): RedirectResponse
     {
-        $this->authorize('create-positions');
-
-        $this->positionService->createPosition($request->all());
+        $this->positionService->createPosition($request->validated());
 
         return redirect()->route('positions.index')
             ->with('success', __('positions.created_successfully'));
@@ -120,17 +120,15 @@ class PositionsController extends Controller
     /**
      * Update the specified position.
      */
-    public function update(Request $request, int $id): RedirectResponse
+    public function update(UpdatePositionRequest $request, int $id): RedirectResponse
     {
-        $this->authorize('edit-positions');
-
         $position = $this->positionService->getPositionById($id);
 
         if (! $position) {
             abort(404);
         }
 
-        $this->positionService->updatePosition($position, $request->all());
+        $this->positionService->updatePosition($position, $request->validated());
 
         return redirect()->route('positions.index')
             ->with('success', __('positions.updated_successfully'));

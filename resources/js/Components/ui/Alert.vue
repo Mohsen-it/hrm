@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 
 const props = defineProps({
     type: { type: String, default: 'info' },
@@ -10,52 +10,64 @@ const props = defineProps({
 
 const emit = defineEmits(['dismiss']);
 
+const visible = ref(true);
+
 const alertClass = computed(() => {
     const map = {
-        success: 'bg-mistral-success-bg border-mistral-success text-mistral-success',
-        danger: 'bg-mistral-danger-bg border-mistral-danger text-mistral-danger',
-        error: 'bg-mistral-danger-bg border-mistral-danger text-mistral-danger',
-        warning: 'bg-mistral-warning-bg border-mistral-warning text-mistral-warning',
-        info: 'bg-mistral-info-bg border-mistral-info text-mistral-info',
+        success: 'bg-mistral-success/8 border-mistral-success/30 text-mistral-success',
+        danger: 'bg-mistral-danger/8 border-mistral-danger/30 text-mistral-danger',
+        error: 'bg-mistral-danger/8 border-mistral-danger/30 text-mistral-danger',
+        warning: 'bg-mistral-warning/8 border-mistral-warning/30 text-mistral-warning',
+        info: 'bg-mistral-info/8 border-mistral-info/30 text-mistral-info',
     };
     return map[props.type] || map.info;
 });
 
 const iconClass = computed(() => {
     const map = {
-        success: 'fas fa-check-circle',
-        danger: 'fas fa-exclamation-circle',
-        error: 'fas fa-exclamation-circle',
-        warning: 'fas fa-exclamation-triangle',
-        info: 'fas fa-info-circle',
+        success: 'fas fa-circle-check',
+        danger: 'fas fa-circle-exclamation',
+        error: 'fas fa-circle-exclamation',
+        warning: 'fas fa-triangle-exclamation',
+        info: 'fas fa-circle-info',
     };
     return map[props.type] || map.info;
 });
 
 function dismiss() {
+    visible.value = false;
     emit('dismiss');
 }
 </script>
 
 <template>
-    <div
-        v-if="message"
-        :class="['flex items-center justify-between gap-3 px-4 py-3 rounded-md border-s-4 text-sm', alertClass]"
-        role="alert"
-        :dir="dir"
+    <Transition
+        enter-active-class="duration-200 ease-out"
+        enter-from-class="opacity-0 -translate-y-1"
+        enter-to-class="opacity-100 translate-y-0"
+        leave-active-class="duration-150 ease-in"
+        leave-from-class="opacity-100 translate-y-0"
+        leave-to-class="opacity-0 -translate-y-1"
     >
-        <div class="flex items-center gap-2">
-            <i :class="iconClass" aria-hidden="true"></i>
-            <span>{{ message }}</span>
-        </div>
-        <button
-            v-if="dismissible"
-            type="button"
-            class="opacity-70 hover:opacity-100 focus-visible:outline-2 focus-visible:outline-current focus-visible:outline-offset-2 rounded"
-            :aria-label="dir === 'rtl' ? 'إغلاق' : 'Dismiss'"
-            @click="dismiss"
+        <div
+            v-if="visible && message"
+            :class="['flex items-center justify-between gap-3 px-4 py-3 rounded-lg border text-sm font-medium', alertClass]"
+            role="alert"
+            :dir="dir"
         >
-            <i class="fas fa-times" aria-hidden="true"></i>
-        </Button>
-    </div>
+            <div class="flex items-center gap-2.5">
+                <i :class="[iconClass, 'text-[14px]']" aria-hidden="true"></i>
+                <span>{{ message }}</span>
+            </div>
+            <button
+                v-if="dismissible"
+                type="button"
+                class="shrink-0 opacity-60 hover:opacity-100 focus-visible:outline-2 focus-visible:outline-current focus-visible:outline-offset-2 rounded transition-opacity"
+                :aria-label="dir === 'rtl' ? 'إغلاق' : 'Dismiss'"
+                @click="dismiss"
+            >
+                <i class="fas fa-xmark text-[14px]" aria-hidden="true"></i>
+            </button>
+        </div>
+    </Transition>
 </template>

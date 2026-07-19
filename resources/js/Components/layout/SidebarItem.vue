@@ -36,8 +36,8 @@ const href = computed(() => {
 });
 
 const paddingClass = computed(() => {
-    if (props.isCollapsed) return 'justify-center';
-    return props.level > 0 ? 'pr-10' : 'px-3';
+    if (props.isCollapsed) return 'justify-center px-0';
+    return props.level > 0 ? 'ps-10 pe-3' : 'px-3';
 });
 </script>
 
@@ -54,10 +54,10 @@ const paddingClass = computed(() => {
     >
         <i
             v-if="item.icon"
-            :class="[item.icon, 'w-5 text-center shrink-0 text-[14px]']"
+            :class="[item.icon, 'w-5 text-center shrink-0 text-[13px]']"
             aria-hidden="true"
         ></i>
-        <span v-if="!isCollapsed" class="truncate flex-1">{{ t(item.label) }}</span>
+        <span v-if="!isCollapsed" class="truncate flex-1 text-[13px]">{{ t(item.label) }}</span>
         <span
             v-if="!isCollapsed && item.badge"
             class="sidebar-item-badge"

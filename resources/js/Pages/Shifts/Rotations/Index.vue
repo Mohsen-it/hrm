@@ -2,15 +2,7 @@
 import { ref, computed } from 'vue';
 import { router, Link, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
-import PageHeader from '@/Components/ui/PageHeader.vue';
-import Button from '@/Components/ui/Button.vue';
-import Card from '@/Components/ui/Card.vue';
-import DataTable from '@/Components/ui/DataTable.vue';
-import SearchInput from '@/Components/ui/SearchInput.vue';
-import ConfirmDialog from '@/Components/ui/ConfirmDialog.vue';
-import Badge from '@/Components/ui/Badge.vue';
-import IconButton from '@/Components/ui/IconButton.vue';
-import Pagination from '@/Components/ui/Pagination.vue';
+import { PageHeader, Button, DataTable, ConfirmDialog, Badge, IconButton } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
@@ -21,7 +13,6 @@ const props = defineProps({
     filters: { type: Object, default: () => ({}) },
 });
 
-const search = ref(props.filters?.search || '');
 const showDelete = ref(false);
 const selectedRotation = ref(null);
 
@@ -37,7 +28,7 @@ function formatCycleLength(rotation) {
 }
 
 const columns = computed(() => [
-    { key: 'name', label: t('shifts.rotation_name'), sortable: true },
+    { key: 'name', label: t('shifts.rotation_name'), sortable: true, filterable: true },
     { key: 'pattern', label: t('shifts.work_pattern'), cellClass: 'text-center' },
     { key: 'cycle_length', label: t('shifts.cycle_length'), cellClass: 'text-center' },
     { key: 'number_of_groups', label: t('shifts.groups_count'), cellClass: 'text-center' },
@@ -50,6 +41,22 @@ function onSearch(value) {
     router.get(
         route('rotations.index'),
         { ...props.filters, search: value },
+        { preserveState: true, preserveScroll: true, replace: true },
+    );
+}
+
+function handlePageChange(page) {
+    router.get(
+        route('rotations.index'),
+        { ...props.filters, page },
+        { preserveState: true, preserveScroll: true, replace: true },
+    );
+}
+
+function handlePerPageChange(perPage) {
+    router.get(
+        route('rotations.index'),
+        { ...props.filters, per_page: perPage },
         { preserveState: true, preserveScroll: true, replace: true },
     );
 }
@@ -85,22 +92,19 @@ const flashSuccess = computed(() => page.props.flash?.success);
             </template>
         </PageHeader>
 
-        <Card variant="base" padding="sm" class="mb-6">
-            <div class="flex items-center justify-between flex-wrap gap-3">
-                <SearchInput
-                    v-model="search"
-                    :placeholder="t('common.search')"
-                    @search="onSearch"
-                />
-            </div>
-        </Card>
-
-        <DataTable :columns="columns" :data="rotations">
+        <DataTable
+            :columns="columns"
+            :data="rotations"
+            storage-key="rotations"
+            @search="onSearch"
+            @page-change="handlePageChange"
+            @per-page-change="handlePerPageChange"
+        >
             <template #cell-name="{ row }">
                 <div class="flex items-center gap-2">
                     <div
                         class="w-3 h-3 rounded-full shrink-0"
-                        :style="{ backgroundColor: row.color || '#fa520f' }"
+                        :style="{ backgroundColor: row.color || 'var(--color-mistral-primary)' }"
                     ></div>
                     <Link
                         :href="route('rotations.show', row.id)"
@@ -156,16 +160,12 @@ const flashSuccess = computed(() => page.props.flash?.success);
                     />
                     <IconButton
                         icon="fas fa-trash"
-                        variant="ghost"
+                        variant="danger"
                         size="sm"
                         :aria-label="t('common.delete')"
                         @click="confirmDelete(row)"
                     />
                 </div>
-            </template>
-
-            <template #footer>
-                <Pagination :data="rotations" />
             </template>
         </DataTable>
 

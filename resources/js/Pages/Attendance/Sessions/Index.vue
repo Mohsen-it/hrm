@@ -2,17 +2,7 @@
 import { ref, computed } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
-import PageHeader from '@/Components/ui/PageHeader.vue';
-import DataTable from '@/Components/ui/DataTable.vue';
-import SearchInput from '@/Components/ui/SearchInput.vue';
-import ConfirmDialog from '@/Components/ui/ConfirmDialog.vue';
-import Badge from '@/Components/ui/Badge.vue';
-import Button from '@/Components/ui/Button.vue';
-import Card from '@/Components/ui/Card.vue';
-import IconButton from '@/Components/ui/IconButton.vue';
-import FormSelect from '@/Components/ui/FormSelect.vue';
-import FormDatepicker from '@/Components/ui/FormDatepicker.vue';
-import Alert from '@/Components/ui/Alert.vue';
+import { PageHeader, DataTable, ConfirmDialog, Badge, Button, IconButton, Alert } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
@@ -25,12 +15,8 @@ const props = defineProps({
     shifts: { type: Array, default: () => [] },
 });
 
-const search = ref(props.filters?.search || '');
 const showDelete = ref(false);
 const selectedSession = ref(null);
-
-const fromValue = ref(props.filters?.from ?? '');
-const toValue = ref(props.filters?.to ?? '');
 
 const statusOptions = [
     { value: 'present', label: t('attendance.status.present') },
@@ -49,15 +35,13 @@ const sessionTypeOptions = [
     { value: 'make_up', label: t('attendance.session_type.make_up') },
 ];
 
-const userOptions = computed(() => [
-    { value: '', label: t('attendance.placeholders.select_user') },
-    ...props.users.map((u) => ({ value: u.id, label: `${u.name} (${u.employee_code})` })),
-]);
+const userFilterOptions = computed(() =>
+    props.users.map((u) => ({ value: u.id, label: `${u.name} (${u.employee_code})` })),
+);
 
-const shiftOptions = computed(() => [
-    { value: '', label: t('attendance.placeholders.select_shift') },
-    ...props.shifts.map((s) => ({ value: s.id, label: `${s.shift_name} (${s.shift_code})` })),
-]);
+const shiftFilterOptions = computed(() =>
+    props.shifts.map((s) => ({ value: s.id, label: `${s.shift_name} (${s.shift_code})` })),
+);
 
 const statusVariant = (status) => {
     return {
@@ -81,14 +65,17 @@ const sessionTypeVariant = (type) => {
 };
 
 const columns = computed(() => [
-    { key: 'user', label: t('attendance.fields.user'), sortable: true },
+    { key: 'user', label: t('attendance.fields.user'), sortable: true, filterable: true, filterType: 'select', filterOptions: userFilterOptions.value, filterKey: 'user_id' },
     { key: 'attendance_date', label: t('attendance.fields.attendance_date'), sortable: true },
     { key: 'check_in_at', label: t('attendance.fields.check_in_at') },
     { key: 'check_out_at', label: t('attendance.fields.check_out_at') },
     { key: 'work_human', label: t('attendance.fields.work_human'), cellClass: 'text-center' },
     { key: 'late_human', label: t('attendance.fields.late_human'), cellClass: 'text-center' },
-    { key: 'status', label: t('attendance.fields.status'), cellClass: 'text-center' },
-    { key: 'session_type', label: t('attendance.fields.session_type'), cellClass: 'text-center' },
+    { key: 'status', label: t('attendance.fields.status'), cellClass: 'text-center', filterable: true, filterType: 'select', filterOptions: statusOptions, filterKey: 'status' },
+    { key: 'session_type', label: t('attendance.fields.session_type'), cellClass: 'text-center', filterable: true, filterType: 'select', filterOptions: sessionTypeOptions, filterKey: 'session_type' },
+    { key: 'shift', label: t('attendance.fields.shift'), filterable: true, filterType: 'select', filterOptions: shiftFilterOptions.value, filterKey: 'shift_id' },
+    { key: 'from', label: t('attendance.fields.from'), filterable: true, filterType: 'date', filterKey: 'from' },
+    { key: 'to', label: t('attendance.fields.to'), filterable: true, filterType: 'date', filterKey: 'to' },
     { key: 'actions', label: t('common.actions'), cellClass: 'text-center w-[160px]' },
 ]);
 
@@ -100,18 +87,36 @@ function onSearch(value) {
     );
 }
 
-function applyFilter(key, value) {
+function onFilterChange(filters) {
     const next = { ...props.filters };
-    if (value === '' || value === null || value === undefined) {
-        delete next[key];
-    } else {
-        next[key] = value;
-    }
+    Object.entries(filters).forEach(([key, value]) => {
+        if (value === '' || value === null || value === undefined) {
+            delete next[key];
+        } else {
+            next[key] = value;
+        }
+    });
     router.get(route('attendance.sessions.index'), next, {
         preserveState: true,
         preserveScroll: true,
         replace: true,
     });
+}
+
+function onPageChange(page) {
+    router.get(
+        route('attendance.sessions.index'),
+        { ...props.filters, page },
+        { preserveState: true, preserveScroll: true, replace: true },
+    );
+}
+
+function onPerPageChange(perPage) {
+    router.get(
+        route('attendance.sessions.index'),
+        { ...props.filters, per_page: perPage },
+        { preserveState: true, preserveScroll: true, replace: true },
+    );
 }
 
 function confirmDelete(session) {
@@ -146,59 +151,16 @@ const flashError = computed(() => page.props.flash?.error);
         <Alert v-if="flashSuccess" type="success" :message="flashSuccess" class="mb-4" />
         <Alert v-if="flashError" type="danger" :message="flashError" class="mb-4" />
 
-        <div class="card p-6 mb-4">
-            <div class="flex items-center justify-between flex-wrap gap-3">
-                <div class="flex items-center gap-3 flex-wrap">
-                    <SearchInput
-                        v-model="search"
-                        :placeholder="t('common.search')"
-                        @search="onSearch"
-                    />
-                    <FormSelect
-                        :model-value="filters.user_id ?? ''"
-                        :options="userOptions"
-                        class="max-w-[200px]"
-                        @update:model-value="(v) => applyFilter('user_id', v)"
-                    />
-                    <FormSelect
-                        :model-value="filters.shift_id ?? ''"
-                        :options="shiftOptions"
-                        class="max-w-[200px]"
-                        @update:model-value="(v) => applyFilter('shift_id', v)"
-                    />
-                    <FormSelect
-                        :model-value="filters.status ?? ''"
-                        :options="[
-                            { value: '', label: t('attendance.placeholders.select_status') },
-                            ...statusOptions,
-                        ]"
-                        class="max-w-[180px]"
-                        @update:model-value="(v) => applyFilter('status', v)"
-                    />
-                    <FormSelect
-                        :model-value="filters.session_type ?? ''"
-                        :options="[
-                            { value: '', label: t('attendance.placeholders.select_session_type') },
-                            ...sessionTypeOptions,
-                        ]"
-                        class="max-w-[180px]"
-                        @update:model-value="(v) => applyFilter('session_type', v)"
-                    />
-                    <FormDatepicker
-                        v-model="fromValue"
-                        class="max-w-[170px]"
-                        @change="applyFilter('from', fromValue)"
-                    />
-                    <FormDatepicker
-                        v-model="toValue"
-                        class="max-w-[170px]"
-                        @change="applyFilter('to', toValue)"
-                    />
-                </div>
-            </div>
-        </div>
-
-        <DataTable :columns="columns" :data="sessions" :empty-title="t('attendance.messages.empty_sessions')">
+        <DataTable
+            :columns="columns"
+            :data="sessions"
+            :empty-title="t('attendance.messages.empty_sessions')"
+            storage-key="attendance-sessions"
+            @search="onSearch"
+            @filter-change="onFilterChange"
+            @page-change="onPageChange"
+            @per-page-change="onPerPageChange"
+        >
             <template #cell-user="{ row }">
                 <div>
                     <div class="font-semibold text-mistral-ink">

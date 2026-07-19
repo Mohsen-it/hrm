@@ -2,12 +2,7 @@
 import { reactive, ref } from 'vue';
 import { router, Head } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
-import PageHeader from '@/Components/ui/PageHeader.vue';
-import Button from '@/Components/ui/Button.vue';
-import Card from '@/Components/ui/Card.vue';
-import FormInput from '@/Components/ui/FormInput.vue';
-import FormSwitch from '@/Components/ui/FormSwitch.vue';
-import IconButton from '@/Components/ui/IconButton.vue';
+import { PageHeader, Button, Card, FormInput, FormSwitch, FormSection, FormActions, IconButton, ErrorSummary } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
@@ -63,9 +58,10 @@ function submit() {
             </template>
         </PageHeader>
 
-        <Card variant="base" padding="md" as="form" @submit.prevent="submit" class="max-w-3xl">
-            <section>
-                <h3 class="text-[14px] text-mistral-ink mb-3 font-medium">{{ t('shifts.basic_info') }}</h3>
+        <form class="space-y-6 max-w-3xl" @submit.prevent="submit">
+            <ErrorSummary :errors="errors" />
+
+            <FormSection :title="t('shifts.basic_info')" icon="fas fa-info-circle" :collapsible="true" :default-open="true">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormInput
                         v-model="form.name"
@@ -73,6 +69,7 @@ function submit() {
                         name="name"
                         :error="errorFor('name')"
                         required
+                        autofocus
                     />
                     <FormInput
                         v-model="form.in_time"
@@ -98,10 +95,9 @@ function submit() {
                         />
                     </div>
                 </div>
-            </section>
+            </FormSection>
 
-            <section class="mt-6">
-                <h3 class="text-[14px] text-mistral-ink mb-3 font-medium">{{ t('shifts.margins') }}</h3>
+            <FormSection :title="t('shifts.margins')" icon="fas fa-arrows-alt-h" :collapsible="true" :default-open="true">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormInput
                         v-model="form.late_margin"
@@ -122,15 +118,14 @@ function submit() {
                         :error="errorFor('early_margin')"
                     />
                 </div>
-            </section>
+            </FormSection>
 
-            <section class="mt-6">
-                <div class="flex items-center justify-between mb-3">
-                    <h3 class="text-[14px] text-mistral-ink font-medium">{{ t('shifts.breaks') }}</h3>
+            <FormSection :title="t('shifts.breaks')" icon="fas fa-coffee" :collapsible="true" :default-open="true">
+                <template #header-actions>
                     <Button type="button" variant="secondary" size="sm" icon="fas fa-plus" @click="addBreak">
                         {{ t('shifts.add_break') }}
                     </Button>
-                </div>
+                </template>
 
                 <div
                     v-for="(brk, index) in breaks"
@@ -158,19 +153,17 @@ function submit() {
                     />
                 </div>
 
-                <p v-if="breaks.length === 0" class="text-[13px] text-mistral-muted mb-3 italic">
+                <p v-if="breaks.length === 0" class="text-[13px] text-mistral-muted italic">
                     {{ t('shifts.no_breaks') }}
                 </p>
-            </section>
+            </FormSection>
 
-            <div class="mt-6 flex items-center justify-start gap-2">
-                <Button type="submit" variant="primary" :loading="processing" icon="fas fa-save">
-                    {{ t('common.save') }}
-                </Button>
-                <Button variant="secondary" :href="route('time-schedules.index')">
-                    {{ t('common.cancel') }}
-                </Button>
-            </div>
-        </Card>
+            <FormActions
+                :save-label="t('common.save')"
+                :cancel-label="t('common.cancel')"
+                :cancel-href="route('time-schedules.index')"
+                :saving="processing"
+            />
+        </form>
     </AppLayout>
 </template>

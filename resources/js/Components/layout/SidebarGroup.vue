@@ -61,34 +61,34 @@ function isItemActive(routeName) {
         <button
             v-if="!isCollapsed && hasMultipleItems"
             type="button"
-            class="sidebar-section-title w-full flex items-center justify-between hover:text-[var(--color-ink-mute)] transition-colors"
+            class="sidebar-section-title w-full flex items-center justify-between hover:text-mistral-steel transition-colors rounded-lg px-2 py-1"
             :aria-expanded="isExpanded"
             @click="toggle"
         >
             <span class="flex items-center gap-2">
-                <i v-if="group.icon" :class="[group.icon, 'text-[12px]']" aria-hidden="true"></i>
+                <i v-if="group.icon" :class="[group.icon, 'text-[11px]']" aria-hidden="true"></i>
                 <span>{{ t(group.section) }}</span>
             </span>
             <i
                 :class="[
                     isExpanded ? 'fas fa-chevron-down' : 'fas fa-chevron-up',
-                    'text-[10px] transition-transform',
+                    'text-[9px] transition-transform duration-200',
                 ]"
                 aria-hidden="true"
             ></i>
         </button>
         <div
             v-else-if="!isCollapsed"
-            class="sidebar-section-title flex items-center gap-2"
+            class="sidebar-section-title flex items-center gap-2 px-2 py-1"
         >
-            <i v-if="group.icon" :class="[group.icon, 'text-[12px]']" aria-hidden="true"></i>
+            <i v-if="group.icon" :class="[group.icon, 'text-[11px]']" aria-hidden="true"></i>
             <span>{{ t(group.section) }}</span>
         </div>
-        <div v-else class="h-px bg-[var(--color-hairline)] my-2 mx-2"></div>
+        <div v-else class="h-px bg-mistral-hairline my-2 mx-2"></div>
 
         <div
             v-show="!isCollapsed ? isExpanded || isGroupActive : true"
-            class="space-y-1"
+            class="space-y-0.5"
         >
             <SidebarItem
                 v-for="item in group.items"

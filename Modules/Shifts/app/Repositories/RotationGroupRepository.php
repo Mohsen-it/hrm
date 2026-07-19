@@ -4,6 +4,7 @@ namespace Modules\Shifts\Repositories;
 
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use Modules\Shifts\Models\RotationAssignment;
 use Modules\Shifts\Models\RotationGroup;
 
 class RotationGroupRepository
@@ -50,7 +51,7 @@ class RotationGroupRepository
 
     public function hasActiveAssignments(int $groupId): bool
     {
-        return \Modules\Shifts\Models\RotationAssignment::query()
+        return RotationAssignment::query()
             ->where('rotation_group_id', $groupId)
             ->whereNull('end_date')
             ->exists();

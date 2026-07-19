@@ -1,13 +1,8 @@
 <script setup>
 import { reactive, ref, computed } from 'vue';
-import { router, Head } from '@inertiajs/vue3';
+import { router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
-import PageHeader from '@/Components/ui/PageHeader.vue';
-import Button from '@/Components/ui/Button.vue';
-import Card from '@/Components/ui/Card.vue';
-import FormInput from '@/Components/ui/FormInput.vue';
-import FormSelect from '@/Components/ui/FormSelect.vue';
-import FormSwitch from '@/Components/ui/FormSwitch.vue';
+import { PageHeader, Button, Card, FormInput, FormSelect, FormSwitch, FormSection, FormActions, ErrorSummary } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
@@ -43,7 +38,7 @@ const form = reactive({
     fingerprint_enabled: props.category?.fingerprint_enabled ?? false,
     work_on_holidays: props.category?.work_on_holidays ?? false,
     work_on_weekends: props.category?.work_on_weekends ?? false,
-    color: props.category?.color || '#fa520f',
+    color: props.category?.color || 'var(--color-mistral-primary)',
     time_schedule_id: props.category?.time_schedule_id || '',
 });
 
@@ -114,20 +109,22 @@ function submit() {
 </script>
 
 <template>
-    <Head :title="t('shifts.edit_category')" />
     <AppLayout :title="t('shifts.edit_category')">
         <PageHeader
             :title="t('shifts.edit_category')"
             :description="category.name"
         >
             <template #actions>
-                <Button variant="secondary" :href="route('shift-categories.index')">{{ t('common.back') }}</Button>
+                <Button variant="secondary" icon="fas fa-arrow-right rtl-flip" :href="route('shift-categories.index')">
+                    {{ t('common.back') }}
+                </Button>
             </template>
         </PageHeader>
 
-        <Card variant="base" padding="md" as="form" @submit.prevent="submit" class="max-w-3xl">
-            <section>
-                <h3 class="text-[14px] text-mistral-ink mb-3 font-medium">{{ t('shifts.basic_info') }}</h3>
+        <form class="space-y-6 max-w-3xl" @submit.prevent="submit">
+            <ErrorSummary :errors="errors" />
+
+            <FormSection :title="t('shifts.basic_info')" icon="fas fa-info-circle" :collapsible="true" :default-open="true">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormInput
                         v-model="form.name"
@@ -135,6 +132,7 @@ function submit() {
                         name="name"
                         :error="errorFor('name')"
                         required
+                        autofocus
                     />
                     <FormSelect
                         v-model="form.type"
@@ -160,10 +158,9 @@ function submit() {
                         :error="errorFor('color')"
                     />
                 </div>
-            </section>
+            </FormSection>
 
-            <section v-if="form.type === 'cyclic'" class="mt-6">
-                <h3 class="text-[14px] text-mistral-ink mb-3 font-medium">{{ t('shifts.cyclic_settings') }}</h3>
+            <FormSection v-if="form.type === 'cyclic'" :title="t('shifts.cyclic_settings')" icon="fas fa-sync-alt" :collapsible="true" :default-open="true">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormInput
                         v-model="form.work_days"
@@ -182,14 +179,13 @@ function submit() {
                         :error="errorFor('rest_days')"
                     />
                 </div>
-            </section>
+            </FormSection>
 
-            <section v-if="form.type === 'weekly'" class="mt-6">
-                <h3 class="text-[14px] text-mistral-ink mb-3 font-medium">{{ t('shifts.weekly_settings') }}</h3>
+            <FormSection v-if="form.type === 'weekly'" :title="t('shifts.weekly_settings')" icon="fas fa-calendar-week" :collapsible="true" :default-open="true">
                 <div class="space-y-4">
                     <div>
                         <label class="block text-[13px] text-mistral-slate mb-2">{{ t('shifts.work_days') }}</label>
-                        <div class="flex items-center gap-4 flex-wrap p-3 bg-mistral-surface rounded-md">
+                        <div class="flex items-center gap-4 flex-wrap p-3 bg-mistral-surface rounded-lg">
                             <FormSwitch
                                 v-for="day in dayKeys"
                                 :key="'work_' + day.key"
@@ -201,7 +197,7 @@ function submit() {
                     </div>
                     <div>
                         <label class="block text-[13px] text-mistral-slate mb-2">{{ t('shifts.weekend_days') }}</label>
-                        <div class="flex items-center gap-4 flex-wrap p-3 bg-mistral-surface rounded-md">
+                        <div class="flex items-center gap-4 flex-wrap p-3 bg-mistral-surface rounded-lg">
                             <FormSwitch
                                 v-for="day in dayKeys"
                                 :key="'weekend_' + day.key"
@@ -212,10 +208,9 @@ function submit() {
                         </div>
                     </div>
                 </div>
-            </section>
+            </FormSection>
 
-            <section v-if="form.type === 'hours'" class="mt-6">
-                <h3 class="text-[14px] text-mistral-ink mb-3 font-medium">{{ t('shifts.hours_settings') }}</h3>
+            <FormSection v-if="form.type === 'hours'" :title="t('shifts.hours_settings')" icon="fas fa-hourglass-half" :collapsible="true" :default-open="true">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormInput
                         v-model="form.required_hours"
@@ -234,26 +229,23 @@ function submit() {
                         :error="errorFor('period_type')"
                     />
                 </div>
-            </section>
+            </FormSection>
 
-            <section class="mt-6">
-                <h3 class="text-[14px] text-mistral-ink mb-3 font-medium">{{ t('shifts.options') }}</h3>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 p-4 bg-mistral-surface rounded-md">
+            <FormSection :title="t('shifts.options')" icon="fas fa-cog" :collapsible="true" :default-open="true">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <FormSwitch v-model="form.overtime_enabled" :label="t('shifts.overtime_enabled')" name="overtime_enabled" />
                     <FormSwitch v-model="form.fingerprint_enabled" :label="t('shifts.fingerprint_enabled')" name="fingerprint_enabled" />
                     <FormSwitch v-model="form.work_on_holidays" :label="t('shifts.work_on_holidays')" name="work_on_holidays" />
                     <FormSwitch v-model="form.work_on_weekends" :label="t('shifts.work_on_weekends')" name="work_on_weekends" />
                 </div>
-            </section>
+            </FormSection>
 
-            <div class="mt-6 flex items-center justify-start gap-2">
-                <Button type="submit" variant="primary" :loading="processing" icon="fas fa-save">
-                    {{ t('common.save') }}
-                </Button>
-                <Button variant="secondary" :href="route('shift-categories.index')">
-                    {{ t('common.cancel') }}
-                </Button>
-            </div>
-        </Card>
+            <FormActions
+                :save-label="t('common.update')"
+                :cancel-label="t('common.cancel')"
+                :cancel-href="route('shift-categories.index')"
+                :saving="processing"
+            />
+        </form>
     </AppLayout>
 </template>

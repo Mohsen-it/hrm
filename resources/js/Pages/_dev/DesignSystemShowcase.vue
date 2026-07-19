@@ -1,27 +1,7 @@
 <script setup>
 import { ref, inject } from 'vue';
 import AppLayout from '@/Layouts/AppLayout.vue';
-import Button from '@/Components/ui/Button.vue';
-import Card from '@/Components/ui/Card.vue';
-import IconButton from '@/Components/ui/IconButton.vue';
-import FormInput from '@/Components/ui/FormInput.vue';
-import FormTextarea from '@/Components/ui/FormTextarea.vue';
-import FormSelect from '@/Components/ui/FormSelect.vue';
-import FormDatepicker from '@/Components/ui/FormDatepicker.vue';
-import FormCheckbox from '@/Components/ui/FormCheckbox.vue';
-import FormRadio from '@/Components/ui/FormRadio.vue';
-import FormSwitch from '@/Components/ui/FormSwitch.vue';
-import FormGroup from '@/Components/ui/FormGroup.vue';
-import Badge from '@/Components/ui/Badge.vue';
-import Alert from '@/Components/ui/Alert.vue';
-import StatCard from '@/Components/ui/StatCard.vue';
-import Tabs from '@/Components/ui/Tabs.vue';
-import Pagination from '@/Components/ui/Pagination.vue';
-import Breadcrumb from '@/Components/ui/Breadcrumb.vue';
-import Avatar from '@/Components/ui/Avatar.vue';
-import DataTable from '@/Components/ui/DataTable.vue';
-import EmptyState from '@/Components/ui/EmptyState.vue';
-import LoadingSpinner from '@/Components/ui/LoadingSpinner.vue';
+import { Button, Card, IconButton, FormInput, FormTextarea, FormSelect, FormDatepicker, FormCheckbox, FormRadio, FormSwitch, FormGroup, Badge, Alert, StatCard, Tabs, Pagination, Breadcrumb, Avatar, DataTable, EmptyState, LoadingSpinner } from '@/Components/ui';
 
 const dir = inject('dir', ref('rtl'));
 const form = ref({ name: '', email: '', role: '', bio: '', birthdate: '' });
@@ -84,14 +64,22 @@ const sampleData = {
                         <Button variant="dark">دخول</Button>
                         <Button variant="on-cream">تصدير</Button>
                         <Button variant="danger" icon="fas fa-trash">حذف</Button>
+                        <Button variant="success" icon="fas fa-check">تأكيد</Button>
+                        <Button variant="warning" icon="fas fa-exclamation-triangle">تحذير</Button>
                         <Button variant="ghost">المزيد</Button>
                         <Button variant="link" href="#">رابط</Button>
                         <IconButton icon="fas fa-cog" aria-label="إعدادات" />
                         <IconButton icon="fas fa-bell" aria-label="إشعارات" variant="primary" />
+                        <IconButton icon="fas fa-check" aria-label="تأكيد" variant="success" />
+                        <IconButton icon="fas fa-trash" aria-label="حذف" variant="danger" />
+                        <IconButton icon="fas fa-exclamation" aria-label="تحذير" variant="warning" />
                     </div>
                     <div class="flex flex-wrap items-center gap-3 mt-4">
                         <Button variant="primary" loading>جاري الحفظ</Button>
                         <Button variant="primary" disabled>معطّل</Button>
+                        <Button variant="primary" pressed>مُضغط</Button>
+                        <Button variant="success" loading>جاري التأكيد</Button>
+                        <Button variant="danger" loading>جاري الحذف</Button>
                     </div>
                 </Card>
 

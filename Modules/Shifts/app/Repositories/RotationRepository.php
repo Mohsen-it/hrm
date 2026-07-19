@@ -6,6 +6,7 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Modules\Shifts\Models\Rotation;
+use Modules\Shifts\Models\RotationAssignment;
 
 class RotationRepository
 {
@@ -51,7 +52,7 @@ class RotationRepository
 
         if ($rotation) {
             $groupIds = $rotation->groups->pluck('id')->toArray();
-            $groupCounts = \Modules\Shifts\Models\RotationAssignment::query()
+            $groupCounts = RotationAssignment::query()
                 ->whereIn('rotation_group_id', $groupIds)
                 ->whereNull('end_date')
                 ->selectRaw('rotation_group_id, count(*) as cnt')
@@ -85,7 +86,7 @@ class RotationRepository
 
     public function hasActiveAssignments(int $rotationId): bool
     {
-        return \Modules\Shifts\Models\RotationAssignment::query()
+        return RotationAssignment::query()
             ->where('rotation_id', $rotationId)
             ->whereNull('end_date')
             ->exists();

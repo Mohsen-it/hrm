@@ -3,14 +3,17 @@
 namespace Modules\Shifts\Services;
 
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
-use Modules\Companies\Models\Company;
 use Modules\Shifts\Models\CategoryTimeSchedule;
 use Modules\Shifts\Models\ShiftCategory;
 use Modules\Shifts\Repositories\ShiftCategoryRepository;
+use Modules\Shifts\Services\Traits\ResolvesCompanyId;
 
 class ShiftCategoryService
 {
+    use ResolvesCompanyId;
+
     public function __construct(
         private ShiftCategoryRepository $repository,
         private ShiftCategoryValidationService $validationService
@@ -43,51 +46,26 @@ class ShiftCategoryService
      */
     public function create(array $data): ShiftCategory
     {
-        $validated = $this->validationService->validateCreate($data);
+        return DB::transaction(function () use ($data) {
+            $validated = $this->validationService->validateCreate($data);
 
-        if (empty($validated['company_id'])) {
-            $validated['company_id'] = $this->resolveCompanyId();
-        }
+            if (empty($validated['company_id'])) {
+                $validated['company_id'] = $this->resolveCompanyId();
+            }
 
-        $this->hydrateDynamicEngine($validated);
+            $this->hydrateDynamicEngine($validated);
 
-        $category = $this->repository->create($validated);
+            $category = $this->repository->create($validated);
 
-        if (! empty($data['time_schedule_id'])) {
-            CategoryTimeSchedule::create([
-                'shift_category_id' => $category->id,
-                'time_schedule_id' => $data['time_schedule_id'],
-            ]);
-        }
+            if (! empty($data['time_schedule_id'])) {
+                CategoryTimeSchedule::create([
+                    'shift_category_id' => $category->id,
+                    'time_schedule_id' => $data['time_schedule_id'],
+                ]);
+            }
 
-        return $category;
-    }
-
-    /**
-     * Resolve the company_id from the authenticated user.
-     * Falls back to the first active company when the current user
-     * is the system super-admin (id=10000) which has no company.
-     */
-    private function resolveCompanyId(): int
-    {
-        $user = auth()->user();
-
-        if ($user && ! empty($user->company_id)) {
-            return (int) $user->company_id;
-        }
-
-        $company = Company::query()
-            ->where('status', 1)
-            ->orderBy('id')
-            ->first();
-
-        if (! $company) {
-            throw ValidationException::withMessages([
-                'company_id' => [__('shifts.no_active_company')],
-            ]);
-        }
-
-        return (int) $company->id;
+            return $category;
+        });
     }
 
     /**

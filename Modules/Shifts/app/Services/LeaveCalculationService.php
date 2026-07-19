@@ -3,18 +3,20 @@
 namespace Modules\Shifts\Services;
 
 use Carbon\Carbon;
-use Modules\Shifts\Models\EmployeeShiftCategory;
-use Modules\Shifts\Repositories\ScheduleEntryRepository;
+use Modules\Shifts\Repositories\RotationAssignmentRepository;
 
 class LeaveCalculationService
 {
     public function __construct(
-        private CyclicScheduleCalculator $calculator,
-        private ScheduleEntryRepository $entryRepository,
+        private RotationEngine $rotationEngine,
+        private RotationAssignmentRepository $rotationAssignmentRepository,
     ) {}
 
     /**
      * Calculate leave days for a given employee and date range.
+     *
+     * Uses rotation engine if employee has a rotation assignment,
+     * otherwise falls back to calendar days.
      *
      * @return array{calendar_days: int, scheduled_work_days: int, scheduled_rest_days: int}
      */
@@ -22,68 +24,25 @@ class LeaveCalculationService
     {
         $calendarDays = $startDate->diffInDays($endDate) + 1;
 
-        $workDays = $this->entryRepository->countWorkDays($employeeId, $startDate, $endDate);
-        $restDays = $calendarDays - $workDays;
+        $rotationAssignment = $this->rotationAssignmentRepository->getActiveAssignment($employeeId);
 
-        return [
-            'calendar_days' => $calendarDays,
-            'scheduled_work_days' => $workDays,
-            'scheduled_rest_days' => $restDays,
-        ];
-    }
+        if ($rotationAssignment) {
+            $rotation = $rotationAssignment->rotation;
+            $group = $rotationAssignment->rotationGroup;
+            $workDays = $this->rotationEngine->getWorkDaysInRange($rotation, $group->group_index, $startDate, $endDate);
 
-    /**
-     * Calculate leave days using cyclic calculator (fallback when no stored schedule).
-     *
-     * @return array{calendar_days: int, scheduled_work_days: int, scheduled_rest_days: int}
-     */
-    public function calculateLeaveDaysFromCycle(
-        int $employeeId,
-        Carbon $startDate,
-        Carbon $endDate
-    ): array {
-        $calendarDays = $startDate->diffInDays($endDate) + 1;
-
-        $assignment = EmployeeShiftCategory::query()
-            ->active()
-            ->forEmployee($employeeId)
-            ->with('shiftCategory')
-            ->first();
-
-        if (! $assignment || $assignment->shiftCategory->type !== 'cyclic') {
             return [
                 'calendar_days' => $calendarDays,
-                'scheduled_work_days' => $calendarDays,
-                'scheduled_rest_days' => 0,
+                'scheduled_work_days' => count($workDays),
+                'scheduled_rest_days' => $calendarDays - count($workDays),
             ];
         }
 
-        $category = $assignment->shiftCategory;
-        $anchor = $category->cycleAnchor();
-        if (! $anchor) {
-            return [
-                'calendar_days' => $calendarDays,
-                'scheduled_work_days' => $calendarDays,
-                'scheduled_rest_days' => 0,
-            ];
-        }
-
-        $workDays = (int) $category->work_days;
-        $restDays = (int) $category->rest_days;
-
-        $workCount = 0;
-        $current = $startDate->copy();
-        while ($current->lte($endDate)) {
-            if ($this->calculator->isWorkDay($current, $anchor, $workDays, $restDays)) {
-                $workCount++;
-            }
-            $current->addDay();
-        }
-
+        // Fallback: assume every day is a work day
         return [
             'calendar_days' => $calendarDays,
-            'scheduled_work_days' => $workCount,
-            'scheduled_rest_days' => $calendarDays - $workCount,
+            'scheduled_work_days' => $calendarDays,
+            'scheduled_rest_days' => 0,
         ];
     }
 }

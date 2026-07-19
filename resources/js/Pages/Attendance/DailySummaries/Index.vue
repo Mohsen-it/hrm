@@ -1,15 +1,8 @@
 <script setup>
 import { ref, computed } from 'vue';
-import { router, Link, usePage } from '@inertiajs/vue3';
+import { router, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
-import PageHeader from '@/Components/ui/PageHeader.vue';
-import Button from '@/Components/ui/Button.vue';
-import Card from '@/Components/ui/Card.vue';
-import DataTable from '@/Components/ui/DataTable.vue';
-import SearchInput from '@/Components/ui/SearchInput.vue';
-import FormModal from '@/Components/ui/FormModal.vue';
-import FormInput from '@/Components/ui/FormInput.vue';
-import Badge from '@/Components/ui/Badge.vue';
+import { PageHeader, Button, DataTable, FormModal, FormInput, FormSelect, FormCheckbox, Badge, Alert } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
@@ -21,7 +14,6 @@ const props = defineProps({
     users: { type: Array, default: () => [] },
 });
 
-const search = ref(props.filters?.search || '');
 const showRecalc = ref(false);
 const showRangeRecalc = ref(false);
 
@@ -50,15 +42,26 @@ const statusVariant = (status) => {
     }[status] || 'inactive';
 };
 
+const userFilterOptions = computed(() =>
+    props.users.map((u) => ({ value: u.id, label: `${u.name} (${u.employee_code})` })),
+);
+
+const userOptions = computed(() => [
+    { value: '', label: t('attendance.placeholders.select_user') },
+    ...userFilterOptions.value,
+]);
+
 const columns = computed(() => [
-    { key: 'user', label: t('attendance.fields.user'), sortable: true },
+    { key: 'user', label: t('attendance.fields.user'), sortable: true, filterable: true, filterType: 'select', filterOptions: userFilterOptions.value, filterKey: 'user_id' },
     { key: 'summary_date', label: t('attendance.fields.summary_date'), sortable: true },
     { key: 'first_check_in_at', label: t('attendance.fields.first_check_in_at') },
     { key: 'last_check_out_at', label: t('attendance.fields.last_check_out_at') },
     { key: 'work_human', label: t('attendance.fields.work_human'), cellClass: 'text-center' },
     { key: 'overtime_human', label: t('attendance.fields.overtime_human'), cellClass: 'text-center' },
     { key: 'late_human', label: t('attendance.fields.late_human'), cellClass: 'text-center' },
-    { key: 'status', label: t('attendance.fields.status'), cellClass: 'text-center' },
+    { key: 'status', label: t('attendance.fields.status'), cellClass: 'text-center', filterable: true, filterType: 'select', filterOptions: statusOptions, filterKey: 'status' },
+    { key: 'from', label: t('attendance.fields.from'), filterable: true, filterType: 'date', filterKey: 'from' },
+    { key: 'to', label: t('attendance.fields.to'), filterable: true, filterType: 'date', filterKey: 'to' },
 ]);
 
 function onSearch(value) {
@@ -69,18 +72,36 @@ function onSearch(value) {
     );
 }
 
-function applyFilter(key, value) {
+function onFilterChange(filters) {
     const next = { ...props.filters };
-    if (value === '' || value === null || value === undefined) {
-        delete next[key];
-    } else {
-        next[key] = value;
-    }
+    Object.entries(filters).forEach(([key, value]) => {
+        if (value === '' || value === null || value === undefined) {
+            delete next[key];
+        } else {
+            next[key] = value;
+        }
+    });
     router.get(route('attendance.daily-summaries.index'), next, {
         preserveState: true,
         preserveScroll: true,
         replace: true,
     });
+}
+
+function onPageChange(page) {
+    router.get(
+        route('attendance.daily-summaries.index'),
+        { ...props.filters, page },
+        { preserveState: true, preserveScroll: true, replace: true },
+    );
+}
+
+function onPerPageChange(perPage) {
+    router.get(
+        route('attendance.daily-summaries.index'),
+        { ...props.filters, per_page: perPage },
+        { preserveState: true, preserveScroll: true, replace: true },
+    );
 }
 
 function performRecalc() {
@@ -111,71 +132,33 @@ const flashSuccess = computed(() => page.props.flash?.success);
             :description="t('attendance.index_description')"
         >
             <template #actions>
-                <button type="button" class="btn btn-ghost" @click="showRecalc = true">
-                    <i class="fas fa-rotate"></i>
-                    <span>{{ t('attendance.actions.recalculate') }}</span>
+                <Button variant="secondary" icon="fas fa-rotate" @click="showRecalc = true">
+                    {{ t('attendance.actions.recalculate') }}
                 </Button>
-                <button type="button" class="btn btn-primary" @click="showRangeRecalc = true">
-                    <i class="fas fa-calendar-week"></i>
-                    <span>{{ t('attendance.actions.recalculate_range') }}</span>
+                <Button variant="primary" icon="fas fa-calendar-week" @click="showRangeRecalc = true">
+                    {{ t('attendance.actions.recalculate_range') }}
                 </Button>
             </template>
         </PageHeader>
 
-        <div v-if="flashSuccess" class="alert alert-success flex items-center gap-2 mb-4">
-            <i class="fas fa-check-circle"></i>
-            <span>{{ flashSuccess }}</span>
-        </div>
+        <Alert v-if="flashSuccess" type="success" :message="flashSuccess" class="mb-4" />
 
-        <div class="card p-4 mb-4 flex items-center justify-between flex-wrap gap-3">
-            <div class="flex items-center gap-3 flex-wrap">
-                <SearchInput
-                    v-model="search"
-                    :placeholder="t('common.search')"
-                    @search="onSearch"
-                />
-                <select
-                    class="form-input max-w-[200px]"
-                    :value="filters.user_id ?? ''"
-                    @change="applyFilter('user_id', $event.target.value)"
-                >
-                    <option value="">{{ t('attendance.placeholders.select_user') }}</option>
-                    <option v-for="u in users" :key="u.id" :value="u.id">
-                        {{ u.name }} ({{ u.employee_code }})
-                    </option>
-                </select>
-                <select
-                    class="form-input max-w-[180px]"
-                    :value="filters.status ?? ''"
-                    @change="applyFilter('status', $event.target.value)"
-                >
-                    <option value="">{{ t('attendance.placeholders.select_status') }}</option>
-                    <option v-for="opt in statusOptions" :key="opt.value" :value="opt.value">
-                        {{ opt.label }}
-                    </option>
-                </select>
-                <input
-                    type="date"
-                    class="form-input max-w-[170px]"
-                    :value="filters.from ?? ''"
-                    @change="applyFilter('from', $event.target.value)"
-                />
-                <input
-                    type="date"
-                    class="form-input max-w-[170px]"
-                    :value="filters.to ?? ''"
-                    @change="applyFilter('to', $event.target.value)"
-                />
-            </div>
-        </div>
-
-        <DataTable :columns="columns" :data="summaries" :empty-title="t('attendance.messages.empty_summaries')">
+        <DataTable
+            :columns="columns"
+            :data="summaries"
+            :empty-title="t('attendance.messages.empty_summaries')"
+            storage-key="attendance-summaries"
+            @search="onSearch"
+            @filter-change="onFilterChange"
+            @page-change="onPageChange"
+            @per-page-change="onPerPageChange"
+        >
             <template #cell-user="{ row }">
                 <div>
-                    <div class="font-semibold text-[var(--color-ink)]">
+                    <div class="font-semibold text-mistral-ink">
                         {{ row.user?.name || '—' }}
                     </div>
-                    <div class="text-[11px] text-[var(--color-ink-subtle)]">
+                    <div class="text-[11px] text-mistral-stone">
                         {{ row.user?.employee_code || '' }}
                     </div>
                 </div>
@@ -196,17 +179,12 @@ const flashSuccess = computed(() => page.props.flash?.success);
 
         <FormModal v-model="showRecalc" :title="t('attendance.actions.recalculate')" size="sm">
             <div class="grid grid-cols-1 gap-3">
-                <div>
-                    <label class="block text-[12px] font-semibold text-[var(--color-ink-muted)] mb-1">
-                        {{ t('attendance.fields.user') }}
-                    </label>
-                    <select v-model="recalcForm.user_id" class="form-input" required>
-                        <option value="">{{ t('attendance.placeholders.select_user') }}</option>
-                        <option v-for="u in users" :key="u.id" :value="u.id">
-                            {{ u.name }} ({{ u.employee_code }})
-                        </option>
-                    </select>
-                </div>
+                <FormSelect
+                    v-model="recalcForm.user_id"
+                    :label="t('attendance.fields.user')"
+                    :options="userOptions"
+                    :placeholder="t('attendance.placeholders.select_user')"
+                />
                 <FormInput
                     v-model="recalcForm.date"
                     :label="t('attendance.fields.date')"
@@ -214,12 +192,11 @@ const flashSuccess = computed(() => page.props.flash?.success);
                 />
             </div>
             <template #footer>
-                <button type="button" class="btn btn-ghost" @click="showRecalc = false">
+                <Button variant="secondary" @click="showRecalc = false">
                     {{ t('common.cancel') }}
                 </Button>
-                <button type="button" class="btn btn-primary" @click="performRecalc">
-                    <i class="fas fa-rotate"></i>
-                    <span>{{ t('attendance.actions.recalculate') }}</span>
+                <Button variant="primary" icon="fas fa-rotate" @click="performRecalc">
+                    {{ t('attendance.actions.recalculate') }}
                 </Button>
             </template>
         </FormModal>
@@ -236,18 +213,18 @@ const flashSuccess = computed(() => page.props.flash?.success);
                     :label="t('attendance.fields.to')"
                     type="date"
                 />
-                <label class="col-span-2 flex items-center gap-2 text-[13px]">
-                    <input type="checkbox" v-model="rangeForm.missing_only" />
-                    <span>{{ t('attendance.filters.processed') === 'معالجة' ? 'إعادة حساب المفقود فقط' : 'Only missing' }}</span>
-                </label>
+                <FormCheckbox
+                    v-model="rangeForm.missing_only"
+                    :label="t('attendance.filters.processed') === 'معالجة' ? 'إعادة حساب المفقود فقط' : 'Only missing'"
+                    class="col-span-2"
+                />
             </div>
             <template #footer>
-                <button type="button" class="btn btn-ghost" @click="showRangeRecalc = false">
+                <Button variant="secondary" @click="showRangeRecalc = false">
                     {{ t('common.cancel') }}
                 </Button>
-                <button type="button" class="btn btn-primary" @click="performRangeRecalc">
-                    <i class="fas fa-calendar-week"></i>
-                    <span>{{ t('attendance.actions.recalculate_range') }}</span>
+                <Button variant="primary" icon="fas fa-calendar-week" @click="performRangeRecalc">
+                    {{ t('attendance.actions.recalculate_range') }}
                 </Button>
             </template>
         </FormModal>

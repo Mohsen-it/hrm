@@ -2,12 +2,7 @@
 import { ref, reactive, computed, watch } from 'vue';
 import { router, Head } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
-import PageHeader from '@/Components/ui/PageHeader.vue';
-import Button from '@/Components/ui/Button.vue';
-import Card from '@/Components/ui/Card.vue';
-import FormInput from '@/Components/ui/FormInput.vue';
-import FormSelect from '@/Components/ui/FormSelect.vue';
-import EmptyState from '@/Components/ui/EmptyState.vue';
+import { PageHeader, Button, Card, FormInput, FormSelect, Badge, DataTable, EmptyState, ErrorSummary, FormSection, FormActions } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
@@ -30,14 +25,12 @@ const form = reactive({
 const errors = ref({});
 const processing = ref(false);
 const generalError = ref('');
-
-const errorFor = (key) => errors.value[key] || '';
-
-const employeeSearch = ref('');
+const loadingEmployees = ref(false);
 const employees = ref([]);
 const selectedEmployees = ref([]);
-const searching = ref(false);
-let searchTimer = null;
+const searchQuery = ref('');
+
+const errorFor = (key) => errors.value[key] || '';
 
 const rotationOptions = computed(() => {
     const items = Array.isArray(props.rotations) ? props.rotations : (props.rotations?.data || []);
@@ -62,44 +55,87 @@ const departmentOptions = computed(() =>
     (props.departments || []).map(d => ({ value: d.id, label: d.department_name })),
 );
 
-watch(() => form.rotation_id, () => {
-    form.rotation_group_id = '';
+const filteredEmployees = computed(() => {
+    if (!searchQuery.value) return employees.value;
+    const q = searchQuery.value.toLowerCase();
+    return employees.value.filter(e =>
+        e.name?.toLowerCase().includes(q) ||
+        e.employee_code?.toLowerCase().includes(q) ||
+        e.first_name?.toLowerCase().includes(q) ||
+        e.last_name?.toLowerCase().includes(q)
+    );
 });
 
-function searchEmployees() {
-    if (searchTimer) clearTimeout(searchTimer);
-    if (employeeSearch.value.length < 2) {
+const selectedIds = computed(() => selectedEmployees.value.map(e => e.id));
+
+const allFilteredSelected = computed(() => {
+    return filteredEmployees.value.length > 0 &&
+        filteredEmployees.value.every(e => selectedIds.value.includes(e.id));
+});
+
+const selectedCount = computed(() => selectedEmployees.value.length);
+
+watch(() => form.rotation_id, () => {
+    form.rotation_group_id = '';
+    selectedEmployees.value = [];
+    form.employee_ids = [];
+    fetchEmployees();
+});
+
+watch(() => form.department_id, () => {
+    fetchEmployees();
+});
+
+function fetchEmployees() {
+    if (!form.rotation_id) {
         employees.value = [];
         return;
     }
-    searchTimer = setTimeout(async () => {
-        searching.value = true;
-        try {
-            const params = new URLSearchParams({ search: employeeSearch.value });
-            if (form.department_id) params.set('department_id', form.department_id);
-            const response = await fetch(
-                route('rotations.search-employees') + '?' + params.toString(),
-                { headers: { Accept: 'application/json' } },
-            );
-            const data = await response.json();
-            employees.value = (data.employees || []).filter(
-                emp => !selectedEmployees.value.find(s => s.id === emp.id),
-            );
-        } catch (e) {
+    loadingEmployees.value = true;
+    const params = new URLSearchParams({ search: '' });
+    if (form.department_id) params.set('department_id', form.department_id);
+
+    fetch(route('rotations.search-employees') + '?' + params.toString(), {
+        headers: { Accept: 'application/json' },
+    })
+        .then(r => r.json())
+        .then(data => {
+            employees.value = data.employees || [];
+        })
+        .catch(() => {
             employees.value = [];
-        } finally {
-            searching.value = false;
-        }
-    }, 300);
+        })
+        .finally(() => {
+            loadingEmployees.value = false;
+        });
 }
 
-function addEmployee(emp) {
-    if (!selectedEmployees.value.find(e => e.id === emp.id)) {
-        selectedEmployees.value.push(emp);
-        form.employee_ids = selectedEmployees.value.map(e => e.id);
+function toggleSelectAll() {
+    if (allFilteredSelected.value) {
+        const filteredIds = filteredEmployees.value.map(e => e.id);
+        selectedEmployees.value = selectedEmployees.value.filter(e => !filteredIds.includes(e.id));
+    } else {
+        filteredEmployees.value.forEach(emp => {
+            if (!selectedIds.value.includes(emp.id)) {
+                selectedEmployees.value.push(emp);
+            }
+        });
     }
-    employeeSearch.value = '';
-    employees.value = [];
+    form.employee_ids = selectedEmployees.value.map(e => e.id);
+}
+
+function toggleEmployee(emp) {
+    const idx = selectedIds.value.indexOf(emp.id);
+    if (idx === -1) {
+        selectedEmployees.value.push(emp);
+    } else {
+        selectedEmployees.value.splice(idx, 1);
+    }
+    form.employee_ids = selectedEmployees.value.map(e => e.id);
+}
+
+function isSelected(empId) {
+    return selectedIds.value.includes(empId);
 }
 
 function removeEmployee(empId) {
@@ -107,15 +143,25 @@ function removeEmployee(empId) {
     form.employee_ids = selectedEmployees.value.map(e => e.id);
 }
 
-function addAllFromSearch() {
-    employees.value.forEach(emp => {
-        if (!selectedEmployees.value.find(s => s.id === emp.id)) {
-            selectedEmployees.value.push(emp);
-        }
-    });
-    form.employee_ids = selectedEmployees.value.map(e => e.id);
-    employees.value = [];
-    employeeSearch.value = '';
+const employeeColumns = computed(() => [
+    { key: 'employee_code', label: t('shifts.employee_code') },
+    { key: 'name', label: t('shifts.employee_name') },
+]);
+
+const employeesData = computed(() => ({
+    data: filteredEmployees.value.map(e => ({ ...e, id: e.id })),
+    links: [],
+    total: filteredEmployees.value.length,
+    current_page: 1,
+    last_page: 1,
+    per_page: 1000,
+    from: 1,
+    to: filteredEmployees.value.length,
+}));
+
+function onBulkSelectionChange(ids) {
+    selectedEmployees.value = employees.value.filter(e => ids.includes(e.id));
+    form.employee_ids = ids;
 }
 
 function clearAll() {
@@ -142,8 +188,6 @@ function submit() {
         },
     });
 }
-
-watch(employeeSearch, searchEmployees);
 </script>
 
 <template>
@@ -154,179 +198,161 @@ watch(employeeSearch, searchEmployees);
             :description="t('shifts.rotation_bulk_assign_description')"
         >
             <template #actions>
+                <Button variant="secondary" :href="route('rotations.assign.manage')">{{ t('shifts.manage_assignments') }}</Button>
                 <Button variant="secondary" :href="route('rotations.assign')">{{ t('shifts.assign_employee') }}</Button>
                 <Button variant="secondary" :href="route('rotations.index')">{{ t('common.back') }}</Button>
             </template>
         </PageHeader>
 
-        <Card variant="base" padding="md" as="form" @submit.prevent="submit" class="max-w-3xl">
-            <div v-if="generalError" class="mb-4 p-3 bg-red-50 border border-red-200 rounded-md text-[13px] text-red-700">
+        <form class="space-y-6" @submit.prevent="submit">
+            <ErrorSummary :errors="errors" />
+
+            <div v-if="generalError" class="p-3 bg-mistral-danger/10 border border-mistral-danger/20 rounded-md text-[13px] text-mistral-danger">
                 <i class="fas fa-exclamation-circle mr-1"></i>
                 {{ generalError }}
             </div>
 
-            <section>
-                <h3 class="text-[14px] text-mistral-ink mb-3 font-medium">{{ t('shifts.assignment_info') }}</h3>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormSelect
-                        v-model="form.department_id"
-                        name="department_id"
-                        :label="t('shifts.filter_by_department')"
-                        :options="departmentOptions"
-                        :placeholder="t('shifts.select_department')"
-                        :error="errorFor('department_id')"
-                    />
+            <FormSection :title="t('shifts.assignment_info')" :description="t('shifts.rotation_bulk_assign_description')">
+                <div class="max-w-5xl">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <FormSelect
+                            v-model="form.rotation_id"
+                            name="rotation_id"
+                            :label="t('shifts.rotation')"
+                            :options="rotationOptions"
+                            :placeholder="t('shifts.select_rotation')"
+                            :error="errorFor('rotation_id')"
+                            required
+                        />
 
-                    <FormSelect
-                        v-model="form.rotation_id"
-                        name="rotation_id"
-                        :label="t('shifts.rotation')"
-                        :options="rotationOptions"
-                        :placeholder="t('shifts.select_rotation')"
-                        :error="errorFor('rotation_id')"
-                        required
-                    />
+                        <FormSelect
+                            v-model="form.rotation_group_id"
+                            name="rotation_group_id"
+                            :label="t('shifts.rotation_group')"
+                            :options="groupOptions"
+                            :placeholder="t('shifts.select_rotation_group')"
+                            :error="errorFor('rotation_group_id')"
+                            required
+                        />
 
-                    <FormSelect
-                        v-model="form.rotation_group_id"
-                        name="rotation_group_id"
-                        :label="t('shifts.rotation_group')"
-                        :options="groupOptions"
-                        :placeholder="t('shifts.select_rotation_group')"
-                        :error="errorFor('rotation_group_id')"
-                        required
-                    />
+                        <FormSelect
+                            v-model="form.department_id"
+                            name="department_id"
+                            :label="t('shifts.filter_by_department')"
+                            :options="[{ value: '', label: t('shifts.all_departments') }, ...departmentOptions]"
+                            :placeholder="t('shifts.select_department')"
+                            :error="errorFor('department_id')"
+                        />
 
-                    <FormInput
-                        v-model="form.start_date"
-                        name="start_date"
-                        :label="t('shifts.start_date')"
-                        type="date"
-                        :error="errorFor('start_date')"
-                        required
-                    />
-                </div>
-
-                <div v-if="selectedRotation" class="mt-4 p-4 bg-mistral-surface rounded-md">
-                    <h4 class="text-[13px] font-medium text-mistral-ink mb-2">{{ t('shifts.rotation_preview') }}</h4>
-                    <div class="grid grid-cols-3 gap-3 text-[12px]">
-                        <div>
-                            <span class="text-mistral-slate">{{ t('shifts.work_pattern') }}:</span>
-                            <span class="font-mono font-medium ml-1">{{ selectedRotation.work_days_count }}+{{ selectedRotation.rest_days_count }}</span>
-                        </div>
-                        <div>
-                            <span class="text-mistral-slate">{{ t('shifts.cycle_length') }}:</span>
-                            <span class="font-medium ml-1">{{ selectedRotation.cycle_length }} {{ t('shifts.days') }}</span>
-                        </div>
-                        <div>
-                            <span class="text-mistral-slate">{{ t('shifts.groups_count') }}:</span>
-                            <span class="font-medium ml-1">{{ selectedRotation.number_of_groups }}</span>
-                        </div>
+                        <FormInput
+                            v-model="form.start_date"
+                            name="start_date"
+                            :label="t('shifts.start_date')"
+                            type="date"
+                            :error="errorFor('start_date')"
+                            required
+                        />
                     </div>
-                </div>
-            </section>
 
-            <section class="mt-6">
-                <div class="flex items-center justify-between mb-3">
-                    <h3 class="text-[14px] text-mistral-ink font-medium">{{ t('shifts.search_employees') }}</h3>
-                    <Button v-if="employees.length > 0" type="button" variant="ghost" size="sm" icon="fas fa-check-double" @click="addAllFromSearch">
-                        {{ t('shifts.select_all') }} ({{ employees.length }})
-                    </Button>
-                </div>
-
-                <div class="relative mb-4">
-                    <FormInput
-                        v-model="employeeSearch"
-                        :placeholder="t('shifts.search_employee_placeholder')"
-                    />
-                    <div
-                        v-if="searching"
-                        class="absolute top-full left-0 right-0 mt-1 p-2 bg-mistral-canvas border border-mistral-hairline rounded-md text-[13px] text-mistral-muted z-10"
-                    >
-                        <i class="fas fa-spinner fa-spin"></i> {{ t('common.search') }}...
-                    </div>
-                    <div
-                        v-else-if="employees.length > 0"
-                        class="absolute top-full left-0 right-0 mt-1 bg-mistral-canvas border border-mistral-hairline rounded-md shadow-level-2 max-h-[240px] overflow-y-auto z-10"
-                    >
-                        <button
-                            v-for="emp in employees"
-                            :key="emp.id"
-                            type="button"
-                            class="w-full text-right flex items-center justify-between p-2 hover:bg-mistral-surface border-b border-mistral-hairline-soft last:border-b-0"
-                            @click="addEmployee(emp)"
-                        >
-                            <div class="flex flex-col">
-                                <span class="text-[14px] text-mistral-ink">{{ emp.first_name }} {{ emp.last_name }}</span>
-                                <span class="text-[12px] text-mistral-muted">{{ emp.employee_code }}</span>
+                    <div v-if="selectedRotation" class="mt-4 p-4 bg-mistral-surface rounded-md">
+                        <div class="grid grid-cols-3 gap-3 text-[12px]">
+                            <div>
+                                <span class="text-mistral-slate">{{ t('shifts.work_pattern') }}:</span>
+                                <span class="font-mono font-medium ms-1">{{ selectedRotation.work_days_count }}+{{ selectedRotation.rest_days_count }}</span>
                             </div>
-                            <i class="fas fa-plus text-mistral-primary text-[12px]"></i>
-                        </button>
+                            <div>
+                                <span class="text-mistral-slate">{{ t('shifts.cycle_length') }}:</span>
+                                <span class="font-medium ms-1">{{ selectedRotation.cycle_length }} {{ t('shifts.days') }}</span>
+                            </div>
+                            <div>
+                                <span class="text-mistral-slate">{{ t('shifts.groups_count') }}:</span>
+                                <span class="font-medium ms-1">{{ selectedRotation.number_of_groups }}</span>
+                            </div>
+                        </div>
                     </div>
-                    <div
-                        v-else-if="employeeSearch.length >= 2 && !searching"
-                        class="absolute top-full left-0 right-0 mt-1 p-2 bg-mistral-canvas border border-mistral-hairline rounded-md text-[13px] text-mistral-muted z-10"
-                    >
+                </div>
+            </FormSection>
+
+            <FormSection :title="t('shifts.select_employees_from_table')">
+                <template #actions>
+                    <div class="flex items-center gap-2">
+                        <Badge v-if="selectedCount > 0" :text="`${selectedCount} ${t('shifts.selected')}`" variant="active" />
+                        <Button v-if="selectedCount > 0" type="button" variant="ghost" size="sm" icon="fas fa-trash" @click="clearAll">
+                            {{ t('shifts.unselect_all') }}
+                        </Button>
+                        <div class="w-64">
+                            <FormInput
+                                v-model="searchQuery"
+                                :placeholder="t('shifts.search_employee_placeholder')"
+                                icon="fas fa-search"
+                            />
+                        </div>
+                    </div>
+                </template>
+
+                <div class="max-w-5xl">
+                    <div v-if="loadingEmployees" class="p-8 text-center">
+                        <i class="fas fa-spinner fa-spin text-mistral-primary text-xl"></i>
+                        <p class="text-[13px] text-mistral-muted mt-2">{{ t('common.loading') }}...</p>
+                    </div>
+
+                    <div v-else-if="filteredEmployees.length === 0 && form.rotation_id" class="p-8 text-center text-[13px] text-mistral-muted">
                         {{ t('shifts.no_employees_found') }}
                     </div>
-                </div>
-            </section>
 
-            <section class="mt-6">
-                <div class="flex items-center justify-between mb-3">
-                    <h3 class="text-[14px] text-mistral-ink font-medium">{{ t('shifts.selected_employees') }} ({{ selectedEmployees.length }})</h3>
-                    <Button v-if="selectedEmployees.length > 0" type="button" variant="ghost" size="sm" icon="fas fa-trash" @click="clearAll">
-                        {{ t('shifts.unselect_all') }}
-                    </Button>
-                </div>
+                    <div v-else-if="!form.rotation_id" class="p-8 text-center text-[13px] text-mistral-muted">
+                        {{ t('shifts.select_rotation_first') }}
+                    </div>
 
-                <div
-                    v-if="selectedEmployees.length > 0"
-                    class="flex flex-wrap gap-2 p-3 bg-mistral-surface rounded-md min-h-[60px]"
-                >
+                    <div v-else class="border border-mistral-hairline rounded-md max-h-[400px] overflow-y-auto">
+                        <DataTable
+                            :columns="employeeColumns"
+                            :data="employeesData"
+                            :selectable="true"
+                            :enable-search="false"
+                            :enable-filters="false"
+                            :enable-pagination="false"
+                            :enable-export="false"
+                            :enable-density="false"
+                            :enable-column-visibility="false"
+                            storage-key="rotation-bulk-assign"
+                            @selection-change="onBulkSelectionChange"
+                        />
+                    </div>
+                </div>
+            </FormSection>
+
+            <FormSection v-if="selectedCount > 0" :title="t('shifts.selected_employees')" :count="selectedCount">
+                <div class="flex flex-wrap gap-2 p-3 bg-mistral-surface rounded-md min-h-[48px]">
                     <span
                         v-for="emp in selectedEmployees"
                         :key="emp.id"
                         class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-mistral-primary text-white text-[13px]"
                     >
                         <i class="fas fa-user text-[10px]"></i>
-                        {{ emp.first_name }} {{ emp.last_name }}
+                        {{ emp.name }}
                         <button
                             type="button"
-                            class="text-white hover:text-mistral-danger"
+                            class="inline-flex items-center justify-center w-4 h-4 rounded-full text-white/70 hover:text-white hover:bg-white/20 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-white focus-visible:outline-offset-1"
+                            :aria-label="t('common.remove')"
                             @click="removeEmployee(emp.id)"
                         >
-                            <i class="fas fa-times text-[10px]"></i>
+                            <i class="fas fa-times text-[9px]" aria-hidden="true"></i>
                         </button>
                     </span>
                 </div>
+            </FormSection>
 
-                <EmptyState
-                    v-else
-                    icon="fas fa-users"
-                    :title="t('shifts.no_employees_selected')"
-                    :description="t('shifts.search_employee_placeholder')"
-                />
+            <p v-if="errorFor('employee_ids')" class="text-[12px] text-mistral-danger">
+                {{ errors.employee_ids }}
+            </p>
 
-                <p v-if="errorFor('employee_ids')" class="text-[12px] text-mistral-danger mt-2">
-                    {{ errors.employee_ids }}
-                </p>
-            </section>
-
-            <div class="mt-6 flex items-center justify-start gap-2">
-                <Button
-                    type="submit"
-                    variant="primary"
-                    :loading="processing"
-                    :disabled="selectedEmployees.length === 0 || !form.rotation_id || !form.rotation_group_id"
-                    icon="fas fa-users"
-                >
-                    {{ t('shifts.bulk_assign') }} ({{ selectedEmployees.length }})
-                </Button>
-                <Button variant="secondary" :href="route('rotations.index')">
-                    {{ t('common.cancel') }}
-                </Button>
-            </div>
-        </Card>
+            <FormActions
+                :save-label="`${t('shifts.bulk_assign')} (${selectedCount})`"
+                :cancel-label="t('common.cancel')"
+                :cancel-href="route('rotations.index')"
+                :saving="processing"
+            />
+        </form>
     </AppLayout>
 </template>

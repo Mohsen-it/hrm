@@ -4,6 +4,7 @@ namespace Modules\Attendance\Services;
 
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 use Modules\Attendance\Models\AttendanceShift;
 use Modules\Attendance\Models\ShiftDetail;
@@ -20,20 +21,22 @@ class AttendanceShiftService
 
     public function createShift(array $data): AttendanceShift
     {
-        $shift = $this->shiftRepository->create($data);
+        return DB::transaction(function () use ($data) {
+            $shift = $this->shiftRepository->create($data);
 
-        if (! empty($data['details'])) {
-            foreach ($data['details'] as $detail) {
-                $shift->details()->create([
-                    'time_interval_id' => $detail['time_interval_id'],
-                    'day_index' => $detail['day_index'],
-                    'in_time' => $detail['in_time'],
-                    'out_time' => $detail['out_time'],
-                ]);
+            if (! empty($data['details'])) {
+                foreach ($data['details'] as $detail) {
+                    $shift->details()->create([
+                        'time_interval_id' => $detail['time_interval_id'],
+                        'day_index' => $detail['day_index'],
+                        'in_time' => $detail['in_time'],
+                        'out_time' => $detail['out_time'],
+                    ]);
+                }
             }
-        }
 
-        return $shift->load('details');
+            return $shift->load('details');
+        });
     }
 
     public function updateShift(AttendanceShift $shift, array $data): AttendanceShift

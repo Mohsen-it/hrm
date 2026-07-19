@@ -2,17 +2,7 @@
 import { ref, computed } from 'vue';
 import { router, Link, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
-import PageHeader from '@/Components/ui/PageHeader.vue';
-import Button from '@/Components/ui/Button.vue';
-import Card from '@/Components/ui/Card.vue';
-import DataTable from '@/Components/ui/DataTable.vue';
-import SearchInput from '@/Components/ui/SearchInput.vue';
-import FormSelect from '@/Components/ui/FormSelect.vue';
-import ConfirmDialog from '@/Components/ui/ConfirmDialog.vue';
-import Badge from '@/Components/ui/Badge.vue';
-import IconButton from '@/Components/ui/IconButton.vue';
-import Alert from '@/Components/ui/Alert.vue';
-import Pagination from '@/Components/ui/Pagination.vue';
+import { PageHeader, Button, DataTable, ConfirmDialog, Badge, IconButton, Alert } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
@@ -24,7 +14,6 @@ const props = defineProps({
     types: { type: Array, default: () => [] },
 });
 
-const search = ref(props.filters?.search || '');
 const showDelete = ref(false);
 const selectedCategory = ref(null);
 
@@ -58,7 +47,7 @@ const periodLabels = computed(() => ({
     monthly: t('shifts.monthly'),
 }));
 
-const typeOptions = computed(() => [
+const typeFilterOptions = computed(() => [
     { value: '', label: t('shifts.category_type') },
     ...props.types,
 ]);
@@ -103,7 +92,7 @@ function formatWorkPattern(category) {
 
 const columns = computed(() => [
     { key: 'name', label: t('shifts.category_name'), sortable: true },
-    { key: 'type', label: t('shifts.category_type'), cellClass: 'text-center' },
+    { key: 'type', label: t('shifts.category_type'), cellClass: 'text-center', filterable: true, filterType: 'select', filterOptions: typeFilterOptions.value },
     { key: 'work_pattern', label: t('shifts.work_days'), cellClass: 'text-center' },
     { key: 'schedule', label: t('shifts.schedule_name') },
     { key: 'employees_count', label: t('shifts.employees_count'), cellClass: 'text-center' },
@@ -118,16 +107,30 @@ function onSearch(value) {
     );
 }
 
-function applyFilter(key, value) {
+function onFilterChange(filters) {
     const next = { ...props.filters };
-    if (value === '' || value === null || value === undefined) {
-        delete next[key];
-    } else {
-        next[key] = value;
+    for (const [key, value] of Object.entries(filters)) {
+        if (value === '' || value === null || value === undefined) {
+            delete next[key];
+        } else {
+            next[key] = value;
+        }
     }
+    router.get(route('shift-categories.index'), next, { preserveState: true, preserveScroll: true, replace: true });
+}
+
+function onPageChange(page) {
     router.get(
         route('shift-categories.index'),
-        next,
+        { ...props.filters, page },
+        { preserveState: true, preserveScroll: true, replace: true },
+    );
+}
+
+function onPerPageChange(perPage) {
+    router.get(
+        route('shift-categories.index'),
+        { ...props.filters, per_page: perPage },
         { preserveState: true, preserveScroll: true, replace: true },
     );
 }
@@ -167,8 +170,8 @@ const flashError = computed(() => page.props.flash?.error);
             </template>
         </PageHeader>
 
-        <Alert v-if="flashSuccess" type="success" :message="flashSuccess" dismissible class="mb-4" />
-        <Alert v-if="flashError" type="danger" :message="flashError" dismissible class="mb-4" />
+        <Alert v-if="flashSuccess" type="success" :message="flashSuccess" class="mb-4" />
+        <Alert v-if="flashError" type="danger" :message="flashError" class="mb-4" />
 
         <nav class="flex items-center gap-0 border-b border-mistral-hairline-soft overflow-x-auto mb-6" role="tablist">
             <Link
@@ -213,24 +216,15 @@ const flashError = computed(() => page.props.flash?.error);
             </Link>
         </nav>
 
-        <Card variant="base" padding="sm" class="mb-6">
-            <div class="flex items-center justify-between flex-wrap gap-3">
-                <div class="flex items-center gap-3 flex-wrap">
-                    <SearchInput
-                        v-model="search"
-                        :placeholder="t('common.search')"
-                        @search="onSearch"
-                    />
-                    <FormSelect
-                        :options="typeOptions"
-                        :model-value="filters.type ?? ''"
-                        @update:modelValue="applyFilter('type', $event)"
-                    />
-                </div>
-            </div>
-        </Card>
-
-        <DataTable :columns="columns" :data="categories">
+        <DataTable
+            :columns="columns"
+            :data="categories"
+            storage-key="shift-categories"
+            @search="onSearch"
+            @filter-change="onFilterChange"
+            @page-change="onPageChange"
+            @per-page-change="onPerPageChange"
+        >
             <template #cell-type="{ row }">
                 <Badge :text="typeLabel(row.type)" :variant="typeVariant(row.type)" />
             </template>
@@ -264,43 +258,34 @@ const flashError = computed(() => page.props.flash?.error);
                     <IconButton
                         icon="fas fa-user-plus"
                         variant="ghost"
-                        size="sm"
                         :aria-label="t('shifts.assign_employee')"
                         :href="route('shift-assignments.assign', { category: row.id })"
                     />
                     <IconButton
                         icon="fas fa-users"
                         variant="ghost"
-                        size="sm"
                         :aria-label="t('shifts.bulk_assign')"
                         :href="route('shift-assignments.bulk-assign', { category: row.id })"
                     />
                     <IconButton
                         icon="fas fa-eye"
                         variant="ghost"
-                        size="sm"
                         :aria-label="t('common.view')"
                         :href="route('shift-categories.show', row.id)"
                     />
                     <IconButton
                         icon="fas fa-edit"
                         variant="ghost"
-                        size="sm"
                         :aria-label="t('common.edit')"
                         :href="route('shift-categories.edit', row.id)"
                     />
                     <IconButton
                         icon="fas fa-trash"
-                        variant="ghost"
-                        size="sm"
+                        variant="danger"
                         :aria-label="t('common.delete')"
                         @click="confirmDelete(row)"
                     />
                 </div>
-            </template>
-
-            <template #footer>
-                <Pagination :data="categories" />
             </template>
         </DataTable>
 

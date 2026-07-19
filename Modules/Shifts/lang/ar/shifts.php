@@ -152,35 +152,12 @@ return [
     'total_days' => 'إجمالي الأيام',
     'today' => 'اليوم',
     'today_legend' => 'اليوم الحالي',
-    'work_day_legend' => 'يوم دوام',
+    'work_day_legend' => 'يوم عمل',
     'rest_day_legend' => 'يوم راحة',
     'range_from' => 'من تاريخ',
     'cycle_start' => 'بداية الدورة',
     'days' => 'أيام',
     'schedule_preview_description' => 'عرض أيام الدوام والراحة المستقبلية',
-
-    // Short day names
-    'sun_short' => 'أح',
-    'mon_short' => 'اث',
-    'tue_short' => 'ث',
-    'wed_short' => 'أر',
-    'thu_short' => 'خ',
-    'fri_short' => 'ج',
-    'sat_short' => 'س',
-
-    // Month names
-    'january' => 'يناير',
-    'february' => 'فبراير',
-    'march' => 'مارس',
-    'april' => 'أبريل',
-    'may' => 'مايو',
-    'june' => 'يونيو',
-    'july' => 'يوليو',
-    'august' => 'أغسطس',
-    'september' => 'سبتمبر',
-    'october' => 'أكتوبر',
-    'november' => 'نوفمبر',
-    'december' => 'ديسمبر',
 
     // Assignments page
     'shift_assignments' => 'إسنادات الموظفين',
@@ -247,8 +224,6 @@ return [
     'training' => 'تدريب',
     'other' => 'أخرى',
     'virtual_roster' => 'معاينة الروتين الافتراضي',
-    'work_day_legend' => 'يوم عمل',
-    'rest_day_legend' => 'يوم راحة',
     'leave_badge' => 'إجازة',
     'excused' => 'معذور',
     'status_work' => 'عمل',
@@ -380,4 +355,17 @@ return [
     'select_rotation_first' => 'اختر دورية',
     'select_rotation_description' => 'اختر دورية لعرض وإدارة إسنادات موظفيها',
     'rotation_employees_transferred_count' => 'تم نقل :count موظف بنجاح.',
+    'select_employee_from_table' => 'اختر الموظف',
+    'select_employees_from_table' => 'اختر الموظفين من الجدول',
+
+    // My Calendar page
+    'my_schedule' => 'جدول دوامي',
+    'prev_month' => 'السابق',
+    'next_month' => 'التالي',
+    'day_work_short' => 'د',
+    'day_rest_short' => 'ر',
+    'day_absent_short' => 'غ',
+    'day_holiday_short' => 'ع',
+    'day_present_short' => 'ح',
+    'day_on_leave_short' => 'إ',
 ];

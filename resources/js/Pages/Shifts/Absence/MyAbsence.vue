@@ -3,9 +3,11 @@ import { ref, computed } from 'vue'
 import { router } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import PageHeader from '@/Components/ui/PageHeader.vue'
+import Card from '@/Components/ui/Card.vue'
+import Button from '@/Components/ui/Button.vue'
 import DataTable from '@/Components/ui/DataTable.vue'
 import Badge from '@/Components/ui/Badge.vue'
-import StatCard from '@/Components/StatCard.vue'
+import { StatCard } from '@/Components/ui'
 import { useTranslations } from '@/composables/useTranslations'
 
 const { t } = useTranslations()
@@ -48,9 +50,9 @@ function loadData() {
 }
 
 const columns = computed(() => [
-    { key: 'date', label: 'التاريخ', cellClass: 'text-center' },
-    { key: 'expected_time', label: 'الوقت المتوقع', cellClass: 'text-center' },
-    { key: 'status', label: 'الحالة', cellClass: 'text-center' },
+    { key: 'date', label: t('shifts.date'), sortable: true, cellClass: 'text-center' },
+    { key: 'expected_time', label: t('shifts.expected_time'), sortable: true, cellClass: 'text-center' },
+    { key: 'status', label: t('shifts.status'), sortable: true, filterable: true, cellClass: 'text-center' },
 ])
 
 function statusVariant(status) {
@@ -66,55 +68,68 @@ function statusVariant(status) {
 
 function statusLabel(status) {
     const map = {
-        absent: 'غياب',
-        late: 'متأخر',
-        early: 'خروج مبكر',
-        present: 'حضور',
-        on_leave: 'إجازة',
+        absent: t('shifts.absent'),
+        late: t('shifts.late'),
+        early: t('shifts.early_leave'),
+        present: t('shifts.present'),
+        on_leave: t('shifts.on_leave'),
     }
     return map[status] || status
 }
 
-const monthNames = [
-    'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو',
-    'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر',
-]
+const monthNames = computed(() => [
+    t('shifts.january'), t('shifts.february'), t('shifts.march'), t('shifts.april'),
+    t('shifts.may'), t('shifts.june'), t('shifts.july'), t('shifts.august'),
+    t('shifts.september'), t('shifts.october'), t('shifts.november'), t('shifts.december'),
+])
 
-const monthLabel = computed(() => `${monthNames[selectedMonth - 1]} ${selectedYear}`)
+const monthLabel = computed(() => `${monthNames.value[selectedMonth.value - 1]} ${selectedYear.value}`)
 </script>
 
 <template>
-    <AppLayout :title="'غياباتي'">
-        <PageHeader :title="'غياباتي'" />
+    <AppLayout :title="t('shifts.my_absence')">
+        <PageHeader :title="t('shifts.my_absence')" />
 
         <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
             <StatCard
-                label="إجمالي أيام العمل"
+                :label="t('shifts.total_work_days')"
                 :value="stats.totalWorkDays"
                 icon="fas fa-briefcase"
                 color="info"
             />
             <StatCard
-                label="أيام الغياب"
+                :label="t('shifts.absent_days')"
                 :value="stats.absentDays"
                 icon="fas fa-user-times"
                 color="danger"
             />
             <StatCard
-                label="نسبة الحضور"
+                :label="t('shifts.attendance_rate')"
                 :value="stats.attendanceRate + '%'"
                 icon="fas fa-chart-pie"
                 :color="stats.attendanceRate >= 90 ? 'success' : stats.attendanceRate >= 75 ? 'warning' : 'danger'"
             />
         </div>
 
-        <div class="card p-4 mb-4 flex items-center gap-3 flex-wrap">
-            <button @click="changeMonth(-1)" class="btn btn-sm btn-outline">&laquo;</Button>
-            <span class="text-sm font-semibold min-w-[140px] text-center">{{ monthLabel }}</span>
-            <button @click="changeMonth(1)" class="btn btn-sm btn-outline">&raquo;</Button>
-        </div>
+        <Card variant="base" padding="none" class="mb-6">
+            <div class="p-5 sm:p-6">
+                <div class="flex items-center gap-3 flex-wrap">
+                    <Button variant="secondary" size="sm" icon="fas fa-chevron-right" @click="changeMonth(-1)" />
+                    <span class="text-sm font-semibold min-w-[140px] text-center text-mistral-ink">{{ monthLabel }}</span>
+                    <Button variant="secondary" size="sm" icon-left="fas fa-chevron-left" @click="changeMonth(1)" />
+                </div>
+            </div>
+        </Card>
 
-        <DataTable :columns="columns" :data="{ data: monthlyData }" :empty-title="'لا توجد غيابات لهذا الشهر'">
+        <DataTable
+            :columns="columns"
+            :data="{ data: monthlyData }"
+            :empty-title="t('shifts.no_absence_this_month')"
+            storage-key="my-absence"
+            @search="(q) => loadData()"
+            @page-change="(p) => loadData()"
+            @per-page-change="(p) => loadData()"
+        >
             <template #cell-date="{ row }">
                 <span dir="ltr">{{ row.date || '—' }}</span>
             </template>

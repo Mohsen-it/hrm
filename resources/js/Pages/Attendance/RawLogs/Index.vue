@@ -4,12 +4,11 @@ import { router, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import PageHeader from '@/Components/ui/PageHeader.vue';
 import Button from '@/Components/ui/Button.vue';
-import Card from '@/Components/ui/Card.vue';
 import DataTable from '@/Components/ui/DataTable.vue';
-import SearchInput from '@/Components/ui/SearchInput.vue';
 import ConfirmDialog from '@/Components/ui/ConfirmDialog.vue';
 import Badge from '@/Components/ui/Badge.vue';
 import IconButton from '@/Components/ui/IconButton.vue';
+import Alert from '@/Components/ui/Alert.vue';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
@@ -21,7 +20,6 @@ const props = defineProps({
     users: { type: Array, default: () => [] },
 });
 
-const search = ref(props.filters?.search || '');
 const showDelete = ref(false);
 const selectedLog = ref(null);
 let pollHandle = null;
@@ -39,13 +37,24 @@ const sourceOptions = [
     { value: 'api', label: t('attendance.source.api') },
 ];
 
+const processedOptions = [
+    { value: '1', label: t('common.yes') },
+    { value: '0', label: t('common.no') },
+];
+
+const userFilterOptions = computed(() =>
+    props.users.map((u) => ({ value: u.id, label: u.name })),
+);
+
 const columns = computed(() => [
     { key: 'punch_time', label: t('attendance.fields.punch_time'), sortable: true },
-    { key: 'user', label: t('attendance.fields.user') },
+    { key: 'user', label: t('attendance.fields.user'), filterable: true, filterType: 'select', filterOptions: userFilterOptions.value, filterKey: 'user_id' },
     { key: 'device_user_id', label: t('attendance.fields.device_user_id') },
-    { key: 'punch_type', label: t('attendance.fields.punch_type'), cellClass: 'text-center' },
-    { key: 'source', label: t('attendance.fields.source'), cellClass: 'text-center' },
-    { key: 'processed', label: t('attendance.fields.processed'), cellClass: 'text-center' },
+    { key: 'punch_type', label: t('attendance.fields.punch_type'), cellClass: 'text-center', filterable: true, filterType: 'select', filterOptions: punchTypeOptions, filterKey: 'punch_type' },
+    { key: 'source', label: t('attendance.fields.source'), cellClass: 'text-center', filterable: true, filterType: 'select', filterOptions: sourceOptions, filterKey: 'source' },
+    { key: 'processed', label: t('attendance.fields.processed'), cellClass: 'text-center', filterable: true, filterType: 'select', filterOptions: processedOptions, filterKey: 'processed' },
+    { key: 'from', label: t('attendance.fields.from'), filterable: true, filterType: 'date', filterKey: 'from' },
+    { key: 'to', label: t('attendance.fields.to'), filterable: true, filterType: 'date', filterKey: 'to' },
     { key: 'actions', label: t('common.actions'), cellClass: 'text-center w-[160px]' },
 ]);
 
@@ -57,18 +66,36 @@ function onSearch(value) {
     );
 }
 
-function applyFilter(key, value) {
+function onFilterChange(filters) {
     const next = { ...props.filters };
-    if (value === '' || value === null || value === undefined) {
-        delete next[key];
-    } else {
-        next[key] = value;
-    }
+    Object.entries(filters).forEach(([key, value]) => {
+        if (value === '' || value === null || value === undefined) {
+            delete next[key];
+        } else {
+            next[key] = value;
+        }
+    });
     router.get(route('attendance.raw-logs.index'), next, {
         preserveState: true,
         preserveScroll: true,
         replace: true,
     });
+}
+
+function onPageChange(page) {
+    router.get(
+        route('attendance.raw-logs.index'),
+        { ...props.filters, page },
+        { preserveState: true, preserveScroll: true, replace: true },
+    );
+}
+
+function onPerPageChange(perPage) {
+    router.get(
+        route('attendance.raw-logs.index'),
+        { ...props.filters, per_page: perPage },
+        { preserveState: true, preserveScroll: true, replace: true },
+    );
 }
 
 function confirmDelete(log) {
@@ -127,73 +154,18 @@ const flashSuccess = computed(() => page.props.flash?.success);
             </template>
         </PageHeader>
 
-        <div v-if="flashSuccess" class="alert alert-success flex items-center gap-2 mb-4">
-            <i class="fas fa-check-circle"></i>
-            <span>{{ flashSuccess }}</span>
-        </div>
+        <Alert v-if="flashSuccess" type="success" :message="flashSuccess" class="mb-4" />
 
-        <div class="card p-4 mb-4 flex items-center justify-between flex-wrap gap-3">
-            <div class="flex items-center gap-3 flex-wrap">
-                <SearchInput
-                    v-model="search"
-                    :placeholder="t('common.search')"
-                    @search="onSearch"
-                />
-                <select
-                    class="form-input max-w-[200px]"
-                    :value="filters.user_id ?? ''"
-                    @change="applyFilter('user_id', $event.target.value)"
-                >
-                    <option value="">{{ t('attendance.placeholders.select_user') }}</option>
-                    <option v-for="u in users" :key="u.id" :value="u.id">
-                        {{ u.name }}
-                    </option>
-                </select>
-                <select
-                    class="form-input max-w-[170px]"
-                    :value="filters.punch_type ?? ''"
-                    @change="applyFilter('punch_type', $event.target.value)"
-                >
-                    <option value="">{{ t('attendance.placeholders.select_punch_type') }}</option>
-                    <option v-for="opt in punchTypeOptions" :key="opt.value" :value="opt.value">
-                        {{ opt.label }}
-                    </option>
-                </select>
-                <select
-                    class="form-input max-w-[170px]"
-                    :value="filters.source ?? ''"
-                    @change="applyFilter('source', $event.target.value)"
-                >
-                    <option value="">{{ t('attendance.placeholders.select_source') }}</option>
-                    <option v-for="opt in sourceOptions" :key="opt.value" :value="opt.value">
-                        {{ opt.label }}
-                    </option>
-                </select>
-                <select
-                    class="form-input max-w-[150px]"
-                    :value="filters.processed ?? ''"
-                    @change="applyFilter('processed', $event.target.value)"
-                >
-                    <option value="">{{ t('attendance.filters.processed') }}</option>
-                    <option value="1">{{ t('common.yes') }}</option>
-                    <option value="0">{{ t('common.no') }}</option>
-                </select>
-                <input
-                    type="date"
-                    class="form-input max-w-[170px]"
-                    :value="filters.from ?? ''"
-                    @change="applyFilter('from', $event.target.value)"
-                />
-                <input
-                    type="date"
-                    class="form-input max-w-[170px]"
-                    :value="filters.to ?? ''"
-                    @change="applyFilter('to', $event.target.value)"
-                />
-            </div>
-        </div>
-
-        <DataTable :columns="columns" :data="logs" :empty-title="t('attendance.messages.empty_logs')">
+        <DataTable
+            :columns="columns"
+            :data="logs"
+            :empty-title="t('attendance.messages.empty_logs')"
+            storage-key="attendance-raw-logs"
+            @search="onSearch"
+            @filter-change="onFilterChange"
+            @page-change="onPageChange"
+            @per-page-change="onPerPageChange"
+        >
             <template #cell-punch_time="{ row }">
                 <span dir="ltr" class="text-[12px]">{{ row.punch_time }}</span>
             </template>

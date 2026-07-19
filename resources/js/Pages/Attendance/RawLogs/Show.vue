@@ -1,6 +1,5 @@
 <script setup>
 import { computed } from 'vue';
-import { Link } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import PageHeader from '@/Components/ui/PageHeader.vue';
 import Button from '@/Components/ui/Button.vue';
@@ -36,51 +35,54 @@ const fields = computed(() => [
             :description="t('attendance.show_description')"
         >
             <template #actions>
-                <Link :href="route('attendance.raw-logs.index')" class="btn btn-ghost">
-                    <i class="fas fa-arrow-right"></i>
-                    <span>{{ t('attendance.actions.back') }}</span>
-                </Link>
+                <Button variant="secondary" icon="fas fa-arrow-right rtl-flip" :href="route('attendance.raw-logs.index')">
+                    {{ t('attendance.actions.back') }}
+                </Button>
             </template>
         </PageHeader>
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <div class="card p-6 lg:col-span-2">
-                <h3 class="text-[16px] font-semibold mb-3 text-[var(--color-ink)]">
-                    {{ t('attendance.raw_log') }}
-                </h3>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div
-                        v-for="f in fields"
-                        :key="f.label"
-                        class="flex items-start justify-between gap-2 py-2 border-b border-[var(--color-hairline)]"
-                    >
-                        <span class="text-[12px] text-[var(--color-ink-muted)]">{{ f.label }}</span>
-                        <span class="text-[13px] font-semibold text-[var(--color-ink)]" dir="ltr">
-                            {{ f.value }}
-                        </span>
+            <Card variant="base" padding="none" class="lg:col-span-2">
+                <div class="p-5 sm:p-6">
+                    <h3 class="text-[16px] font-semibold mb-3 text-mistral-ink">
+                        {{ t('attendance.raw_log') }}
+                    </h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div
+                            v-for="f in fields"
+                            :key="f.label"
+                            class="flex items-start justify-between gap-2 py-2 border-b border-mistral-hairline-soft"
+                        >
+                            <span class="text-[12px] text-mistral-steel">{{ f.label }}</span>
+                            <span class="text-[13px] font-semibold text-mistral-ink" dir="ltr">
+                                {{ f.value }}
+                            </span>
+                        </div>
                     </div>
                 </div>
-            </div>
+            </Card>
 
-            <div class="card p-6">
-                <h3 class="text-[16px] font-semibold mb-3 text-[var(--color-ink)]">
-                    {{ t('attendance.fields.processed') }}
-                </h3>
-                <div class="flex flex-col gap-3">
-                    <div class="flex items-center justify-between">
-                        <span class="text-[12px] text-[var(--color-ink-muted)]">
-                            {{ t('attendance.fields.processed') }}
-                        </span>
-                        <Badge
-                            :text="log.processed ? t('common.yes') : t('common.no')"
-                            :variant="log.processed ? 'active' : 'pending'"
-                        />
-                    </div>
-                    <div v-if="log.raw_data" class="text-[12px] text-[var(--color-ink-muted)] mt-2">
-                        <pre class="bg-[var(--color-surface-1)] p-2 rounded text-[11px] overflow-x-auto" dir="ltr">{{ JSON.stringify(log.raw_data, null, 2) }}</pre>
+            <Card variant="base" padding="none">
+                <div class="p-5 sm:p-6">
+                    <h3 class="text-[16px] font-semibold mb-3 text-mistral-ink">
+                        {{ t('attendance.fields.processed') }}
+                    </h3>
+                    <div class="flex flex-col gap-3">
+                        <div class="flex items-center justify-between">
+                            <span class="text-[12px] text-mistral-steel">
+                                {{ t('attendance.fields.processed') }}
+                            </span>
+                            <Badge
+                                :text="log.processed ? t('common.yes') : t('common.no')"
+                                :variant="log.processed ? 'active' : 'pending'"
+                            />
+                        </div>
+                        <div v-if="log.raw_data" class="text-[12px] text-mistral-steel mt-2">
+                            <pre class="bg-mistral-surface p-2 rounded-lg text-[11px] overflow-x-auto" dir="ltr">{{ JSON.stringify(log.raw_data, null, 2) }}</pre>
+                        </div>
                     </div>
                 </div>
-            </div>
+            </Card>
         </div>
     </AppLayout>
 </template>

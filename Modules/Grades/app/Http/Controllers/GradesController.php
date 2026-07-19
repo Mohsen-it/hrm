@@ -8,6 +8,8 @@ use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 use Modules\Companies\Services\CompanyService;
+use Modules\Grades\Http\Requests\StoreGradeRequest;
+use Modules\Grades\Http\Requests\UpdateGradeRequest;
 use Modules\Grades\Http\Resources\GradeResource;
 use Modules\Grades\Services\GradeService;
 
@@ -53,11 +55,9 @@ class GradesController extends Controller
     /**
      * Store a newly created grade.
      */
-    public function store(Request $request): RedirectResponse
+    public function store(StoreGradeRequest $request): RedirectResponse
     {
-        $this->authorize('create-grades');
-
-        $this->gradeService->createGrade($request->all());
+        $this->gradeService->createGrade($request->validated());
 
         return redirect()->route('grades.index')
             ->with('success', __('grades.created_successfully'));
@@ -104,17 +104,15 @@ class GradesController extends Controller
     /**
      * Update the specified grade.
      */
-    public function update(Request $request, int $id): RedirectResponse
+    public function update(UpdateGradeRequest $request, int $id): RedirectResponse
     {
-        $this->authorize('edit-grades');
-
         $grade = $this->gradeService->getGradeById($id);
 
         if (! $grade) {
             abort(404);
         }
 
-        $this->gradeService->updateGrade($grade, $request->all());
+        $this->gradeService->updateGrade($grade, $request->validated());
 
         return redirect()->route('grades.index')
             ->with('success', __('grades.updated_successfully'));

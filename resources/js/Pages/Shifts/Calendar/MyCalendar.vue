@@ -2,7 +2,7 @@
 import { ref, computed } from 'vue'
 import { router } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
-import PageHeader from '@/Components/ui/PageHeader.vue'
+import { PageHeader, Card, Button } from '@/Components/ui'
 import CalendarLegend from '@/Pages/Shifts/Partials/CalendarLegend.vue'
 import CyclicDaysDisplay from '@/Pages/Shifts/Partials/CyclicDaysDisplay.vue'
 import { useTranslations } from '@/composables/useTranslations'
@@ -18,12 +18,13 @@ const props = defineProps({
 const currentMonth = ref(props.month)
 const currentYear = ref(props.year)
 
-const monthNames = [
-    'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو',
-    'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر',
-]
+const monthNames = computed(() => [
+    t('shifts.january'), t('shifts.february'), t('shifts.march'), t('shifts.april'),
+    t('shifts.may'), t('shifts.june'), t('shifts.july'), t('shifts.august'),
+    t('shifts.september'), t('shifts.october'), t('shifts.november'), t('shifts.december'),
+])
 
-const monthLabel = computed(() => `${monthNames[currentMonth.value - 1]} ${currentYear.value}`)
+const monthLabel = computed(() => `${monthNames.value[currentMonth.value - 1]} ${currentYear.value}`)
 
 function prevMonth() {
     if (currentMonth.value === 1) {
@@ -55,65 +56,76 @@ function navigate() {
 
 function statusColor(status) {
     const map = {
-        work: 'bg-green-500 text-white',
-        rest: 'bg-gray-200 text-gray-600',
-        absent: 'bg-red-500 text-white',
-        holiday: 'bg-yellow-400 text-white',
-        present: 'bg-green-600 text-white',
-        on_leave: 'bg-blue-400 text-white',
+        work: 'bg-mistral-success text-white',
+        rest: 'bg-mistral-surface text-mistral-steel',
+        absent: 'bg-mistral-danger text-white',
+        holiday: 'bg-mistral-warning text-white',
+        present: 'bg-mistral-success text-white',
+        on_leave: 'bg-mistral-info text-white',
     }
-    return map[status] || 'bg-gray-200 text-gray-600'
+    return map[status] || 'bg-mistral-surface text-mistral-steel'
 }
 
 function dayLabel(status) {
     const map = {
-        work: 'د',
-        rest: 'ر',
-        absent: 'غ',
-        holiday: 'ع',
-        present: 'ح',
-        on_leave: 'إ',
+        work: t('shifts.day_work_short'),
+        rest: t('shifts.day_rest_short'),
+        absent: t('shifts.day_absent_short'),
+        holiday: t('shifts.day_holiday_short'),
+        present: t('shifts.day_present_short'),
+        on_leave: t('shifts.day_on_leave_short'),
     }
     return map[status] || ''
 }
 
-const dayNames = ['السبت', 'الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة']
+const dayNames = computed(() => [
+    t('shifts.saturday'), t('shifts.sunday'), t('shifts.monday'),
+    t('shifts.tuesday'), t('shifts.wednesday'), t('shifts.thursday'), t('shifts.friday'),
+])
 </script>
 
 <template>
-    <AppLayout :title="'جدول دوامي'">
-        <PageHeader :title="'جدول دوامي'" />
+    <AppLayout :title="t('shifts.my_schedule')">
+        <PageHeader :title="t('shifts.my_schedule')" />
 
-        <div class="flex items-center justify-between mb-4">
-            <button @click="prevMonth" class="btn btn-sm btn-outline">&laquo; السابق</Button>
-            <h3 class="text-lg font-bold">{{ monthLabel }}</h3>
-            <button @click="nextMonth" class="btn btn-sm btn-outline">التالي &raquo;</Button>
-        </div>
-
-        <CalendarLegend class="mb-4" />
-
-        <div class="grid grid-cols-7 gap-1 text-center mb-6">
-            <div class="text-xs font-bold text-gray-500 py-2">السبت</div>
-            <div class="text-xs font-bold text-gray-500 py-2">الأحد</div>
-            <div class="text-xs font-bold text-gray-500 py-2">الإثنين</div>
-            <div class="text-xs font-bold text-gray-500 py-2">الثلاثاء</div>
-            <div class="text-xs font-bold text-gray-500 py-2">الأربعاء</div>
-            <div class="text-xs font-bold text-gray-500 py-2">الخميس</div>
-            <div class="text-xs font-bold text-gray-500 py-2">الجمعة</div>
-
-            <template v-for="(cell, i) in calendar" :key="cell.date">
-                <div
-                    v-if="i === 0 && cell.day_of_week !== undefined"
-                    :style="{ gridColumnStart: cell.day_of_week + 2 }"
-                ></div>
-                <div
-                    :class="[statusColor(cell.status), 'rounded-lg p-2 min-h-[55px] flex flex-col items-center justify-center cursor-pointer hover:opacity-80 transition']"
-                    :title="cell.date + ' - ' + cell.day_name"
-                >
-                    <span class="text-xs">{{ new Date(cell.date).getDate() }}</span>
-                    <span class="text-[10px] mt-0.5" v-if="cell.status !== 'rest'">{{ dayLabel(cell.status) }}</span>
+        <Card variant="base" padding="none" class="mb-6">
+            <div class="p-5 sm:p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <Button variant="secondary" size="sm" icon="fas fa-chevron-right" @click="prevMonth">
+                        {{ t('shifts.prev_month') }}
+                    </Button>
+                    <h3 class="text-lg font-bold text-mistral-ink">{{ monthLabel }}</h3>
+                    <Button variant="secondary" size="sm" icon-right="fas fa-chevron-left" @click="nextMonth">
+                        {{ t('shifts.next_month') }}
+                    </Button>
                 </div>
-            </template>
-        </div>
+
+                <CalendarLegend class="mb-4" />
+
+                <div class="grid grid-cols-7 gap-1 text-center">
+                    <div
+                        v-for="name in dayNames"
+                        :key="name"
+                        class="text-xs font-bold text-mistral-slate py-2"
+                    >
+                        {{ name }}
+                    </div>
+
+                    <template v-for="(cell, i) in calendar" :key="cell.date">
+                        <div
+                            v-if="i === 0 && cell.day_of_week !== undefined"
+                            :style="{ gridColumnStart: cell.day_of_week + 2 }"
+                        ></div>
+                        <div
+                            :class="[statusColor(cell.status), 'rounded-lg p-2 min-h-[55px] flex flex-col items-center justify-center cursor-pointer hover:opacity-80 transition']"
+                            :title="cell.date + ' - ' + cell.day_name"
+                        >
+                            <span class="text-xs">{{ new Date(cell.date).getDate() }}</span>
+                            <span class="text-[10px] mt-0.5" v-if="cell.status !== 'rest'">{{ dayLabel(cell.status) }}</span>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </Card>
     </AppLayout>
 </template>

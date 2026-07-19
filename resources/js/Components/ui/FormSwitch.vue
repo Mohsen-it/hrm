@@ -26,7 +26,7 @@ function onChange(e) {
         :class="['inline-flex items-center gap-3 cursor-pointer select-none', disabled ? 'cursor-not-allowed opacity-50' : '']"
         :dir="dir"
     >
-        <span class="relative inline-block w-10 h-6">
+        <span class="relative inline-block w-10 h-[22px]">
             <input
                 :id="inputId"
                 :name="name"
@@ -45,14 +45,14 @@ function onChange(e) {
             ></span>
             <span
                 :class="[
-                    'absolute top-0.5 w-5 h-5 bg-mistral-canvas rounded-full shadow-level-1 transition-transform duration-200',
+                    'absolute top-[3px] w-[16px] h-[16px] bg-white rounded-full shadow-sm transition-transform duration-200',
                     modelValue
                         ? (dir === 'rtl' ? '-translate-x-[18px]' : 'translate-x-[18px]')
-                        : (dir === 'rtl' ? '-translate-x-0.5' : 'translate-x-0.5'),
+                        : (dir === 'rtl' ? '-translate-x-0.5' : 'translate-x-[3px]'),
                 ]"
             ></span>
         </span>
-        <span v-if="label" class="text-[14px] text-mistral-ink">
+        <span v-if="label" class="text-[13px] text-mistral-ink">
             {{ label }}
         </span>
     </label>

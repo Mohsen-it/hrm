@@ -7,6 +7,8 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
+use Modules\Companies\Http\Requests\StoreCompanyRequest;
+use Modules\Companies\Http\Requests\UpdateCompanyRequest;
 use Modules\Companies\Http\Resources\CompanyResource;
 use Modules\Companies\Services\CompanyService;
 
@@ -46,11 +48,9 @@ class CompaniesController extends Controller
     /**
      * Store a newly created company.
      */
-    public function store(Request $request): RedirectResponse
+    public function store(StoreCompanyRequest $request): RedirectResponse
     {
-        $this->authorize('create-companies');
-
-        $this->companyService->createCompany($request->all());
+        $this->companyService->createCompany($request->validated());
 
         return redirect()->route('companies.index')
             ->with('success', __('companies.created_successfully'));
@@ -95,17 +95,15 @@ class CompaniesController extends Controller
     /**
      * Update the specified company.
      */
-    public function update(Request $request, int $id): RedirectResponse
+    public function update(UpdateCompanyRequest $request, int $id): RedirectResponse
     {
-        $this->authorize('edit-companies');
-
         $company = $this->companyService->getCompanyById($id);
 
         if (! $company) {
             abort(404);
         }
 
-        $this->companyService->updateCompany($company, $request->all());
+        $this->companyService->updateCompany($company, $request->validated());
 
         return redirect()->route('companies.index')
             ->with('success', __('companies.updated_successfully'));

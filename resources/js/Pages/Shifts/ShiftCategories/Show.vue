@@ -103,6 +103,12 @@ const employeeColumns = computed(() => [
     { key: 'status', label: t('shifts.status'), cellClass: 'text-center' },
 ]);
 
+const breakColumns = computed(() => [
+    { key: 'break_start', label: t('shifts.break_start') },
+    { key: 'duration', label: t('shifts.duration') },
+    { key: 'break_end', label: t('shifts.break_end') },
+]);
+
 const formatTime = (val) => {
     if (!val) return '—';
     return String(val).slice(0, 5);
@@ -154,7 +160,7 @@ const formatTime = (val) => {
             <div class="flex items-center gap-4 mb-6 pb-6 border-b border-mistral-hairline">
                 <div
                     class="w-16 h-16 rounded-md flex items-center justify-center border border-mistral-hairline"
-                    :style="{ backgroundColor: category?.color || '#fa520f' }"
+                    :style="{ backgroundColor: category?.color || 'var(--color-mistral-primary)' }"
                 >
                     <i class="fas fa-layer-group text-[24px] text-white"></i>
                 </div>
@@ -243,24 +249,26 @@ const formatTime = (val) => {
                     {{ t('shifts.breaks') }}
                 </h3>
             </template>
-            <div class="overflow-x-auto">
-                <table class="w-full text-right text-[13px]">
-                    <thead>
-                        <tr class="border-b border-mistral-hairline">
-                            <th class="px-3 py-2 text-mistral-slate">{{ t('shifts.break_start') }}</th>
-                            <th class="px-3 py-2 text-mistral-slate">{{ t('shifts.duration') }}</th>
-                            <th class="px-3 py-2 text-mistral-slate">{{ t('shifts.break_end') }}</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr v-for="(brk, i) in breaks" :key="i" class="border-b border-mistral-hairline">
-                            <td class="px-3 py-2" dir="ltr">{{ formatTime(brk.break_start) }}</td>
-                            <td class="px-3 py-2">{{ brk.duration }}</td>
-                            <td class="px-3 py-2" dir="ltr">{{ formatTime(brk.break_end) }}</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
+            <DataTable
+                :columns="breakColumns"
+                :data="{ data: breaks }"
+                storage-key="shift-category-details"
+                enable-search="false"
+                enable-filters="false"
+                enable-pagination="false"
+            >
+                <template #cell-break_start="{ row }">
+                    <span dir="ltr">{{ formatTime(row.break_start) }}</span>
+                </template>
+
+                <template #cell-duration="{ row }">
+                    {{ row.duration }}
+                </template>
+
+                <template #cell-break_end="{ row }">
+                    <span dir="ltr">{{ formatTime(row.break_end) }}</span>
+                </template>
+            </DataTable>
         </Card>
 
         <Card variant="base" padding="lg">
@@ -291,6 +299,10 @@ const formatTime = (val) => {
                 v-else
                 :columns="employeeColumns"
                 :data="{ data: employees }"
+                storage-key="shift-category-details"
+                enable-search="false"
+                enable-filters="false"
+                enable-pagination="false"
             >
                 <template #cell-employee_name="{ row }">
                     {{ row.employee?.first_name }} {{ row.employee?.last_name }}

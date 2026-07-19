@@ -2,16 +2,7 @@
 import { ref, computed } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
-import PageHeader from '@/Components/ui/PageHeader.vue';
-import DataTable from '@/Components/ui/DataTable.vue';
-import SearchInput from '@/Components/ui/SearchInput.vue';
-import ConfirmDialog from '@/Components/ui/ConfirmDialog.vue';
-import Badge from '@/Components/ui/Badge.vue';
-import Button from '@/Components/ui/Button.vue';
-import Card from '@/Components/ui/Card.vue';
-import IconButton from '@/Components/ui/IconButton.vue';
-import FormSelect from '@/Components/ui/FormSelect.vue';
-import Alert from '@/Components/ui/Alert.vue';
+import { PageHeader, DataTable, ConfirmDialog, Badge, Button, IconButton, Alert } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t, locale } = useTranslations();
@@ -23,7 +14,6 @@ const props = defineProps({
     companies: { type: Array, default: () => [] },
 });
 
-const search = ref(props.filters?.search || '');
 const showDelete = ref(false);
 const selectedZone = ref(null);
 
@@ -48,10 +38,10 @@ const columns = computed(() => [
     { key: 'code', label: t('zones.code'), sortable: true },
     { key: 'name_ar', label: t('zones.name_ar') },
     { key: 'name_en', label: t('zones.name_en') },
-    { key: 'zone_type', label: t('zones.zone_type') },
+    { key: 'zone_type', label: t('zones.zone_type'), filterable: true, filterType: 'select', filterOptions: zoneTypeOptions },
     { key: 'city', label: t('zones.city') },
     { key: 'branches_count', label: t('zones.branches'), cellClass: 'text-center' },
-    { key: 'is_active', label: t('common.status'), cellClass: 'text-center' },
+    { key: 'is_active', label: t('common.status'), cellClass: 'text-center', filterable: true, filterType: 'select', filterOptions: statusOptions },
     { key: 'actions', label: t('common.actions'), cellClass: 'text-center w-[200px]' },
 ]);
 
@@ -59,14 +49,16 @@ function onSearch(value) {
     router.get(route('zones.index'), { ...props.filters, search: value }, { preserveState: true, preserveScroll: true, replace: true });
 }
 
-function applyFilter(key, value) {
-    const filters = { ...props.filters };
-    if (value === '' || value === null) {
-        delete filters[key];
-    } else {
-        filters[key] = value;
-    }
-    router.get(route('zones.index'), filters, { preserveState: true, preserveScroll: true, replace: true });
+function onFilterChange(filters) {
+    router.get(route('zones.index'), { ...props.filters, ...filters }, { preserveState: true, preserveScroll: true, replace: true });
+}
+
+function onPageChange(page) {
+    router.get(route('zones.index'), { ...props.filters, page }, { preserveState: true, preserveScroll: true, replace: true });
+}
+
+function onPerPageChange(perPage) {
+    router.get(route('zones.index'), { ...props.filters, per_page: perPage }, { preserveState: true, preserveScroll: true, replace: true });
 }
 
 function confirmDelete(zone) {
@@ -102,25 +94,15 @@ function zoneTypeLabel(value) {
 
         <Alert v-if="flashSuccess" type="success" :message="flashSuccess" class="mb-4" />
 
-        <div class="card p-6 mb-4"">
-            <div class="flex items-center gap-3 flex-wrap">
-                <SearchInput v-model="search" :placeholder="t('common.search')" @search="onSearch" />
-                <FormSelect
-                    :model-value="filters.zone_type ?? ''"
-                    :options="zoneTypeOptions"
-                    class="max-w-[200px]"
-                    @update:model-value="(v) => applyFilter('zone_type', v)"
-                />
-                <FormSelect
-                    :model-value="filters.is_active ?? ''"
-                    :options="statusOptions"
-                    class="max-w-[180px]"
-                    @update:model-value="(v) => applyFilter('is_active', v)"
-                />
-            </div>
-        </div>
-
-        <DataTable :columns="columns" :data="zones">
+        <DataTable
+            :columns="columns"
+            :data="zones"
+            storage-key="zones"
+            @search="onSearch"
+            @filter-change="onFilterChange"
+            @page-change="onPageChange"
+            @per-page-change="onPerPageChange"
+        >
             <template #cell-name_ar="{ row }">
                 <a :href="route('zones.show', row.id)" class="font-medium text-mistral-primary hover:underline">
                     {{ row.name_ar }}

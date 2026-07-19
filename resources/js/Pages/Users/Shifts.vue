@@ -2,15 +2,7 @@
 import { reactive, ref, computed } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
-import PageHeader from '@/Components/ui/PageHeader.vue';
-import Button from '@/Components/ui/Button.vue';
-import Card from '@/Components/ui/Card.vue';
-import FormInput from '@/Components/ui/FormInput.vue';
-import FormSelect from '@/Components/ui/FormSelect.vue';
-import FormCheckbox from '@/Components/ui/FormCheckbox.vue';
-import Badge from '@/Components/ui/Badge.vue';
-import EmptyState from '@/Components/ui/EmptyState.vue';
-import IconButton from '@/Components/ui/IconButton.vue';
+import { PageHeader, Button, Card, FormInput, FormSelect, FormCheckbox, Badge, EmptyState, IconButton, Alert, ErrorSummary, FormSection, FormActions } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
@@ -100,21 +92,17 @@ const flashSuccess = computed(() => page.props.flash?.success);
             :description="`${user.name} — ${t('users.shifts_description')}`"
         >
             <template #actions>
-                <Button variant="secondary" :href="route('users.show', user.id)">{{ t('common.back') }}</Button>
+                <Button variant="secondary" icon="fas fa-arrow-right rtl-flip" :href="route('users.show', user.id)">{{ t('common.back') }}</Button>
             </template>
         </PageHeader>
 
-        <div v-if="flashSuccess" class="alert alert-success flex items-center gap-2 mb-4">
-            <i class="fas fa-check-circle"></i>
-            <span>{{ flashSuccess }}</span>
-        </div>
+        <Alert v-if="flashSuccess" type="success" :message="flashSuccess" class="mb-4" />
 
-        <form class="space-y-4" @submit.prevent="submit">
-            <div class="card p-6">
+        <form class="space-y-6" @submit.prevent="submit">
+            <ErrorSummary :errors="errors" />
+
+            <FormSection :title="t('users.shifts')" :description="t('users.shifts_description')">
                 <div class="flex items-center justify-between mb-4">
-                    <h3 class="text-[16px] font-semibold text-[var(--color-ink)]">
-                        {{ t('users.shifts') }}
-                    </h3>
                     <Button
                         variant="primary"
                         icon="fas fa-plus"
@@ -134,7 +122,7 @@ const flashSuccess = computed(() => page.props.flash?.success);
                     <div
                         v-for="(entry, idx) in form.shifts"
                         :key="idx"
-                        class="grid grid-cols-1 md:grid-cols-12 gap-3 items-end p-3 rounded-md border border-[var(--color-hairline)] bg-[var(--color-surface-1)]"
+                        class="grid grid-cols-1 md:grid-cols-12 gap-3 items-end p-3 rounded-lg border border-mistral-hairline-soft bg-mistral-surface/30"
                     >
                         <div class="md:col-span-4">
                             <FormSelect
@@ -179,14 +167,14 @@ const flashSuccess = computed(() => page.props.flash?.success);
                         </div>
                     </div>
                 </div>
-            </div>
+            </FormSection>
 
-            <div class="flex items-center justify-start gap-2">
-                <Button type="submit" variant="primary" :loading="processing" icon="fas fa-save">
-                    {{ t('common.save') }}
-                </Button>
-                <Button variant="secondary" :href="route('users.show', user.id)">{{ t('common.cancel') }}</Button>
-            </div>
+            <FormActions
+                :save-label="t('common.save')"
+                :cancel-label="t('common.cancel')"
+                :cancel-href="route('users.show', user.id)"
+                :saving="processing"
+            />
         </form>
     </AppLayout>
 </template>

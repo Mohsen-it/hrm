@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, watch } from 'vue';
+import { computed, ref } from 'vue';
 
 const props = defineProps({
     modelValue: { type: [String, Number, null], default: '' },
@@ -11,6 +11,7 @@ const props = defineProps({
     disabled: { type: Boolean, default: false },
     name: { type: String, default: '' },
     id: { type: String, default: '' },
+    autofocus: { type: Boolean, default: false },
     min: { type: String, default: null },
     max: { type: String, default: null },
     dir: { type: String, default: 'rtl' },
@@ -19,47 +20,89 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue']);
 
 const inputId = computed(() => props.id || props.name || `date-${Math.random().toString(36).slice(2, 9)}`);
+const isFocused = ref(false);
+const inputRef = ref(null);
+
+const hasValue = computed(() => {
+    const v = props.modelValue;
+    if (v === null || v === undefined || v === '') return false;
+    return true;
+});
+
+const isFloating = computed(() => isFocused.value || hasValue.value);
 
 function onInput(e) {
     emit('update:modelValue', e.target.value);
 }
+
+function onFocus() {
+    isFocused.value = true;
+}
+
+function onBlur() {
+    isFocused.value = false;
+}
+
+function focus() {
+    inputRef.value?.focus();
+}
+
+defineExpose({ focus });
 </script>
 
 <template>
     <div class="w-full text-start" :dir="dir">
-        <label
-            v-if="label"
-            :for="inputId"
-            class="block text-[13px] text-mistral-steel mb-2 font-semibold"
-        >
-            {{ label }}
-            <span v-if="required" class="text-mistral-primary" aria-hidden="true">*</span>
-        </label>
-        <div class="relative">
+        <div class="relative" @click="focus">
             <input
                 :id="inputId"
+                ref="inputRef"
                 :name="name"
                 type="date"
                 :value="modelValue"
-                :placeholder="placeholder"
+                :placeholder="isFloating ? placeholder : ''"
                 :required="required"
                 :disabled="disabled"
                 :min="min"
                 :max="max"
+                :autofocus="autofocus"
                 :aria-invalid="!!error"
+                :aria-describedby="error ? `${inputId}-error` : hint ? `${inputId}-hint` : undefined"
                 :class="[
-                    'h-11 w-full px-3 text-[14px] text-mistral-ink bg-mistral-canvas border rounded-md transition-colors',
-                    'focus:outline-none focus:ring-2 focus:ring-mistral-primary focus:ring-opacity-15 focus:border-mistral-primary',
+                    'peer w-full h-11 pt-3 pb-1 px-3 text-[14px] text-mistral-ink bg-white border rounded-lg transition-all duration-200',
+                    'placeholder:text-transparent',
+                    'focus:outline-none focus:ring-2 focus:ring-mistral-primary/20 focus:border-mistral-primary',
                     'disabled:bg-mistral-surface disabled:text-mistral-muted disabled:cursor-not-allowed',
-                    error ? 'border-mistral-danger focus:border-mistral-danger' : 'border-mistral-hairline-strong',
+                    error
+                        ? 'border-mistral-danger focus:ring-mistral-danger/20 focus:border-mistral-danger'
+                        : 'border-mistral-hairline-strong hover:border-mistral-stone',
                 ]"
                 @input="onInput"
+                @focus="onFocus"
+                @blur="onBlur"
             />
+            <label
+                v-if="label"
+                :for="inputId"
+                :class="[
+                    'absolute text-[13px] font-medium pointer-events-none transition-all duration-200 origin-top-start z-10',
+                    isFloating
+                        ? (dir === 'rtl' ? 'top-1.5 right-3 text-[11px]' : 'top-1.5 left-3 text-[11px]')
+                        : (dir === 'rtl' ? 'top-2.5 right-3 text-[14px]' : 'top-2.5 left-3 text-[14px]'),
+                    isFloating && 'text-mistral-steel',
+                    !isFloating && 'text-mistral-muted',
+                    isFocused && !error && 'text-mistral-primary',
+                    error && 'text-mistral-danger',
+                ]"
+            >
+                {{ label }}
+                <span v-if="required" class="text-mistral-danger ms-0.5" aria-hidden="true">*</span>
+            </label>
         </div>
-        <p v-if="hint && !error" class="text-[12px] text-mistral-stone mt-1">
+        <p v-if="hint && !error" :id="`${inputId}-hint`" class="text-[12px] text-mistral-stone mt-1">
             {{ hint }}
         </p>
-        <p v-if="error" class="text-[12px] text-mistral-danger mt-1" role="alert">
+        <p v-if="error" :id="`${inputId}-error`" class="text-[12px] text-mistral-danger mt-1 flex items-center gap-1" role="alert">
+            <i class="fas fa-exclamation-circle text-[10px]" aria-hidden="true"></i>
             {{ error }}
         </p>
     </div>

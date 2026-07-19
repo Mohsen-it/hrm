@@ -1,13 +1,8 @@
 <script setup>
 import { computed, reactive, ref } from 'vue';
-import { router, Link } from '@inertiajs/vue3';
+import { router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
-import PageHeader from '@/Components/ui/PageHeader.vue';
-import Button from '@/Components/ui/Button.vue';
-import Card from '@/Components/ui/Card.vue';
-import FormInput from '@/Components/ui/FormInput.vue';
-import FormTextarea from '@/Components/ui/FormTextarea.vue';
-import FormSelect from '@/Components/ui/FormSelect.vue';
+import { PageHeader, Button, FormInput, FormTextarea, FormSelect, FormSection, FormActions, ErrorSummary } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
@@ -52,40 +47,45 @@ function submit() {
     <AppLayout :title="t('vacations.edit_request')">
         <PageHeader :title="t('vacations.edit_request')" :description="request.vacation_type?.name_ar">
             <template #actions>
-                <Button variant="secondary" :href="route('vacations.my.show', request.id)">{{ t('common.back') }}</Button>
+                <Button variant="secondary" icon="fas fa-arrow-right rtl-flip" :href="route('vacations.my.show', request.id)">{{ t('common.back') }}</Button>
             </template>
         </PageHeader>
 
-        <form class="card p-6" @submit.prevent="submit">
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormSelect
-                    v-model="form.vacation_type_id"
-                    :label="t('vacations.vacation_type')"
-                    name="vacation_type_id"
-                    :options="typeOptions"
-                    required
-                    :error="errorFor('vacation_type_id')"
-                />
-                <div class="hidden md:block"></div>
-                <FormInput
-                    v-model="form.start_date"
-                    :label="t('vacations.start_date')"
-                    name="start_date"
-                    type="date"
-                    required
-                    :error="errorFor('start_date')"
-                />
-                <FormInput
-                    v-model="form.end_date"
-                    :label="t('vacations.end_date')"
-                    name="end_date"
-                    type="date"
-                    required
-                    :error="errorFor('end_date')"
-                />
-            </div>
+        <form class="space-y-6" @submit.prevent="submit">
+            <ErrorSummary :errors="errors" />
 
-            <div class="mt-4">
+            <FormSection :title="t('vacations.request_info')" icon="fas fa-paper-plane" :collapsible="true" :default-open="true">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FormSelect
+                        v-model="form.vacation_type_id"
+                        :label="t('vacations.vacation_type')"
+                        name="vacation_type_id"
+                        :options="typeOptions"
+                        required
+                        :error="errorFor('vacation_type_id')"
+                        autofocus
+                    />
+                    <div class="hidden md:block"></div>
+                    <FormInput
+                        v-model="form.start_date"
+                        :label="t('vacations.start_date')"
+                        name="start_date"
+                        type="date"
+                        required
+                        :error="errorFor('start_date')"
+                    />
+                    <FormInput
+                        v-model="form.end_date"
+                        :label="t('vacations.end_date')"
+                        name="end_date"
+                        type="date"
+                        required
+                        :error="errorFor('end_date')"
+                    />
+                </div>
+            </FormSection>
+
+            <FormSection :title="t('vacations.additional')" icon="fas fa-align-left" :collapsible="true" :default-open="true">
                 <FormTextarea
                     v-model="form.reason"
                     :label="t('vacations.reason')"
@@ -93,14 +93,9 @@ function submit() {
                     :rows="4"
                     :error="errorFor('reason')"
                 />
-            </div>
+            </FormSection>
 
-            <div class="mt-6 flex items-center justify-start gap-2">
-                <Button type="submit" variant="primary" :loading="processing" icon="fas fa-save">
-                    {{ t('common.update') }}
-                </Button>
-                <Button variant="secondary" :href="route('vacations.my.show', request.id)">{{ t('common.cancel') }}</Button>
-            </div>
+            <FormActions :save-label="t('common.update')" :cancel-label="t('common.cancel')" :cancel-href="route('vacations.my.show', request.id)" :saving="processing" />
         </form>
     </AppLayout>
 </template>

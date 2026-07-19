@@ -5,7 +5,7 @@ namespace Modules\Shifts\Services;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
-use Modules\Shifts\Repositories\EmployeeShiftCategoryRepository;
+use Modules\Shifts\Repositories\RotationAssignmentRepository;
 
 /**
  * ShiftReportsService — Step 5 regression-safe reporting.
@@ -21,7 +21,7 @@ class ShiftReportsService
 {
     public function __construct(
         private ScheduleResolverService $resolver,
-        private EmployeeShiftCategoryRepository $assignmentRepository,
+        private RotationAssignmentRepository $rotationAssignmentRepository,
     ) {}
 
     /**
@@ -37,7 +37,7 @@ class ShiftReportsService
         $target = Carbon::parse($date)->startOfDay();
         $dateStr = $target->toDateString();
 
-        $assignments = $this->assignmentRepository->getAssignmentsForDate($dateStr);
+        $assignments = $this->rotationAssignmentRepository->getAssignmentsForDate($dateStr);
         if ($departmentId !== null) {
             $assignments = $assignments->filter(fn ($a) => optional($a->employee)->department_id === $departmentId);
         }
@@ -47,7 +47,6 @@ class ShiftReportsService
             return [];
         }
 
-        // One grouped query for punch times (no per-employee round trips).
         $punches = DB::table('iclock_transaction')
             ->whereIn('emp_id', $employeeIds)
             ->whereDate('punch_time', $dateStr)
@@ -68,11 +67,13 @@ class ShiftReportsService
                 default => 'rest',
             };
 
+            $assignment = $assignments->firstWhere('employee_id', $employeeId);
+
             $rows[] = [
                 'employee_id' => $employeeId,
-                'employee_name' => optional($assignments->firstWhere('employee_id', $employeeId)?->employee)->name,
-                'group_id' => $resolved['shift_category_id'],
-                'group_name' => optional($assignments->firstWhere('employee_id', $employeeId)?->shiftCategory)->name,
+                'employee_name' => optional($assignment?->employee)->name,
+                'group_id' => $resolved['rotation_group_id'],
+                'group_name' => optional($assignment?->rotationGroup)->name,
                 'is_work_day' => $resolved['is_work_day'],
                 'status' => $status,
                 'expected_check_in' => $resolved['expected_check_in'],
@@ -82,7 +83,6 @@ class ShiftReportsService
             ];
         }
 
-        // Sort: work-day employees first, then by name.
         usort($rows, fn ($a, $b) => ($b['is_work_day'] <=> $a['is_work_day']) ?: strcmp((string) $a['employee_name'], (string) $b['employee_name']));
 
         return $rows;
@@ -90,9 +90,6 @@ class ShiftReportsService
 
     /**
      * Monthly Attendance Summary (high-performance SET aggregation).
-     *
-     * Counts exact days worked, late minutes, unexcused absences and approved
-     * leave days. Leave/excused days are explicitly EXCLUDED from absences.
      *
      * @param  array<int, int>|null  $employeeIds
      * @return Collection<int, object>

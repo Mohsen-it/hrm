@@ -4,7 +4,7 @@ use Illuminate\Support\Facades\Route;
 use Modules\Zones\Http\Controllers\ZoneBranchesController;
 use Modules\Zones\Http\Controllers\ZonesController;
 
-Route::middleware(['auth'])->group(function () {
+Route::middleware(['auth', 'permission:view-zones'])->group(function () {
     Route::get('zones/dashboard', [ZonesController::class, 'dashboard'])
         ->name('zones.dashboard');
 

@@ -1,11 +1,8 @@
 <script setup>
 import { reactive, ref, computed } from 'vue';
-import { router, Link, usePage } from '@inertiajs/vue3';
+import { router, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
-import PageHeader from '@/Components/ui/PageHeader.vue';
-import Button from '@/Components/ui/Button.vue';
-import Card from '@/Components/ui/Card.vue';
-import FormInput from '@/Components/ui/FormInput.vue';
+import { PageHeader, Button, Card, FormInput, FormSelect, FormTextarea, Alert, EmptyState, ErrorSummary, FormSection, FormActions } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
@@ -33,6 +30,11 @@ function displayName(s) {
     return s.name_ar || s.name_en || s.key;
 }
 
+const booleanOptions = [
+    { value: 1, label: t('settings.true_value') },
+    { value: 0, label: t('settings.false_value') },
+];
+
 function saveAll() {
     processing.value = true;
     const settings = props.settings.map((s) => ({
@@ -55,41 +57,67 @@ function saveAll() {
             </template>
         </PageHeader>
 
-        <div v-if="flashSuccess" class="alert alert-success flex items-center gap-2 mb-4">
-            <i class="fas fa-check-circle"></i>
-            <span>{{ flashSuccess }}</span>
-        </div>
+        <Alert v-if="flashSuccess" type="success" :message="flashSuccess" class="mb-4" />
 
-        <div class="card p-6">
-            <div v-if="settings.length === 0" class="text-center py-12 text-[13px] text-[var(--color-ink-muted)]">
-                {{ t('settings.no_settings') }}
-            </div>
-            <form v-else @submit.prevent="saveAll" class="space-y-4">
-                <div v-for="s in settings" :key="s.id" class="grid grid-cols-1 md:grid-cols-3 gap-3 items-start">
-                    <div class="md:col-span-1">
-                        <label class="block text-[12px] font-medium text-[var(--color-ink-muted)] mb-1">{{ displayName(s) }}</label>
-                        <p class="text-[11px] text-[var(--color-ink-subtle)] font-mono">{{ s.key }} · {{ s.type }}</p>
-                        <p v-if="s.description" class="text-[11px] mt-1">{{ s.description }}</p>
-                    </div>
-                    <div class="md:col-span-2">
-                        <input v-if="s.type === 'string' || s.type === null" v-model="draft[s.id]" type="text" class="form-input" />
-                        <input v-else-if="s.type === 'int' || s.type === 'integer'" v-model="draft[s.id]" type="number" class="form-input" />
-                        <input v-else-if="s.type === 'float'" v-model="draft[s.id]" type="number" step="any" class="form-input" />
-                        <select v-else-if="s.type === 'bool' || s.type === 'boolean'" v-model="draft[s.id]" class="form-input">
-                            <option :value="1">{{ t('settings.true_value') }}</option>
-                            <option :value="0">{{ t('settings.false_value') }}</option>
-                        </select>
-                        <textarea v-else-if="s.type === 'json' || s.type === 'array'" v-model="draft[s.id]" class="form-input font-mono text-[12px]" rows="4"></textarea>
-                        <input v-else v-model="draft[s.id]" type="text" class="form-input" />
+        <EmptyState
+            v-if="settings.length === 0"
+            icon="fas fa-cog"
+            :title="t('settings.no_settings')"
+        />
+
+        <form v-else class="space-y-6" @submit.prevent="saveAll">
+            <ErrorSummary :errors="{}" />
+
+            <FormSection :title="t('settings.general_settings')" :description="t('settings.index_description')">
+                <div class="space-y-4">
+                    <div v-for="s in settings" :key="s.id" class="grid grid-cols-1 md:grid-cols-3 gap-3 items-start">
+                        <div class="md:col-span-1">
+                            <label class="block text-[12px] font-medium text-mistral-steel mb-1">{{ displayName(s) }}</label>
+                            <p class="text-[11px] text-mistral-stone font-mono">{{ s.key }} · {{ s.type }}</p>
+                            <p v-if="s.description" class="text-[11px] mt-1 text-mistral-stone">{{ s.description }}</p>
+                        </div>
+                        <div class="md:col-span-2">
+                            <FormInput
+                                v-if="s.type === 'string' || s.type === null"
+                                v-model="draft[s.id]"
+                                type="text"
+                            />
+                            <FormInput
+                                v-else-if="s.type === 'int' || s.type === 'integer'"
+                                v-model="draft[s.id]"
+                                type="number"
+                            />
+                            <FormInput
+                                v-else-if="s.type === 'float'"
+                                v-model="draft[s.id]"
+                                type="number"
+                            />
+                            <FormSelect
+                                v-else-if="s.type === 'bool' || s.type === 'boolean'"
+                                v-model="draft[s.id]"
+                                :options="booleanOptions"
+                            />
+                            <FormTextarea
+                                v-else-if="s.type === 'json' || s.type === 'array'"
+                                v-model="draft[s.id]"
+                                :rows="4"
+                            />
+                            <FormInput
+                                v-else
+                                v-model="draft[s.id]"
+                                type="text"
+                            />
+                        </div>
                     </div>
                 </div>
+            </FormSection>
 
-                <div class="flex items-center justify-end gap-2 pt-2">
-                    <Button type="submit" variant="primary" :loading="processing" icon="fas fa-save">
-                        {{ t('settings.save_all') }}
-                    </Button>
-                </div>
-            </form>
-        </div>
+            <FormActions
+                :save-label="t('settings.save_all')"
+                :cancel-label="t('common.back')"
+                :cancel-href="route('settings.index')"
+                :saving="processing"
+            />
+        </form>
     </AppLayout>
 </template>

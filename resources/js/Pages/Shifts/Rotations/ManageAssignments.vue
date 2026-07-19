@@ -2,13 +2,7 @@
 import { ref, reactive, computed, watch } from 'vue';
 import { router, Head } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
-import PageHeader from '@/Components/ui/PageHeader.vue';
-import Button from '@/Components/ui/Button.vue';
-import Card from '@/Components/ui/Card.vue';
-import FormInput from '@/Components/ui/FormInput.vue';
-import FormSelect from '@/Components/ui/FormSelect.vue';
-import Badge from '@/Components/ui/Badge.vue';
-import EmptyState from '@/Components/ui/EmptyState.vue';
+import { PageHeader, Button, Card, FormInput, FormSelect, Badge, DataTable, EmptyState } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
@@ -97,6 +91,29 @@ const toggleSelect = (empId) => {
 };
 
 const isSelected = (empId) => selectedEmployees.value.includes(empId);
+
+const employeeColumns = computed(() => [
+    { key: 'employee_code', label: t('shifts.employee_code') },
+    { key: 'name', label: t('shifts.employee_name') },
+    { key: 'rotation_group_name', label: t('shifts.rotation_group'), headerClass: 'text-center' },
+    { key: 'start_date', label: t('shifts.start_date'), headerClass: 'text-center' },
+    { key: 'status', label: t('common.status'), headerClass: 'text-center' },
+]);
+
+const employeesData = computed(() => ({
+    data: filteredEmployees.value.map(e => ({ ...e, id: e.id })),
+    links: [],
+    total: filteredEmployees.value.length,
+    current_page: 1,
+    last_page: 1,
+    per_page: 1000,
+    from: 1,
+    to: filteredEmployees.value.length,
+}));
+
+function onSelectionChange(ids) {
+    selectedEmployees.value = ids;
+}
 
 const groupColorClass = (groupName) => {
     const colors = {
@@ -378,81 +395,55 @@ if (props.preselected_rotation_id) {
                 :description="t('shifts.no_employees_description')"
             />
 
-            <div v-else class="overflow-x-auto">
-                <table class="w-full text-[13px]">
-                    <thead>
-                        <tr class="border-b border-mistral-hairline bg-mistral-surface">
-                            <th class="px-4 py-3 text-center w-10">
-                                <input
-                                    type="checkbox"
-                                    :checked="allSelected"
-                                    @change="selectAll"
-                                    class="w-4 h-4 rounded border-mistral-hairline text-mistral-primary focus:ring-mistral-primary"
-                                />
-                            </th>
-                            <th class="px-4 py-3 text-right text-mistral-slate">{{ t('shifts.employee_code') }}</th>
-                            <th class="px-4 py-3 text-right text-mistral-slate">{{ t('shifts.employee_name') }}</th>
-                            <th class="px-4 py-3 text-center text-mistral-slate">{{ t('shifts.rotation_group') }}</th>
-                            <th class="px-4 py-3 text-center text-mistral-slate">{{ t('shifts.start_date') }}</th>
-                            <th class="px-4 py-3 text-center text-mistral-slate">{{ t('common.status') }}</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr
-                            v-for="emp in filteredEmployees"
-                            :key="emp.id"
-                            class="border-b border-mistral-hairline last:border-0 hover:bg-mistral-surface/50 cursor-pointer"
-                            :class="{ 'bg-mistral-primary/5': isSelected(emp.id) }"
-                            @click="toggleSelect(emp.id)"
-                        >
-                            <td class="px-4 py-3 text-center">
-                                <input
-                                    type="checkbox"
-                                    :checked="isSelected(emp.id)"
-                                    @click.stop
-                                    @change="toggleSelect(emp.id)"
-                                    class="w-4 h-4 rounded border-mistral-hairline text-mistral-primary focus:ring-mistral-primary"
-                                />
-                            </td>
-                            <td class="px-4 py-3 font-mono text-mistral-muted">{{ emp.employee_code }}</td>
-                            <td class="px-4 py-3 font-medium text-mistral-ink">{{ emp.name }}</td>
-                            <td class="px-4 py-3 text-center">
-                                <span
-                                    v-if="emp.rotation_group_name"
-                                    class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[12px] font-medium border"
-                                    :class="groupColorClass(emp.rotation_group_name)"
-                                >
-                                    <span class="w-2 h-2 rounded-full" :class="{
-                                        'bg-green-500': emp.rotation_group_name === 'A',
-                                        'bg-blue-500': emp.rotation_group_name === 'B',
-                                        'bg-amber-500': emp.rotation_group_name === 'C',
-                                        'bg-red-500': emp.rotation_group_name === 'D',
-                                        'bg-purple-500': emp.rotation_group_name === 'E',
-                                        'bg-cyan-500': emp.rotation_group_name === 'F',
-                                    }"></span>
-                                    {{ emp.rotation_group_name }}
-                                </span>
-                                <span v-else class="text-mistral-muted text-[12px]">—</span>
-                            </td>
-                            <td class="px-4 py-3 text-center text-mistral-muted">
-                                {{ emp.start_date || '—' }}
-                            </td>
-                            <td class="px-4 py-3 text-center">
-                                <Badge
-                                    v-if="emp.rotation_group_id"
-                                    :text="t('shifts.assigned')"
-                                    variant="active"
-                                />
-                                <Badge
-                                    v-else
-                                    :text="t('shifts.unassigned')"
-                                    variant="inactive"
-                                />
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
+            <DataTable
+                v-else
+                :key="selectedRotationId"
+                :columns="employeeColumns"
+                :data="employeesData"
+                :selectable="true"
+                :enable-search="false"
+                :enable-filters="false"
+                :enable-pagination="false"
+                :enable-export="false"
+                :enable-density="false"
+                :enable-column-visibility="false"
+                storage-key="rotation-manage-assignments"
+                @selection-change="onSelectionChange"
+            >
+                <template #cell-rotation_group_name="{ row }">
+                    <span
+                        v-if="row.rotation_group_name"
+                        class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[12px] font-medium border"
+                        :class="groupColorClass(row.rotation_group_name)"
+                    >
+                        <span class="w-2 h-2 rounded-full" :class="{
+                            'bg-green-500': row.rotation_group_name === 'A',
+                            'bg-blue-500': row.rotation_group_name === 'B',
+                            'bg-amber-500': row.rotation_group_name === 'C',
+                            'bg-red-500': row.rotation_group_name === 'D',
+                            'bg-purple-500': row.rotation_group_name === 'E',
+                            'bg-cyan-500': row.rotation_group_name === 'F',
+                        }"></span>
+                        {{ row.rotation_group_name }}
+                    </span>
+                    <span v-else class="text-mistral-muted text-[12px]">—</span>
+                </template>
+                <template #cell-start_date="{ row }">
+                    {{ row.start_date || '—' }}
+                </template>
+                <template #cell-status="{ row }">
+                    <Badge
+                        v-if="row.rotation_group_id"
+                        :text="t('shifts.assigned')"
+                        variant="active"
+                    />
+                    <Badge
+                        v-else
+                        :text="t('shifts.unassigned')"
+                        variant="inactive"
+                    />
+                </template>
+            </DataTable>
         </Card>
 
         <Card v-else variant="base" padding="8">

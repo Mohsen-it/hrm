@@ -2,10 +2,7 @@
 import { ref, computed } from 'vue';
 import { Head, Link } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
-import PageHeader from '@/Components/ui/PageHeader.vue';
-import Button from '@/Components/ui/Button.vue';
-import Card from '@/Components/ui/Card.vue';
-import Badge from '@/Components/ui/Badge.vue';
+import { PageHeader, Button, Card, Badge } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
@@ -120,7 +117,7 @@ const formatDate = (dateStr) => {
             <div class="flex items-center gap-4 mb-6 pb-6 border-b border-mistral-hairline">
                 <div
                     class="w-16 h-16 rounded-md flex items-center justify-center border border-mistral-hairline"
-                    :style="{ backgroundColor: category.color || '#fa520f' }"
+                    :style="{ backgroundColor: category.color || 'var(--color-mistral-primary)' }"
                 >
                     <i class="fas fa-layer-group text-[24px] text-white"></i>
                 </div>
@@ -193,10 +190,10 @@ const formatDate = (dateStr) => {
                         <p class="text-[12px] font-semibold text-mistral-slate uppercase tracking-wider">
                             {{ t('shifts.work_days_count') }}
                         </p>
-                        <p class="text-[28px] font-bold text-green-600 mt-1">{{ stats.workDays }}</p>
+                        <p class="text-[28px] font-bold text-mistral-success mt-1">{{ stats.workDays }}</p>
                     </div>
-                    <div class="w-12 h-12 rounded-lg bg-green-100 flex items-center justify-center">
-                        <i class="fas fa-check-circle text-green-600 text-xl"></i>
+                    <div class="w-12 h-12 rounded-lg bg-mistral-success/10 flex items-center justify-center">
+                        <i class="fas fa-check-circle text-mistral-success text-xl"></i>
                     </div>
                 </div>
             </Card>
@@ -207,10 +204,10 @@ const formatDate = (dateStr) => {
                         <p class="text-[12px] font-semibold text-mistral-slate uppercase tracking-wider">
                             {{ t('shifts.rest_days_count') }}
                         </p>
-                        <p class="text-[28px] font-bold text-gray-500 mt-1">{{ stats.restDays }}</p>
+                        <p class="text-[28px] font-bold text-mistral-steel mt-1">{{ stats.restDays }}</p>
                     </div>
-                    <div class="w-12 h-12 rounded-lg bg-gray-100 flex items-center justify-center">
-                        <i class="fas fa-moon text-gray-500 text-xl"></i>
+                    <div class="w-12 h-12 rounded-lg bg-mistral-surface flex items-center justify-center">
+                        <i class="fas fa-moon text-mistral-steel text-xl"></i>
                     </div>
                 </div>
             </Card>
@@ -230,22 +227,22 @@ const formatDate = (dateStr) => {
             </template>
 
             <div class="overflow-x-auto">
-                <table class="w-full text-center text-[13px]">
+                <table class="w-full text-center text-[13px] border-collapse">
                     <thead>
-                        <tr class="border-b border-mistral-hairline">
-                            <th v-for="(name, i) in shortDayNames" :key="i" class="px-3 py-2 text-mistral-slate">
+                        <tr class="border-b border-mistral-hairline-soft bg-mistral-surface/60">
+                            <th v-for="(name, i) in shortDayNames" :key="i" class="px-3 py-2.5 text-mistral-slate font-semibold text-[11px] uppercase tracking-wider">
                                 {{ name }}
                             </th>
                         </tr>
                     </thead>
                     <tbody>
-                        <tr v-for="(week, weekIndex) in chunkedDays" :key="weekIndex" class="border-b border-mistral-hairline last:border-0">
+                        <tr v-for="(week, weekIndex) in chunkedDays" :key="weekIndex" class="border-b border-mistral-hairline-soft/60 last:border-0 hover:bg-mistral-cream-light/40 transition-colors">
                             <td v-for="(day, dayIndex) in week" :key="dayIndex" class="px-2 py-1.5 relative">
                                 <div
                                     v-if="!day.isEmpty"
                                     :class="[
                                         'w-9 h-9 rounded-md flex items-center justify-center mx-auto transition-colors',
-                                        day.isWorkDay ? 'bg-green-100 text-green-700 font-medium' : 'bg-gray-100 text-gray-500',
+                                        day.isWorkDay ? 'bg-mistral-success/10 text-mistral-success font-medium' : 'bg-mistral-surface text-mistral-steel',
                                         day.isToday ? 'ring-2 ring-mistral-primary' : ''
                                     ]"
                                     :title="formatDate(day.date)"
@@ -261,11 +258,11 @@ const formatDate = (dateStr) => {
 
             <div class="mt-6 flex items-center justify-center gap-6 text-sm">
                 <div class="flex items-center gap-2">
-                    <span class="w-4 h-4 rounded bg-green-100"></span>
+                    <span class="w-4 h-4 rounded bg-mistral-success/10"></span>
                     <span class="text-mistral-ink">{{ t('shifts.work_day') }}</span>
                 </div>
                 <div class="flex items-center gap-2">
-                    <span class="w-4 h-4 rounded bg-gray-100"></span>
+                    <span class="w-4 h-4 rounded bg-mistral-surface"></span>
                     <span class="text-mistral-ink">{{ t('shifts.rest_day') }}</span>
                 </div>
                 <div class="flex items-center gap-2">

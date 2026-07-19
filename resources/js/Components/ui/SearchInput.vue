@@ -24,12 +24,17 @@ watch(localValue, (val) => {
         emit('search', val);
     }, props.debounce);
 });
+
+function clear() {
+    localValue.value = '';
+}
 </script>
 
 <template>
-    <div class="relative w-full sm:w-72" :dir="dir">
+    <div class="relative w-full sm:w-64" :dir="dir">
         <i
-            :class="[dir === 'rtl' ? 'fa-magnifying-glass' : 'fa-magnifying-glass', 'fas absolute top-1/2 -translate-y-1/2 text-mistral-muted text-[14px]', dir === 'rtl' ? 'right-3' : 'left-3']"
+            class="fas fa-magnifying-glass absolute top-1/2 -translate-y-1/2 text-mistral-muted text-[13px]"
+            :class="dir === 'rtl' ? 'right-3' : 'left-3'"
             aria-hidden="true"
         ></i>
         <input
@@ -37,10 +42,21 @@ watch(localValue, (val) => {
             type="search"
             :placeholder="placeholder"
             :class="[
-                'h-10 w-full text-[14px] text-mistral-ink bg-mistral-canvas border border-mistral-hairline-strong rounded-md transition-colors',
-                'focus:outline-none focus:ring-2 focus:ring-mistral-primary focus:ring-opacity-15 focus:border-mistral-primary',
-                dir === 'rtl' ? 'pr-9 pl-3' : 'pl-9 pr-3',
+                'h-9 w-full text-[13px] text-mistral-ink bg-white border border-mistral-hairline-strong rounded-lg transition-all duration-150',
+                'placeholder:text-mistral-muted',
+                'focus:outline-none focus:ring-2 focus:ring-mistral-primary/20 focus:border-mistral-primary',
+                dir === 'rtl' ? 'pr-9 pl-8' : 'pl-9 pr-8',
             ]"
         />
+        <button
+            v-if="localValue"
+            type="button"
+            class="absolute top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full text-mistral-muted hover:text-mistral-ink hover:bg-mistral-surface transition-colors"
+            :class="dir === 'rtl' ? 'left-2' : 'right-2'"
+            aria-label="مسح"
+            @click="clear"
+        >
+            <i class="fas fa-xmark text-[10px]" aria-hidden="true"></i>
+        </button>
     </div>
 </template>

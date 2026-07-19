@@ -1,130 +1,144 @@
-<template>
-  <AppLayout>
-    <PageHeader :title="t('attendance.attendance_groups')">
-      <Button variant="primary" :href="route('attendance.groups.create')">
-        {{ t('actions.create') }} {{ t('attendance.attendance_group') }}
-      </Button>
-    </PageHeader>
-
-    <Card>
-      <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <SearchInput
-          v-model="filters.search"
-          :placeholder="t('attendance.filters.search')"
-          @search="applyFilters"
-        />
-      </div>
-
-      <DataTable
-        :columns="columns"
-        :data="groups.data"
-        :empty-message="t('attendance.messages.empty_groups', 'لا توجد فئات حضور.')"
-      >
-        <template #cell-code="{ item }">
-          <span class="font-medium">{{ item.code }}</span>
-        </template>
-
-        <template #cell-name="{ item }">
-          {{ item.name }}
-        </template>
-
-        <template #cell-employees_count="{ item }">
-          <Badge variant="info">{{ item.employees?.length ?? 0 }}</Badge>
-        </template>
-
-        <template #cell-status="{ item }">
-          <Badge :variant="item.status === 1 ? 'success' : 'danger'">
-            {{ item.status === 1 ? t('general.active') : t('general.inactive') }}
-          </Badge>
-        </template>
-
-        <template #cell-actions="{ item }">
-          <div class="flex gap-2">
-            <IconButton
-              :href="route('attendance.groups.show', item.id)"
-              icon="eye"
-              :title="t('actions.view')"
-            />
-            <IconButton
-              :href="route('attendance.groups.edit', item.id)"
-              icon="pencil"
-              :title="t('actions.edit')"
-            />
-            <IconButton
-              icon="trash"
-              :title="t('actions.delete')"
-              variant="danger"
-              @click="confirmDelete(item)"
-            />
-          </div>
-        </template>
-      </DataTable>
-
-      <Pagination :data="groups" @page-change="handlePageChange" />
-    </Card>
-
-    <ConfirmDialog
-      v-model="showDeleteDialog"
-      :title="t('attendance.messages.delete_confirm_title')"
-      :message="t('attendance.messages.delete_confirm_message', { name: deletingGroup?.name })"
-      @confirm="deleteGroup"
-    />
-  </AppLayout>
-</template>
-
 <script setup>
-import { ref, reactive } from 'vue'
-import { router } from '@inertiajs/vue3'
-import AppLayout from '@/layouts/AppLayout.vue'
-import PageHeader from '@/Components/ui/PageHeader.vue'
-import Button from '@/Components/ui/Button.vue'
-import Card from '@/Components/ui/Card.vue'
-import DataTable from '@/Components/ui/DataTable.vue'
-import SearchInput from '@/Components/ui/SearchInput.vue'
-import Badge from '@/Components/ui/Badge.vue'
-import IconButton from '@/Components/ui/IconButton.vue'
-import Pagination from '@/Components/ui/Pagination.vue'
-import ConfirmDialog from '@/Components/ui/ConfirmDialog.vue'
-import { useTranslations } from '@/composables/useTranslations'
+import { ref } from 'vue';
+import { router } from '@inertiajs/vue3';
+import AppLayout from '@/Layouts/AppLayout.vue';
+import { PageHeader, Button, Card, DataTable, Badge, IconButton, ConfirmDialog } from '@/Components/ui';
+import { useTranslations } from '@/composables/useTranslations';
 
-const { t } = useTranslations()
+const { t } = useTranslations();
 
 const props = defineProps({
-  groups: Object,
-  filters: Object,
-})
+    groups: { type: Object, default: () => ({ data: [], links: [] }) },
+    filters: { type: Object, default: () => ({}) },
+});
 
-const filters = reactive({ search: props.filters?.search || '' })
-const showDeleteDialog = ref(false)
-const deletingGroup = ref(null)
+const showDeleteDialog = ref(false);
+const deletingGroup = ref(null);
 
 const columns = [
-  { key: 'code', label: t('attendance.fields.code') },
-  { key: 'name', label: t('attendance.fields.name') },
-  { key: 'employees_count', label: t('attendance.fields.employees_count') },
-  { key: 'status', label: t('attendance.fields.status') },
-  { key: 'actions', label: t('general.actions') },
-]
+    { key: 'code', label: t('attendance.fields.code'), sortable: true, filterable: true },
+    { key: 'name', label: t('attendance.fields.name'), sortable: true, filterable: true },
+    { key: 'employees_count', label: t('attendance.fields.employees_count'), cellClass: 'text-center' },
+    { key: 'status', label: t('attendance.fields.status'), cellClass: 'text-center' },
+    { key: 'actions', label: t('common.actions'), cellClass: 'text-center w-[150px]' },
+];
 
-const applyFilters = () => {
-  router.get(route('attendance.groups.index'), { search: filters.search }, { preserveState: true })
+function onSearch(value) {
+    router.get(
+        route('attendance.groups.index'),
+        { search: value },
+        { preserveState: true, preserveScroll: true, replace: true },
+    );
 }
 
-const handlePageChange = (page) => {
-  router.get(route('attendance.groups.index', { page, search: filters.search }))
+function handlePageChange(page) {
+    router.get(
+        route('attendance.groups.index'),
+        { page, search: props.filters?.search },
+        { preserveState: true, preserveScroll: true, replace: true },
+    );
+}
+
+function handlePerPageChange(perPage) {
+    router.get(
+        route('attendance.groups.index'),
+        { per_page: perPage, search: props.filters?.search },
+        { preserveState: true, preserveScroll: true, replace: true },
+    );
 }
 
 const confirmDelete = (group) => {
-  deletingGroup.value = group
-  showDeleteDialog.value = true
-}
+    deletingGroup.value = group;
+    showDeleteDialog.value = true;
+};
 
 const deleteGroup = () => {
-  router.delete(route('attendance.groups.destroy', deletingGroup.value.id), {
-    onSuccess: () => {
-      showDeleteDialog.value = false
-      deletingGroup.value = null
-    },
-  })
-}
+    router.delete(route('attendance.groups.destroy', deletingGroup.value.id), {
+        onSuccess: () => {
+            showDeleteDialog.value = false;
+            deletingGroup.value = null;
+        },
+    });
+};
 </script>
+
+<template>
+    <AppLayout :title="t('attendance.attendance_groups')">
+        <PageHeader
+            :title="t('attendance.attendance_groups')"
+            :description="t('attendance.attendance_groups_description', 'فئات الحضور والانصراف')"
+        >
+            <template #actions>
+                <Button variant="primary" :href="route('attendance.groups.create')" icon="fas fa-plus">
+                    {{ t('attendance.create_attendance_group', 'إنشاء فئة حضور') }}
+                </Button>
+            </template>
+        </PageHeader>
+
+        <Card variant="base" padding="none">
+            <DataTable
+                :columns="columns"
+                :data="groups"
+                storage-key="attendance-groups"
+                @search="onSearch"
+                @page-change="handlePageChange"
+                @per-page-change="handlePerPageChange"
+            >
+                <template #cell-code="{ row }">
+                    <span class="text-[13px] font-medium">{{ row.code }}</span>
+                </template>
+
+                <template #cell-name="{ row }">
+                    <span class="text-[13px]">{{ row.name }}</span>
+                </template>
+
+                <template #cell-employees_count="{ row }">
+                    <Badge :text="String(row.employees?.length ?? 0)" variant="info" />
+                </template>
+
+                <template #cell-status="{ row }">
+                    <Badge
+                        :text="row.status === 1 ? t('common.active') : t('common.inactive')"
+                        :variant="row.status === 1 ? 'active' : 'inactive'"
+                    />
+                </template>
+
+                <template #cell-actions="{ row }">
+                    <div class="flex items-center justify-center gap-1">
+                        <IconButton
+                            icon="fas fa-eye"
+                            variant="ghost"
+                            size="sm"
+                            :aria-label="t('common.view')"
+                            :href="route('attendance.groups.show', row.id)"
+                        />
+                        <IconButton
+                            icon="fas fa-edit"
+                            variant="ghost"
+                            size="sm"
+                            :aria-label="t('common.edit')"
+                            :href="route('attendance.groups.edit', row.id)"
+                        />
+                        <IconButton
+                            icon="fas fa-trash"
+                            variant="danger"
+                            size="sm"
+                            :aria-label="t('common.delete')"
+                            @click="confirmDelete(row)"
+                        />
+                    </div>
+                </template>
+            </DataTable>
+        </Card>
+
+        <ConfirmDialog
+            v-model="showDeleteDialog"
+            :title="t('attendance.messages.delete_confirm_title', 'تأكيد الحذف')"
+            :message="t('attendance.messages.delete_confirm_message', { name: deletingGroup?.name })"
+            :confirm-text="t('common.delete')"
+            :cancel-text="t('common.cancel')"
+            confirm-variant="danger"
+            @confirm="deleteGroup"
+        />
+    </AppLayout>
+</template>

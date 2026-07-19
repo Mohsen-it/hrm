@@ -1,12 +1,9 @@
 <script setup>
-import { reactive, computed } from 'vue';
-import FormInput from '@/Components/ui/FormInput.vue';
-import FormSelect from '@/Components/ui/FormSelect.vue';
-import FormSwitch from '@/Components/ui/FormSwitch.vue';
-import Button from '@/Components/ui/Button.vue';
-import { useTranslations } from '@/composables/useTranslations';
+import { reactive, computed } from 'vue'
+import { FormInput, FormSelect, FormSwitch, Button, Card, FormSection, FormActions } from '@/Components/ui'
+import { useTranslations } from '@/composables/useTranslations'
 
-const { t } = useTranslations();
+const { t } = useTranslations()
 
 const props = defineProps({
     category: { type: Object, default: null },
@@ -14,9 +11,9 @@ const props = defineProps({
     errors: { type: Object, default: () => ({}) },
     processing: { type: Boolean, default: false },
     withActions: { type: Boolean, default: true },
-});
+})
 
-const emit = defineEmits(['submit']);
+const emit = defineEmits(['submit'])
 
 const defaultWorkDays = () => ({
     sunday: false,
@@ -26,23 +23,23 @@ const defaultWorkDays = () => ({
     thursday: false,
     friday: false,
     saturday: false,
-});
+})
 
-const dayKeyMap = { 0: 'sunday', 1: 'monday', 2: 'tuesday', 3: 'wednesday', 4: 'thursday', 5: 'friday', 6: 'saturday' };
+const dayKeyMap = { 0: 'sunday', 1: 'monday', 2: 'tuesday', 3: 'wednesday', 4: 'thursday', 5: 'friday', 6: 'saturday' }
 
 const normalizeWorkDaysJson = (value) => {
-    if (!value) return defaultWorkDays();
+    if (!value) return defaultWorkDays()
     if (Array.isArray(value)) {
-        const result = defaultWorkDays();
+        const result = defaultWorkDays()
         value.forEach((dayNum) => {
-            const key = dayKeyMap[Number(dayNum)];
-            if (key) result[key] = true;
-        });
-        return result;
+            const key = dayKeyMap[Number(dayNum)]
+            if (key) result[key] = true
+        })
+        return result
     }
-    if (typeof value === 'object') return { ...defaultWorkDays(), ...value };
-    return defaultWorkDays();
-};
+    if (typeof value === 'object') return { ...defaultWorkDays(), ...value }
+    return defaultWorkDays()
+}
 
 const form = reactive({
     name: props.category?.name || '',
@@ -57,23 +54,23 @@ const form = reactive({
     fingerprint_enabled: props.category?.fingerprint_enabled ?? false,
     work_on_holidays: props.category?.work_on_holidays ?? false,
     work_on_weekends: props.category?.work_on_weekends ?? false,
-    color: props.category?.color || '#fa520f',
+    color: props.category?.color || 'var(--color-mistral-primary)',
     time_schedule_id: props.category?.time_schedule_id || '',
     is_dynamic: props.category?.is_dynamic ?? false,
     anchor_start_date: props.category?.anchor_start_date || '',
-});
+})
 
 const typeOptions = computed(() => [
     { value: 'cyclic', label: t('shifts.cyclic') },
     { value: 'weekly', label: t('shifts.weekly') },
     { value: 'hours', label: t('shifts.hours') },
-]);
+])
 
 const periodTypeOptions = computed(() => [
     { value: 'daily', label: t('shifts.daily') },
     { value: 'weekly', label: t('shifts.weekly_label') },
     { value: 'monthly', label: t('shifts.monthly') },
-]);
+])
 
 const dayKeys = [
     { key: 'sunday', label: t('shifts.sunday') },
@@ -83,35 +80,33 @@ const dayKeys = [
     { key: 'thursday', label: t('shifts.thursday') },
     { key: 'friday', label: t('shifts.friday') },
     { key: 'saturday', label: t('shifts.saturday') },
-];
+]
 
 const scheduleOptions = computed(() => {
-    const items = Array.isArray(props.timeSchedules) ? props.timeSchedules : (props.timeSchedules?.data || []);
-    return items.map((s) => ({ value: s.id, label: s.name }));
-});
-
-const sectionTitleClass = 'text-[14px] text-mistral-ink mb-3 font-medium';
+    const items = Array.isArray(props.timeSchedules) ? props.timeSchedules : (props.timeSchedules?.data || [])
+    return items.map((s) => ({ value: s.id, label: s.name }))
+})
 
 function onSubmit() {
-    if (props.processing) return;
+    if (props.processing) return
 
-    let workDaysJson = form.work_days_json;
-    let weekendDaysJson = form.weekend_days_json;
+    let workDaysJson = form.work_days_json
+    let weekendDaysJson = form.weekend_days_json
 
     if (form.type === 'weekly' && workDaysJson && typeof workDaysJson === 'object' && !Array.isArray(workDaysJson)) {
-        const dayMap = { sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6 };
+        const dayMap = { sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6 }
         workDaysJson = Object.keys(workDaysJson)
             .filter((k) => workDaysJson[k])
             .map((k) => dayMap[k])
-            .filter((v) => v !== undefined);
+            .filter((v) => v !== undefined)
     }
 
     if (form.type === 'weekly' && weekendDaysJson && typeof weekendDaysJson === 'object' && !Array.isArray(weekendDaysJson)) {
-        const dayMap = { sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6 };
+        const dayMap = { sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6 }
         weekendDaysJson = Object.keys(weekendDaysJson)
             .filter((k) => weekendDaysJson[k])
             .map((k) => dayMap[k])
-            .filter((v) => v !== undefined);
+            .filter((v) => v !== undefined)
     }
 
     const payload = {
@@ -131,17 +126,14 @@ function onSubmit() {
         time_schedule_id: form.time_schedule_id || null,
         is_dynamic: form.is_dynamic,
         anchor_start_date: form.anchor_start_date || null,
-    };
-    emit('submit', payload);
+    }
+    emit('submit', payload)
 }
 </script>
 
 <template>
-    <div class="space-y-6">
-        <section>
-            <h3 :class="sectionTitleClass">
-                {{ t('shifts.basic_info') }}
-            </h3>
+    <form class="space-y-6" @submit.prevent="onSubmit">
+        <FormSection :title="t('shifts.basic_info')">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FormInput
                     v-model="form.name"
@@ -177,12 +169,9 @@ function onSubmit() {
                     :error="errors?.color"
                 />
             </div>
-        </section>
+        </FormSection>
 
-        <section v-if="form.type === 'cyclic'">
-            <h3 :class="sectionTitleClass">
-                {{ t('shifts.cyclic_settings') }}
-            </h3>
+        <FormSection v-if="form.type === 'cyclic'" :title="t('shifts.cyclic_settings')">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FormInput
                     v-model="form.work_days"
@@ -201,7 +190,7 @@ function onSubmit() {
                     :error="errors?.rest_days"
                 />
             </div>
-            <div class="mt-4 p-4 bg-mistral-surface rounded-md space-y-4">
+            <div class="mt-4 p-4 bg-mistral-surface rounded-lg space-y-4">
                 <FormSwitch
                     v-model="form.is_dynamic"
                     :label="t('shifts.is_dynamic')"
@@ -216,18 +205,15 @@ function onSubmit() {
                     :error="errors?.anchor_start_date"
                 />
             </div>
-        </section>
+        </FormSection>
 
-        <section v-if="form.type === 'weekly'">
-            <h3 :class="sectionTitleClass">
-                {{ t('shifts.weekly_settings') }}
-            </h3>
+        <FormSection v-if="form.type === 'weekly'" :title="t('shifts.weekly_settings')">
             <div class="space-y-4">
                 <div>
                     <label class="block text-[13px] text-mistral-slate mb-2">
                         {{ t('shifts.work_days') }}
                     </label>
-                    <div class="flex items-center gap-4 flex-wrap p-3 bg-mistral-surface rounded-md">
+                    <div class="flex items-center gap-4 flex-wrap p-3 bg-mistral-surface rounded-lg">
                         <FormSwitch
                             v-for="day in dayKeys"
                             :key="'work_' + day.key"
@@ -241,7 +227,7 @@ function onSubmit() {
                     <label class="block text-[13px] text-mistral-slate mb-2">
                         {{ t('shifts.weekend_days') }}
                     </label>
-                    <div class="flex items-center gap-4 flex-wrap p-3 bg-mistral-surface rounded-md">
+                    <div class="flex items-center gap-4 flex-wrap p-3 bg-mistral-surface rounded-lg">
                         <FormSwitch
                             v-for="day in dayKeys"
                             :key="'weekend_' + day.key"
@@ -252,12 +238,9 @@ function onSubmit() {
                     </div>
                 </div>
             </div>
-        </section>
+        </FormSection>
 
-        <section v-if="form.type === 'hours'">
-            <h3 :class="sectionTitleClass">
-                {{ t('shifts.hours_settings') }}
-            </h3>
+        <FormSection v-if="form.type === 'hours'" :title="t('shifts.hours_settings')">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FormInput
                     v-model="form.required_hours"
@@ -276,13 +259,10 @@ function onSubmit() {
                     :error="errors?.period_type"
                 />
             </div>
-        </section>
+        </FormSection>
 
-        <section>
-            <h3 :class="sectionTitleClass">
-                {{ t('shifts.options') }}
-            </h3>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 p-4 bg-mistral-surface rounded-md">
+        <FormSection :title="t('shifts.options')">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 p-4 bg-mistral-surface rounded-lg">
                 <FormSwitch
                     v-model="form.overtime_enabled"
                     :label="t('shifts.overtime_enabled')"
@@ -304,25 +284,14 @@ function onSubmit() {
                     name="work_on_weekends"
                 />
             </div>
-        </section>
+        </FormSection>
 
-        <div
+        <FormActions
             v-if="withActions"
-            class="flex items-center justify-end gap-2 pt-4 border-t border-mistral-hairline"
-        >
-            <slot name="cancel">
-                <Button variant="secondary" :href="route('shift-categories.index')">
-                    {{ t('common.cancel') }}
-                </Button>
-            </slot>
-            <Button
-                variant="primary"
-                :loading="processing"
-                icon="fas fa-save"
-                @click="onSubmit"
-            >
-                {{ t('common.save') }}
-            </Button>
-        </div>
-    </div>
+            :save-label="t('common.save')"
+            :cancel-label="t('common.cancel')"
+            :cancel-href="route('shift-categories.index')"
+            :saving="processing"
+        />
+    </form>
 </template>

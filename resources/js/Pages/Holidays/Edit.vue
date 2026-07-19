@@ -1,189 +1,140 @@
 <script setup>
-
 import { reactive, ref } from 'vue';
-
-import { router, Link } from '@inertiajs/vue3';
-
+import { router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
-
-import PageHeader from '@/Components/ui/PageHeader.vue';
-
-import Button from '@/Components/ui/Button.vue';
-import Card from '@/Components/ui/Card.vue';
-
-import FormInput from '@/Components/ui/FormInput.vue';
-
-import FormTextarea from '@/Components/ui/FormTextarea.vue';
-
-import FormSelect from '@/Components/ui/FormSelect.vue';
-
+import { PageHeader, Button, Card, FormInput, FormTextarea, FormSelect, FormSection, FormActions, ErrorSummary } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
 
 const props = defineProps({
-
     holiday: { type: Object, required: true },
-
 });
 
 const form = reactive({
-
     _method: 'PUT',
-
     name_ar: props.holiday.name_ar || '',
-
     name_en: props.holiday.name_en || '',
-
     code: props.holiday.code || '',
-
     is_recurring: !!props.holiday.is_recurring,
-
     date: props.holiday.date || '',
-
     recurring_month: props.holiday.recurring_month || '',
-
     recurring_day: props.holiday.recurring_day || '',
-
     category: props.holiday.category || 'public',
-
     is_paid: !!props.holiday.is_paid,
-
     is_active: !!props.holiday.is_active,
-
     duration_days: props.holiday.duration_days || 1,
-
     applies_to_all: !!props.holiday.applies_to_all,
-
     description: props.holiday.description || '',
-
 });
 
 const errors = ref({});
-
 const processing = ref(false);
 
 const categoryOptions = [
-
     { value: 'public', label: t('holidays.category_public') },
-
     { value: 'religious', label: t('holidays.category_religious') },
-
     { value: 'national', label: t('holidays.category_national') },
-
     { value: 'company', label: t('holidays.category_company') },
-
 ];
 
 const monthOptions = Array.from({ length: 12 }, (_, i) => ({
-
     value: i + 1,
-
     label: t('holidays.month_' + (i + 1)),
-
 }));
 
 const dayOptions = Array.from({ length: 31 }, (_, i) => ({
-
     value: i + 1,
-
     label: String(i + 1),
-
 }));
 
 const yesNoOptions = [
-
     { value: true, label: t('common.yes') },
-
     { value: false, label: t('common.no') },
-
 ];
 
 const errorFor = (key) => errors.value[key] || '';
 
 function submit() {
-
     processing.value = true;
-
     errors.value = {};
-
     router.post(route('holidays.update', props.holiday.id), form, {
-
         preserveScroll: true,
-
-        onError: (err) => { errors.value = err;
-
- },
-
-        onFinish: () => { processing.value = false;
-
- },
-
+        onError: (err) => { errors.value = err; },
+        onFinish: () => { processing.value = false; },
     });
-
 }
-
 </script>
 
 <template>
-
     <AppLayout :title="t('holidays.edit_holiday')">
-
         <PageHeader :title="t('holidays.edit_holiday')" :description="holiday.name_ar">
-
             <template #actions>
-
-                <Button variant="secondary" icon="fas fa-arrow-right rtl-flip" :href="route('holidays.index')">{{ t('common.back') }}</Button>
-
-            
-</template>
-
+                <Button variant="secondary" icon="fas fa-arrow-right rtl-flip" :href="route('holidays.index')">
+                    {{ t('common.back') }}
+                </Button>
+            </template>
         </PageHeader>
 
-        <Card variant="base" padding="md" as="form" @submit.prevent="submit">
+        <ErrorSummary :errors="errors" />
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <form class="space-y-6" @submit.prevent="submit">
+            <FormSection
+                :title="t('holidays.basic_info')"
+                icon="fas fa-calendar-days"
+                :collapsible="true"
+                :default-open="true"
+            >
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FormInput v-model="form.name_ar" :label="t('holidays.name_ar')" name="name_ar" required autofocus :error="errorFor('name_ar')" />
+                    <FormInput v-model="form.name_en" :label="t('holidays.name_en')" name="name_en" :error="errorFor('name_en')" />
+                    <FormInput v-model="form.code" :label="t('holidays.code')" name="code" :error="errorFor('code')" />
+                    <FormSelect v-model="form.category" :label="t('holidays.category')" name="category" :options="categoryOptions" :error="errorFor('category')" />
+                    <FormInput v-model="form.duration_days" :label="t('holidays.duration_days')" name="duration_days" type="number" min="1" :error="errorFor('duration_days')" />
+                </div>
+            </FormSection>
 
-                <FormInput v-model="form.name_ar" :label="t('holidays.name_ar')" name="name_ar" required :error="errorFor('name_ar')" />
+            <FormSection
+                :title="t('holidays.schedule')"
+                icon="fas fa-clock"
+                :collapsible="true"
+                :default-open="true"
+            >
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FormSelect v-model="form.is_recurring" :label="t('holidays.recurring')" name="is_recurring" :options="yesNoOptions" :error="errorFor('is_recurring')" />
+                    <FormInput v-if="!form.is_recurring" v-model="form.date" :label="t('holidays.date')" name="date" type="date" required :error="errorFor('date')" />
+                    <FormSelect v-if="form.is_recurring" v-model="form.recurring_month" :label="t('holidays.recurring_month')" name="recurring_month" :options="monthOptions" required :error="errorFor('recurring_month')" />
+                    <FormSelect v-if="form.is_recurring" v-model="form.recurring_day" :label="t('holidays.recurring_day')" name="recurring_day" :options="dayOptions" required :error="errorFor('recurring_day')" />
+                </div>
+            </FormSection>
 
-                <FormInput v-model="form.name_en" :label="t('holidays.name_en')" name="name_en" :error="errorFor('name_en')" />
+            <FormSection
+                :title="t('holidays.settings')"
+                icon="fas fa-gear"
+                :collapsible="true"
+                :default-open="true"
+            >
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FormSelect v-model="form.is_paid" :label="t('holidays.is_paid')" name="is_paid" :options="yesNoOptions" :error="errorFor('is_paid')" />
+                    <FormSelect v-model="form.is_active" :label="t('common.status')" name="is_active" :options="yesNoOptions" :error="errorFor('is_active')" />
+                </div>
+            </FormSection>
 
-                <FormInput v-model="form.code" :label="t('holidays.code')" name="code" :error="errorFor('code')" />
-
-                <FormSelect v-model="form.category" :label="t('holidays.category')" name="category" :options="categoryOptions" :error="errorFor('category')" />
-
-                <FormSelect v-model="form.is_recurring" :label="t('holidays.recurring')" name="is_recurring" :options="yesNoOptions" :error="errorFor('is_recurring')" />
-
-                <FormInput v-if="!form.is_recurring" v-model="form.date" :label="t('holidays.date')" name="date" type="date" required :error="errorFor('date')" />
-
-                <FormSelect v-if="form.is_recurring" v-model="form.recurring_month" :label="t('holidays.recurring_month')" name="recurring_month" :options="monthOptions" required :error="errorFor('recurring_month')" />
-
-                <FormSelect v-if="form.is_recurring" v-model="form.recurring_day" :label="t('holidays.recurring_day')" name="recurring_day" :options="dayOptions" required :error="errorFor('recurring_day')" />
-
-                <FormInput v-model="form.duration_days" :label="t('holidays.duration_days')" name="duration_days" type="number" min="1" :error="errorFor('duration_days')" />
-
-                <FormSelect v-model="form.is_paid" :label="t('holidays.is_paid')" name="is_paid" :options="yesNoOptions" :error="errorFor('is_paid')" />
-
-                <FormSelect v-model="form.is_active" :label="t('common.status')" name="is_active" :options="yesNoOptions" :error="errorFor('is_active')" />
-
-            </div>
-
-            <div class="mt-4">
-
+            <FormSection
+                :title="t('holidays.description')"
+                icon="fas fa-align-left"
+                :collapsible="true"
+                :default-open="false"
+            >
                 <FormTextarea v-model="form.description" :label="t('holidays.description')" name="description" :rows="3" :error="errorFor('description')" />
+            </FormSection>
 
-            </div>
-
-            <div class="mt-6 flex items-center justify-start gap-2">
-
-                <Button type="submit" variant="primary" :loading="processing" icon="fas fa-save">{{ t('common.update') }}</Button>
-
-                <Button variant="secondary" :href="route('holidays.index')">{{ t('common.cancel') }}</Button>
-
-            </div>
-
-        </Card>
-
+            <FormActions
+                :save-label="t('common.update')"
+                :cancel-label="t('common.cancel')"
+                :cancel-href="route('holidays.index')"
+                :saving="processing"
+            />
+        </form>
     </AppLayout>
-
 </template>

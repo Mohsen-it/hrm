@@ -3,107 +3,91 @@
 namespace Modules\Shifts\Services;
 
 use Carbon\Carbon;
-use Modules\Shifts\Models\EmployeeShiftCategory;
+use Illuminate\Support\Facades\DB;
 use Modules\Shifts\Models\ScheduleEntry;
 use Modules\Shifts\Models\SchedulePeriod;
+use Modules\Shifts\Repositories\RotationAssignmentRepository;
 use Modules\Shifts\Repositories\ScheduleEntryRepository;
 use Modules\Shifts\Repositories\SchedulePeriodRepository;
 
 class ScheduleGenerationService
 {
     public function __construct(
-        private CyclicScheduleCalculator $calculator,
+        private RotationEngine $rotationEngine,
         private SchedulePeriodRepository $periodRepository,
         private ScheduleEntryRepository $entryRepository,
+        private RotationAssignmentRepository $rotationAssignmentRepository,
         private AuditService $auditService,
     ) {}
 
     /**
-     * Generate monthly schedule for all active assignments.
+     * Generate monthly schedule for all active rotation assignments.
      */
     public function generateMonthlySchedule(int $year, int $month): SchedulePeriod
     {
-        $periodStart = Carbon::create($year, $month, 1)->startOfDay();
-        $periodEnd = $periodStart->copy()->endOfMonth();
+        return DB::transaction(function () use ($year, $month) {
+            $periodStart = Carbon::create($year, $month, 1)->startOfDay();
+            $periodEnd = $periodStart->copy()->endOfMonth();
 
-        $existingDraft = SchedulePeriod::where('year', $year)
-            ->where('month', $month)
-            ->where('status', 'draft')
-            ->first();
+            $existingDraft = SchedulePeriod::where('year', $year)
+                ->where('month', $month)
+                ->where('status', 'draft')
+                ->first();
 
-        if ($existingDraft) {
-            $existingDraft->entries()->delete();
-            $period = $existingDraft;
-        } else {
-            $period = SchedulePeriod::create([
+            if ($existingDraft) {
+                $existingDraft->entries()->delete();
+                $period = $existingDraft;
+            } else {
+                $period = SchedulePeriod::create([
+                    'year' => $year,
+                    'month' => $month,
+                    'schedule_period_start' => $periodStart,
+                    'schedule_period_end' => $periodEnd,
+                    'status' => 'draft',
+                    'generated_by' => auth()->id(),
+                    'generated_at' => now(),
+                    'schedule_version' => 1,
+                ]);
+            }
+
+            // Get all active rotation assignments for the period
+            $assignments = $this->rotationAssignmentRepository->getAssignmentsForDate($periodStart->toDateString());
+
+            $entries = [];
+
+            foreach ($assignments as $assignment) {
+                $rotation = $assignment->rotation;
+                $group = $assignment->rotationGroup;
+
+                $current = $periodStart->copy();
+                while ($current->lte($periodEnd)) {
+                    $isWork = $this->rotationEngine->isWorkDay($rotation, $group->group_index, $current);
+
+                    $entries[] = [
+                        'schedule_period_id' => $period->id,
+                        'employee_id' => $assignment->employee_id,
+                        'date' => $current->format('Y-m-d'),
+                        'day_status' => $isWork ? 'WORK' : 'REST',
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ];
+
+                    $current->addDay();
+                }
+            }
+
+            foreach (array_chunk($entries, 500) as $chunk) {
+                ScheduleEntry::insert($chunk);
+            }
+
+            $this->auditService->logCreated('SchedulePeriod', $period->id, [
                 'year' => $year,
                 'month' => $month,
-                'schedule_period_start' => $periodStart,
-                'schedule_period_end' => $periodEnd,
-                'status' => 'draft',
-                'generated_by' => auth()->id(),
-                'generated_at' => now(),
-                'schedule_version' => 1,
+                'entries_count' => count($entries),
             ]);
-        }
 
-        $assignments = EmployeeShiftCategory::query()
-            ->active()
-            ->forDate($periodStart)
-            ->with('shiftCategory')
-            ->get();
-
-        $entries = [];
-
-        foreach ($assignments as $assignment) {
-            $category = $assignment->shiftCategory;
-
-            if ($category->type !== 'cyclic' || ! $category->is_dynamic) {
-                continue;
-            }
-
-            $anchor = $category->cycleAnchor();
-            if (! $anchor) {
-                continue;
-            }
-
-            $cycleLength = $category->cycleLength();
-            if ($cycleLength <= 0) {
-                continue;
-            }
-
-            $workDays = (int) $category->work_days;
-            $restDays = (int) $category->rest_days;
-
-            $current = $periodStart->copy();
-            while ($current->lte($periodEnd)) {
-                $isWork = $this->calculator->isWorkDay($current, $anchor, $workDays, $restDays);
-
-                $entries[] = [
-                    'schedule_period_id' => $period->id,
-                    'employee_id' => $assignment->employee_id,
-                    'duty_category_id' => $category->id,
-                    'date' => $current->format('Y-m-d'),
-                    'day_status' => $isWork ? 'WORK' : 'REST',
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ];
-
-                $current->addDay();
-            }
-        }
-
-        foreach (array_chunk($entries, 500) as $chunk) {
-            ScheduleEntry::insert($chunk);
-        }
-
-        $this->auditService->logCreated('SchedulePeriod', $period->id, [
-            'year' => $year,
-            'month' => $month,
-            'entries_count' => count($entries),
-        ]);
-
-        return $period->fresh();
+            return $period->fresh();
+        });
     }
 
     /**

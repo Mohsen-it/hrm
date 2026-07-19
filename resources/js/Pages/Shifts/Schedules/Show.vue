@@ -2,12 +2,7 @@
 import { ref, computed } from 'vue';
 import { router, Link, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
-import PageHeader from '@/Components/ui/PageHeader.vue';
-import Button from '@/Components/ui/Button.vue';
-import Card from '@/Components/ui/Card.vue';
-import Badge from '@/Components/ui/Badge.vue';
-import Alert from '@/Components/ui/Alert.vue';
-import ConfirmDialog from '@/Components/ui/ConfirmDialog.vue';
+import { PageHeader, Button, Card, Badge, DataTable, Alert, ConfirmDialog } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
@@ -133,6 +128,29 @@ function performRegenerate() {
 }
 
 const flashSuccess = computed(() => page.props.flash?.success);
+
+const entryColumns = computed(() => [
+    { key: 'employee_name', label: t('shifts.employee_name') },
+    { key: 'category_name', label: t('shifts.category') },
+    { key: 'work_count', label: t('shifts.work_days_count'), headerClass: 'text-center' },
+    { key: 'rest_count', label: t('shifts.rest_days_count'), headerClass: 'text-center' },
+    { key: 'actions', label: t('common.actions'), cellClass: 'text-center w-[80px]', headerClass: 'text-center' },
+]);
+
+const entriesData = computed(() => ({
+    data: employeeEntries.value.map(e => ({ ...e, id: e.employee_id })),
+    links: [],
+    total: employeeEntries.value.length,
+    current_page: 1,
+    last_page: 1,
+    per_page: 1000,
+    from: 1,
+    to: employeeEntries.value.length,
+}));
+
+function toggleEmployeeSelection(row) {
+    selectedEmployee.value = selectedEmployee.value === row.employee_id ? null : row.employee_id;
+}
 </script>
 
 <template>
@@ -228,40 +246,31 @@ const flashSuccess = computed(() => page.props.flash?.success);
                 {{ t('shifts.no_data') }}
             </div>
 
-            <div v-else class="overflow-x-auto">
-                <table class="w-full text-sm">
-                    <thead>
-                        <tr class="border-b border-mistral-hairline-soft">
-                            <th class="text-start py-3 px-4 font-medium text-mistral-ink">{{ t('shifts.employee_name') }}</th>
-                            <th class="text-start py-3 px-4 font-medium text-mistral-ink">{{ t('shifts.category') }}</th>
-                            <th class="text-center py-3 px-4 font-medium text-mistral-ink">{{ t('shifts.work_days_count') }}</th>
-                            <th class="text-center py-3 px-4 font-medium text-mistral-ink">{{ t('shifts.rest_days_count') }}</th>
-                            <th class="text-center py-3 px-4 font-medium text-mistral-ink">{{ t('common.actions') }}</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr
-                            v-for="emp in employeeEntries"
-                            :key="emp.employee_id"
-                            class="border-b border-mistral-hairline-soft hover:bg-mistral-cream-soft cursor-pointer"
-                            :class="{ 'bg-mistral-cream-soft': selectedEmployee === emp.employee_id }"
-                            @click="selectedEmployee = selectedEmployee === emp.employee_id ? null : emp.employee_id"
-                        >
-                            <td class="py-3 px-4">{{ emp.employee_name }}</td>
-                            <td class="py-3 px-4">{{ emp.category_name }}</td>
-                            <td class="py-3 px-4 text-center">
-                                <Badge :text="emp.work_count.toString()" variant="active" />
-                            </td>
-                            <td class="py-3 px-4 text-center">
-                                <Badge :text="emp.rest_count.toString()" variant="inactive" />
-                            </td>
-                            <td class="py-3 px-4 text-center">
-                                <i class="fas" :class="selectedEmployee === emp.employee_id ? 'fa-chevron-up' : 'fa-chevron-down'" />
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
+            <DataTable
+                v-else
+                :columns="entryColumns"
+                :data="entriesData"
+                :selectable="false"
+                row-clickable
+                :enable-search="false"
+                :enable-filters="false"
+                :enable-pagination="false"
+                :enable-export="false"
+                :enable-density="false"
+                :enable-column-visibility="false"
+                storage-key="schedule-entries"
+                @row-click="toggleEmployeeSelection"
+            >
+                <template #cell-work_count="{ row }">
+                    <Badge :text="row.work_count.toString()" variant="active" />
+                </template>
+                <template #cell-rest_count="{ row }">
+                    <Badge :text="row.rest_count.toString()" variant="inactive" />
+                </template>
+                <template #cell-actions="{ row }">
+                    <i class="fas" :class="selectedEmployee === row.employee_id ? 'fa-chevron-up' : 'fa-chevron-down'" />
+                </template>
+            </DataTable>
         </Card>
 
         <Card v-if="selectedEmployee && calendarDays.length > 0" variant="base" padding="sm" class="mb-6">
@@ -272,18 +281,18 @@ const flashSuccess = computed(() => page.props.flash?.success);
                 </h3>
                 <div class="flex items-center gap-4 text-sm">
                     <div class="flex items-center gap-1.5">
-                        <span class="w-3 h-3 rounded bg-green-500"></span>
+                        <span class="w-3 h-3 rounded bg-mistral-success"></span>
                         <span>{{ t('shifts.work_day_legend') }}</span>
                     </div>
                     <div class="flex items-center gap-1.5">
-                        <span class="w-3 h-3 rounded bg-gray-200"></span>
+                        <span class="w-3 h-3 rounded bg-mistral-surface"></span>
                         <span>{{ t('shifts.rest_day_legend') }}</span>
                     </div>
                 </div>
             </div>
 
             <div class="grid grid-cols-7 gap-1 text-center mb-2">
-                <div v-for="day in ['السبت', 'الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة']" :key="day" class="text-xs font-bold text-gray-500 py-2">
+                <div v-for="day in ['السبت', 'الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة']" :key="day" class="text-xs font-bold text-mistral-steel py-2">
                     {{ day }}
                 </div>
             </div>
@@ -297,7 +306,7 @@ const flashSuccess = computed(() => page.props.flash?.success);
                     <div
                         :class="[
                             'rounded-lg p-2 min-h-[55px] flex flex-col items-center justify-center transition',
-                            day.status === 'WORK' ? 'bg-green-500 text-white' : 'bg-gray-100 text-gray-500',
+                            day.status === 'WORK' ? 'bg-mistral-success text-white' : 'bg-mistral-surface text-mistral-steel',
                         ]"
                         :title="day.date + ' - ' + day.day_name_ar"
                     >

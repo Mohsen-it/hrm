@@ -2,15 +2,13 @@
 
 namespace Modules\Attendance\Services;
 
-use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Modules\Attendance\Models\AttendanceSession;
 use Modules\Attendance\Models\DailyAttendanceSummary;
 use Modules\Attendance\Repositories\DailyAttendanceSummaryRepository;
-use Modules\Shifts\Models\Shift;
-use Modules\Shifts\Services\AbsenceCalculationService;
+use Modules\Shifts\Services\ScheduleResolverService;
 use Modules\Users\Models\User;
 
 /**
@@ -23,10 +21,6 @@ use Modules\Users\Models\User;
  *      missing_punch | absent | rest).
  *   4. Persists exactly one `daily_attendance_summaries` row for the (user,
  *      date) pair — enforced unique at the DB level.
- *
- * The service is intentionally stateless and free of HTTP / DB-cache state so
- * it can be reused by the auto-calculation service, queue jobs, and the
- * controllers alike.
  */
 class DailyAttendanceSummaryService
 {
@@ -35,7 +29,7 @@ class DailyAttendanceSummaryService
      */
     public function __construct(
         private DailyAttendanceSummaryRepository $repository,
-        private AbsenceCalculationService $absenceCalculationService,
+        private ScheduleResolverService $scheduleResolver,
     ) {}
 
     // ------------------------------------------------------------------
@@ -69,7 +63,7 @@ class DailyAttendanceSummaryService
             ->query()
             ->betweenDates($from, $to)
             ->when($userId, fn ($q, $id) => $q->forUser($id))
-            ->with(['user', 'shift'])
+            ->with(['user'])
             ->orderBy('summary_date')
             ->get();
     }
@@ -107,25 +101,24 @@ class DailyAttendanceSummaryService
      */
     public function recalculateForUserAndDate(int $userId, string $date): DailyAttendanceSummary
     {
-        $user = User::find($userId);
-        $shift = $this->resolveShift($user, $date);
+        // Resolve schedule via ScheduleResolverService (rotation-aware)
+        $resolved = $this->scheduleResolver->resolve($userId, $date);
 
         $sessions = AttendanceSession::forUser($userId)
             ->onDate($date)
             ->orderBy('check_in_at')
             ->get();
 
-        $computed = $this->aggregateSessions($sessions, $shift, $date);
+        $computed = $this->aggregateSessions($sessions);
 
         $status = $this->resolveExternalStatus($userId, $date)
-            ?? $this->determineStatus($sessions, $shift, $userId, $date);
+            ?? $this->determineStatus($sessions, $resolved, $userId, $date);
 
         $payload = array_merge($computed, [
             'user_id' => $userId,
-            'shift_id' => $shift?->id,
             'summary_date' => $date,
-            'expected_check_in' => $shift?->start_time ? $this->formatTimeString($shift->start_time) : null,
-            'expected_check_out' => $shift?->end_time ? $this->formatTimeString($shift->end_time) : null,
+            'expected_check_in' => $resolved['expected_check_in'],
+            'expected_check_out' => $resolved['expected_check_out'],
             'sessions_count' => $sessions->count(),
             'is_first_punch' => $sessions->isNotEmpty(),
             'is_complete' => $sessions->isNotEmpty() && $sessions->every(fn (AttendanceSession $s) => $s->check_out_at !== null),
@@ -156,7 +149,7 @@ class DailyAttendanceSummaryService
      * @param  Collection<int, AttendanceSession>  $sessions
      * @return array<string, mixed>
      */
-    protected function aggregateSessions(Collection $sessions, ?Shift $shift, string $date): array
+    protected function aggregateSessions(Collection $sessions): array
     {
         $totalWork = 0;
         $totalBreak = 0;
@@ -166,7 +159,7 @@ class DailyAttendanceSummaryService
 
         foreach ($sessions as $session) {
             $totalWork += (int) $session->work_minutes;
-            $totalBreak += (int) $session->break_minutes;
+            $totalBreak += (int) ($session->break_minutes ?? 0);
             $totalOvertime += (int) $session->overtime_minutes;
             $late = max($late, (int) $session->late_minutes);
             $earlyLeave = max($earlyLeave, (int) $session->early_leave_minutes);
@@ -186,14 +179,24 @@ class DailyAttendanceSummaryService
      *
      * @param  Collection<int, AttendanceSession>  $sessions
      */
-    protected function determineStatus(Collection $sessions, ?Shift $shift, int $userId, string $date): string
+    protected function determineStatus(Collection $sessions, array $resolved, int $userId, string $date): string
     {
-        // No sessions on a scheduled day → absent (unless it's a rest day).
-        if ($sessions->isEmpty()) {
-            if ($this->isRestDay($userId, $date)) {
-                return 'rest';
-            }
+        // If resolver says employee is on rest day or unassigned
+        if ($resolved['status'] === ScheduleResolverService::STATUS_REST) {
+            return 'rest';
+        }
 
+        if ($resolved['status'] === ScheduleResolverService::STATUS_UNASSIGNED) {
+            return 'rest';
+        }
+
+        // If resolver says leave excused
+        if ($resolved['status'] === ScheduleResolverService::STATUS_LEAVE_EXCUSED) {
+            return 'vacation';
+        }
+
+        // No sessions on a work day → absent
+        if ($sessions->isEmpty()) {
             return 'absent';
         }
 
@@ -217,42 +220,15 @@ class DailyAttendanceSummaryService
     }
 
     /**
-     * Check if the given date is a rest day for the employee.
-     * Uses the ShiftCategory assignment and CyclicScheduleCalculator.
-     */
-    protected function isRestDay(int $userId, string $date): bool
-    {
-        if (! class_exists(AbsenceCalculationService::class)) {
-            return false;
-        }
-
-        try {
-            $absenceService = app(AbsenceCalculationService::class);
-
-            return ! $absenceService->isEmployeeExpectedToWork($userId, Carbon::parse($date));
-        } catch (\Throwable) {
-            return false;
-        }
-    }
-
-    /**
      * Determine whether an external module (Vacations / Holidays) has
-     * already set the day's status. Returns `null` when the day belongs
-     * to the regular attendance flow.
-     *
-     * The lookup is intentionally cheap (two table reads) so the
-     * daily-rollup job stays performant. The two queries are
-     * opportunistic: a missing table (module disabled) returns `null`
-     * and the function falls through to the normal status logic.
+     * already set the day's status.
      */
     protected function resolveExternalStatus(int $userId, string $date): ?string
     {
-        // Holiday — applies to every employee (the `applies_to_all` flag).
         if (Schema::hasTable('holidays') && $this->isHoliday($date)) {
             return 'holiday';
         }
 
-        // Approved vacation request overlapping the date.
         if (Schema::hasTable('user_vacation_requests') && $this->hasApprovedVacation($userId, $date)) {
             return 'vacation';
         }
@@ -261,8 +237,7 @@ class DailyAttendanceSummaryService
     }
 
     /**
-     * Return true when an active holiday has a materialised date that
-     * matches the supplied `Y-m-d`.
+     * Return true when an active holiday matches the supplied date.
      */
     protected function isHoliday(string $date): bool
     {
@@ -273,9 +248,8 @@ class DailyAttendanceSummaryService
 
         $month = (int) date('n', $ts);
         $day = (int) date('j', $ts);
-        $year = (int) date('Y', $ts);
 
-        $exists = DB::table('holidays')
+        return DB::table('holidays')
             ->where('is_active', true)
             ->whereNull('deleted_at')
             ->where(function ($q) use ($date, $month, $day): void {
@@ -288,13 +262,10 @@ class DailyAttendanceSummaryService
                 });
             })
             ->exists();
-
-        return $exists;
     }
 
     /**
-     * Return true when the user has an approved vacation request that
-     * covers the supplied date.
+     * Return true when the user has an approved vacation request covering the date.
      */
     protected function hasApprovedVacation(int $userId, string $date): bool
     {
@@ -305,64 +276,5 @@ class DailyAttendanceSummaryService
             ->where('start_date', '<=', $date)
             ->where('end_date', '>=', $date)
             ->exists();
-    }
-
-    /**
-     * Resolve the effective shift for a user on a given date.
-     *
-     * Mirrors the precedence used by the AttendanceSessionService so the
-     * summary references the same shift the sessions were created against.
-     */
-    protected function resolveShift(?User $user, string $date): ?Shift
-    {
-        if (! $user) {
-            return null;
-        }
-
-        if ($user->shift_id) {
-            return Shift::find($user->shift_id);
-        }
-
-        // Resolve through a pivot subquery so the boolean precedence
-        // between `effective_from`, `effective_to IS NULL` and
-        // `effective_to >= date` is enforced correctly. The previous
-        // `wherePivot -> orWherePivot` chain widened the predicate and
-        // could return pivots whose `effective_from` was in the future.
-        $pivotSub = DB::table('user_shifts')
-            ->select('shift_id')
-            ->where('user_id', $user->id)
-            ->where('effective_from', '<=', $date)
-            ->where(function ($q) use ($date): void {
-                $q->whereNull('effective_to')->orWhere('effective_to', '>=', $date);
-            });
-
-        $shiftId = DB::table('shifts')
-            ->whereIn('id', $pivotSub)
-            ->orderByDesc(DB::raw('(SELECT is_primary FROM user_shifts WHERE user_shifts.shift_id = shifts.id AND user_shifts.user_id = '.(int) $user->id.' LIMIT 1)'))
-            ->value('id');
-
-        if (! $shiftId) {
-            return null;
-        }
-
-        return Shift::find($shiftId);
-    }
-
-    /**
-     * Normalize any time-like value into a `H:i:s` string.
-     */
-    protected function formatTimeString(mixed $value): ?string
-    {
-        if (! $value) {
-            return null;
-        }
-
-        if ($value instanceof \DateTimeInterface) {
-            return $value->format('H:i:s');
-        }
-
-        $value = (string) $value;
-
-        return strlen($value) >= 8 ? substr($value, 0, 8) : $value;
     }
 }

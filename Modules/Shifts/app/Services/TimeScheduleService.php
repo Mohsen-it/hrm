@@ -4,14 +4,17 @@ namespace Modules\Shifts\Services;
 
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
-use Modules\Companies\Models\Company;
 use Modules\Shifts\Models\TimeSchedule;
 use Modules\Shifts\Models\TimeScheduleBreak;
 use Modules\Shifts\Repositories\TimeScheduleRepository;
+use Modules\Shifts\Services\Traits\ResolvesCompanyId;
 
 class TimeScheduleService
 {
+    use ResolvesCompanyId;
+
     public function __construct(
         private TimeScheduleRepository $repository,
         private TimeScheduleValidationService $validationService
@@ -55,54 +58,29 @@ class TimeScheduleService
      */
     public function create(array $data): TimeSchedule
     {
-        $validated = $this->validationService->validateCreate($data);
+        return DB::transaction(function () use ($data) {
+            $validated = $this->validationService->validateCreate($data);
 
-        $breaks = $data['breaks'] ?? [];
-        unset($data['breaks']);
+            $breaks = $data['breaks'] ?? [];
+            unset($data['breaks']);
 
-        if (empty($validated['company_id'])) {
-            $validated['company_id'] = $this->resolveCompanyId();
-        }
+            if (empty($validated['company_id'])) {
+                $validated['company_id'] = $this->resolveCompanyId();
+            }
 
-        $schedule = $this->repository->create($validated);
+            $schedule = $this->repository->create($validated);
 
-        foreach ($breaks as $break) {
-            TimeScheduleBreak::create([
-                'schedule_id' => $schedule->id,
-                'break_start' => $break['break_start'] ?? null,
-                'break_end' => $break['break_end'] ?? null,
-                'duration' => $break['duration'] ?? null,
-            ]);
-        }
+            foreach ($breaks as $break) {
+                TimeScheduleBreak::create([
+                    'schedule_id' => $schedule->id,
+                    'break_start' => $break['break_start'] ?? null,
+                    'break_end' => $break['break_end'] ?? null,
+                    'duration' => $break['duration'] ?? null,
+                ]);
+            }
 
-        return $schedule;
-    }
-
-    /**
-     * Resolve the company_id from the authenticated user.
-     * Falls back to the first active company when the current user
-     * is the system super-admin (id=10000) which has no company.
-     */
-    private function resolveCompanyId(): int
-    {
-        $user = auth()->user();
-
-        if ($user && ! empty($user->company_id)) {
-            return (int) $user->company_id;
-        }
-
-        $company = Company::query()
-            ->where('status', 1)
-            ->orderBy('id')
-            ->first();
-
-        if (! $company) {
-            throw ValidationException::withMessages([
-                'company_id' => [__('shifts.no_active_company')],
-            ]);
-        }
-
-        return (int) $company->id;
+            return $schedule;
+        });
     }
 
     /**
@@ -135,7 +113,7 @@ class TimeScheduleService
             }
         }
 
-        return $schedule->fresh($this->repository->defaultWith);
+        return $this->repository->findById($schedule->id);
     }
 
     /**

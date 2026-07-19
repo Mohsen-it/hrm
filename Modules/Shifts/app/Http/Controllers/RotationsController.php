@@ -349,7 +349,7 @@ class RotationsController extends Controller
             });
         }
 
-        $employees = $query->orderBy('name')->limit(20)->get();
+        $employees = $query->orderBy('name')->when($search, fn ($q) => $q->limit(20))->get();
 
         return response()->json([
             'employees' => $employees->map(function ($emp): array {

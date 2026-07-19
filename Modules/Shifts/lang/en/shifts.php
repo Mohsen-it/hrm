@@ -159,29 +159,6 @@ return [
     'days' => 'Days',
     'schedule_preview_description' => 'View future work and rest days',
 
-    // Short day names
-    'sun_short' => 'Sun',
-    'mon_short' => 'Mon',
-    'tue_short' => 'Tue',
-    'wed_short' => 'Wed',
-    'thu_short' => 'Thu',
-    'fri_short' => 'Fri',
-    'sat_short' => 'Sat',
-
-    // Month names
-    'january' => 'January',
-    'february' => 'February',
-    'march' => 'March',
-    'april' => 'April',
-    'may' => 'May',
-    'june' => 'June',
-    'july' => 'July',
-    'august' => 'August',
-    'september' => 'September',
-    'october' => 'October',
-    'november' => 'November',
-    'december' => 'December',
-
     // Assignments page
     'shift_assignments' => 'Employee Assignments',
     'assignments_description' => 'Assign employees to attendance systems and categories',
@@ -247,8 +224,6 @@ return [
     'training' => 'Training',
     'other' => 'Other',
     'virtual_roster' => 'Virtual Roster Preview',
-    'work_day_legend' => 'Work Day',
-    'rest_day_legend' => 'Off Day',
     'leave_badge' => 'Leave',
     'excused' => 'Excused',
     'status_work' => 'Work',
@@ -380,4 +355,17 @@ return [
     'select_rotation_first' => 'Select a Rotation',
     'select_rotation_description' => 'Choose a rotation to view and manage its employee assignments',
     'rotation_employees_transferred_count' => ':count employees transferred successfully.',
+    'select_employee_from_table' => 'Select Employee',
+    'select_employees_from_table' => 'Select Employees from Table',
+
+    // My Calendar page
+    'my_schedule' => 'My Schedule',
+    'prev_month' => 'Previous',
+    'next_month' => 'Next',
+    'day_work_short' => 'W',
+    'day_rest_short' => 'R',
+    'day_absent_short' => 'A',
+    'day_holiday_short' => 'H',
+    'day_present_short' => 'P',
+    'day_on_leave_short' => 'L',
 ];

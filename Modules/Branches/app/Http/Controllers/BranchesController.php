@@ -7,6 +7,8 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
+use Modules\Branches\Http\Requests\StoreBranchRequest;
+use Modules\Branches\Http\Requests\UpdateBranchRequest;
 use Modules\Branches\Http\Resources\BranchResource;
 use Modules\Branches\Services\BranchService;
 use Modules\Companies\Services\CompanyService;
@@ -53,11 +55,9 @@ class BranchesController extends Controller
     /**
      * Store a newly created branch.
      */
-    public function store(Request $request): RedirectResponse
+    public function store(StoreBranchRequest $request): RedirectResponse
     {
-        $this->authorize('create-branches');
-
-        $this->branchService->createBranch($request->all());
+        $this->branchService->createBranch($request->validated());
 
         return redirect()->route('branches.index')
             ->with('success', __('branches.created_successfully'));
@@ -104,17 +104,15 @@ class BranchesController extends Controller
     /**
      * Update the specified branch.
      */
-    public function update(Request $request, int $id): RedirectResponse
+    public function update(UpdateBranchRequest $request, int $id): RedirectResponse
     {
-        $this->authorize('edit-branches');
-
         $branch = $this->branchService->getBranchById($id);
 
         if (! $branch) {
             abort(404);
         }
 
-        $this->branchService->updateBranch($branch, $request->all());
+        $this->branchService->updateBranch($branch, $request->validated());
 
         return redirect()->route('branches.index')
             ->with('success', __('branches.updated_successfully'));

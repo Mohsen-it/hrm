@@ -3,7 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use Modules\Settings\Http\Controllers\SettingsController;
 
-Route::middleware(['auth'])->group(function () {
+Route::middleware(['auth', 'permission:view-settings'])->group(function () {
     Route::prefix('settings')->name('settings.')->group(function () {
         Route::get('general', [SettingsController::class, 'general'])->name('general');
         Route::get('attendance', [SettingsController::class, 'attendance'])->name('attendance');

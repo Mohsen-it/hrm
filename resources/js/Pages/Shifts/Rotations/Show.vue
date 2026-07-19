@@ -2,10 +2,7 @@
 import { ref, computed } from 'vue';
 import { Head, Link } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
-import PageHeader from '@/Components/ui/PageHeader.vue';
-import Button from '@/Components/ui/Button.vue';
-import Card from '@/Components/ui/Card.vue';
-import Badge from '@/Components/ui/Badge.vue';
+import { PageHeader, Button, Card, Badge, DataTable } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
@@ -94,6 +91,24 @@ const nextMonth = () => {
         currentMonth.value++;
     }
 };
+
+const groupColumns = computed(() => [
+    { key: 'name', label: t('shifts.group_name') },
+    { key: 'group_index', label: t('shifts.group_index'), headerClass: 'text-center' },
+    { key: 'time_schedule', label: t('shifts.time_schedule'), headerClass: 'text-center' },
+    { key: 'active_employees_count', label: t('shifts.employees_count'), headerClass: 'text-center' },
+]);
+
+const groupsData = computed(() => ({
+    data: (props.rotation.groups || []).map((g, idx) => ({ ...g, id: g.id || idx })),
+    links: [],
+    total: (props.rotation.groups || []).length,
+    current_page: 1,
+    last_page: 1,
+    per_page: 1000,
+    from: 1,
+    to: (props.rotation.groups || []).length,
+}));
 </script>
 
 <template>
@@ -139,10 +154,10 @@ const nextMonth = () => {
                         <p class="text-[12px] font-semibold text-mistral-slate uppercase tracking-wider">
                             {{ t('shifts.groups_count') }}
                         </p>
-                        <p class="text-[28px] font-bold text-blue-600 mt-1">{{ rotation.number_of_groups }}</p>
+                        <p class="text-[28px] font-bold text-mistral-info mt-1">{{ rotation.number_of_groups }}</p>
                     </div>
-                    <div class="w-12 h-12 rounded-lg bg-blue-100 flex items-center justify-center">
-                        <i class="fas fa-users text-blue-600 text-xl"></i>
+                    <div class="w-12 h-12 rounded-lg bg-mistral-info/10 flex items-center justify-center">
+                        <i class="fas fa-users text-mistral-info text-xl"></i>
                     </div>
                 </div>
             </Card>
@@ -153,10 +168,10 @@ const nextMonth = () => {
                         <p class="text-[12px] font-semibold text-mistral-slate uppercase tracking-wider">
                             {{ t('shifts.active_employees') }}
                         </p>
-                        <p class="text-[28px] font-bold text-green-600 mt-1">{{ rotation.active_employees_count || 0 }}</p>
+                        <p class="text-[28px] font-bold text-mistral-success mt-1">{{ rotation.active_employees_count || 0 }}</p>
                     </div>
-                    <div class="w-12 h-12 rounded-lg bg-green-100 flex items-center justify-center">
-                        <i class="fas fa-user-check text-green-600 text-xl"></i>
+                    <div class="w-12 h-12 rounded-lg bg-mistral-success/10 flex items-center justify-center">
+                        <i class="fas fa-user-check text-mistral-success text-xl"></i>
                     </div>
                 </div>
             </Card>
@@ -196,34 +211,29 @@ const nextMonth = () => {
                     {{ t('shifts.groups') }}
                 </h3>
             </template>
-            <div class="overflow-x-auto">
-                <table class="w-full text-[13px]">
-                    <thead>
-                        <tr class="border-b border-mistral-hairline">
-                            <th class="px-4 py-2 text-right text-mistral-slate">{{ t('shifts.group_name') }}</th>
-                            <th class="px-4 py-2 text-center text-mistral-slate">{{ t('shifts.group_index') }}</th>
-                            <th class="px-4 py-2 text-center text-mistral-slate">{{ t('shifts.time_schedule') }}</th>
-                            <th class="px-4 py-2 text-center text-mistral-slate">{{ t('shifts.employees_count') }}</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr v-for="(group, idx) in rotation.groups" :key="group.id" class="border-b border-mistral-hairline last:border-0">
-                            <td class="px-4 py-3">
-                                <div class="flex items-center gap-2">
-                                    <div class="w-3 h-3 rounded-full" :style="{ backgroundColor: groupColors[idx % groupColors.length] }"></div>
-                                    <span class="font-medium">{{ group.name }}</span>
-                                </div>
-                            </td>
-                            <td class="px-4 py-3 text-center">{{ group.group_index }}</td>
-                            <td class="px-4 py-3 text-center">
-                                <span v-if="group.time_schedule">{{ group.time_schedule.name }}</span>
-                                <span v-else class="text-mistral-muted">—</span>
-                            </td>
-                            <td class="px-4 py-3 text-center">{{ group.active_employees_count || 0 }}</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
+            <DataTable
+                :columns="groupColumns"
+                :data="groupsData"
+                :selectable="false"
+                :enable-search="false"
+                :enable-filters="false"
+                :enable-pagination="false"
+                :enable-export="false"
+                :enable-density="false"
+                :enable-column-visibility="false"
+                storage-key="rotation-groups"
+            >
+                <template #cell-name="{ row, value }">
+                    <div class="flex items-center gap-2">
+                        <div class="w-3 h-3 rounded-full" :style="{ backgroundColor: groupColors[groupsData.data.indexOf(row) % groupColors.length] }"></div>
+                        <span class="font-medium">{{ value }}</span>
+                    </div>
+                </template>
+                <template #cell-time_schedule="{ row }">
+                    <span v-if="row.time_schedule">{{ row.time_schedule.name }}</span>
+                    <span v-else class="text-mistral-muted">—</span>
+                </template>
+            </DataTable>
         </Card>
 
         <Card variant="base" padding="lg">
@@ -249,7 +259,7 @@ const nextMonth = () => {
                         </tr>
                     </thead>
                     <tbody>
-                        <tr v-for="(week, weekIndex) in chunkedDays" :key="weekIndex" class="border-b border-mistral-hairline last:border-0">
+                        <tr v-for="(week, weekIndex) in chunkedDays" :key="weekIndex" class="border-b border-mistral-hairline-soft last:border-0 even:bg-mistral-surface/30 hover:bg-mistral-cream-light/40 transition-colors">
                             <td v-for="(day, dayIndex) in week" :key="dayIndex" class="px-1 py-1.5 relative">
                                 <div v-if="!day.isEmpty" class="min-h-[60px]">
                                     <div
@@ -264,8 +274,8 @@ const nextMonth = () => {
                                             :key="groupId"
                                             class="text-[10px] px-1 py-0.5 rounded"
                                             :class="groupData.is_work_day
-                                                ? 'bg-green-100 text-green-700'
-                                                : 'bg-gray-100 text-gray-500'"
+                                                ? 'bg-mistral-success/10 text-mistral-success'
+                                                : 'bg-mistral-surface text-mistral-steel'"
                                         >
                                             {{ groupData.name }}: {{ groupData.is_work_day ? 'W' : 'R' }}
                                         </div>
@@ -284,11 +294,11 @@ const nextMonth = () => {
                     <span class="text-mistral-ink">{{ group.name }}</span>
                 </div>
                 <div class="flex items-center gap-2">
-                    <span class="w-4 h-4 rounded bg-green-100"></span>
+                    <span class="w-4 h-4 rounded bg-mistral-success/10"></span>
                     <span class="text-mistral-ink">{{ t('shifts.work_day') }}</span>
                 </div>
                 <div class="flex items-center gap-2">
-                    <span class="w-4 h-4 rounded bg-gray-100"></span>
+                    <span class="w-4 h-4 rounded bg-mistral-surface"></span>
                     <span class="text-mistral-ink">{{ t('shifts.rest_day') }}</span>
                 </div>
             </div>

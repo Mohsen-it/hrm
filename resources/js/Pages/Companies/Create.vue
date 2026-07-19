@@ -1,16 +1,8 @@
 <script setup>
-
-import { reactive, ref, computed } from 'vue';
+import { reactive, ref } from 'vue';
 import { router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
-import PageHeader from '@/Components/ui/PageHeader.vue';
-import FormInput from '@/Components/ui/FormInput.vue';
-import FormTextarea from '@/Components/ui/FormTextarea.vue';
-import FormSelect from '@/Components/ui/FormSelect.vue';
-import FormCheckbox from '@/Components/ui/FormCheckbox.vue';
-import Button from '@/Components/ui/Button.vue';
-import Card from '@/Components/ui/Card.vue';
-
+import { PageHeader, Button, Card, FormInput, FormTextarea, FormSelect, FormCheckbox, FormFileUpload, FormSection, FormActions, ErrorSummary } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
@@ -46,10 +38,6 @@ const statusOptions = [
 
 const errorFor = (key) => errors.value[key] || '';
 
-function onFileChange(e) {
-    form.logo = e.target.files[0] || null;
-}
-
 function submit() {
     processing.value = true;
     errors.value = {};
@@ -64,11 +52,9 @@ function submit() {
         },
     });
 }
-
 </script>
 
 <template>
-
     <AppLayout :title="t('companies.add_new')">
         <PageHeader
             :title="t('companies.add_new')"
@@ -78,160 +64,173 @@ function submit() {
                 <Button variant="secondary" icon="fas fa-arrow-right rtl-flip" :href="route('companies.index')">
                     {{ t('common.back') }}
                 </Button>
-
-            
-</template>
-
+            </template>
         </PageHeader>
 
-        <Card variant="base" padding="md" as="form" @submit.prevent="submit">
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormInput
-                    v-model="form.company_code"
-                    :label="t('companies.code')"
-                    name="company_code"
-                    required
-                    :error="errorFor('company_code')"
-                />
-                <FormInput
-                    v-model="form.company_name"
-                    :label="t('companies.name')"
-                    name="company_name"
-                    required
-                    :error="errorFor('company_name')"
-                />
-                <FormInput
-                    v-model="form.email"
-                    :label="t('companies.email')"
-                    name="email"
-                    type="email"
-                    :error="errorFor('email')"
-                />
-                <FormInput
-                    v-model="form.phone"
-                    :label="t('companies.phone')"
-                    name="phone"
-                    :error="errorFor('phone')"
-                />
-                <FormInput
-                    v-model="form.website"
-                    :label="t('companies.website')"
-                    name="website"
-                    type="url"
-                    :error="errorFor('website')"
-                />
-                <FormInput
-                    v-model="form.established_date"
-                    :label="t('companies.established_date')"
-                    name="established_date"
-                    type="date"
-                    :error="errorFor('established_date')"
-                />
-                <FormInput
-                    v-model="form.tax_number"
-                    :label="t('companies.tax_number')"
-                    name="tax_number"
-                    :error="errorFor('tax_number')"
-                />
-                <FormInput
-                    v-model="form.commercial_number"
-                    :label="t('companies.commercial_number')"
-                    name="commercial_number"
-                    :error="errorFor('commercial_number')"
-                />
-                <FormInput
-                    v-model="form.address"
-                    :label="t('companies.address')"
-                    name="address"
-                    :error="errorFor('address')"
-                />
-                <FormInput
-                    v-model="form.address2"
-                    :label="t('companies.address2')"
-                    name="address2"
-                    :error="errorFor('address2')"
-                />
-                <FormInput
-                    v-model="form.city"
-                    :label="t('companies.city')"
-                    name="city"
-                    :error="errorFor('city')"
-                />
-                <FormInput
-                    v-model="form.state"
-                    :label="t('companies.state')"
-                    name="state"
-                    :error="errorFor('state')"
-                />
-                <FormInput
-                    v-model="form.postal_code"
-                    :label="t('companies.postal_code')"
-                    name="postal_code"
-                    :error="errorFor('postal_code')"
-                />
-                <FormInput
-                    v-model="form.country"
-                    :label="t('companies.country')"
-                    name="country"
-                    :error="errorFor('country')"
-                />
-                <FormSelect
-                    v-model="form.status"
-                    :label="t('common.status')"
-                    name="status"
-                    :options="statusOptions"
-                    required
-                    :error="errorFor('status')"
-                />
-            </div>
+        <ErrorSummary :errors="errors" />
 
-            <div class="mt-4">
-                <FormTextarea
-                    v-model="form.description"
-                    :label="t('companies.description')"
-                    name="description"
-                    :rows="3"
-                    :error="errorFor('description')"
-                />
-            </div>
+        <form class="space-y-6" @submit.prevent="submit">
+            <FormSection
+                :title="t('companies.basic_info')"
+                icon="fas fa-building"
+                :collapsible="true"
+                :default-open="true"
+            >
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FormInput
+                        v-model="form.company_code"
+                        :label="t('companies.code')"
+                        name="company_code"
+                        required
+                        autofocus
+                        :error="errorFor('company_code')"
+                    />
+                    <FormInput
+                        v-model="form.company_name"
+                        :label="t('companies.name')"
+                        name="company_name"
+                        required
+                        :error="errorFor('company_name')"
+                    />
+                    <FormInput
+                        v-model="form.email"
+                        :label="t('companies.email')"
+                        name="email"
+                        type="email"
+                        :error="errorFor('email')"
+                    />
+                    <FormInput
+                        v-model="form.phone"
+                        :label="t('companies.phone')"
+                        name="phone"
+                        :error="errorFor('phone')"
+                    />
+                    <FormInput
+                        v-model="form.website"
+                        :label="t('companies.website')"
+                        name="website"
+                        type="url"
+                        :error="errorFor('website')"
+                    />
+                    <FormInput
+                        v-model="form.established_date"
+                        :label="t('companies.established_date')"
+                        name="established_date"
+                        type="date"
+                        :error="errorFor('established_date')"
+                    />
+                    <FormSelect
+                        v-model="form.status"
+                        :label="t('common.status')"
+                        name="status"
+                        :options="statusOptions"
+                        required
+                        :error="errorFor('status')"
+                    />
+                </div>
+            </FormSection>
 
-            <div class="mt-4">
-                <label class="block text-[13px] font-semibold text-mistral-steel mb-1">
-                    {{ t('companies.logo') }}
-                </label>
+            <FormSection
+                :title="t('companies.legal_info')"
+                icon="fas fa-file-invoice"
+                :collapsible="true"
+                :default-open="true"
+            >
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FormInput
+                        v-model="form.tax_number"
+                        :label="t('companies.tax_number')"
+                        name="tax_number"
+                        :error="errorFor('tax_number')"
+                    />
+                    <FormInput
+                        v-model="form.commercial_number"
+                        :label="t('companies.commercial_number')"
+                        name="commercial_number"
+                        :error="errorFor('commercial_number')"
+                    />
+                </div>
+            </FormSection>
 
-                <input
-                    type="file"
-                    accept="image/*"
-                    class="form-input py-2"
-                    @change="onFileChange"
-                />
-                <p v-if="errorFor('logo')" class="text-[11px] text-mistral-danger mt-1">
-                    {{ errorFor('logo') }}
-                </p>
+            <FormSection
+                :title="t('companies.location')"
+                icon="fas fa-location-dot"
+                :collapsible="true"
+                :default-open="true"
+            >
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FormInput
+                        v-model="form.address"
+                        :label="t('companies.address')"
+                        name="address"
+                        :error="errorFor('address')"
+                    />
+                    <FormInput
+                        v-model="form.address2"
+                        :label="t('companies.address2')"
+                        name="address2"
+                        :error="errorFor('address2')"
+                    />
+                    <FormInput
+                        v-model="form.city"
+                        :label="t('companies.city')"
+                        name="city"
+                        :error="errorFor('city')"
+                    />
+                    <FormInput
+                        v-model="form.state"
+                        :label="t('companies.state')"
+                        name="state"
+                        :error="errorFor('state')"
+                    />
+                    <FormInput
+                        v-model="form.postal_code"
+                        :label="t('companies.postal_code')"
+                        name="postal_code"
+                        :error="errorFor('postal_code')"
+                    />
+                    <FormInput
+                        v-model="form.country"
+                        :label="t('companies.country')"
+                        name="country"
+                        :error="errorFor('country')"
+                    />
+                </div>
+            </FormSection>
 
-            </div>
+            <FormSection
+                :title="t('companies.additional')"
+                icon="fas fa-ellipsis"
+                :collapsible="true"
+                :default-open="false"
+            >
+                <div class="space-y-4">
+                    <FormTextarea
+                        v-model="form.description"
+                        :label="t('companies.description')"
+                        name="description"
+                        :rows="3"
+                        :error="errorFor('description')"
+                    />
+                    <FormFileUpload
+                        v-model="form.logo"
+                        :label="t('companies.logo')"
+                        accept="image/*"
+                        :error="errorFor('logo')"
+                    />
+                    <FormCheckbox
+                        v-model="form.is_default"
+                        :label="t('companies.set_as_default')"
+                    />
+                </div>
+            </FormSection>
 
-            <div class="mt-4">
-                <FormCheckbox
-                    v-model="form.is_default"
-                    :label="t('companies.set_as_default')"
-                />
-            </div>
-
-            <div class="mt-6 flex items-center justify-start gap-2">
-                <Button type="submit" variant="primary" :loading="processing" icon="fas fa-save">
-                    {{ t('common.save') }}
-                </Button>
-
-                <Button variant="secondary" :href="route('companies.index')">
-                    {{ t('common.cancel') }}
-                </Button>
-
-            </div>
-
-        </Card>
-
+            <FormActions
+                :save-label="t('common.save')"
+                :cancel-label="t('common.cancel')"
+                :cancel-href="route('companies.index')"
+                :saving="processing"
+            />
+        </form>
     </AppLayout>
-
 </template>

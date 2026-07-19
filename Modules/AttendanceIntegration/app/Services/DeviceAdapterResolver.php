@@ -7,6 +7,7 @@ use Modules\AttendanceIntegration\Contracts\DriverProviderInterface;
 use Modules\AttendanceIntegration\Contracts\PunchNormalizerInterface;
 use Modules\AttendanceIntegration\Contracts\PushPayloadParserInterface;
 use Modules\AttendanceIntegration\Drivers\Hikvision\HikvisionAdapter;
+use Modules\AttendanceIntegration\Drivers\Hikvision\HikvisionPunchNormalizer;
 use Modules\AttendanceIntegration\Drivers\Suprema\SupremaAdapter;
 use Modules\AttendanceIntegration\Drivers\ZKTeco\ZKTecoAdapter;
 use Modules\AttendanceIntegration\Drivers\ZKTeco\ZKTecoAdmsParser;
@@ -110,7 +111,7 @@ class DeviceAdapterResolver
             ],
             'hikvision' => [
                 'adapter' => HikvisionAdapter::class,
-                'normalizer' => null,
+                'normalizer' => HikvisionPunchNormalizer::class,
                 'parser' => null,
             ],
         ];

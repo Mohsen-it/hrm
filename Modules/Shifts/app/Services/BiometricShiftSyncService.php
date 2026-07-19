@@ -3,7 +3,6 @@
 namespace Modules\Shifts\Services;
 
 use Carbon\Carbon;
-use Illuminate\Support\Facades\DB;
 use Modules\Attendance\Models\AttendanceSession;
 use Modules\Attendance\Models\DailyAttendanceSummary;
 use Modules\Shifts\Repositories\RotationAssignmentRepository;

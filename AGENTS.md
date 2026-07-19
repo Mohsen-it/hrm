@@ -91,6 +91,50 @@ class CompaniesController extends Controller
 
 ---
 
+## ⚠️ IMPORTANT: Rotation Features vs Basic Shift Features
+
+**DO NOT CONFUSE these two systems.** They are separate features that serve different purposes.
+
+### Basic Shift Features (Backend Only - NOT in UI)
+
+These features exist in the codebase but are **NOT exposed in the user interface**. They are internal/backend only:
+
+| Feature | Purpose | Location |
+|---------|---------|----------|
+| **Shifts** (`المناوبات`) | Basic shift definitions (code, name, time, work days) | `Modules/Shifts/` - Shift model, ShiftsController |
+| **Shift Categories** (`فئات النوبات`) | Work patterns (cyclic/weekly/hours) | `Modules/Shifts/` - ShiftCategory model |
+| **Time Schedules** (`جداول الوقت`) | Clock-in/out times, breaks, margins | `Modules/Shifts/` - TimeSchedule model |
+| **Shift Assignments** (`إسناد الموظفين`) | Assign employees to shift categories | `Modules/Shifts/` - EmployeeShiftCategory model |
+
+**⚠️ NEVER edit these features when asked about Rotations.**
+
+### Rotation Features (Active in UI)
+
+These are the **active features** shown in the sidebar navigation:
+
+| Feature | Purpose | Location |
+|---------|---------|----------|
+| **Rotations** (`الدوريات`) | Cyclic work/rest patterns with groups (A,B,C,D) | `Modules/Shifts/` - Rotation model, RotationsController |
+| **Rotation Assignments** (`إسناد الدوريات`) | Assign employees to rotation groups | `Modules/Shifts/` - RotationAssignment model |
+| **Monthly Schedules** (`الجداول الشهرية`) | Generated schedule periods from rotations | `Modules/Shifts/` - SchedulePeriod model |
+
+### Dependency Chain
+
+```
+Rotations → use TimeSchedules (for clock times)
+RotationGroups → have time_schedule_id FK
+ScheduleResolverService → uses RotationAssignment + RotationEngine
+```
+
+### When Working on Rotations
+
+- **Edit:** `RotationsController.php`, `RotationService.php`, `RotationEngine.php`, `Rotation.php`, `RotationGroup.php`, `RotationAssignment.php`
+- **Edit Views:** `resources/js/Pages/Shifts/Rotations/*.vue`
+- **Edit Routes:** `Modules/Shifts/routes/web.php` (rotation routes section)
+- **DO NOT edit:** ShiftsController, ShiftCategoriesController, TimeSchedulesController, ShiftCategoryAssignmentController
+
+---
+
 ## 📁 Project Structure
 
 ```

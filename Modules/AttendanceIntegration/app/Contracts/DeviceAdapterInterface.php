@@ -28,4 +28,11 @@ interface DeviceAdapterInterface
     public function clearAttendance(string $ip, int $port, string $commKey, int $timeout): bool;
 
     public function getDriverName(): string;
+
+    /**
+     * Get face photos for all users from the device.
+     * Returns array of ['employee_no' => string, 'face_url' => string, 'photo_base64' => string|null].
+     * Default: empty array (not all devices support face photos).
+     */
+    public function getFacePhotos(string $ip, int $port, string $commKey, int $timeout): array;
 }

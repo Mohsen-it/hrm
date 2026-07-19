@@ -188,6 +188,11 @@ class ZKTecoAdapter implements DeviceAdapterInterface
         return 'zkteco';
     }
 
+    public function getFacePhotos(string $ip, int $port, string $commKey, int $timeout): array
+    {
+        return [];
+    }
+
     private function buildPayload(string $ip, int $port, string $commKey, int $timeout): array
     {
         return [

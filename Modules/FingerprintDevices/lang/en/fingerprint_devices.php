@@ -118,6 +118,7 @@ return [
     'sync_step_info' => 'Refresh device info',
     'sync_step_users' => 'Pull user list',
     'sync_step_fingerprints' => 'Pull fingerprint templates',
+    'sync_step_face_photos' => 'Pull face photos',
     'sync_step_attendance' => 'Pull attendance logs',
     'sync_clear_local' => 'Wipe local templates before pulling (full rebuild)',
     'sync_run' => 'Start Sync',

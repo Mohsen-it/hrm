@@ -73,7 +73,7 @@ return new class extends Migration
     {
         $connection = Schema::getConnection();
         $database = $connection->getDatabaseName();
-        $table = $connection->getTablePrefix() . $table;
+        $table = $connection->getTablePrefix().$table;
 
         $count = $connection->selectOne(
             "SELECT COUNT(*) as count FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA = ? AND TABLE_NAME = ? AND CONSTRAINT_NAME = ? AND CONSTRAINT_TYPE = 'FOREIGN KEY'",

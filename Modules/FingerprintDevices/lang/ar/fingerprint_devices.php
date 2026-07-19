@@ -118,6 +118,7 @@ return [
     'sync_step_info' => 'تحديث معلومات الجهاز',
     'sync_step_users' => 'سحب قائمة المستخدمين',
     'sync_step_fingerprints' => 'سحب البصمات',
+    'sync_step_face_photos' => 'سحب الصور',
     'sync_step_attendance' => 'سجلات الحضور',
     'sync_clear_local' => 'حذف البصمات المحلية قبل السحب (إعادة بناء)',
     'sync_run' => 'بدء المزامنة',

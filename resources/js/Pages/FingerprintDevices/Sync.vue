@@ -25,6 +25,7 @@ const options = ref({
     info: true,
     users: true,
     fingerprints: true,
+    face_photos: true,
     attendance: true,
     clear_local_cache: false,
 });
@@ -71,6 +72,7 @@ const stepIcon = (name) => {
         info: 'fas fa-info-circle',
         users: 'fas fa-users',
         fingerprints: 'fas fa-fingerprint',
+        face_photos: 'fas fa-camera',
         attendance: 'fas fa-clock',
     };
     return map[name] || 'fas fa-cog';
@@ -81,6 +83,7 @@ const stepColorClass = (name) => {
         info: 'text-mistral-info',
         users: 'text-mistral-primary',
         fingerprints: 'text-mistral-success',
+        face_photos: 'text-mistral-info',
         attendance: 'text-mistral-warning',
     };
     return map[name] || 'text-mistral-steel';
@@ -317,6 +320,16 @@ watch(deviceId, (v) => {
                             />
                             <i class="fas fa-fingerprint text-mistral-success w-4"></i>
                             <span>{{ t('fingerprint_devices.sync_step_fingerprints') }}</span>
+                        </label>
+                        <label class="flex items-center gap-2 text-[13px] text-mistral-ink">
+                            <input
+                                v-model="options.face_photos"
+                                type="checkbox"
+                                class="form-checkbox"
+                                :disabled="isRunning"
+                            />
+                            <i class="fas fa-camera text-mistral-info w-4"></i>
+                            <span>{{ t('fingerprint_devices.sync_step_face_photos') }}</span>
                         </label>
                         <label class="flex items-center gap-2 text-[13px] text-mistral-ink">
                             <input

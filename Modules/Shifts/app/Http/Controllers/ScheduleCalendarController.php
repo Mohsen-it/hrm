@@ -9,9 +9,7 @@ use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Modules\Attendance\Models\AttendanceSession;
 use Modules\Holidays\Models\Holiday;
-use Modules\Shifts\Models\ShiftCategory;
 use Modules\Shifts\Services\AbsenceCalculationService;
-use Modules\Shifts\Services\ScheduleResolverService;
 use Modules\Vacations\Models\UserVacationRequest;
 
 class ScheduleCalendarController extends Controller

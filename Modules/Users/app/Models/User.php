@@ -66,7 +66,7 @@ class User extends Authenticatable
         'address', 'city', 'state', 'country', 'postal_code',
         'emergency_contact_name', 'emergency_contact_phone', 'emergency_contact_relation',
         'bank_name', 'bank_account_number', 'iban',
-        'avatar',
+        'avatar', 'face_photo_path',
         'status', 'is_active_employee',
         'last_login_at', 'last_login_ip',
         'must_change_password', 'failed_login_attempts', 'locked_until',

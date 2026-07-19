@@ -27,7 +27,7 @@ class StoreFingerprintDeviceRequest extends FormRequest
             ],
             'ip_address' => ['required', 'ip', 'max:45'],
             'port' => ['nullable', 'integer', 'min:1', 'max:65535'],
-            'comm_key' => ['nullable', 'integer', 'min:0'],
+            'comm_key' => ['nullable', 'string', 'max:255'],
             'timezone' => ['nullable', 'string', 'max:50', 'timezone'],
             'connection_type' => ['nullable', Rule::in(['tcp', 'udp'])],
             'timeout' => ['nullable', 'integer', 'min:5', 'max:120'],
@@ -56,7 +56,7 @@ class StoreFingerprintDeviceRequest extends FormRequest
         $data = $this->validated();
 
         $data['port'] = $data['port'] ?? 4370;
-        $data['comm_key'] = $data['comm_key'] ?? 0;
+        $data['comm_key'] = $data['comm_key'] ?? '';
         $data['timeout'] = $data['timeout'] ?? 30;
         $data['connection_type'] = $data['connection_type'] ?? 'tcp';
         $data['status'] = $data['status'] ?? 'offline';

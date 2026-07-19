@@ -15,8 +15,10 @@ return [
             'api_key' => env('SUPREMA_API_KEY', ''),
         ],
         'hikvision' => [
-            'api_url' => env('HIKVISION_API_URL', ''),
-            'api_key' => env('HIKVISION_API_KEY', ''),
+            'api_url' => env('HIKVISION_API_URL', 'http://127.0.0.1:5001'),
+            'bridge_timeout' => (int) env('HIKVISION_BRIDGE_TIMEOUT', 30),
+            'username' => env('HIKVISION_USERNAME', 'admin'),
+            'password' => env('HIKVISION_PASSWORD', ''),
         ],
     ],
 

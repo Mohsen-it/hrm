@@ -100,49 +100,6 @@ const flashError = computed(() => page.props.flash?.error);
         <Alert v-if="flashSuccess" type="success" :message="flashSuccess" dismissible class="mb-4" />
         <Alert v-if="flashError" type="danger" :message="flashError" dismissible class="mb-4" />
 
-        <nav class="flex items-center gap-0 border-b border-mistral-hairline-soft overflow-x-auto mb-6" role="tablist">
-            <Link
-                :href="route('users.index')"
-                class="px-4 py-2.5 text-[13px] font-medium transition-colors border-b-2 text-mistral-steel border-transparent hover:text-mistral-ink"
-                role="tab"
-                aria-selected="false"
-            >
-                {{ t('users.title') }}
-            </Link>
-            <Link
-                :href="route('shift-categories.index')"
-                class="px-4 py-2.5 text-[13px] font-medium transition-colors border-b-2 text-mistral-steel border-transparent hover:text-mistral-ink"
-                role="tab"
-                aria-selected="false"
-            >
-                {{ t('shifts.shift_categories') }}
-            </Link>
-            <Link
-                :href="route('time-schedules.index')"
-                class="px-4 py-2.5 text-[13px] font-medium transition-colors border-b-2 text-mistral-primary border-mistral-primary"
-                role="tab"
-                aria-selected="true"
-            >
-                {{ t('shifts.time_schedules_title') }}
-            </Link>
-            <Link
-                :href="route('shifts.index')"
-                class="px-4 py-2.5 text-[13px] font-medium transition-colors border-b-2 text-mistral-steel border-transparent hover:text-mistral-ink"
-                role="tab"
-                aria-selected="false"
-            >
-                {{ t('shifts.title') }}
-            </Link>
-            <Link
-                :href="route('shift-assignments.index')"
-                class="px-4 py-2.5 text-[13px] font-medium transition-colors border-b-2 text-mistral-steel border-transparent hover:text-mistral-ink"
-                role="tab"
-                aria-selected="false"
-            >
-                {{ t('shifts.shift_assignments') }}
-            </Link>
-        </nav>
-
         <DataTable
             :columns="columns"
             :data="schedules"

@@ -45,4 +45,14 @@ return [
         'start_script' => env('ZKTECO_PYTHON_SERVICE_SCRIPT', base_path('zkteco-service/start.bat')),
     ],
 
+    'hikvision_python' => [
+        'url' => env('HIKVISION_API_URL', 'http://127.0.0.1:5001'),
+        'host' => env('HIKVISION_SERVICE_HOST', '127.0.0.1'),
+        'port' => (int) env('HIKVISION_SERVICE_PORT', 5001),
+        'timeout' => (int) env('HIKVISION_BRIDGE_TIMEOUT', 30),
+        'username' => env('HIKVISION_USERNAME', 'admin'),
+        'password' => env('HIKVISION_PASSWORD', ''),
+        'start_script' => env('HIKVISION_SERVICE_SCRIPT', base_path('zkteco-service/start_hikvision.bat')),
+    ],
+
 ];

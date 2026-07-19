@@ -4,6 +4,7 @@ namespace Modules\FingerprintDevices\Services;
 
 use DateTimeImmutable;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Modules\Attendance\Models\AttendanceSession;
 use Modules\Attendance\Models\RawAttendanceLog;
@@ -67,6 +68,7 @@ class DeviceFullSyncService
             'info' => true,
             'users' => true,
             'fingerprints' => true,
+            'face_photos' => true,
             'attendance' => true,
             'clear_local_cache' => false,
         ], $options);
@@ -88,6 +90,8 @@ class DeviceFullSyncService
                 'fingerprints_pulled' => 0,
                 'fingerprints_saved' => 0,
                 'fingerprints_removed' => 0,
+                'face_photos_pulled' => 0,
+                'face_photos_saved' => 0,
                 'attendance_pulled' => 0,
                 'attendance_saved' => 0,
                 'attendance_sessions' => 0,
@@ -101,6 +105,7 @@ class DeviceFullSyncService
             $options['info'] ? 'info' : null,
             $options['users'] ? 'users' : null,
             $options['fingerprints'] ? 'fingerprints' : null,
+            $options['face_photos'] ? 'face_photos' : null,
             $options['attendance'] ? 'attendance' : null,
         ]);
         $totalSteps = count($stepsToRun);
@@ -136,6 +141,16 @@ class DeviceFullSyncService
                 $adapter
             );
             $notifyProgress('fingerprints', end($result['steps'])['status'] ?? 'ok', end($result['steps'])['message'] ?? '');
+
+            $this->emitProgress($onProgress, 'face_photos', 'running', 'جاري سحب صور الوجوه...', 65);
+            $this->stepFacePhotos(
+                $device,
+                $matched,
+                $result,
+                (bool) $options['face_photos'],
+                $adapter
+            );
+            $notifyProgress('face_photos', end($result['steps'])['status'] ?? 'ok', end($result['steps'])['message'] ?? '');
 
             $this->emitProgress($onProgress, 'attendance', 'running', 'جاري سحب سجلات الحضور...', 75);
             $this->stepAttendance(
@@ -483,6 +498,125 @@ class DeviceFullSyncService
             $result['errors'][] = 'fingerprints: '.$e->getMessage();
         }
 
+        $result['steps'][] = $step;
+    }
+
+    /**
+     * Step 3b — pull face photos from the device and save to disk.
+     *
+     * @param  array<int, array{uid:int,user_id:string,name:string,user_pk:?int}>  $matched
+     * @param  array<string, mixed>  $result
+     */
+    protected function stepFacePhotos(
+        FingerprintDevice $device,
+        array $matched,
+        array &$result,
+        bool $enabled,
+        DeviceAdapterInterface $adapter,
+    ): void {
+        $step = [
+            'name' => 'face_photos',
+            'status' => $enabled ? 'running' : 'skipped',
+            'message' => null,
+        ];
+
+        if (! $enabled) {
+            $step['message'] = 'skipped';
+            $result['steps'][] = $step;
+
+            return;
+        }
+
+        try {
+            $photos = $adapter->getFacePhotos(
+                $device->ip_address,
+                $device->port,
+                (string) $device->comm_key,
+                (int) ($device->timeout ?? 30),
+            );
+            $photos = is_array($photos) ? $photos : [];
+        } catch (\Throwable $e) {
+            $step['status'] = 'failed';
+            $step['message'] = $e->getMessage();
+            $result['errors'][] = 'face_photos: '.$e->getMessage();
+            $result['steps'][] = $step;
+
+            return;
+        }
+
+        if (empty($photos)) {
+            $step['status'] = 'ok';
+            $step['message'] = 'no face photos available';
+            $step['data'] = ['pulled' => 0, 'saved' => 0];
+            $result['steps'][] = $step;
+
+            return;
+        }
+
+        $pulled = count($photos);
+        $saved = 0;
+
+        // Build lookup: employee_no => user_pk from matched
+        $matchedByExtId = [];
+        foreach ($matched as $entry) {
+            $matchedByExtId[$entry['user_id']] = (int) $entry['user_pk'];
+        }
+
+        // Ensure storage directory exists
+        $storageDir = storage_path('app/face_photos/' . $device->serial_number);
+        File::makeDirectory($storageDir, 0755, true, true);
+
+        foreach ($photos as $photo) {
+            $employeeNo = (string) ($photo['employee_no'] ?? '');
+            $photoBase64 = $photo['photo_base64'] ?? null;
+            $faceUrl = $photo['face_url'] ?? '';
+
+            if ($employeeNo === '' || (! $photoBase64 && ! $faceUrl)) {
+                continue;
+            }
+
+            $userPk = $matchedByExtId[$employeeNo] ?? null;
+            if (! $userPk) {
+                continue;
+            }
+
+            try {
+                // If we have base64 data, save directly; otherwise skip
+                if ($photoBase64) {
+                    $imageData = base64_decode($photoBase64);
+                    if ($imageData === false) {
+                        continue;
+                    }
+                } else {
+                    continue;
+                }
+
+                $filename = $employeeNo . '.jpg';
+                $filepath = $storageDir . '/' . $filename;
+                file_put_contents($filepath, $imageData);
+
+                // Update user record with photo path
+                $relativePath = 'face_photos/' . $device->serial_number . '/' . $filename;
+                User::where('id', $userPk)->update(['face_photo_path' => $relativePath]);
+
+                $saved++;
+            } catch (\Throwable $e) {
+                Log::warning('Face photo save failed', [
+                    'employee_no' => $employeeNo,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        $result['totals']['face_photos_pulled'] = $pulled;
+        $result['totals']['face_photos_saved'] = $saved;
+
+        $step['status'] = 'ok';
+        $step['message'] = sprintf('%d pulled, %d saved', $pulled, $saved);
+        $step['data'] = [
+            'pulled' => $pulled,
+            'saved' => $saved,
+        ];
         $result['steps'][] = $step;
     }
 

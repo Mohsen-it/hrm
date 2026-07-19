@@ -77,6 +77,7 @@ class DeviceFullSyncController extends Controller
             'options.info' => ['nullable', 'boolean'],
             'options.users' => ['nullable', 'boolean'],
             'options.fingerprints' => ['nullable', 'boolean'],
+            'options.face_photos' => ['nullable', 'boolean'],
             'options.attendance' => ['nullable', 'boolean'],
             'options.clear_local_cache' => ['nullable', 'boolean'],
         ]);
@@ -114,6 +115,7 @@ class DeviceFullSyncController extends Controller
             'options.info' => ['nullable', 'boolean'],
             'options.users' => ['nullable', 'boolean'],
             'options.fingerprints' => ['nullable', 'boolean'],
+            'options.face_photos' => ['nullable', 'boolean'],
             'options.attendance' => ['nullable', 'boolean'],
             'options.clear_local_cache' => ['nullable', 'boolean'],
         ]);

@@ -343,8 +343,8 @@ export const navigationModules = [
     icon: 'fa-solid fa-clock',
     color: 'bg-mistral-info/10 text-mistral-info',
     groupKeys: ['shifts'],
-    route: 'shifts.index',
-    permissions: ['view-shifts'],
+    route: 'rotations.index',
+    permissions: ['view-rotations'],
   },
   {
     id: 'leave',

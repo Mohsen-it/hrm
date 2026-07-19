@@ -1,5 +1,5 @@
 <script setup>
-import { reactive, ref, computed } from 'vue';
+import { reactive, ref, computed, watch } from 'vue';
 import { router, Link } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import { PageHeader, Button, Card, FormInput, FormTextarea, FormSelect, FormCheckbox, FormSection, FormActions, ErrorSummary } from '@/Components/ui';
@@ -19,7 +19,9 @@ const form = reactive({
     serial_number: '',
     ip_address: '',
     port: 4370,
-    comm_key: 0,
+    comm_key: '',
+    hikvision_username: '',
+    hikvision_password: '',
     timezone: 'Asia/Baghdad',
     connection_type: 'tcp',
     timeout: 30,
@@ -49,6 +51,28 @@ const deviceTypeOptions = computed(() =>
         value: dt.id,
         label: `${dt.name} (${dt.manufacturer})${dt.default_port ? ' :' + dt.default_port : ''}`,
     })),
+);
+
+const isHikvision = computed(() => {
+    const selected = props.deviceTypes.find((dt) => String(dt.id) === String(form.device_type_id));
+    return selected && (selected.manufacturer || '').toLowerCase().includes('hik');
+});
+
+watch(
+    () => [form.hikvision_username, form.hikvision_password, isHikvision.value],
+    () => {
+        if (isHikvision.value && form.hikvision_username) {
+            form.comm_key = form.hikvision_password
+                ? `${form.hikvision_username}:${form.hikvision_password}`
+                : form.hikvision_username;
+        }
+    },
+);
+
+const commKeyHint = computed(() =>
+    isHikvision.value
+        ? 'Format: username:password (e.g. admin:alep@2025)'
+        : t('fingerprint_devices.comm_key_hint'),
 );
 
 const branchOptions = computed(() => [
@@ -152,6 +176,7 @@ function submit() {
                         :error="errorFor('port')"
                     />
                     <FormInput
+                        v-if="!isHikvision"
                         v-model="form.comm_key"
                         :label="t('fingerprint_devices.comm_key')"
                         name="comm_key"
@@ -159,6 +184,24 @@ function submit() {
                         :hint="t('fingerprint_devices.comm_key_hint')"
                         :error="errorFor('comm_key')"
                     />
+                    <template v-else>
+                        <FormInput
+                            v-model="form.hikvision_username"
+                            label="Username"
+                            name="hikvision_username"
+                            placeholder="admin"
+                            :error="errorFor('comm_key')"
+                        />
+                        <FormInput
+                            v-model="form.hikvision_password"
+                            label="Password"
+                            name="hikvision_password"
+                            type="password"
+                            placeholder="••••••"
+                            :error="errorFor('comm_key')"
+                        />
+                        <input type="hidden" name="comm_key" :value="form.comm_key" />
+                    </template>
                     <FormSelect
                         v-model="form.connection_type"
                         :label="t('fingerprint_devices.connection_type')"

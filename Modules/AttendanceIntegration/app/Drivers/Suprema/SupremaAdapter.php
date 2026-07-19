@@ -59,4 +59,9 @@ class SupremaAdapter implements DeviceAdapterInterface
     {
         return 'suprema';
     }
+
+    public function getFacePhotos(string $ip, int $port, string $commKey, int $timeout): array
+    {
+        return [];
+    }
 }

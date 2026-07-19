@@ -34,7 +34,9 @@ class FingerprintDevicesServiceProvider extends ServiceProvider
 
     protected function registerCommands(): void
     {
-        // $this->commands([]);
+        $this->commands([
+            \Modules\FingerprintDevices\Console\Commands\ImportHikvisionEmployees::class,
+        ]);
     }
 
     protected function registerCommandSchedules(): void

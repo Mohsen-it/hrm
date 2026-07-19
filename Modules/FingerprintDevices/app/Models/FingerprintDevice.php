@@ -35,7 +35,7 @@ class FingerprintDevice extends Model
             'device_type_id' => 'integer',
             'branch_id' => 'integer',
             'port' => 'integer',
-            'comm_key' => 'integer',
+            'comm_key' => 'string',
             'timeout' => 'integer',
             'last_seen_at' => 'datetime',
             'last_synced_at' => 'datetime',

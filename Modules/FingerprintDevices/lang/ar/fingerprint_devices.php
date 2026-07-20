@@ -174,6 +174,8 @@ return [
     'sync_select_users_by_branch' => 'حسب الفرع',
     'sync_select_users_missing' => 'من لم يُدفع سابقاً',
     'sync_push_run' => 'دفع إلى الجهاز',
+    'sync_bidirectional' => 'مزامنة ثنائية',
+    'sync_bidirectional_description' => 'سحب ثم دفع في عملية واحدة',
     'queued_success' => 'تم وضع العملية في قائمة الانتظار. ستكتمل في الخلفية.',
     'push_failed_generic' => 'فشل الدفع',
     'push_completed' => 'اكتمل الدفع',

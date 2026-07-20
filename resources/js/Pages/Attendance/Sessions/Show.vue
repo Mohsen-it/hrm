@@ -20,6 +20,7 @@ const statusVariant = (status) => {
         holiday: 'vacation',
         vacation: 'vacation',
         weekend: 'info',
+        unassigned: 'warning',
     }[status] || 'inactive';
 };
 

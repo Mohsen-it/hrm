@@ -264,6 +264,90 @@ function runPush() {
     });
 }
 
+function runBidirectional() {
+    if (!deviceId.value || isRunning.value) return;
+
+    isRunning.value = true;
+    errorMessage.value = '';
+    result.value = null;
+    progress.value = 0;
+    currentStep.value = '';
+    currentMessage.value = '';
+    currentStatus.value = '';
+    stepsLog.value = [];
+
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+
+    fetch(route('fingerprint-devices.sync.bidirectional'), {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            Accept: 'text/event-stream',
+            'X-CSRF-TOKEN': csrfToken,
+            'X-Requested-With': 'XMLHttpRequest',
+        },
+        credentials: 'same-origin',
+        body: JSON.stringify({
+            device_id: deviceId.value,
+            options: {
+                pull: {
+                    info: options.value.info,
+                    users: options.value.users,
+                    fingerprints: options.value.fingerprints,
+                    face_photos: options.value.face_photos,
+                    attendance: options.value.attendance,
+                },
+                push: {
+                    push_users: options.value.push_users,
+                    push_fingerprints: options.value.push_fingerprints,
+                    select_mode: options.value.select_mode,
+                },
+            },
+        }),
+    }).then((response) => {
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        function processChunk({ done, value }) {
+            if (done) {
+                isRunning.value = false;
+                return;
+            }
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+
+            let eventType = '';
+            let eventData = '';
+
+            for (const line of lines) {
+                if (line.startsWith('event: ')) {
+                    eventType = line.slice(7).trim();
+                } else if (line.startsWith('data: ')) {
+                    eventData = line.slice(6);
+                } else if (line === '' && eventType && eventData) {
+                    handleSSE(eventType, eventData);
+                    eventType = '';
+                    eventData = '';
+                }
+            }
+
+            return reader.read().then(processChunk);
+        }
+
+        return reader.read().then(processChunk);
+    }).catch((err) => {
+        errorMessage.value = err?.message || 'Network error';
+        isRunning.value = false;
+    });
+}
+
 function handleSSE(event, dataRaw) {
     let data;
     try {
@@ -482,6 +566,17 @@ watch(deviceId, (v) => {
                         <Button
                             v-if="!isRunning"
                             variant="primary"
+                            icon="fas fa-exchange-alt"
+                            block
+                            :disabled="!deviceId"
+                            @click="runBidirectional"
+                        >
+                            {{ t('fingerprint_devices.sync_bidirectional') }}
+                        </Button>
+
+                        <Button
+                            v-if="!isRunning"
+                            variant="secondary"
                             icon="fas fa-cloud-download-alt"
                             block
                             :disabled="!deviceId"

@@ -30,6 +30,8 @@ const statusOptions = [
     { value: 'late', label: t('attendance.status.late') },
     { value: 'early_leave', label: t('attendance.status.early_leave') },
     { value: 'missing_punch', label: t('attendance.status.missing_punch') },
+    { value: 'rest', label: t('attendance.status.rest') },
+    { value: 'unassigned', label: t('attendance.status.unassigned') },
 ];
 
 const statusVariant = (status) => {
@@ -39,6 +41,8 @@ const statusVariant = (status) => {
         early_leave: 'info',
         missing_punch: 'absent',
         absent: 'inactive',
+        rest: 'info',
+        unassigned: 'warning',
     }[status] || 'inactive';
 };
 

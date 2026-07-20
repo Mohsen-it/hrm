@@ -114,6 +114,18 @@ class ScheduleResolverService
         $group = $rotationAssignment->rotationGroup;
         $times = $this->rotationEngine->resolveTimes($rotationAssignment);
 
+        // Grace priority: rotation.grace_minutes → snapshot late_margin → global config (null = defer to consumer)
+        $graceMinutes = $rotation->grace_minutes ?? $times['late_margin'] ?? null;
+
+        $timesMeta = [
+            'grace_minutes' => $graceMinutes,
+            'early_margin' => $times['early_margin'] ?? null,
+            'overtime_enabled' => (bool) $rotation->overtime_enabled,
+            'work_on_holidays' => (bool) $rotation->work_on_holidays,
+            'is_overnight' => $times['is_overnight'] ?? false,
+            'break_minutes' => $times['break_minutes'] ?? 0,
+        ];
+
         return $this->rotationEngine->resolve(
             employeeId: $employeeId,
             rotation: $rotation,
@@ -121,6 +133,7 @@ class ScheduleResolverService
             targetDate: $dateStr,
             expectedCheckIn: $times['check_in'],
             expectedCheckOut: $times['check_out'],
+            timesMeta: $timesMeta,
         );
     }
 
@@ -140,6 +153,12 @@ class ScheduleResolverService
         ?int $rotationGroupId = null,
         ?int $exceptionId = null,
         string $source = 'rotation',
+        ?int $graceMinutes = null,
+        ?int $earlyMargin = null,
+        bool $overtimeEnabled = false,
+        bool $workOnHolidays = false,
+        bool $isOvernight = false,
+        int $breakMinutes = 0,
     ): array {
         return [
             'employee_id' => $employeeId,
@@ -154,6 +173,12 @@ class ScheduleResolverService
             'rotation_group_id' => $rotationGroupId,
             'exception_id' => $exceptionId,
             'source' => $source,
+            'grace_minutes' => $graceMinutes,
+            'early_margin' => $earlyMargin,
+            'overtime_enabled' => $overtimeEnabled,
+            'work_on_holidays' => $workOnHolidays,
+            'is_overnight' => $isOvernight,
+            'break_minutes' => $breakMinutes,
         ];
     }
 }

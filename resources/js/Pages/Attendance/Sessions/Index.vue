@@ -27,6 +27,7 @@ const statusOptions = [
     { value: 'holiday', label: t('attendance.status.holiday') },
     { value: 'vacation', label: t('attendance.status.vacation') },
     { value: 'weekend', label: t('attendance.status.weekend') },
+    { value: 'unassigned', label: t('attendance.status.unassigned') },
 ];
 
 const sessionTypeOptions = [
@@ -53,6 +54,7 @@ const statusVariant = (status) => {
         holiday: 'vacation',
         vacation: 'vacation',
         weekend: 'info',
+        unassigned: 'warning',
     }[status] || 'inactive';
 };
 

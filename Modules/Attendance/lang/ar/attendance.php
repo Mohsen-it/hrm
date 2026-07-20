@@ -96,6 +96,8 @@ return [
         'holiday' => 'عطلة',
         'vacation' => 'إجازة',
         'weekend' => 'إجازة أسبوعية',
+        'rest' => 'يوم راحة',
+        'unassigned' => 'بدون إسناد',
     ],
 
     'session_type' => [

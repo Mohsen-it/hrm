@@ -31,6 +31,7 @@ const statusVariant = (status) => {
         late: 'pending',
         early_leave: 'info',
         missing_punch: 'absent',
+        unassigned: 'warning',
     }[status] || 'inactive';
 };
 

@@ -96,6 +96,8 @@ return [
         'holiday' => 'Holiday',
         'vacation' => 'Vacation',
         'weekend' => 'Weekend',
+        'rest' => 'Rest Day',
+        'unassigned' => 'Unassigned',
     ],
 
     'session_type' => [

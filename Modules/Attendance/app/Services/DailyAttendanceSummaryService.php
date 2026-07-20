@@ -113,7 +113,7 @@ class DailyAttendanceSummaryService
 
         $employee = User::select('id', 'branch_id', 'department_id')->find($userId);
 
-        $status = $this->resolveExternalStatus($userId, $date, $employee)
+        $status = $this->resolveExternalStatus($userId, $date, $employee, $resolved)
             ?? $this->determineStatus($sessions, $resolved, $userId, $date);
 
         $payload = array_merge($computed, [
@@ -183,13 +183,14 @@ class DailyAttendanceSummaryService
      */
     protected function determineStatus(Collection $sessions, array $resolved, int $userId, string $date): string
     {
-        // If resolver says employee is on rest day or unassigned
+        // If resolver says employee is on rest day
         if ($resolved['status'] === ScheduleResolverService::STATUS_REST) {
             return 'rest';
         }
 
+        // If resolver says employee has no rotation assignment
         if ($resolved['status'] === ScheduleResolverService::STATUS_UNASSIGNED) {
-            return 'rest';
+            return 'unassigned';
         }
 
         // If resolver says leave excused
@@ -224,10 +225,15 @@ class DailyAttendanceSummaryService
     /**
      * Determine whether an external module (Vacations / Holidays) has
      * already set the day's status.
+     *
+     * @param  array<string, mixed>  $resolved  Resolver contract (contains work_on_holidays).
      */
-    protected function resolveExternalStatus(int $userId, string $date, ?User $employee = null): ?string
+    protected function resolveExternalStatus(int $userId, string $date, ?User $employee = null, array $resolved = []): ?string
     {
-        if (Schema::hasTable('holidays') && $this->isHoliday($date, $employee)) {
+        // Skip holiday status when the rotation is configured to work on holidays
+        $workOnHolidays = $resolved['work_on_holidays'] ?? false;
+
+        if (! $workOnHolidays && Schema::hasTable('holidays') && $this->isHoliday($date, $employee)) {
             return 'holiday';
         }
 

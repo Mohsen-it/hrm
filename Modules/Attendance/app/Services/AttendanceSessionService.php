@@ -243,22 +243,33 @@ class AttendanceSessionService
 
         $earlyLeaveMinutes = 0;
         $overtimeMinutes = 0;
+        $breakMinutes = 0;
 
         // Resolve expected times from rotation via resolver
         $resolved = $this->scheduleResolver->resolve($session->user_id, $session->attendance_date);
         $expectedCheckOut = $resolved['expected_check_out'];
 
         if ($expectedCheckOut) {
-            $expectedEnd = $this->buildDateTimeFromSlot($expectedCheckOut, $session->attendance_date);
+            $expectedEnd = $this->buildDateTimeFromSlot($expectedCheckOut, $session->attendance_date, $resolved['is_overnight'] ?? false);
             if ($expectedEnd !== null) {
                 $diff = (int) round(($at->getTimestamp() - $expectedEnd->getTimestamp()) / 60);
                 if ($diff < 0) {
-                    $earlyLeaveMinutes = abs($diff);
+                    // Early leave: subtract early_margin if present
+                    $earlyMargin = (int) ($resolved['early_margin'] ?? 0);
+                    $earlyLeaveMinutes = max(0, abs($diff) - $earlyMargin);
                 } elseif ($diff > 0) {
-                    $overtimeMinutes = $diff;
+                    // Overtime: only if rotation enables it and exceeds grace threshold
+                    $overtimeEnabled = $resolved['overtime_enabled'] ?? false;
+                    $overtimeGrace = (int) config('attendance.overtime_grace_minutes', 60);
+                    if ($overtimeEnabled && $diff > $overtimeGrace) {
+                        $overtimeMinutes = $diff;
+                    }
                 }
             }
         }
+
+        // Scheduled break minutes from the resolver
+        $breakMinutes = (int) ($resolved['break_minutes'] ?? 0);
 
         $status = $session->status;
         if (! in_array($status, ['holiday', 'vacation', 'weekend'], true)) {
@@ -274,6 +285,7 @@ class AttendanceSessionService
         $session->forceFill([
             'check_out_at' => $at,
             'work_minutes' => $workMinutes,
+            'break_minutes' => $breakMinutes,
             'early_leave_minutes' => $earlyLeaveMinutes,
             'overtime_minutes' => $overtimeMinutes,
             'status' => $status,
@@ -359,8 +371,11 @@ class AttendanceSessionService
 
     /**
      * Reconstruct the absolute date-time of an expected check-out slot.
+     *
+     * When the shift is overnight (out_time < in_time), the expected checkout
+     * is moved to the next calendar day.
      */
-    protected function buildDateTimeFromSlot(string $slot, string $attendanceDate): ?DateTimeImmutable
+    protected function buildDateTimeFromSlot(string $slot, string $attendanceDate, bool $isOvernight = false): ?DateTimeImmutable
     {
         if (preg_match('/^\d{2}:\d{2}$/', $slot) === 1) {
             $slot = "{$attendanceDate} {$slot}:00";
@@ -372,14 +387,18 @@ class AttendanceSessionService
             ?: DateTimeImmutable::createFromFormat('Y-m-d H:i', $slot)
             ?: null;
 
+        // For overnight shifts, expected checkout falls on the next day
+        if ($dt && $isOvernight) {
+            $dt = $dt->modify('+1 day');
+        }
+
         return $dt;
     }
 
     /**
      * Compute late minutes for a check-in against the expected slot.
      *
-     * Grace minutes from the resolver are subtracted first; punches within
-     * the grace window never count as late.
+     * Grace priority: rotation.grace_minutes → global config fallback.
      */
     protected function computeLateMinutes(?string $expectedCheckIn, DateTimeInterface $at, array $resolved): int
     {
@@ -392,11 +411,15 @@ class AttendanceSessionService
             return 0;
         }
 
-        // Grace minutes from the rotation group or global config
-        $grace = (int) config('attendance.default_grace_minutes', 0);
+        // Grace from rotation → global config
+        $grace = $resolved['grace_minutes'] ?? null;
+        if ($grace === null) {
+            $grace = (int) config('attendance.default_grace_minutes', 0);
+        }
+
         $minutes = (int) round(($at->getTimestamp() - $expected->getTimestamp()) / 60);
 
-        return max(0, $minutes - $grace);
+        return max(0, $minutes - (int) $grace);
     }
 
     /**

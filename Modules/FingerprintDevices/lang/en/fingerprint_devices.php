@@ -174,6 +174,8 @@ return [
     'sync_select_users_by_branch' => 'By branch',
     'sync_select_users_missing' => 'Never pushed before',
     'sync_push_run' => 'Push to device',
+    'sync_bidirectional' => 'Bidirectional Sync',
+    'sync_bidirectional_description' => 'Pull then push in a single operation',
     'queued_success' => 'Operation queued. Will complete in background.',
     'push_failed_generic' => 'Push failed',
     'push_completed' => 'Push completed',

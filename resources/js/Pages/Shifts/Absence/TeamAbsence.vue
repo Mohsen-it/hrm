@@ -46,6 +46,7 @@ function statusVariant(status) {
         late: 'pending',
         early_leave: 'info',
         on_leave: 'vacation',
+        unassigned: 'warning',
     }
     return map[status] || 'inactive'
 }

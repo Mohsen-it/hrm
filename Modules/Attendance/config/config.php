@@ -36,6 +36,7 @@ return [
         'holiday' => 'holiday',
         'vacation' => 'vacation',
         'weekend' => 'weekend',
+        'unassigned' => 'unassigned',
     ],
 
     /*

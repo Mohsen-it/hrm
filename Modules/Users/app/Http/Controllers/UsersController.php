@@ -15,6 +15,7 @@ use Modules\Grades\Services\GradeService;
 use Modules\Positions\Services\PositionService;
 use Modules\Shifts\Services\RotationService;
 use Modules\Shifts\Services\ShiftService;
+use Modules\Subordinations\Services\SubordinationService;
 use Modules\Users\Http\Requests\StoreUserRequest;
 use Modules\Users\Http\Requests\UpdateUserRequest;
 use Modules\Users\Http\Resources\UserResource;
@@ -32,6 +33,7 @@ class UsersController extends Controller
         private DepartmentService $departmentService,
         private PositionService $positionService,
         private GradeService $gradeService,
+        private SubordinationService $subordinationService,
         private ShiftService $shiftService,
         private AttendanceGroupService $attendanceGroupService,
         private RotationService $rotationService,
@@ -51,14 +53,14 @@ class UsersController extends Controller
         return Inertia::render('Users/Index', [
             'filters' => fn () => $request->only([
                 'search', 'company_id', 'branch_id', 'department_id',
-                'position_id', 'grade_id', 'shift_id', 'status',
+                'position_id', 'grade_id', 'subordination_id', 'shift_id', 'status',
                 'employment_type', 'role', 'is_active_employee',
             ]),
             'users' => fn () => UserResource::collection(
                 $this->userService->getAllUsers(
                     $request->only([
                         'search', 'company_id', 'branch_id', 'department_id',
-                        'position_id', 'grade_id', 'shift_id', 'status',
+                        'position_id', 'grade_id', 'subordination_id', 'shift_id', 'status',
                         'employment_type', 'role', 'is_active_employee',
                     ])
                 )
@@ -75,6 +77,12 @@ class UsersController extends Controller
                 ->map(fn ($p) => ['id' => $p->id, 'position_name' => $p->position_name]),
             'grades' => fn () => $this->gradeService->getActiveGrades()
                 ->map(fn ($g) => ['id' => $g->id, 'grade_name' => $g->grade_name]),
+            'subordinations' => fn () => $this->subordinationService->getActiveSubordinations()
+                ->map(fn ($s) => [
+                    'id' => $s->id,
+                    'code' => $s->code,
+                    'display_name' => $s->display_name,
+                ]),
             'shifts' => fn () => $this->shiftService->getActiveShifts()
                 ->map(fn ($s) => ['id' => $s->id, 'shift_name' => $s->shift_name]),
             'roles' => fn () => Role::orderBy('name')->get()
@@ -355,6 +363,12 @@ class UsersController extends Controller
                 ->map(fn ($p) => ['id' => $p->id, 'position_name' => $p->position_name]),
             'grades' => fn () => $this->gradeService->getActiveGrades()
                 ->map(fn ($g) => ['id' => $g->id, 'grade_name' => $g->grade_name]),
+            'subordinations' => fn () => $this->subordinationService->getActiveSubordinations()
+                ->map(fn ($s) => [
+                    'id' => $s->id,
+                    'code' => $s->code,
+                    'display_name' => $s->display_name,
+                ]),
             'managers' => fn () => User::query()
                 ->where('status', 1)
                 ->orderBy('name')

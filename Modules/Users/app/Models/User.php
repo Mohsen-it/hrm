@@ -19,6 +19,7 @@ use Modules\FingerprintDevices\Models\UserFingerprint;
 use Modules\Grades\Models\Grade;
 use Modules\Positions\Models\Position;
 use Modules\Shifts\Models\Shift;
+use Modules\Subordinations\Models\Subordination;
 use Modules\Vacations\Models\UserVacationBalance;
 use Modules\Vacations\Models\UserVacationRequest;
 use Modules\Vacations\Models\Vacation;
@@ -71,7 +72,7 @@ class User extends Authenticatable
         'last_login_at', 'last_login_ip',
         'must_change_password', 'failed_login_attempts', 'locked_until',
         'company_id', 'branch_id', 'department_id', 'position_id', 'grade_id',
-        'shift_id', 'manager_id',
+        'subordination_id', 'shift_id', 'manager_id',
     ];
 
     /**
@@ -158,6 +159,16 @@ class User extends Authenticatable
     public function grade(): BelongsTo
     {
         return $this->belongsTo(Grade::class, 'grade_id');
+    }
+
+    /**
+     * Get the subordination attached to the user (e.g., the airport they report to).
+     *
+     * @return BelongsTo<Subordination, $this>
+     */
+    public function subordination(): BelongsTo
+    {
+        return $this->belongsTo(Subordination::class, 'subordination_id');
     }
 
     /**

@@ -1,0 +1,215 @@
+﻿
+> build
+> vite build
+
+[36mvite v8.1.4 [32mbuilding client environment for production...[36m[39m
+[2K
+node.exe : Found 1 warning while optimizing generated CSS:
+At line:1 char:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Found 1 warning... generated CSS::String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+[2mظ¤é   }[22m
+[2mظ¤é   .text-\[var\(--color-ink-\*\)\] {[22m
+[2mظ¤é[22m     color: var(--color-ink-*);
+[2mظ¤[22m                            [33m[2m^--[22m Unexpected token Delim('*')[39m
+[2mظ¤[22m
+[2mظ¤é   }[22m
+[2mظ¤é   .text-amber-700 {[22m
+
+transforming...ظ£ô 792 modules transformed.
+rendering chunks...
+computing gzip size...
+public/build/assets/cairo-400-normal-xCL67Y2R.woff2      7.33 kB
+public/build/assets/cairo-700-normal-Cscux539.woff2      7.46 kB
+public/build/assets/cairo-600-normal-DuRnqffh.woff2      7.48 kB
+public/build/assets/tajawal-400-normal-CyCXRvzh.woff2    8.93 kB
+public/build/assets/tajawal-500-normal-BZ8ojJNu.woff2    8.94 kB
+public/build/assets/tajawal-700-normal-D2-eand5.woff2    9.02 kB
+public/build/assets/tajawal-500-normal-CoYeBiSI.woff2    9.90 kB
+public/build/assets/tajawal-700-normal-BypgxfGb.woff2    9.99 kB
+public/build/assets/cairo-400-normal-C_BIE9Qe.woff      10.16 kB
+public/build/assets/cairo-600-normal-DAfLYaOC.woff      10.24 kB
+public/build/assets/cairo-700-normal-htXca11Z.woff      10.25 kB
+public/build/assets/tajawal-400-normal-BVNSOH3d.woff2   10.25 kB
+public/build/assets/tajawal-500-normal-CbVEaYEW.woff    11.88 kB
+public/build/assets/tajawal-400-normal-DCQxawbB.woff    12.01 kB
+public/build/assets/tajawal-700-normal-9L7Zusdl.woff    12.16 kB
+public/build/assets/tajawal-500-normal-DU9v6xgj.woff    13.02 kB
+public/build/assets/tajawal-700-normal-CV3bxpHe.woff    13.16 kB
+public/build/assets/cairo-400-normal-DN15VWMM.woff2     13.29 kB
+public/build/assets/tajawal-400-normal-BdYcZznU.woff    13.46 kB
+public/build/assets/cairo-600-normal-rkrvveqO.woff2     13.89 kB
+public/build/assets/cairo-700-normal-D3nDedWX.woff2     13.95 kB
+public/build/assets/cairo-400-normal-Dh7otpdh.woff2     15.01 kB
+public/build/assets/cairo-600-normal-mGS0uvCM.woff2     15.28 kB
+public/build/assets/cairo-700-normal-C3GYtKbV.woff2     15.28 kB
+public/build/assets/cairo-400-normal-CAYwymWN.woff      16.80 kB
+public/build/assets/cairo-700-normal-CyOqhaeK.woff      17.26 kB
+public/build/assets/cairo-600-normal-B3EOalmC.woff      17.33 kB
+public/build/assets/cairo-400-normal-b1R3q6Pf.woff      19.48 kB
+public/build/assets/cairo-600-normal-buYOP1M3.woff      19.68 kB
+public/build/assets/cairo-700-normal-6fcUy4Rc.woff      19.74 kB
+public/build/fonts-manifest.json                        35.83 kB ظ¤é gzip:  1.89 kB
+public/build/manifest.json                              84.03 kB ظ¤é gzip:  5.74 kB
+public/build/assets/fonts-B6xWo_VE.css                  16.09 kB ظ¤é gzip:  1.12 kB
+public/build/assets/app-Ce3OFiOM.css                   136.79 kB ظ¤é gzip: 23.58 kB
+public/build/assets/useTranslations-DdKZnDZ5.js          0.49 kB ظ¤é gzip:  0.33 kB
+public/build/assets/PageHeader-Bh4Rrc-h.js               0.73 kB ظ¤é gzip:  0.44 kB
+public/build/assets/Avatar-Z6m8SlVc.js                   0.98 kB ظ¤é gzip:  0.59 kB
+public/build/assets/Fingerprints-D368mlu0.js             1.12 kB ظ¤é gzip:  0.58 kB
+public/build/assets/CalendarLegend-TGe4kKSK.js           1.13 kB ظ¤é gzip:  0.57 kB
+public/build/assets/CyclicDaysDisplay-BFobwPjq.js        1.30 kB ظ¤é gzip:  0.62 kB
+public/build/assets/FormSwitch-BSrQo__W.js               1.48 kB ظ¤é gzip:  0.78 kB
+public/build/assets/Badge-CBP0T7nw.js                    1.64 kB ظ¤é gzip:  0.66 kB
+public/build/assets/StatCard-BC9rdAXJ.js                 1.78 kB ظ¤é gzip:  0.82 kB
+public/build/assets/Alert-DaFIYKgP.js                    2.06 kB ظ¤é gzip:  0.93 kB
+public/build/assets/Create-6IrDvkmy.js                   2.15 kB ظ¤é gzip:  0.96 kB
+public/build/assets/DepartmentCalendar-B3lGSjG1.js       2.19 kB ظ¤é gzip:  1.02 kB
+public/build/assets/Edit-Bi8wn0zs.js                     2.21 kB ظ¤é gzip:  0.97 kB
+public/build/assets/Show-BGBlT9UL.js                     2.27 kB ظ¤é gzip:  0.84 kB
+public/build/assets/Login-D2fYSq1J.js                    2.53 kB ظ¤é gzip:  1.18 kB
+public/build/assets/FormSection-7XzRFolk.js              2.59 kB ظ¤é gzip:  1.17 kB
+public/build/assets/LanguageSwitcher-BFxABlVU.js         2.61 kB ظ¤é gzip:  1.31 kB
+public/build/assets/Show-BjFvR9cl.js                     2.79 kB ظ¤é gzip:  1.20 kB
+public/build/assets/Create-BNB6ZadS.js                   2.84 kB ظ¤é gzip:  1.09 kB
+public/build/assets/Create-BrV1Lqkl.js                   2.90 kB ظ¤é gzip:  1.17 kB
+public/build/assets/FormModal-BmwjcYng.js                2.91 kB ظ¤é gzip:  1.26 kB
+public/build/assets/Edit-6lnPbtGx.js                     2.95 kB ظ¤é gzip:  1.11 kB
+public/build/assets/AppLayout-MJQchPWm.js                2.96 kB ظ¤é gzip:  1.39 kB
+public/build/assets/Show-DY9ESPrV.js                     3.04 kB ظ¤é gzip:  1.22 kB
+public/build/assets/FormDatepicker-C6oIuXT8.js           3.05 kB ظ¤é gzip:  1.34 kB
+public/build/assets/FormTextarea-DgBIWYTH.js             3.08 kB ظ¤é gzip:  1.36 kB
+public/build/assets/Show-CBjQX_46.js                     3.09 kB ظ¤é gzip:  1.28 kB
+public/build/assets/FormSelect-BOsADQdz.js               3.09 kB ظ¤é gzip:  1.41 kB
+public/build/assets/Show-B4uRIzh3.js                     3.10 kB ظ¤é gzip:  1.24 kB
+public/build/assets/Index-Bf1TfB3y.js                    3.11 kB ظ¤é gzip:  1.20 kB
+public/build/assets/TeamAbsence-CG8nvJwW.js              3.12 kB ظ¤é gzip:  1.37 kB
+public/build/assets/Edit-DAvSLJpZ.js                     3.12 kB ظ¤é gzip:  1.26 kB
+public/build/assets/Edit-XhH7MuKr.js                     3.13 kB ظ¤é gzip:  1.26 kB
+public/build/assets/Show-Cds5bq58.js                     3.18 kB ظ¤é gzip:  1.22 kB
+public/build/assets/FormCheckbox-DrItypsd.js             3.19 kB ظ¤é gzip:  1.36 kB
+public/build/assets/FormInput-Cf1Ez_rW.js                3.19 kB ظ¤é gzip:  1.36 kB
+public/build/assets/AssignEmployee-B9JgN09H.js           3.21 kB ظ¤é gzip:  1.13 kB
+public/build/assets/Show-D0EYqPCu.js                     3.26 kB ظ¤é gzip:  1.31 kB
+public/build/assets/Show-CT17B3hM.js                     3.27 kB ظ¤é gzip:  1.24 kB
+public/build/assets/Create-DBNz9Qqe.js                   3.29 kB ظ¤é gzip:  1.25 kB
+public/build/assets/MyCalendar-CKKvbZIj.js               3.31 kB ظ¤é gzip:  1.45 kB
+public/build/assets/Show-Bh0-5Rp2.js                     3.34 kB ظ¤é gzip:  1.25 kB
+public/build/assets/Show-DUW1NTU_.js                     3.43 kB ظ¤é gzip:  1.34 kB
+public/build/assets/EmployeeCalendar-41aRKgPg.js         3.45 kB ظ¤é gzip:  1.47 kB
+public/build/assets/Index-2m0JT664.js                    3.48 kB ظ¤é gzip:  1.34 kB
+public/build/assets/Show-DIoNbusp.js                     3.48 kB ظ¤é gzip:  1.30 kB
+public/build/assets/Index-CHvBKNlx.js                    3.49 kB ظ¤é gzip:  1.44 kB
+public/build/assets/Index-D8RqSubA.js                    3.58 kB ظ¤é gzip:  1.55 kB
+public/build/assets/MyAbsence-si7Zci8n.js                3.60 kB ظ¤é gzip:  1.57 kB
+public/build/assets/Index-BnS4Y75o.js                    3.63 kB ظ¤é gzip:  1.37 kB
+public/build/assets/Show-DwfH--ZS.js                     3.64 kB ظ¤é gzip:  1.51 kB
+public/build/assets/Show-1udo41ed.js                     3.64 kB ظ¤é gzip:  1.40 kB
+public/build/assets/Index-CpMMxwKK.js                    3.67 kB ظ¤é gzip:  1.35 kB
+public/build/assets/Index-eLpPgaN7.js                    3.68 kB ظ¤é gzip:  1.44 kB
+public/build/assets/Index-Ca05THm5.js                    3.70 kB ظ¤é gzip:  1.46 kB
+public/build/assets/General-Bki045DN.js                  3.72 kB ظ¤é gzip:  1.45 kB
+public/build/assets/Dashboard-mZFQ4JPq.js                3.73 kB ظ¤é gzip:  1.47 kB
+public/build/assets/Attendance-C9lKSoBr.js               3.73 kB ظ¤é gzip:  1.46 kB
+public/build/assets/Show-BafCsvE4.js                     3.83 kB ظ¤é gzip:  1.34 kB
+public/build/assets/Index-BQy_tMcy.js                    4.09 kB ظ¤é gzip:  1.46 kB
+public/build/assets/Create-XwVmmZFn.js                   4.13 kB ظ¤é gzip:  1.43 kB
+public/build/assets/Index-BdlaoNLt.js                    4.14 kB ظ¤é gzip:  1.52 kB
+public/build/assets/Dashboard-Bk16_XIh.js                4.19 kB ظ¤é gzip:  1.35 kB
+public/build/assets/Index-ctJiB153.js                    4.21 kB ظ¤é gzip:  1.52 kB
+public/build/assets/Index-CdKfD1tH.js                    4.22 kB ظ¤é gzip:  1.55 kB
+public/build/assets/TeamCalendar-CJxEOHuA.js             4.26 kB ظ¤é gzip:  1.75 kB
+public/build/assets/Index-DDrKzh7L.js                    4.32 kB ظ¤é gzip:  1.50 kB
+public/build/assets/Edit-N58_CGXi.js                     4.33 kB ظ¤é gzip:  1.49 kB
+public/build/assets/TimeScheduleForm-C7HyBXAN.js         4.42 kB ظ¤é gzip:  1.54 kB
+public/build/assets/Create-CY84G_Ae.js                   4.46 kB ظ¤é gzip:  1.52 kB
+public/build/assets/Show-CYcefR73.js                     4.49 kB ظ¤é gzip:  1.69 kB
+public/build/assets/Shifts-bxx50eQf.js                   4.55 kB ظ¤é gzip:  1.84 kB
+public/build/assets/Show-Cbw6zv4N.js                     4.56 kB ظ¤é gzip:  1.72 kB
+public/build/assets/Index-DZLBM72V.js                    4.56 kB ظ¤é gzip:  1.66 kB
+public/build/assets/Index-Dv7Yqa3K.js                    4.56 kB ظ¤é gzip:  1.79 kB
+public/build/assets/Create-VQsD-ZyW.js                   4.56 kB ظ¤é gzip:  1.60 kB
+public/build/assets/Index-D4V-5ZdW.js                    4.60 kB ظ¤é gzip:  1.64 kB
+public/build/assets/User-CbdyZKFE.js                     4.61 kB ظ¤é gzip:  1.75 kB
+public/build/assets/Index-CT1zsRwY.js                    4.62 kB ظ¤é gzip:  1.58 kB
+public/build/assets/Create-Cxxm__Cr.js                   4.64 kB ظ¤é gzip:  1.48 kB
+public/build/assets/Create-BtXA5P2k.js                   4.68 kB ظ¤é gzip:  1.44 kB
+public/build/assets/Edit-imPeDd2C.js                     4.69 kB ظ¤é gzip:  1.57 kB
+public/build/assets/Show-lNHn-_KL.js                     4.69 kB ظ¤é gzip:  1.72 kB
+public/build/assets/Edit-CcBpuUiw.js                     4.70 kB ظ¤é gzip:  1.59 kB
+public/build/assets/Index-DOflhIJe.js                    4.77 kB ظ¤é gzip:  1.66 kB
+public/build/assets/Index-wgJ2eM28.js                    4.77 kB ظ¤é gzip:  1.90 kB
+public/build/assets/Index-DpNobKkc.js                    4.80 kB ظ¤é gzip:  1.82 kB
+public/build/assets/Branches-DUrqFN1l.js                 4.91 kB ظ¤é gzip:  1.98 kB
+public/build/assets/Index-BLLLP_fr.js                    4.95 kB ظ¤é gzip:  1.77 kB
+public/build/assets/Edit-DSjD5InY.js                     4.98 kB ظ¤é gzip:  1.73 kB
+public/build/assets/Edit-BZkJdGoX.js                     5.02 kB ظ¤é gzip:  1.53 kB
+public/build/assets/QuickPushModal-BimWbZe5.js           5.02 kB ظ¤é gzip:  1.70 kB
+public/build/assets/Create-D32OB-tj.js                   5.13 kB ظ¤é gzip:  1.58 kB
+public/build/assets/Create-DsxdDVYu.js                   5.15 kB ظ¤é gzip:  1.58 kB
+public/build/assets/Show-C9ko99SJ.js                     5.15 kB ظ¤é gzip:  1.54 kB
+public/build/assets/Create-BvVM6cOc.js                   5.31 kB ظ¤é gzip:  1.49 kB
+public/build/assets/Create-DrPlNySA.js                   5.35 kB ظ¤é gzip:  1.62 kB
+public/build/assets/Create-DHEclLHx.js                   5.37 kB ظ¤é gzip:  1.61 kB
+public/build/assets/Edit-XqEKMM7B.js                     5.44 kB ظ¤é gzip:  1.66 kB
+public/build/assets/Assign-CvrDaS-t.js                   5.49 kB ظ¤é gzip:  2.13 kB
+public/build/assets/Edit-BZKogjiu.js                     5.50 kB ظ¤é gzip:  1.66 kB
+public/build/assets/Yearly-DooHMRBw.js                   5.52 kB ظ¤é gzip:  1.69 kB
+public/build/assets/Index-Dho5lHrd.js                    5.56 kB ظ¤é gzip:  1.95 kB
+public/build/assets/Edit-BD9hld0D.js                     5.56 kB ظ¤é gzip:  1.67 kB
+public/build/assets/LiveScan-Bn_QF33d.js                 5.58 kB ظ¤é gzip:  2.21 kB
+public/build/assets/Index-LobWBMoG.js                    5.59 kB ظ¤é gzip:  1.89 kB
+public/build/assets/Show-D0BlspmT.js                     5.61 kB ظ¤é gzip:  2.34 kB
+public/build/assets/Edit-CMDhLZi7.js                     5.62 kB ظ¤é gzip:  1.58 kB
+public/build/assets/Edit-Cte8dHij.js                     5.70 kB ظ¤é gzip:  1.70 kB
+public/build/assets/Create-VOOH23yf.js                   5.74 kB ظ¤é gzip:  1.63 kB
+public/build/assets/Timeline-CH-r2pT1.js                 5.92 kB ظ¤é gzip:  2.23 kB
+public/build/assets/Create-BwqYTa1-.js                   6.04 kB ظ¤é gzip:  1.65 kB
+public/build/assets/Edit-B00MisCU.js                     6.11 kB ظ¤é gzip:  1.72 kB
+public/build/assets/Index-Cx9zg1ye.js                    6.24 kB ظ¤é gzip:  2.10 kB
+public/build/assets/Index-DW4Xs3AE.js                    6.33 kB ظ¤é gzip:  2.18 kB
+public/build/assets/Monthly-DAtVOODV.js                  6.35 kB ظ¤é gzip:  1.90 kB
+public/build/assets/Index-Mz9oedfd.js                    6.35 kB ظ¤é gzip:  2.01 kB
+public/build/assets/IconButton-Cj1gJKJV.js               6.53 kB ظ¤é gzip:  2.10 kB
+public/build/assets/Create-BVoj1zKP.js                   6.85 kB ظ¤é gzip:  2.21 kB
+public/build/assets/Index-BQm4S7wM.js                    6.90 kB ظ¤é gzip:  2.16 kB
+public/build/assets/Edit-CnKs41rk.js                     7.01 kB ظ¤é gzip:  1.97 kB
+public/build/assets/Edit-Cpe3hd_N.js                     7.04 kB ظ¤é gzip:  2.30 kB
+public/build/assets/Show-_OTYt-eL.js                     7.16 kB ظ¤é gzip:  2.22 kB
+public/build/assets/Edit-CHZfzdql.js                     7.19 kB ظ¤é gzip:  2.29 kB
+public/build/assets/Create-DnZmVZkF.js                   7.22 kB ظ¤é gzip:  2.17 kB
+public/build/assets/Edit-CCGmoh8D.js                     7.30 kB ظ¤é gzip:  2.16 kB
+public/build/assets/BulkAssign-Brc0TvBz.js               7.32 kB ظ¤é gzip:  2.61 kB
+public/build/assets/Create-hzWvp5fL.js                   7.77 kB ظ¤é gzip:  2.24 kB
+public/build/assets/Index-DCtSrQTT.js                    7.86 kB ظ¤é gzip:  2.59 kB
+public/build/assets/SmartAbsenceReport-DyTExTDp.js       8.05 kB ظ¤é gzip:  2.85 kB
+public/build/assets/Card-TxMIBUDb.js                     8.10 kB ظ¤é gzip:  2.31 kB
+public/build/assets/Create-BSDr4ZEO.js                   8.31 kB ظ¤é gzip:  2.71 kB
+public/build/assets/Edit-DvfqEx90.js                     8.31 kB ظ¤é gzip:  2.42 kB
+public/build/assets/Show-BkTEuq_1.js                     8.38 kB ظ¤é gzip:  2.96 kB
+public/build/assets/ShiftCategoryForm-BJhj0HMA.js        8.53 kB ظ¤é gzip:  2.32 kB
+public/build/assets/SchedulePreview-DZTSLzD0.js          8.64 kB ظ¤é gzip:  2.68 kB
+public/build/assets/Show-CbAvMW8H.js                     9.03 kB ظ¤é gzip:  2.67 kB
+public/build/assets/Assign-K-28O8Vh2.js                  9.30 kB ظ¤é gzip:  3.23 kB
+public/build/assets/Index-BpaTPpI2.js                    9.53 kB ظ¤é gzip:  3.10 kB
+public/build/assets/Index-CzD1mfEN.js                    9.73 kB ظ¤é gzip:  3.30 kB
+public/build/assets/Show-7AqGBlYN.js                     9.79 kB ظ¤é gzip:  2.29 kB
+public/build/assets/ui-DlRPHWs_.js                       9.97 kB ظ¤é gzip:  3.56 kB
+public/build/assets/ManageAssignments-cMo-zlPJ.js       10.50 kB ظ¤é gzip:  3.45 kB
+public/build/assets/Show-DUvk7F9R.js                    10.54 kB ظ¤é gzip:  3.21 kB
+public/build/assets/Index-DhraPaza2.js                  11.28 kB ظ¤é gzip:  3.43 kB
+public/build/assets/Create-BqChUcGg.js                  15.04 kB ظ¤é gzip:  3.08 kB
+public/build/assets/Sync-C8qDUrnm.js                    16.59 kB ظ¤é gzip:  4.51 kB
+public/build/assets/DesignSystemShowcase-PuTfuvI9.js    16.61 kB ظ¤é gzip:  5.22 kB
+public/build/assets/Edit-BtYHx38b.js                    20.09 kB ظ¤é gzip:  4.23 kB
+public/build/assets/DataTable-Cwa3Bn9z.js               32.77 kB ظ¤é gzip:  8.68 kB
+public/build/assets/SunsetStripeBand-I20iTtUe.js        38.64 kB ظ¤é gzip: 10.22 kB
+public/build/assets/app-BN-fJUOa.js                     87.44 kB ظ¤é gzip: 28.87 kB
+public/build/assets/dist-BYIEDPo6.js                   184.07 kB ظ¤é gzip: 62.98 kB
+public/build/assets/Dashboard-VjDPZaoa.js              240.02 kB ظ¤é gzip: 79.14 kB
+
+[32mظ£ô built in 1.40s[39m

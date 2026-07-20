@@ -3,15 +3,20 @@
 namespace Modules\FingerprintDevices\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 use Modules\Branches\Services\BranchService;
+use Modules\Companies\Services\CompanyService;
 use Modules\FingerprintDevices\Http\Requests\StoreFingerprintDeviceRequest;
 use Modules\FingerprintDevices\Http\Requests\UpdateFingerprintDeviceRequest;
 use Modules\FingerprintDevices\Http\Resources\FingerprintDeviceResource;
+use Modules\FingerprintDevices\Services\DevicePushPreviewService;
 use Modules\FingerprintDevices\Services\FingerprintDeviceService;
 use Modules\FingerprintDevices\Services\FingerprintDeviceTypeService;
+use Modules\Subordinations\Services\SubordinationService;
 
 /**
  * FingerprintDevicesController — CRUD for fingerprint devices.
@@ -22,7 +27,43 @@ class FingerprintDevicesController extends Controller
         private FingerprintDeviceService $deviceService,
         private FingerprintDeviceTypeService $typeService,
         private BranchService $branchService,
+        private CompanyService $companyService,
+        private SubordinationService $subordinationService,
+        private DevicePushPreviewService $previewService,
     ) {}
+
+    /**
+     * @return array<int, array{id:int,branch_name:string}>
+     */
+    protected function branchOptions(): array
+    {
+        return $this->branchService->getActiveBranches()
+            ->map(fn ($b) => ['id' => $b->id, 'branch_name' => $b->branch_name])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return array<int, array{id:int,company_name:string}>
+     */
+    protected function companyOptions(): array
+    {
+        return $this->companyService->getActiveCompanies()
+            ->map(fn ($c) => ['id' => $c->id, 'company_name' => $c->company_name])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return array<int, array{id:int,name_ar:string,code:?string}>
+     */
+    protected function subordinationOptions(): array
+    {
+        return $this->subordinationService->getActiveSubordinations()
+            ->map(fn ($s) => ['id' => $s->id, 'name_ar' => $s->name_ar, 'code' => $s->code])
+            ->values()
+            ->all();
+    }
 
     public function index(): Response
     {
@@ -58,9 +99,9 @@ class FingerprintDevicesController extends Controller
                     'default_port' => $dt->default_port,
                 ])
                 ->values(),
-            'branches' => fn () => $this->branchService->getActiveBranches()
-                ->map(fn ($b) => ['id' => $b->id, 'branch_name' => $b->branch_name])
-                ->values(),
+            'branches' => fn () => $this->branchOptions(),
+            'companies' => fn () => $this->companyOptions(),
+            'subordinations' => fn () => $this->subordinationOptions(),
         ]);
     }
 
@@ -84,6 +125,7 @@ class FingerprintDevicesController extends Controller
 
         return Inertia::render('FingerprintDevices/Show', [
             'device' => fn () => (new FingerprintDeviceResource($device))->toArray(request()),
+            'branches' => fn () => $this->branchOptions(),
         ]);
     }
 
@@ -107,9 +149,9 @@ class FingerprintDevicesController extends Controller
                     'default_port' => $dt->default_port,
                 ])
                 ->values(),
-            'branches' => fn () => $this->branchService->getActiveBranches()
-                ->map(fn ($b) => ['id' => $b->id, 'branch_name' => $b->branch_name])
-                ->values(),
+            'branches' => fn () => $this->branchOptions(),
+            'companies' => fn () => $this->companyOptions(),
+            'subordinations' => fn () => $this->subordinationOptions(),
         ]);
     }
 
@@ -188,5 +230,56 @@ class FingerprintDevicesController extends Controller
     protected function cleanFilters(array $filters): array
     {
         return array_filter($filters, fn ($v) => $v !== null && $v !== '');
+    }
+
+    /**
+     * Read-only preview of a push operation.
+     *
+     * Validates the same options as the real push, but performs no writes:
+     * no DB inserts, no device commands other than getUsers (a GET).
+     */
+    public function pushPreview(Request $request, int $id): JsonResponse
+    {
+        $request->validate([
+            'push_users' => ['nullable', 'boolean'],
+            'push_fingerprints' => ['nullable', 'boolean'],
+            'push_face_photos' => ['nullable', 'boolean'],
+            'user_ids' => ['nullable', 'string', 'max:10000'],
+            'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
+            'select_mode' => ['nullable', 'string', 'in:all,specific,branch,missing'],
+        ]);
+
+        $userIdsRaw = $request->query('user_ids');
+        $userIds = [];
+        if (is_string($userIdsRaw) && $userIdsRaw !== '') {
+            $userIds = array_values(array_filter(array_map('intval', explode(',', $userIdsRaw))));
+        }
+
+        $options = [
+            'push_users' => $request->boolean('push_users', true),
+            'push_fingerprints' => $request->boolean('push_fingerprints', true),
+            'push_face_photos' => $request->boolean('push_face_photos', false),
+            'select_mode' => $request->query('select_mode', 'all'),
+        ];
+        if ($request->filled('branch_id')) {
+            $options['branch_id'] = (int) $request->query('branch_id');
+        }
+        if (! empty($userIds)) {
+            $options['user_ids'] = $userIds;
+        }
+
+        $device = $this->deviceService->getDeviceById($id);
+
+        if (! $device) {
+            return response()->json([
+                'success' => false,
+                'read_only' => true,
+                'error' => 'Device not found',
+            ], 404);
+        }
+
+        $preview = $this->previewService->preview($device, $options);
+
+        return response()->json($preview);
     }
 }

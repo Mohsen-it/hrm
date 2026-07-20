@@ -7,6 +7,7 @@ return [
     'departments' => 'Departments',
     'positions' => 'Positions',
     'grades' => 'Grades',
+    'subordinations' => 'Subordinations',
     'zones' => 'Zones',
     'users' => 'Users',
     'user_shifts' => 'User Shifts',

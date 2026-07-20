@@ -67,8 +67,11 @@ return [
     'department' => 'Department',
     'position' => 'Position',
     'grade' => 'Grade',
+    'subordination' => 'Subordination',
+    'select_subordination' => '— Select subordination —',
+    'subordination_id_exists' => 'The selected subordination does not exist.',
     'shift' => 'Shift',
-    'manager' => 'Manager',
+    'manager' => 'Direct Manager',
     'select_manager' => '— No manager —',
 
     'roles' => 'Roles',

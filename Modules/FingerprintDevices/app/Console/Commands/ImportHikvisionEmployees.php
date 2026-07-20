@@ -5,14 +5,17 @@ namespace Modules\FingerprintDevices\Console\Commands;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
-use Modules\AttendanceIntegration\Drivers\Hikvision\HikvisionAdapter;
+use Modules\AttendanceIntegration\Contracts\DeviceAdapterInterface;
 use Modules\AttendanceIntegration\Services\DeviceAdapterResolver;
 use Modules\FingerprintDevices\Models\FingerprintDevice;
 use Modules\FingerprintDevices\Models\UserFingerprint;
+use Modules\FingerprintDevices\Support\AppliesDeviceOrgDefaults;
 use Modules\Users\Models\User;
 
 class ImportHikvisionEmployees extends Command
 {
+    use AppliesDeviceOrgDefaults;
+
     protected $signature = 'hikvision:import-employees
                             {--device= : Device ID to import from (default: first Hikvision device)}
                             {--expire-before= : Exclude users whose validity ended before this date (Y-m-d)}
@@ -65,7 +68,7 @@ class ImportHikvisionEmployees extends Command
             return self::SUCCESS;
         }
 
-        $this->info('  Found ' . count($deviceUsers) . ' total users on device');
+        $this->info('  Found '.count($deviceUsers).' total users on device');
         $this->newLine();
 
         // Step 2: Filter out expired users using validity data from device
@@ -87,7 +90,7 @@ class ImportHikvisionEmployees extends Command
                     $cutoff = $expireBefore->copy()->endOfDay();
                     if ($endDate->lte($cutoff)) {
                         $expiredCount++;
-                        $this->line("    [EXPIRED] {$externalId} - " . ($du['name'] ?? '') . " (ended: {$validEnd})");
+                        $this->line("    [EXPIRED] {$externalId} - ".($du['name'] ?? '')." (ended: {$validEnd})");
 
                         continue;
                     }
@@ -99,8 +102,8 @@ class ImportHikvisionEmployees extends Command
             $validUsers[] = $du;
         }
 
-        $this->info('  Valid users: ' . count($validUsers));
-        $this->info('  Expired users: ' . $expiredCount);
+        $this->info('  Valid users: '.count($validUsers));
+        $this->info('  Expired users: '.$expiredCount);
         $this->newLine();
 
         if (empty($validUsers)) {
@@ -155,17 +158,17 @@ class ImportHikvisionEmployees extends Command
                 continue;
             }
 
-            $autoName = $name !== '' ? $name : 'User ' . $externalId;
+            $autoName = $name !== '' ? $name : 'User '.$externalId;
 
-            $emailBase = 'device_' . strtolower($externalId);
-            $email = $emailBase . '@hrm.local';
+            $emailBase = 'device_'.strtolower($externalId);
+            $email = $emailBase.'@hrm.local';
             $attempt = 1;
             while (User::where('email', $email)->exists()) {
-                $email = $emailBase . '_' . $attempt . '@hrm.local';
+                $email = $emailBase.'_'.$attempt.'@hrm.local';
                 $attempt++;
             }
 
-            $user = User::create([
+            $user = User::create($this->applyDeviceOrgDefaults($device, [
                 'employee_code' => $externalId,
                 'name' => $autoName,
                 'full_name_ar' => $autoName,
@@ -173,7 +176,7 @@ class ImportHikvisionEmployees extends Command
                 'password' => bcrypt('password'),
                 'status' => 1,
                 'is_active_employee' => true,
-            ]);
+            ]));
 
             $created++;
             $employeeCodeToUserId[$externalId] = $user->id;
@@ -267,7 +270,7 @@ class ImportHikvisionEmployees extends Command
 
             $this->info("  Fingerprints saved: {$fingerprintsSaved}");
             if (! empty($fingerprintErrors)) {
-                $this->warn('  Fingerprint errors: ' . count($fingerprintErrors));
+                $this->warn('  Fingerprint errors: '.count($fingerprintErrors));
             }
         }
         $this->newLine();
@@ -283,8 +286,8 @@ class ImportHikvisionEmployees extends Command
         // Summary
         $this->info('=== Import Summary ===');
         $this->info("  Device: {$device->name}");
-        $this->info("  Total on device: " . count($deviceUsers));
-        $this->info("  Valid users: " . count($validUsers));
+        $this->info('  Total on device: '.count($deviceUsers));
+        $this->info('  Valid users: '.count($validUsers));
         $this->info("  Expired (filtered out): {$expiredCount}");
         $this->info("  Created in DB: {$created}");
         $this->info("  Already existed: {$skipped}");
@@ -331,7 +334,7 @@ class ImportHikvisionEmployees extends Command
         return $device;
     }
 
-    private function resolveAdapter(FingerprintDevice $device, DeviceAdapterResolver $adapterResolver): \Modules\AttendanceIntegration\Contracts\DeviceAdapterInterface
+    private function resolveAdapter(FingerprintDevice $device, DeviceAdapterResolver $adapterResolver): DeviceAdapterInterface
     {
         $typeName = strtolower($device->deviceType->manufacturer ?? '');
 

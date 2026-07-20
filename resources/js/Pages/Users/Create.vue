@@ -13,6 +13,7 @@ const props = defineProps({
     departments: { type: Array, default: () => [] },
     positions: { type: Array, default: () => [] },
     grades: { type: Array, default: () => [] },
+    subordinations: { type: Array, default: () => [] },
     shifts: { type: Array, default: () => [] },
     managers: { type: Array, default: () => [] },
     roles: { type: Array, default: () => [] },
@@ -62,6 +63,7 @@ const form = reactive({
     department_id: '',
     position_id: '',
     grade_id: '',
+    subordination_id: '',
     shift_id: '',
     manager_id: '',
     attendance_group_id: '',
@@ -327,7 +329,7 @@ function submit() {
                 icon="fas fa-sitemap"
                 :collapsible="true"
                 :default-open="true"
-                :count="8"
+                :count="9"
             >
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     <FormSelect
@@ -369,6 +371,14 @@ function submit() {
                         :options="grades.map((g) => ({ value: g.id, label: g.grade_name }))"
                         :placeholder="t('users.select_grade')"
                         :error="errorFor('grade_id')"
+                    />
+                    <FormSelect
+                        v-model="form.subordination_id"
+                        :label="t('users.subordination')"
+                        name="subordination_id"
+                        :options="subordinations.map((s) => ({ value: s.id, label: s.display_name }))"
+                        :placeholder="t('users.select_subordination')"
+                        :error="errorFor('subordination_id')"
                     />
                     <FormSelect
                         v-model="form.shift_id"

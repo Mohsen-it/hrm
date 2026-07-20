@@ -4,7 +4,11 @@ namespace Database\Seeders;
 
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use Modules\Branches\Database\Seeders\BranchesDatabaseSeeder;
+use Modules\Companies\Database\Seeders\CompaniesDatabaseSeeder;
 use Modules\FingerprintDevices\Database\Seeders\FingerprintDeviceTypesSeeder;
+use Modules\Subordinations\Database\Seeders\SubordinationPermissionsSeeder;
+use Modules\Subordinations\Database\Seeders\SubordinationsDatabaseSeeder;
 
 class DatabaseSeeder extends Seeder
 {
@@ -20,6 +24,12 @@ class DatabaseSeeder extends Seeder
      *     (id = 10000) and grants it every permission.
      *  3. {@see RamadanDatesSeeder} inserts the multi-year Ramadan
      *     schedule used by the attendance calculations.
+     *  4. {@see CompaniesDatabaseSeeder} / {@see BranchesDatabaseSeeder}
+     *     insert the foundational org-structure data (Aleppo Airport).
+     *  5. {@see SubordinationsDatabaseSeeder} inserts the airport
+     *     locations (Aleppo + Latakia).
+     *  6. {@see SubordinationPermissionsSeeder} creates the 4
+     *     subordination permissions and grants them to super-admin.
      */
     public function run(): void
     {
@@ -28,6 +38,10 @@ class DatabaseSeeder extends Seeder
             UserSeeder::class,
             RamadanDatesSeeder::class,
             FingerprintDeviceTypesSeeder::class,
+            CompaniesDatabaseSeeder::class,
+            BranchesDatabaseSeeder::class,
+            SubordinationsDatabaseSeeder::class,
+            SubordinationPermissionsSeeder::class,
         ]);
     }
 }

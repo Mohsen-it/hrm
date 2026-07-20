@@ -11,6 +11,8 @@ const props = defineProps({
     device: { type: Object, required: true },
     deviceTypes: { type: Array, default: () => [] },
     branches: { type: Array, default: () => [] },
+    companies: { type: Array, default: () => [] },
+    subordinations: { type: Array, default: () => [] },
 });
 
 // Parse existing comm_key for Hikvision (format: username:password)
@@ -21,6 +23,9 @@ const form = reactive({
     _method: 'PUT',
     device_type_id: props.device.device_type_id || '',
     branch_id: props.device.branch_id || '',
+    default_company_id: props.device.default_company_id || '',
+    default_branch_id: props.device.default_branch_id || '',
+    default_subordination_id: props.device.default_subordination_id || '',
     name: props.device.name || '',
     serial_number: props.device.serial_number || '',
     ip_address: props.device.ip_address || '',
@@ -80,6 +85,30 @@ const branchOptions = computed(() => [
     ...props.branches.map((b) => ({
         value: b.id,
         label: b.branch_name,
+    })),
+]);
+
+const companyOptions = computed(() => [
+    { value: '', label: t('fingerprint_devices.no_company') },
+    ...props.companies.map((c) => ({
+        value: c.id,
+        label: c.company_name,
+    })),
+]);
+
+const defaultBranchOptions = computed(() => [
+    { value: '', label: t('fingerprint_devices.no_branch') },
+    ...props.branches.map((b) => ({
+        value: b.id,
+        label: b.branch_name,
+    })),
+]);
+
+const subordinationOptions = computed(() => [
+    { value: '', label: t('fingerprint_devices.no_subordination') },
+    ...props.subordinations.map((s) => ({
+        value: s.id,
+        label: s.name_ar,
     })),
 ]);
 
@@ -145,6 +174,33 @@ function submit() {
                         name="serial_number"
                         required
                         :error="errorFor('serial_number')"
+                    />
+                </div>
+            </FormSection>
+
+            <FormSection :title="t('fingerprint_devices.default_org_section')" icon="fas fa-sitemap" :collapsible="true" :default-open="true">
+                <p class="text-sm text-mistral-ink-soft mb-4">{{ t('fingerprint_devices.default_org_hint') }}</p>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <FormSelect
+                        v-model="form.default_company_id"
+                        :label="t('fingerprint_devices.default_company')"
+                        name="default_company_id"
+                        :options="companyOptions"
+                        :error="errorFor('default_company_id')"
+                    />
+                    <FormSelect
+                        v-model="form.default_branch_id"
+                        :label="t('fingerprint_devices.default_branch')"
+                        name="default_branch_id"
+                        :options="defaultBranchOptions"
+                        :error="errorFor('default_branch_id')"
+                    />
+                    <FormSelect
+                        v-model="form.default_subordination_id"
+                        :label="t('fingerprint_devices.default_subordination')"
+                        name="default_subordination_id"
+                        :options="subordinationOptions"
+                        :error="errorFor('default_subordination_id')"
                     />
                 </div>
             </FormSection>

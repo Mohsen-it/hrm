@@ -3,14 +3,22 @@
 namespace Modules\Companies\Database\Seeders;
 
 use Illuminate\Database\Seeder;
+use Modules\Companies\Models\Company;
 
 class CompaniesDatabaseSeeder extends Seeder
 {
-    /**
-     * Run the database seeds.
-     */
     public function run(): void
     {
-        // $this->call([]);
+        Company::updateOrCreate(
+            ['company_code' => 'AIRPORT-ALEPPO'],
+            [
+                'company_name' => 'مطار حلب الدولي',
+                'city' => 'حلب',
+                'country' => 'SY',
+                'is_default' => true,
+                'status' => 1,
+                'description' => 'المطار الدولي في مدينة حلب',
+            ]
+        );
     }
 }

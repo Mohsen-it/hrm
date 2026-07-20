@@ -17,6 +17,7 @@ const props = defineProps({
     positions: { type: Array, default: () => [] },
     grades: { type: Array, default: () => [] },
     shifts: { type: Array, default: () => [] },
+    subordinations: { type: Array, default: () => [] },
     roles: { type: Array, default: () => [] },
 });
 
@@ -33,6 +34,7 @@ const columns = computed(() => [
     { key: 'email', label: t('users.email') },
     { key: 'company', label: t('users.company') },
     { key: 'branch', label: t('users.branch') },
+    { key: 'subordination', label: t('users.subordination') },
     { key: 'department', label: t('users.department') },
     { key: 'shift', label: t('users.shift') },
     { key: 'status', label: t('common.status'), cellClass: 'text-center' },
@@ -52,6 +54,11 @@ const branchOptions = computed(() => [
 const departmentOptions = computed(() => [
     { value: '', label: t('users.select_department') },
     ...props.departments.map((d) => ({ value: d.id, label: d.department_name })),
+]);
+
+const subordinationOptions = computed(() => [
+    { value: '', label: t('users.select_subordination') },
+    ...props.subordinations.map((s) => ({ value: s.id, label: s.display_name })),
 ]);
 
 const employmentTypeOptions = [
@@ -200,6 +207,12 @@ const flashError = computed(() => page.props.flash?.error);
                             @update:model-value="(v) => applyFilter('department_id', v)"
                         />
                         <FormSelect
+                            :model-value="filters.subordination_id ?? ''"
+                            :options="subordinationOptions"
+                            class="max-w-[180px]"
+                            @update:model-value="(v) => applyFilter('subordination_id', v)"
+                        />
+                        <FormSelect
                             :model-value="filters.employment_type ?? ''"
                             :options="[
                                 { value: '', label: t('users.select_employment_type') },
@@ -254,6 +267,9 @@ const flashError = computed(() => page.props.flash?.error);
             </template>
             <template #cell-branch="{ row }">
                 <span>{{ row.branch?.branch_name || '—' }}</span>
+            </template>
+            <template #cell-subordination="{ row }">
+                <span>{{ row.subordination?.display_name || row.subordination?.name_ar || row.subordination?.name_en || row.subordination?.code || '—' }}</span>
             </template>
             <template #cell-department="{ row }">
                 <span>{{ row.department?.department_name || '—' }}</span>

@@ -69,6 +69,7 @@ class UserResource extends JsonResource
             'department_id' => $this->department_id,
             'position_id' => $this->position_id,
             'grade_id' => $this->grade_id,
+            'subordination_id' => $this->subordination_id,
             'shift_id' => $this->shift_id,
             'manager_id' => $this->manager_id,
 
@@ -100,6 +101,15 @@ class UserResource extends JsonResource
                 return $this->grade ? [
                     'id' => $this->grade->id,
                     'grade_name' => $this->grade->grade_name,
+                ] : null;
+            }),
+            'subordination' => $this->whenLoaded('subordination', function () {
+                return $this->subordination ? [
+                    'id' => $this->subordination->id,
+                    'code' => $this->subordination->code,
+                    'name_ar' => $this->subordination->name_ar,
+                    'name_en' => $this->subordination->name_en,
+                    'display_name' => $this->subordination->display_name,
                 ] : null;
             }),
             'shift' => $this->whenLoaded('shift', function () {

@@ -20,6 +20,7 @@ class UserRepository
         'department',
         'position',
         'grade',
+        'subordination',
         'shift',
         'manager',
     ];
@@ -264,6 +265,10 @@ class UserRepository
 
         $query->when($filters['grade_id'] ?? null, function (Builder $q, int $gradeId): void {
             $q->where('grade_id', $gradeId);
+        });
+
+        $query->when($filters['subordination_id'] ?? null, function (Builder $q, int $subordinationId): void {
+            $q->where('subordination_id', $subordinationId);
         });
 
         $query->when($filters['shift_id'] ?? null, function (Builder $q, int $shiftId): void {

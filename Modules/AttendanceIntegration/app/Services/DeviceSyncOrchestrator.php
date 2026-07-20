@@ -15,10 +15,13 @@ use Modules\AttendanceIntegration\Events\DeviceSyncCompleted;
 use Modules\AttendanceIntegration\Models\DeviceAdapter;
 use Modules\FingerprintDevices\Models\FingerprintDevice;
 use Modules\FingerprintDevices\Models\UserFingerprint;
+use Modules\FingerprintDevices\Support\AppliesDeviceOrgDefaults;
 use Modules\Users\Models\User;
 
 class DeviceSyncOrchestrator
 {
+    use AppliesDeviceOrgDefaults;
+
     public function __construct(
         private DeviceRepositoryInterface $deviceRepository,
         private DeviceAdapterResolver $adapterResolver,
@@ -186,6 +189,8 @@ class DeviceSyncOrchestrator
                 $device->getTimeout(),
             );
 
+            $rawDevice = $this->resolveRawDevice($device);
+
             $matched = [];
             $unmatched = [];
             $created = 0;
@@ -206,7 +211,7 @@ class DeviceSyncOrchestrator
 
                 if (! $user) {
                     $autoName = ! empty($du['name']) ? $du['name'] : 'User '.$externalId;
-                    $user = User::create([
+                    $userData = [
                         'employee_code' => $externalId,
                         'name' => $autoName,
                         'full_name_ar' => $autoName,
@@ -214,7 +219,11 @@ class DeviceSyncOrchestrator
                         'password' => bcrypt('password'),
                         'status' => 1,
                         'is_active_employee' => true,
-                    ]);
+                    ];
+
+                    $userData = $this->applyDeviceOrgDefaults($rawDevice, $userData);
+
+                    $user = User::create($userData);
                     $created++;
                 }
 

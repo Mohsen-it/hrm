@@ -3,15 +3,18 @@ import { computed, ref } from 'vue';
 import { router, Link } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import { PageHeader, Button, Card, Badge, ConfirmDialog } from '@/Components/ui';
+import QuickPushModal from '@/Components/FingerprintDevices/QuickPushModal.vue';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
 
 const props = defineProps({
     device: { type: Object, required: true },
+    branches: { type: Array, default: () => [] },
 });
 
 const showDelete = ref(false);
+const showQuickPush = ref(false);
 
 const statusVariant = (status) => {
     const map = { online: 'active', offline: 'inactive', maintenance: 'pending', deactivated: 'inactive' };
@@ -67,6 +70,14 @@ const fields = computed(() => [
                 <Button variant="secondary" icon="fas fa-cloud-download-alt" :href="route('fingerprint-devices.sync', { device_id: device.id })">
                     {{ t('fingerprint_devices.sync_title') }}
                 </Button>
+                <Button
+                    v-if="device.can_push_users"
+                    variant="dark"
+                    icon="fas fa-cloud-upload-alt"
+                    @click="showQuickPush = true"
+                >
+                    {{ t('fingerprint_devices.quick_push_title') }}
+                </Button>
                 <Button variant="primary" icon="fas fa-edit" :href="route('fingerprint-devices.edit', device.id)">
                     {{ t('common.edit') }}
                 </Button>
@@ -116,6 +127,12 @@ const fields = computed(() => [
             :cancel-text="t('common.cancel')"
             confirm-variant="danger"
             @confirm="performDelete"
+        />
+
+        <QuickPushModal
+            v-model="showQuickPush"
+            :device="device"
+            :branches="branches"
         />
     </AppLayout>
 </template>

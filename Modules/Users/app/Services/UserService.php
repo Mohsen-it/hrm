@@ -585,6 +585,7 @@ class UserService
             'department_id' => ['nullable', 'integer', 'exists:departments,id'],
             'position_id' => ['nullable', 'integer', 'exists:positions,id'],
             'grade_id' => ['nullable', 'integer', 'exists:grades,id'],
+            'subordination_id' => ['nullable', 'integer', 'exists:subordinations,id'],
             'shift_id' => ['nullable', 'integer', 'exists:shifts,id'],
             'manager_id' => ['nullable', 'integer', 'exists:users,id'],
             'attendance_group_id' => ['nullable', 'integer', 'exists:att_attgroup,id'],

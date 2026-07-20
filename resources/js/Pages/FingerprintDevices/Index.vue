@@ -3,6 +3,7 @@ import { ref, computed } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import { PageHeader, DataTable, ConfirmDialog, Badge, Button, Card, IconButton, Alert } from '@/Components/ui';
+import QuickPushModal from '@/Components/FingerprintDevices/QuickPushModal.vue';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
@@ -20,6 +21,18 @@ const selectedDevice = ref(null);
 const syncingAll = ref(false);
 const syncResult = ref(null);
 const showSyncResult = ref(false);
+const showQuickPush = ref(false);
+const quickPushDevice = ref(null);
+
+function openQuickPush(device) {
+    quickPushDevice.value = device;
+    showQuickPush.value = true;
+}
+
+function onPushComplete() {
+    showQuickPush.value = false;
+    router.reload({ only: ['devices'] });
+}
 
 const columns = computed(() => [
     { key: 'name', label: t('fingerprint_devices.device_name'), sortable: true },
@@ -60,7 +73,12 @@ const columns = computed(() => [
         ],
     },
     { key: 'last_seen_at', label: t('fingerprint_devices.last_seen'), cellClass: 'text-center' },
-    { key: 'actions', label: t('common.actions'), cellClass: 'text-center w-[200px]' },
+    {
+        key: 'last_pushed_at',
+        label: t('fingerprint_devices.last_pushed'),
+        cellClass: 'text-center',
+    },
+    { key: 'actions', label: t('common.actions'), cellClass: 'text-center w-[240px]' },
 ]);
 
 const statusVariant = (status) => {
@@ -218,12 +236,26 @@ async function syncAllDevices() {
                 <span class="text-[12px] text-mistral-steel">{{ formatDate(row.last_seen_at) }}</span>
             </template>
 
+            <template #cell-last_pushed_at="{ row }">
+                <span v-if="row.last_pushed_at" class="text-[12px] text-mistral-primary font-medium">
+                    {{ row.last_pushed_at_human || formatDate(row.last_pushed_at) }}
+                </span>
+                <span v-else class="text-[12px] text-mistral-stone">—</span>
+            </template>
+
             <template #cell-actions="{ row }">
                 <div class="flex items-center justify-center gap-1">
                     <IconButton icon="fas fa-eye" :aria-label="t('common.view')" :href="route('fingerprint-devices.show', row.id)" />
                     <IconButton icon="fas fa-edit" :aria-label="t('common.edit')" :href="route('fingerprint-devices.edit', row.id)" />
                     <IconButton icon="fas fa-plug" :aria-label="t('fingerprint_devices.test_connection')" @click="router.post(route('fingerprint-devices.test-connection', row.id), {}, { preserveScroll: true })" />
                     <IconButton icon="fas fa-cloud-download-alt" :aria-label="t('fingerprint_devices.sync_title')" :href="route('fingerprint-devices.sync', { device_id: row.id })" />
+                    <IconButton
+                        v-if="row.can_push_users"
+                        icon="fas fa-cloud-upload-alt"
+                        :aria-label="t('fingerprint_devices.quick_push_title')"
+                        variant="primary"
+                        @click="openQuickPush(row)"
+                    />
                     <IconButton icon="fas fa-trash" :aria-label="t('common.delete')" variant="danger" @click="confirmDelete(row)" />
                 </div>
             </template>
@@ -237,6 +269,13 @@ async function syncAllDevices() {
             :cancel-text="t('common.cancel')"
             confirm-variant="danger"
             @confirm="performDelete"
+        />
+
+        <QuickPushModal
+            :show="showQuickPush"
+            :device="quickPushDevice"
+            @close="showQuickPush = false"
+            @pushed="onPushComplete"
         />
 
         <Teleport to="body">

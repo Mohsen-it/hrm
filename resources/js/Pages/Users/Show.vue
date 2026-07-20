@@ -42,6 +42,7 @@ const orgFields = computed(() => [
     { label: t('users.department'), value: props.user.department?.department_name || '—' },
     { label: t('users.position'), value: props.user.position?.position_name || '—' },
     { label: t('users.grade'), value: props.user.grade?.grade_name || '—' },
+    { label: t('users.subordination'), value: props.user.subordination?.name_ar || '—' },
     { label: t('users.shift'), value: props.user.shift?.shift_name || '—' },
     { label: t('users.manager'), value: props.user.manager?.name || '—' },
 ]);

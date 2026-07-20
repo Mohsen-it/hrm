@@ -8,7 +8,7 @@ return [
     'drivers' => [
         'zkteco' => [
             'bridge_url' => env('ZKTECO_BRIDGE_URL', 'http://127.0.0.1:5000'),
-            'bridge_timeout' => (int) env('ZKTECO_BRIDGE_TIMEOUT', 30),
+            'bridge_timeout' => (int) env('ZKTECO_BRIDGE_TIMEOUT', 300),
         ],
         'suprema' => [
             'api_url' => env('SUPREMA_API_URL', ''),

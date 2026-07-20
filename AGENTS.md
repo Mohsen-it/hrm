@@ -45,7 +45,7 @@
 | **UI** | Blade + Tailwind CSS 4.3 |
 | **Language** | Arabic (primary), English (secondary) |
 | **RTL** | Yes |
-| **Modules** | 13 |
+| **Modules** | 14 |
 
 ---
 

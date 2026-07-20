@@ -1,0 +1,14 @@
+﻿
+ GET|HEAD fingerprint-devices/sync fingerprint-devices.sync ظ║ Modules\FingerprintDevices\Http\Controllers\DeviceFuظخ
+ POST fingerprint-devices/sync fingerprint-devices.sync.run ظ║ Modules\FingerprintDevices\Http\Controllers\Deviظخ
+ POST fingerprint-devices/sync-all fingerprint-devices.sync-all ظ║ Modules\FingerprintDevices\Http\Controllers\ظخ
+ POST fingerprint-devices/sync/bidirectional fingerprint-devices.sync.bidirectional ظ║ Modules\FingerprintDevicظخ
+ GET|HEAD fingerprint-devices/sync/log-status/{logId} fingerprint-devices.sync.log-status ظ║ Modules\FingerprintDevظخ
+ POST fingerprint-devices/sync/push fingerprint-devices.sync.push ظ║ Modules\FingerprintDevices\Http\Controllerظخ
+ POST fingerprint-devices/sync/push-all fingerprint-devices.sync.push-all ظ║ Modules\FingerprintDevices\Http\Coظخ
+ POST fingerprint-devices/sync/push-stream fingerprint-devices.sync.push-stream ظ║ Modules\FingerprintDevices\Hظخ
+ POST fingerprint-devices/sync/retry-failed/{logId} fingerprint-devices.sync.retry-failed ظ║ Modules\Fingerprinظخ
+ POST fingerprint-devices/sync/stream fingerprint-devices.sync.stream ظ║ Modules\FingerprintDevices\Http\Controظخ
+
+ Showing [10] routes
+

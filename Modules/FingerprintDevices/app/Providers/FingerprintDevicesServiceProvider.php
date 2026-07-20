@@ -4,6 +4,8 @@ namespace Modules\FingerprintDevices\Providers;
 
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\ServiceProvider;
+use Modules\FingerprintDevices\Console\Commands\BackfillDeviceOrgDefaults;
+use Modules\FingerprintDevices\Console\Commands\ImportHikvisionEmployees;
 use Nwidart\Modules\Traits\PathNamespace;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
@@ -35,7 +37,8 @@ class FingerprintDevicesServiceProvider extends ServiceProvider
     protected function registerCommands(): void
     {
         $this->commands([
-            \Modules\FingerprintDevices\Console\Commands\ImportHikvisionEmployees::class,
+            ImportHikvisionEmployees::class,
+            BackfillDeviceOrgDefaults::class,
         ]);
     }
 

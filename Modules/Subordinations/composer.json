@@ -1,0 +1,30 @@
+{
+    "name": "nwidart/subordinations",
+    "description": "Subordination management module (e.g., airports) for HRM.",
+    "authors": [
+        {
+            "name": "HRM Team",
+            "email": "dev@hrm.local"
+        }
+    ],
+    "extra": {
+        "laravel": {
+            "providers": [],
+            "aliases": {
+
+            }
+        }
+    },
+    "autoload": {
+        "psr-4": {
+            "Modules\\Subordinations\\": "app/",
+            "Modules\\Subordinations\\Database\\Factories\\": "database/factories/",
+            "Modules\\Subordinations\\Database\\Seeders\\": "database/seeders/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Modules\\Subordinations\\Tests\\": "tests/"
+        }
+    }
+}

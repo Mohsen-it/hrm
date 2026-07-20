@@ -7,6 +7,7 @@ return [
     'departments' => 'الأقسام',
     'positions' => 'المسميات الوظيفية',
     'grades' => 'الدرجات الوظيفية',
+    'subordinations' => 'التبعية',
     'zones' => 'المناطق',
     'users' => 'الموظفون',
     'user_shifts' => 'مناوبات الموظفين',

@@ -22,6 +22,9 @@ class UpdateFingerprintDeviceRequest extends FormRequest
         return [
             'device_type_id' => ['required', 'integer', 'exists:fingerprint_device_types,id'],
             'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
+            'default_company_id' => ['nullable', 'integer', 'exists:companies,id'],
+            'default_branch_id' => ['nullable', 'integer', 'exists:branches,id'],
+            'default_subordination_id' => ['nullable', 'integer', 'exists:subordinations,id'],
             'name' => ['required', 'string', 'max:150'],
             'serial_number' => [
                 'required', 'string', 'max:100',

@@ -14,6 +14,7 @@ use Modules\FingerprintDevices\Models\FingerprintDevice;
 use Modules\FingerprintDevices\Models\UserFingerprint;
 use Modules\FingerprintDevices\Repositories\FingerprintDeviceRepository;
 use Modules\FingerprintDevices\Repositories\UserFingerprintRepository;
+use Modules\FingerprintDevices\Support\AppliesDeviceOrgDefaults;
 use Modules\Users\Models\User;
 
 /**
@@ -35,6 +36,8 @@ use Modules\Users\Models\User;
  */
 class DeviceFullSyncService
 {
+    use AppliesDeviceOrgDefaults;
+
     public function __construct(
         private FingerprintDeviceRepository $deviceRepository,
         private UserFingerprintRepository $fingerprintRepository,
@@ -320,7 +323,7 @@ class DeviceFullSyncService
                 if (! $user) {
                     $autoName = $name !== '' ? $name : 'User '.$externalId;
 
-                    $user = User::create([
+                    $userData = [
                         'employee_code' => $externalId,
                         'name' => $autoName,
                         'full_name_ar' => $autoName,
@@ -328,7 +331,11 @@ class DeviceFullSyncService
                         'password' => bcrypt('password'),
                         'status' => 1,
                         'is_active_employee' => true,
-                    ]);
+                    ];
+
+                    $userData = $this->applyDeviceOrgDefaults($device, $userData);
+
+                    $user = User::create($userData);
                     $created++;
                 }
 
@@ -563,7 +570,7 @@ class DeviceFullSyncService
         }
 
         // Ensure storage directory exists
-        $storageDir = storage_path('app/face_photos/' . $device->serial_number);
+        $storageDir = storage_path('app/face_photos/'.$device->serial_number);
         File::makeDirectory($storageDir, 0755, true, true);
 
         foreach ($photos as $photo) {
@@ -591,12 +598,12 @@ class DeviceFullSyncService
                     continue;
                 }
 
-                $filename = $employeeNo . '.jpg';
-                $filepath = $storageDir . '/' . $filename;
+                $filename = $employeeNo.'.jpg';
+                $filepath = $storageDir.'/'.$filename;
                 file_put_contents($filepath, $imageData);
 
                 // Update user record with photo path
-                $relativePath = 'face_photos/' . $device->serial_number . '/' . $filename;
+                $relativePath = 'face_photos/'.$device->serial_number.'/'.$filename;
                 User::where('id', $userPk)->update(['face_photo_path' => $relativePath]);
 
                 $saved++;

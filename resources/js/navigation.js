@@ -60,6 +60,13 @@ export const navigationGroups = [
         permissions: ['view-grades'],
       },
       {
+        id: 'subordinations',
+        label: 'menu.subordinations',
+        route: 'subordinations.index',
+        icon: 'fa-solid fa-map-location-dot',
+        permissions: ['view-subordinations'],
+      },
+      {
         id: 'users',
         label: 'menu.users',
         route: 'users.index',

@@ -1,0 +1,11 @@
+{
+    "name": "Subordinations",
+    "alias": "subordinations",
+    "description": "Administrative/geographic subordination (e.g., airports) for employees.",
+    "keywords": [],
+    "priority": 0,
+    "providers": [
+        "Modules\\Subordinations\\Providers\\SubordinationsServiceProvider"
+    ],
+    "files": []
+}

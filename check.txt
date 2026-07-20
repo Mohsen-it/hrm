@@ -1,0 +1,4 @@
+﻿
+last_pushed_at: yes
+device_sync_logs: yes
+device_push_results: yes

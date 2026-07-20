@@ -14,6 +14,7 @@ const props = defineProps({
     departments: { type: Array, default: () => [] },
     positions: { type: Array, default: () => [] },
     grades: { type: Array, default: () => [] },
+    subordinations: { type: Array, default: () => [] },
     managers: { type: Array, default: () => [] },
     roles: { type: Array, default: () => [] },
     permissions: { type: Array, default: () => [] },
@@ -64,6 +65,7 @@ const form = reactive({
     department_id: props.user.department_id || '',
     position_id: props.user.position_id || '',
     grade_id: props.user.grade_id || '',
+    subordination_id: props.user.subordination_id || '',
     manager_id: props.user.manager_id || '',
     roles: (props.user.roles || []).map((r) => r.name),
     permissions: (props.user.permissions || []).slice(),
@@ -394,7 +396,7 @@ function submit() {
                 icon="fas fa-sitemap"
                 :collapsible="true"
                 :default-open="true"
-                :count="7"
+                :count="8"
             >
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     <FormSelect
@@ -436,6 +438,14 @@ function submit() {
                         :options="grades.map((g) => ({ value: g.id, label: g.grade_name }))"
                         :placeholder="t('users.select_grade')"
                         :error="errorFor('grade_id')"
+                    />
+                    <FormSelect
+                        v-model="form.subordination_id"
+                        :label="t('users.subordination')"
+                        name="subordination_id"
+                        :options="subordinations.map((s) => ({ value: s.id, label: s.display_name }))"
+                        :placeholder="t('users.select_subordination')"
+                        :error="errorFor('subordination_id')"
                     />
                     <FormSelect
                         v-model="form.manager_id"

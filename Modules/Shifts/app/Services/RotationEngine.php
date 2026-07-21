@@ -10,30 +10,55 @@ use Modules\Shifts\Models\RotationGroup;
 /**
  * RotationEngine — the core calculation engine for rotation schedules.
  *
- * Given a rotation definition, a group index, and a target date,
+ * Given a rotation definition, a group, and a target date,
  * it determines whether the employee should work or rest using
  * closed-form date math (no loops, no database queries).
  *
- * Formula:
- *   position_in_cycle = ((target_date - anchor_start_date) + (group_index * work_days_count)) % cycle_length
+ * Anchor selection:
+ *   - If the group has a `start_date`, that date is used as the cycle anchor
+ *     for that group. This lets each group start its cycle on a different day.
+ *   - Otherwise the rotation's `anchor_start_date` is used, with an offset of
+ *     `group_index * work_days_count` so that groups tile the cycle without
+ *     overlap when number_of_groups × work_days_count <= cycle_length.
+ *
+ * Formula (with group start_date):
+ *   position_in_cycle = (target_date - group.start_date) % cycle_length
  *   is_work_day = pattern[position_in_cycle] == 1
  *
- * The offset is `group_index * work_days_count` (not just `group_index`) so that
- * each group works a contiguous block of `work_days_count` days and the groups
- * tile the cycle without overlap. This is the only formula that yields
- * continuous coverage when number_of_groups × work_days_count <= cycle_length.
+ * Formula (fallback, without group start_date):
+ *   position_in_cycle = ((target_date - rotation.anchor_start_date) + (group_index * work_days_count)) % cycle_length
+ *   is_work_day = pattern[position_in_cycle] == 1
  */
 class RotationEngine
 {
     /**
+     * Resolve the cycle anchor for a specific group.
+     *
+     * Returns the group's own start_date if set; otherwise falls back to the
+     * rotation's anchor_start_date.
+     */
+    private function resolveAnchor(Rotation $rotation, RotationGroup $group): Carbon
+    {
+        if ($group->start_date) {
+            return Carbon::parse($group->start_date)->startOfDay();
+        }
+
+        return $rotation->anchor_start_date->startOfDay();
+    }
+
+    /**
      * Resolve the cycle offset for a given group.
      *
-     * Each group works a contiguous block of `work_days_count` days, evenly
-     * distributed across the cycle by multiplying the group index by the
-     * number of work days.
+     * Only used when the group does not have its own start_date. Each group
+     * works a contiguous block of `work_days_count` days, evenly distributed
+     * across the cycle by multiplying the group index by the number of work days.
      */
-    private function groupOffset(Rotation $rotation): int
+    private function groupOffset(Rotation $rotation, RotationGroup $group): int
     {
+        if ($group->start_date) {
+            return 0;
+        }
+
         $workDaysCount = $rotation->work_days_count;
 
         if (! $workDaysCount) {
@@ -41,16 +66,16 @@ class RotationEngine
             $workDaysCount = count(array_filter($pattern, fn ($v) => $v == 1));
         }
 
-        return (int) $workDaysCount;
+        return (int) ($group->group_index ?? 0) * (int) $workDaysCount;
     }
 
     /**
      * Determine if a date is a work day for a given rotation and group.
      */
-    public function isWorkDay(Rotation $rotation, int $groupIndex, Carbon|string $targetDate): bool
+    public function isWorkDay(Rotation $rotation, RotationGroup $group, Carbon|string $targetDate): bool
     {
         $date = Carbon::parse($targetDate)->startOfDay();
-        $anchor = $rotation->anchor_start_date->startOfDay();
+        $anchor = $this->resolveAnchor($rotation, $group);
         $pattern = $rotation->pattern;
 
         if (! is_array($pattern) || $rotation->cycle_length <= 0) {
@@ -58,7 +83,7 @@ class RotationEngine
         }
 
         $daysSinceAnchor = (int) $date->diffInDays($anchor);
-        $offset = $groupIndex * $this->groupOffset($rotation);
+        $offset = $this->groupOffset($rotation, $group);
         $positionInCycle = ($daysSinceAnchor + $offset) % $rotation->cycle_length;
 
         if ($positionInCycle < 0) {
@@ -73,10 +98,10 @@ class RotationEngine
      *
      * @return int|null 1-based day index, or null if cycle is invalid
      */
-    public function dayIndex(Rotation $rotation, int $groupIndex, Carbon|string $targetDate): ?int
+    public function dayIndex(Rotation $rotation, RotationGroup $group, Carbon|string $targetDate): ?int
     {
         $date = Carbon::parse($targetDate)->startOfDay();
-        $anchor = $rotation->anchor_start_date->startOfDay();
+        $anchor = $this->resolveAnchor($rotation, $group);
         $cycleLength = $rotation->cycle_length;
 
         if ($cycleLength <= 0) {
@@ -84,7 +109,7 @@ class RotationEngine
         }
 
         $daysSinceAnchor = (int) $date->diffInDays($anchor);
-        $offset = $groupIndex * $this->groupOffset($rotation);
+        $offset = $this->groupOffset($rotation, $group);
         $positionInCycle = ($daysSinceAnchor + $offset) % $cycleLength;
 
         if ($positionInCycle < 0) {
@@ -99,7 +124,7 @@ class RotationEngine
      *
      * @return array<int, array{date: string, is_work_day: bool, day_index: int}>
      */
-    public function getScheduleInRange(Rotation $rotation, int $groupIndex, Carbon|string $fromDate, Carbon|string $toDate): array
+    public function getScheduleInRange(Rotation $rotation, RotationGroup $group, Carbon|string $fromDate, Carbon|string $toDate): array
     {
         $current = Carbon::parse($fromDate)->startOfDay();
         $end = Carbon::parse($toDate)->startOfDay();
@@ -108,8 +133,8 @@ class RotationEngine
         while ($current->lte($end)) {
             $schedule[] = [
                 'date' => $current->format('Y-m-d'),
-                'is_work_day' => $this->isWorkDay($rotation, $groupIndex, $current),
-                'day_index' => $this->dayIndex($rotation, $groupIndex, $current) ?? 0,
+                'is_work_day' => $this->isWorkDay($rotation, $group, $current),
+                'day_index' => $this->dayIndex($rotation, $group, $current) ?? 0,
             ];
             $current->addDay();
         }
@@ -122,9 +147,9 @@ class RotationEngine
      *
      * @return array<int, string>
      */
-    public function getWorkDaysInRange(Rotation $rotation, int $groupIndex, Carbon|string $fromDate, Carbon|string $toDate): array
+    public function getWorkDaysInRange(Rotation $rotation, RotationGroup $group, Carbon|string $fromDate, Carbon|string $toDate): array
     {
-        $schedule = $this->getScheduleInRange($rotation, $groupIndex, $fromDate, $toDate);
+        $schedule = $this->getScheduleInRange($rotation, $group, $fromDate, $toDate);
 
         return array_values(array_column(
             array_filter($schedule, fn (array $day): bool => $day['is_work_day']),
@@ -135,11 +160,11 @@ class RotationEngine
     /**
      * Get the next work day from a given date for a specific rotation and group.
      */
-    public function getNextWorkDay(Rotation $rotation, int $groupIndex, Carbon|string $fromDate): Carbon
+    public function getNextWorkDay(Rotation $rotation, RotationGroup $group, Carbon|string $fromDate): Carbon
     {
         $next = Carbon::parse($fromDate)->startOfDay()->addDay();
 
-        while (! $this->isWorkDay($rotation, $groupIndex, $next)) {
+        while (! $this->isWorkDay($rotation, $group, $next)) {
             $next->addDay();
         }
 
@@ -149,11 +174,11 @@ class RotationEngine
     /**
      * Get the next rest day from a given date for a specific rotation and group.
      */
-    public function getNextRestDay(Rotation $rotation, int $groupIndex, Carbon|string $fromDate): Carbon
+    public function getNextRestDay(Rotation $rotation, RotationGroup $group, Carbon|string $fromDate): Carbon
     {
         $next = Carbon::parse($fromDate)->startOfDay()->addDay();
 
-        while ($this->isWorkDay($rotation, $groupIndex, $next)) {
+        while ($this->isWorkDay($rotation, $group, $next)) {
             $next->addDay();
         }
 
@@ -199,13 +224,13 @@ class RotationEngine
         return [
             'employee_id' => $employeeId,
             'target_date' => $date->toDateString(),
-            'is_work_day' => $this->isWorkDay($rotation, $group->group_index, $date),
-            'status' => $this->isWorkDay($rotation, $group->group_index, $date)
+            'is_work_day' => $this->isWorkDay($rotation, $group, $date),
+            'status' => $this->isWorkDay($rotation, $group, $date)
                 ? ScheduleResolverService::STATUS_WORK
                 : ScheduleResolverService::STATUS_REST,
             'expected_check_in' => $expectedCheckIn,
             'expected_check_out' => $expectedCheckOut,
-            'day_index' => $this->dayIndex($rotation, $group->group_index, $date),
+            'day_index' => $this->dayIndex($rotation, $group, $date),
             'cycle_length' => $rotation->cycle_length,
             'rotation_id' => $rotation->id,
             'rotation_group_id' => $group->id,

@@ -64,7 +64,7 @@ class ScheduleGenerationService
 
                 $current = $periodStart->copy();
                 while ($current->lte($periodEnd)) {
-                    $isWork = $this->rotationEngine->isWorkDay($rotation, $group->group_index, $current);
+                    $isWork = $this->rotationEngine->isWorkDay($rotation, $group, $current);
 
                     $entries[] = [
                         'schedule_period_id' => $period->id,

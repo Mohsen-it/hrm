@@ -46,7 +46,7 @@ class AbsenceCalculationService
                 continue;
             }
 
-            if ($this->rotationEngine->isWorkDay($rotation, $group->group_index, $date)) {
+            if ($this->rotationEngine->isWorkDay($rotation, $group, $date)) {
                 $expectedIds->push($rotationAssignment->employee_id);
             }
         }
@@ -156,7 +156,7 @@ class AbsenceCalculationService
         $current = $startOfMonth->copy();
         while ($current->lte($endOfMonth)) {
             $dateStr = $current->toDateString();
-            $isExpected = $this->rotationEngine->isWorkDay($rotation, $group->group_index, $current);
+            $isExpected = $this->rotationEngine->isWorkDay($rotation, $group, $current);
 
             if ($isExpected) {
                 $hasPunch = AttendanceSession::onDate($dateStr)
@@ -216,7 +216,7 @@ class AbsenceCalculationService
             $rotation = $rotationAssignment->rotation;
             $group = $rotationAssignment->rotationGroup;
 
-            return $this->rotationEngine->isWorkDay($rotation, $group->group_index, $date);
+            return $this->rotationEngine->isWorkDay($rotation, $group, $date);
         }
 
         return false;

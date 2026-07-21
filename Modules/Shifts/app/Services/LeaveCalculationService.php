@@ -29,7 +29,7 @@ class LeaveCalculationService
         if ($rotationAssignment) {
             $rotation = $rotationAssignment->rotation;
             $group = $rotationAssignment->rotationGroup;
-            $workDays = $this->rotationEngine->getWorkDaysInRange($rotation, $group->group_index, $startDate, $endDate);
+            $workDays = $this->rotationEngine->getWorkDaysInRange($rotation, $group, $startDate, $endDate);
 
             return [
                 'calendar_days' => $calendarDays,

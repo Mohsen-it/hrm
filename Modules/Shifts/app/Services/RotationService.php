@@ -278,7 +278,7 @@ class RotationService
             foreach ($groups as $group) {
                 $dayData['groups'][$group->id] = [
                     'name' => $group->name,
-                    'is_work_day' => $this->rotationEngine->isWorkDay($rotation, $group->group_index, $current),
+                    'is_work_day' => $this->rotationEngine->isWorkDay($rotation, $group, $current),
                 ];
             }
 

@@ -371,7 +371,7 @@ class RotationsController extends Controller
         $groups = $rotation->groups()->orderBy('group_index')->get();
 
         $assignments = RotationAssignment::query()
-            ->with(['employee:id,name,employee_code,department_id', 'rotationGroup:id,name,rotation_id,group_index'])
+            ->with(['employee:id,name,employee_code,department_id', 'rotationGroup:id,name,rotation_id,group_index,start_date'])
             ->where('rotation_id', $id)
             ->whereNull('end_date')
             ->get();
@@ -383,7 +383,8 @@ class RotationsController extends Controller
                 continue;
             }
 
-            $groupIndex = $assignment->rotationGroup?->group_index ?? 0;
+            $group = $assignment->rotationGroup;
+            $groupIndex = $group?->group_index ?? 0;
             $days = [];
 
             $current = Carbon::parse($from)->startOfDay();
@@ -392,7 +393,7 @@ class RotationsController extends Controller
             while ($current->lte($end)) {
                 $days[] = [
                     'date' => $current->format('Y-m-d'),
-                    'is_work_day' => $this->rotationEngine->isWorkDay($rotation, $groupIndex, $current),
+                    'is_work_day' => $this->rotationEngine->isWorkDay($rotation, $group, $current),
                 ];
                 $current->addDay();
             }
@@ -402,7 +403,7 @@ class RotationsController extends Controller
                 'employee_name' => $employee->name,
                 'employee_code' => $employee->employee_code,
                 'group_id' => $assignment->rotation_group_id,
-                'group_name' => $assignment->rotationGroup?->name,
+                'group_name' => $group?->name,
                 'group_index' => $groupIndex,
                 'start_date' => $assignment->start_date,
                 'days' => $days,

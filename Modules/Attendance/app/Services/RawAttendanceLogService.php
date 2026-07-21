@@ -193,7 +193,7 @@ class RawAttendanceLogService
     }
 
     /**
-     * Process every unprocessed log in chunks.
+     * Process a single chunk of unprocessed logs.
      *
      * @return array{processed: int, sessions: int}
      */
@@ -202,19 +202,52 @@ class RawAttendanceLogService
         $processed = 0;
         $sessions = 0;
 
-        $this->repository
+        $logs = $this->repository
             ->query()
             ->unprocessed()
             ->orderBy('punch_time')
-            ->chunkById($chunkSize, function ($logs) use (&$processed, &$sessions): void {
-                foreach ($logs as $log) {
-                    $session = $this->processLog($log);
-                    $processed++;
-                    if ($session !== null) {
-                        $sessions++;
-                    }
-                }
-            });
+            ->limit($chunkSize)
+            ->get();
+
+        foreach ($logs as $log) {
+            $session = $this->processLog($log);
+            $processed++;
+            if ($session !== null) {
+                $sessions++;
+            }
+        }
+
+        return [
+            'processed' => $processed,
+            'sessions' => $sessions,
+        ];
+    }
+
+    /**
+     * Process unprocessed raw logs belonging to a specific device.
+     *
+     * @return array{processed: int, sessions: int}
+     */
+    public function processUnprocessedForDevice(int $deviceId, int $limit = 1000): array
+    {
+        $processed = 0;
+        $sessions = 0;
+
+        $logs = $this->repository
+            ->query()
+            ->unprocessed()
+            ->forDevice($deviceId)
+            ->orderBy('punch_time')
+            ->limit($limit)
+            ->get();
+
+        foreach ($logs as $log) {
+            $session = $this->processLog($log);
+            $processed++;
+            if ($session !== null) {
+                $sessions++;
+            }
+        }
 
         return [
             'processed' => $processed,

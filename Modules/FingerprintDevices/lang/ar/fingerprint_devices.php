@@ -36,7 +36,7 @@ return [
     'test_connection' => 'اختبار الاتصال',
     'connection_success' => 'تم الاتصال بالجهاز بنجاح',
     'connection_failed' => 'فشل الاتصال بالجهاز',
-    'sync_complete' => 'تمت المزامنة بنجاح (:count سجل)',
+    'sync_complete' => 'تمت المزامنة بنجاح (:count سجل، :imported جديد، :sessions جلسة)',
     'device_created' => 'تم إنشاء الجهاز بنجاح',
     'device_updated' => 'تم تحديث الجهاز بنجاح',
     'device_deleted' => 'تم حذف الجهاز بنجاح',

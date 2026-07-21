@@ -75,9 +75,9 @@ class DailyAttendanceAutoCalculationService
             ->withoutSuperAdmin()
             ->where('status', 1)
             ->where('is_active_employee', true)
-            ->whereNull('termination_date')
-            ->orWhere(function ($q) use ($date) {
-                $q->whereNotNull('termination_date')->where('termination_date', '>=', $date);
+            ->where(function ($q) use ($date) {
+                $q->whereNull('termination_date')
+                    ->orWhere('termination_date', '>=', $date);
             })
             ->select(['id', 'name'])
             ->chunkById($chunk, function ($users) use ($date, &$count): void {

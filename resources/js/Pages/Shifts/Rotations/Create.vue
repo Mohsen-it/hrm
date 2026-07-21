@@ -21,6 +21,10 @@ const form = reactive({
     work_on_holidays: false,
     grace_minutes: 0,
     color: 'var(--color-mistral-primary)',
+    in_ahead_margin: 0,
+    in_above_margin: 0,
+    out_ahead_margin: 0,
+    out_above_margin: 0,
 });
 
 const patternInput = ref('');
@@ -266,6 +270,39 @@ function submit() {
                         name="color"
                         type="color"
                         :error="errorFor('color')"
+                    />
+                </div>
+            </FormSection>
+
+            <FormSection :title="t('shifts.margins')" icon="fas fa-arrows-alt-h" :collapsible="true" :default-open="true">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <FormInput
+                        v-model="form.in_ahead_margin"
+                        :label="t('shifts.in_ahead_margin')"
+                        name="in_ahead_margin"
+                        type="time"
+                        :error="errorFor('in_ahead_margin')"
+                    />
+                    <FormInput
+                        v-model="form.in_above_margin"
+                        :label="t('shifts.in_above_margin')"
+                        name="in_above_margin"
+                        type="time"
+                        :error="errorFor('in_above_margin')"
+                    />
+                    <FormInput
+                        v-model="form.out_ahead_margin"
+                        :label="t('shifts.out_ahead_margin')"
+                        name="out_ahead_margin"
+                        type="time"
+                        :error="errorFor('out_ahead_margin')"
+                    />
+                    <FormInput
+                        v-model="form.out_above_margin"
+                        :label="t('shifts.out_above_margin')"
+                        name="out_above_margin"
+                        type="time"
+                        :error="errorFor('out_above_margin')"
                     />
                 </div>
             </FormSection>

@@ -5,6 +5,7 @@ namespace Modules\FingerprintDevices\Services;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
+use Modules\Attendance\Services\RawAttendanceLogService;
 use Modules\AttendanceIntegration\Contracts\DeviceAdapterInterface;
 use Modules\AttendanceIntegration\Services\DeviceAdapterResolver;
 use Modules\FingerprintDevices\Http\Requests\StoreFingerprintDeviceRequest;
@@ -17,6 +18,7 @@ class FingerprintDeviceService
     public function __construct(
         private FingerprintDeviceRepository $repository,
         private DeviceAdapterResolver $adapterResolver,
+        private RawAttendanceLogService $rawLogService,
     ) {}
 
     private function resolveAdapter(FingerprintDevice $device): DeviceAdapterInterface
@@ -113,11 +115,42 @@ class FingerprintDeviceService
             $device->timeout
         );
 
-        if (! empty($records)) {
-            $this->repository->updateSyncTimestamp($device);
+        if (empty($records)) {
+            return ['pulled' => 0, 'imported' => 0, 'sessions' => 0, 'records' => []];
         }
 
-        return $records;
+        $rows = [];
+        foreach ($records as $record) {
+            $externalId = trim((string) ($record['user_id'] ?? ''));
+            $timestamp = $record['timestamp'] ?? null;
+            if ($externalId === '' || ! $timestamp) {
+                continue;
+            }
+
+            $rows[] = [
+                'device_id' => $device->id,
+                'device_user_id' => $externalId,
+                'punch_time' => $timestamp,
+                'punch_type' => ((int) ($record['punch'] ?? 0)) === 1 ? 'check_out' : 'check_in',
+                'verify_type' => 'fingerprint',
+                'work_code' => (int) ($record['status'] ?? 0),
+                'source' => 'device_pull',
+                'ip_address' => $device->ip_address,
+                'raw_data' => $record,
+            ];
+        }
+
+        $imported = $this->rawLogService->bulkImport($rows);
+        $processed = $this->rawLogService->processUnprocessedForDevice($device->id, $imported['inserted']);
+
+        $this->repository->updateSyncTimestamp($device);
+
+        return [
+            'pulled' => count($records),
+            'imported' => $imported['inserted'],
+            'sessions' => $processed['sessions'],
+            'records' => $records,
+        ];
     }
 
     public function syncUsers(FingerprintDevice $device): array

@@ -59,6 +59,9 @@ class ScheduleGenerationService
                 $rotation = $assignment->rotation;
                 $group = $assignment->rotationGroup;
 
+                $dutyCategoryId = $group->timeSchedule?->category?->id
+                    ?? $group->timeSchedule?->categoryTimeSchedule?->shift_category_id;
+
                 $current = $periodStart->copy();
                 while ($current->lte($periodEnd)) {
                     $isWork = $this->rotationEngine->isWorkDay($rotation, $group->group_index, $current);
@@ -66,6 +69,7 @@ class ScheduleGenerationService
                     $entries[] = [
                         'schedule_period_id' => $period->id,
                         'employee_id' => $assignment->employee_id,
+                        'duty_category_id' => $dutyCategoryId,
                         'date' => $current->format('Y-m-d'),
                         'day_status' => $isWork ? 'WORK' : 'REST',
                         'created_at' => now(),

@@ -21,6 +21,10 @@ const form = reactive({
     is_multi_day: props.schedule?.is_multi_day ?? false,
     late_margin: props.schedule?.late_margin ?? 0,
     early_margin: props.schedule?.early_margin ?? 0,
+    in_ahead_margin: props.schedule?.in_ahead_margin ? String(props.schedule.in_ahead_margin).slice(0, 5) : '',
+    in_above_margin: props.schedule?.in_above_margin ? String(props.schedule.in_above_margin).slice(0, 5) : '',
+    out_ahead_margin: props.schedule?.out_ahead_margin ? String(props.schedule.out_ahead_margin).slice(0, 5) : '',
+    out_above_margin: props.schedule?.out_above_margin ? String(props.schedule.out_above_margin).slice(0, 5) : '',
 })
 
 const breaks = ref(
@@ -49,6 +53,10 @@ function handleSubmit() {
         is_multi_day: form.is_multi_day,
         late_margin: form.late_margin,
         early_margin: form.early_margin,
+        in_ahead_margin: form.in_ahead_margin,
+        in_above_margin: form.in_above_margin,
+        out_ahead_margin: form.out_ahead_margin,
+        out_above_margin: form.out_above_margin,
         breaks: breaks.value,
     })
 }
@@ -114,6 +122,38 @@ function handleSubmit() {
                     min="0"
                     :hint="t('shifts.minutes')"
                     :error="errors?.early_margin"
+                />
+
+                <FormInput
+                    v-model="form.in_ahead_margin"
+                    :label="t('shifts.in_ahead_margin')"
+                    name="in_ahead_margin"
+                    type="time"
+                    :error="errors?.in_ahead_margin"
+                />
+
+                <FormInput
+                    v-model="form.in_above_margin"
+                    :label="t('shifts.in_above_margin')"
+                    name="in_above_margin"
+                    type="time"
+                    :error="errors?.in_above_margin"
+                />
+
+                <FormInput
+                    v-model="form.out_ahead_margin"
+                    :label="t('shifts.out_ahead_margin')"
+                    name="out_ahead_margin"
+                    type="time"
+                    :error="errors?.out_ahead_margin"
+                />
+
+                <FormInput
+                    v-model="form.out_above_margin"
+                    :label="t('shifts.out_above_margin')"
+                    name="out_above_margin"
+                    type="time"
+                    :error="errors?.out_above_margin"
                 />
             </div>
         </FormSection>

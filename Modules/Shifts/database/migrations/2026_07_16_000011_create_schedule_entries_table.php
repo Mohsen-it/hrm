@@ -15,7 +15,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('schedule_period_id')->constrained('schedule_periods')->cascadeOnDelete();
             $table->foreignId('employee_id')->constrained('users')->cascadeOnDelete();
-            $table->foreignId('duty_category_id')->constrained('att_shift_categories')->cascadeOnDelete();
+            $table->foreignId('duty_category_id')->nullable()->constrained('att_shift_categories')->nullOnDelete();
             $table->date('date');
             $table->enum('day_status', ['WORK', 'REST']);
             $table->timestamps();

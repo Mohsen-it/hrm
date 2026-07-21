@@ -23,8 +23,12 @@ class AbsenceCalculationService
      *
      * @return Collection<int, int>
      */
-    public function getExpectedEmployees(Carbon $date): Collection
-    {
+    public function getExpectedEmployees(
+        Carbon $date,
+        ?int $departmentId = null,
+        ?int $rotationId = null,
+        ?int $rotationGroupId = null,
+    ): Collection {
         $dateStr = $date->toDateString();
 
         $rotationAssignments = $this->rotationAssignmentRepository->getAssignmentsForDate($dateStr);
@@ -33,6 +37,14 @@ class AbsenceCalculationService
         foreach ($rotationAssignments as $rotationAssignment) {
             $rotation = $rotationAssignment->rotation;
             $group = $rotationAssignment->rotationGroup;
+
+            if ($rotationId !== null && $rotation->id !== $rotationId) {
+                continue;
+            }
+
+            if ($rotationGroupId !== null && $group->id !== $rotationGroupId) {
+                continue;
+            }
 
             if ($this->rotationEngine->isWorkDay($rotation, $group->group_index, $date)) {
                 $expectedIds->push($rotationAssignment->employee_id);
@@ -45,15 +57,20 @@ class AbsenceCalculationService
             return $expectedIds;
         }
 
-        return DB::table('users')
+        $query = DB::table('users')
             ->whereIn('id', $expectedIds->toArray())
             ->where('status', 1)
             ->where('is_active_employee', true)
             ->where(function ($q) use ($dateStr) {
                 $q->whereNull('termination_date')
                     ->orWhere('termination_date', '>=', $dateStr);
-            })
-            ->pluck('id');
+            });
+
+        if ($departmentId !== null) {
+            $query->where('department_id', $departmentId);
+        }
+
+        return $query->pluck('id');
     }
 
     /**
@@ -61,21 +78,16 @@ class AbsenceCalculationService
      *
      * @return Collection<int, int>
      */
-    public function getAbsentEmployees(Carbon $date, ?int $departmentId = null): Collection
-    {
-        $expected = $this->getExpectedEmployees($date);
+    public function getAbsentEmployees(
+        Carbon $date,
+        ?int $departmentId = null,
+        ?int $rotationId = null,
+        ?int $rotationGroupId = null,
+    ): Collection {
+        $expected = $this->getExpectedEmployees($date, $departmentId, $rotationId, $rotationGroupId);
 
         if ($expected->isEmpty()) {
             return collect();
-        }
-
-        if ($departmentId !== null) {
-            $expected = $expected->filter(function ($employeeId) use ($departmentId) {
-                return DB::table('users')
-                    ->where('id', $employeeId)
-                    ->where('department_id', $departmentId)
-                    ->exists();
-            });
         }
 
         $dateStr = $date->toDateString();

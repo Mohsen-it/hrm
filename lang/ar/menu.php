@@ -41,4 +41,5 @@ return [
     'group_schedules' => 'جداول الفئات',
     'rotations' => 'الدوريات',
     'rotation_assignments' => 'إسناد الدوريات',
+    'rotation_groups' => 'مجموعات الدوريات',
 ];

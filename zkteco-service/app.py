@@ -15,6 +15,7 @@ import traceback
 import base64
 import struct
 import os
+import threading
 
 try:
     from zk import ZK, const
@@ -65,6 +66,7 @@ class ZKTecoService:
         self.force_udp = force_udp
         self.ommit_ping = ommit_ping
         self.conn = None
+        self._templates_cache = None
         
     def connect(self):
         """Connect to ZKTeco device"""
@@ -458,18 +460,25 @@ class ZKTecoService:
             logger.error(f"Get attendance failed: {str(e)}")
             raise
     
+    def _get_all_templates_cached(self):
+        """Get all templates from device, with caching per connection"""
+        if self._templates_cache is not None:
+            return self._templates_cache
+        
+        self._templates_cache = self.conn.get_templates()
+        return self._templates_cache
+
     def get_fingerprint_templates(self, uid):
         """Get all fingerprint templates for a user"""
         try:
             if not self.conn:
                 raise Exception("Not connected")
             
-            templates = self.conn.get_templates()
+            templates = self._get_all_templates_cached()
             
             user_templates = []
             for template in templates:
                 if hasattr(template, 'uid') and template.uid == uid:
-                    # Repack template with header
                     template_data = template.repack() if hasattr(template, 'repack') else template.template
                     
                     user_templates.append({
@@ -529,7 +538,7 @@ class ZKTecoService:
             return False
     
     def get_device_info(self):
-        """Get device information"""
+        """Get device information - fast version (no template counting)"""
         try:
             if not self.conn:
                 raise Exception("Not connected")
@@ -539,10 +548,20 @@ class ZKTecoService:
                 'serialnumber': self.conn.get_serialnumber() if hasattr(self.conn, 'get_serialnumber') else None,
                 'platform': self.conn.get_platform() if hasattr(self.conn, 'get_platform') else None,
                 'device_name': self.conn.get_device_name() if hasattr(self.conn, 'get_device_name') else None,
-                'users_count': len(self.conn.get_users()),
-                'attendance_count': len(self.conn.get_attendance()),
-                'templates_count': len(self.conn.get_templates())
+                'users_count': 0,
+                'attendance_count': 0,
+                'templates_count': 0,
             }
+            
+            # Get users count (fast)
+            try:
+                users = self.conn.get_users()
+                info['users_count'] = len(users)
+            except Exception as e:
+                logger.warning(f"Could not count users: {str(e)}")
+            
+            # Skip attendance/templates count here - too slow for large devices
+            # These counts are fetched during the actual sync steps instead
             
             logger.info(f"Device info retrieved: {info}")
             return info
@@ -941,6 +960,39 @@ def get_templates():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/device/get-all-templates', methods=['POST'])
+def get_all_templates():
+    """Get ALL templates from device once - much faster than per-user calls"""
+    try:
+        data = request.json
+        
+        ip = data.get('ip')
+        port = data.get('port', 4370)
+        password = data.get('password', 0)
+        
+        if not ip:
+            return jsonify({'success': False, 'error': 'IP required'}), 400
+        
+        service = ZKTecoService(ip, port, password)
+        
+        if not service.connect():
+            return jsonify({'success': False, 'error': 'Could not connect'}), 500
+        
+        templates = service.get_all_templates()
+        
+        service.disconnect()
+        
+        return jsonify({
+            'success': True,
+            'templates': templates,
+            'count': len(templates)
+        })
+        
+    except Exception as e:
+        logger.error(f"Get all templates error: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/device/clear-attendance', methods=['POST'])
 def clear_attendance():
     """Clear attendance logs from device"""
@@ -1088,5 +1140,5 @@ if __name__ == '__main__':
         logger.warning("Service will start but template operations will fail")
     
     logger.info(f"Listening on {SERVICE_HOST}:{SERVICE_PORT}")
-    app.run(host=SERVICE_HOST, port=SERVICE_PORT, debug=False)
+    app.run(host=SERVICE_HOST, port=SERVICE_PORT, debug=False, threaded=True)
 

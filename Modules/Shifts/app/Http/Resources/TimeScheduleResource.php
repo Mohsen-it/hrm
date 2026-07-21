@@ -22,6 +22,10 @@ class TimeScheduleResource extends JsonResource
             'is_multi_day' => $this->is_multi_day,
             'late_margin' => $this->late_margin,
             'early_margin' => $this->early_margin,
+            'in_ahead_margin' => $this->in_ahead_margin,
+            'in_above_margin' => $this->in_above_margin,
+            'out_ahead_margin' => $this->out_ahead_margin,
+            'out_above_margin' => $this->out_above_margin,
             'breaks' => $this->whenLoaded('breaks', function () {
                 return $this->breaks->map(function ($break) {
                     return [

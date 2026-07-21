@@ -95,6 +95,8 @@ Route::middleware(['auth', 'permission:view-attendance-by-schedule'])
     ->group(function () {
         Route::get('smart-absence/daily', [SmartAbsenceController::class, 'daily'])
             ->name('smart-absence.daily');
+        Route::get('smart-absence/daily/export', [SmartAbsenceController::class, 'exportDaily'])
+            ->name('smart-absence.daily.export');
         Route::get('smart-absence/monthly/{employee}', [SmartAbsenceController::class, 'monthly'])
             ->name('smart-absence.monthly');
     });
@@ -175,6 +177,21 @@ Route::middleware(['auth', 'permission:assign-employees-to-rotation'])
             ->name('rotations.assign.bulk-page');
         Route::get('rotation-assignments/manage', [RotationsController::class, 'manageAssignments'])
             ->name('rotations.assign.manage');
+    });
+
+// Rotation Groups (standalone management page)
+Route::middleware(['auth', 'permission:view-rotations'])
+    ->group(function () {
+        Route::get('rotation-groups', [RotationsController::class, 'groupsIndex'])
+            ->name('rotation-groups.index');
+    });
+
+Route::middleware(['auth', 'permission:edit-rotations'])
+    ->group(function () {
+        Route::get('rotation-groups/{id}/edit', [RotationsController::class, 'groupsEdit'])
+            ->name('rotation-groups.edit');
+        Route::put('rotation-groups/{id}', [RotationsController::class, 'groupsUpdate'])
+            ->name('rotation-groups.update');
     });
 
 Route::middleware(['auth', 'permission:assign-employees-to-rotation'])

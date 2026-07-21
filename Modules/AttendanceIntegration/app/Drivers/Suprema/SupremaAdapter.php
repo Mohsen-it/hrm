@@ -45,6 +45,11 @@ class SupremaAdapter implements DeviceAdapterInterface
         throw new \RuntimeException('Suprema driver is not yet implemented.');
     }
 
+    public function getAllFingerprintTemplates(string $ip, int $port, string $commKey = '', int $timeout = 30): array
+    {
+        throw new \RuntimeException('Suprema driver is not yet implemented.');
+    }
+
     public function setFingerprintTemplate(string $ip, int $port, string $commKey, int $timeout, FingerprintTemplateData $template): bool
     {
         throw new \RuntimeException('Suprema driver is not yet implemented.');

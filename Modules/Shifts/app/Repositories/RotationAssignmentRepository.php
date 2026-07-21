@@ -9,7 +9,12 @@ use Modules\Shifts\Models\RotationAssignment;
 
 class RotationAssignmentRepository
 {
-    protected array $defaultWith = ['employee', 'rotation', 'rotationGroup'];
+    protected array $defaultWith = [
+        'employee',
+        'rotation',
+        'rotationGroup.timeSchedule.categoryTimeSchedule',
+        'rotationGroup.timeSchedule.category',
+    ];
 
     public function query(): Builder
     {

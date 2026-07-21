@@ -126,6 +126,7 @@ class DeviceFullSyncController extends Controller
     public function syncStream(Request $request): StreamedResponse
     {
         $this->authorize('edit-fingerprint-devices');
+        set_time_limit(0);
 
         $data = $request->validate([
             'device_id' => ['required', 'integer', 'exists:fingerprint_devices,id'],
@@ -147,6 +148,12 @@ class DeviceFullSyncController extends Controller
         }
 
         return response()->stream(function () use ($device, $data) {
+            // Disable output buffering immediately so SSE events reach the client
+            while (ob_get_level()) {
+                ob_end_flush();
+            }
+            ob_implicit_flush(true);
+
             $this->sendSse('start', [
                 'device_name' => $device->name,
                 'message' => 'جاري بدء المزامنة...',
@@ -164,7 +171,6 @@ class DeviceFullSyncController extends Controller
 
             $this->sendSse('done', $result);
 
-            @ob_end_flush();
             if (function_exists('fastcgi_finish_request')) {
                 fastcgi_finish_request();
             }
@@ -292,6 +298,12 @@ class DeviceFullSyncController extends Controller
         $userCount = $this->estimateUserCount($options);
 
         return response()->stream(function () use ($device, $options, $userCount) {
+            // Disable output buffering immediately so SSE events reach the client
+            while (ob_get_level()) {
+                ob_end_flush();
+            }
+            ob_implicit_flush(true);
+
             if ($userCount > self::PUSH_QUEUE_THRESHOLD) {
                 $this->sendSse('progress', [
                     'step' => 'push_users',
@@ -325,7 +337,6 @@ class DeviceFullSyncController extends Controller
 
             $this->sendSse('done', $result);
 
-            @ob_end_flush();
             if (function_exists('fastcgi_finish_request')) {
                 fastcgi_finish_request();
             }
@@ -399,6 +410,7 @@ class DeviceFullSyncController extends Controller
     public function bidirectional(Request $request): StreamedResponse
     {
         $this->authorize('edit-fingerprint-devices');
+        set_time_limit(0);
 
         $data = $request->validate([
             'device_id' => ['required', 'integer', 'exists:fingerprint_devices,id'],
@@ -421,6 +433,12 @@ class DeviceFullSyncController extends Controller
         }
 
         return response()->stream(function () use ($device, $data) {
+            // Disable output buffering immediately so SSE events reach the client
+            while (ob_get_level()) {
+                ob_end_flush();
+            }
+            ob_implicit_flush(true);
+
             $this->sendSse('start', [
                 'device_id' => $device->id,
                 'device_name' => $device->name,
@@ -480,7 +498,6 @@ class DeviceFullSyncController extends Controller
                 'push' => $pushResult ?? null,
             ]);
 
-            @ob_end_flush();
             if (function_exists('fastcgi_finish_request')) {
                 fastcgi_finish_request();
             }

@@ -15,8 +15,10 @@ use Modules\Shifts\Http\Requests\StoreRotationRequest;
 use Modules\Shifts\Http\Requests\UpdateRotationRequest;
 use Modules\Shifts\Http\Resources\RotationGroupResource;
 use Modules\Shifts\Http\Resources\RotationResource;
+use Modules\Shifts\Models\Rotation;
 use Modules\Shifts\Models\RotationAssignment;
 use Modules\Shifts\Models\RotationGroup;
+use Modules\Shifts\Models\TimeSchedule;
 use Modules\Shifts\Services\RotationEngine;
 use Modules\Shifts\Services\RotationService;
 use Modules\Shifts\Services\TimeScheduleService;
@@ -95,6 +97,7 @@ class RotationsController extends Controller
             'preview' => fn () => $preview,
             'preview_from' => $from,
             'preview_to' => $to,
+            'time_schedules' => fn () => TimeSchedule::where('company_id', auth()->user()->company_id ?? 1)->get(['id', 'name']),
         ]);
     }
 
@@ -153,9 +156,10 @@ class RotationsController extends Controller
         $request->validate([
             'name' => ['required', 'string', 'max:50'],
             'time_schedule_id' => ['nullable', 'integer', 'exists:att_time_schedules,id'],
+            'start_date' => ['nullable', 'date'],
         ]);
 
-        $this->rotationService->addGroup($rotationId, $request->only(['name', 'time_schedule_id']));
+        $this->rotationService->addGroup($rotationId, $request->only(['name', 'time_schedule_id', 'start_date']));
 
         return redirect()->route('rotations.show', $rotationId)
             ->with('success', __('shifts.rotation_group_added'));
@@ -171,9 +175,10 @@ class RotationsController extends Controller
         $request->validate([
             'name' => ['sometimes', 'required', 'string', 'max:50'],
             'time_schedule_id' => ['nullable', 'integer', 'exists:att_time_schedules,id'],
+            'start_date' => ['nullable', 'date'],
         ]);
 
-        $this->rotationService->updateGroup($groupId, $request->only(['name', 'time_schedule_id']));
+        $this->rotationService->updateGroup($groupId, $request->only(['name', 'time_schedule_id', 'start_date']));
 
         $group = RotationGroup::find($groupId);
 
@@ -484,6 +489,7 @@ class RotationsController extends Controller
             'rotations' => fn () => RotationResource::collection($this->rotationService->getAllList()),
             'departments' => fn () => Department::orderBy('department_name')->get(['id', 'department_name']),
             'preselected_rotation_id' => $request->input('rotation') ? (int) $request->input('rotation') : null,
+            'preselected_group_id' => $request->input('group') ? (int) $request->input('group') : null,
         ]);
     }
 
@@ -501,19 +507,32 @@ class RotationsController extends Controller
         }
 
         $departmentId = $request->input('department_id');
+        $groupId = $request->input('group_id');
         $search = $request->input('search', '');
 
-        $query = User::query()
-            ->active()
+        $assignmentQuery = RotationAssignment::query()
+            ->with(['rotationGroup'])
+            ->where('rotation_id', $id)
+            ->whereNull('end_date');
+
+        if ($groupId) {
+            $assignmentQuery->where('rotation_group_id', $groupId);
+        }
+
+        $assignments = $assignmentQuery->get();
+        $employeeIds = $assignments->pluck('employee_id')->unique()->toArray();
+
+        $userQuery = User::query()
             ->withoutSuperAdmin()
-            ->select('id', 'employee_code', 'name', 'first_name', 'last_name', 'department_id');
+            ->select('id', 'employee_code', 'name', 'first_name', 'last_name', 'department_id', 'status', 'is_active_employee')
+            ->whereIn('id', $employeeIds);
 
         if ($departmentId) {
-            $query->where('department_id', $departmentId);
+            $userQuery->where('department_id', $departmentId);
         }
 
         if ($search) {
-            $query->where(function ($q) use ($search): void {
+            $userQuery->where(function ($q) use ($search): void {
                 $q->where('name', 'like', "%{$search}%")
                     ->orWhere('first_name', 'like', "%{$search}%")
                     ->orWhere('last_name', 'like', "%{$search}%")
@@ -521,20 +540,11 @@ class RotationsController extends Controller
             });
         }
 
-        $employees = $query->orderBy('name')->get();
+        $employees = $userQuery->orderBy('name')->get();
+        $assignmentsByKey = $assignments->keyBy('employee_id');
 
-        $employeeIds = $employees->pluck('id')->toArray();
-
-        $assignments = RotationAssignment::query()
-            ->with(['rotationGroup'])
-            ->where('rotation_id', $id)
-            ->whereIn('employee_id', $employeeIds)
-            ->whereNull('end_date')
-            ->get()
-            ->keyBy('employee_id');
-
-        $result = $employees->map(function ($emp) use ($assignments) {
-            $assignment = $assignments->get($emp->id);
+        $result = $employees->map(function ($emp) use ($assignmentsByKey) {
+            $assignment = $assignmentsByKey->get($emp->id);
 
             return [
                 'id' => $emp->id,
@@ -546,7 +556,8 @@ class RotationsController extends Controller
                 'department_id' => $emp->department_id,
                 'rotation_group_id' => $assignment?->rotation_group_id,
                 'rotation_group_name' => $assignment?->rotationGroup?->name,
-                'start_date' => $assignment?->start_date,
+                'start_date' => $assignment?->start_date?->format('Y-m-d'),
+                'is_active' => $emp->status == 1 && $emp->is_active_employee,
             ];
         });
 
@@ -589,5 +600,73 @@ class RotationsController extends Controller
             'message' => __('shifts.rotation_employees_transferred_count', ['count' => $count]),
             'count' => $count,
         ]);
+    }
+
+    // ── Rotation Groups Management ──────────────────────────────────
+
+    /**
+     * Display a listing of all rotation groups across all rotations.
+     */
+    public function groupsIndex(Request $request): Response
+    {
+        $this->authorize('view-rotations');
+
+        $query = RotationGroup::with(['rotation:id,name', 'timeSchedule:id,name,in_time,out_time'])
+            ->orderBy('rotation_id')
+            ->orderBy('group_index');
+
+        if ($search = $request->input('search')) {
+            $query->whereHas('rotation', function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%");
+            })->orWhere('name', 'like', "%{$search}%");
+        }
+
+        $groups = $query->get();
+
+        return Inertia::render('Shifts/RotationGroups/Index', [
+            'groups' => fn () => [
+                'data' => RotationGroupResource::collection($groups),
+                'links' => [],
+                'total' => $groups->count(),
+            ],
+            'rotations' => fn () => Rotation::select('id', 'name')->orderBy('name')->get(),
+            'filters' => fn () => $request->only(['search']),
+        ]);
+    }
+
+    /**
+     * Show the form for editing a rotation group.
+     */
+    public function groupsEdit(int $id): Response
+    {
+        $this->authorize('edit-rotations');
+
+        $group = RotationGroup::with(['rotation:id,name', 'timeSchedule:id,name'])
+            ->findOrFail($id);
+
+        return Inertia::render('Shifts/RotationGroups/Edit', [
+            'group' => fn () => new RotationGroupResource($group),
+            'timeSchedules' => fn () => TimeSchedule::where('company_id', auth()->user()->company_id ?? 1)
+                ->get(['id', 'name']),
+        ]);
+    }
+
+    /**
+     * Update a rotation group.
+     */
+    public function groupsUpdate(Request $request, int $id): RedirectResponse
+    {
+        $this->authorize('edit-rotations');
+
+        $request->validate([
+            'name' => ['sometimes', 'required', 'string', 'max:50'],
+            'time_schedule_id' => ['nullable', 'integer', 'exists:att_time_schedules,id'],
+            'start_date' => ['nullable', 'date'],
+        ]);
+
+        $this->rotationService->updateGroup($id, $request->only(['name', 'time_schedule_id', 'start_date']));
+
+        return redirect()->route('rotation-groups.index')
+            ->with('success', __('shifts.rotation_group_updated'));
     }
 }

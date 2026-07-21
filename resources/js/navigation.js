@@ -165,6 +165,13 @@ export const navigationGroups = [
         icon: 'fa-solid fa-people-arrows',
         permissions: ['assign-employees-to-rotation'],
       },
+      {
+        id: 'shifts.rotation-groups',
+        label: 'menu.rotation_groups',
+        route: 'rotation-groups.index',
+        icon: 'fa-solid fa-users-gear',
+        permissions: ['view-rotations'],
+      },
         {
         id: 'shifts.schedules',
         label: 'menu.schedules',

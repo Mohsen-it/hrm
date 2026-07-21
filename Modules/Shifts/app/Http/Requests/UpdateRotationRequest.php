@@ -24,6 +24,10 @@ class UpdateRotationRequest extends FormRequest
             'work_on_holidays' => ['boolean'],
             'grace_minutes' => ['nullable', 'integer', 'min:0', 'max:120'],
             'color' => ['nullable', 'string', 'max:7'],
+            'in_ahead_margin' => ['nullable', 'date_format:H:i'],
+            'in_above_margin' => ['nullable', 'date_format:H:i'],
+            'out_ahead_margin' => ['nullable', 'date_format:H:i'],
+            'out_above_margin' => ['nullable', 'date_format:H:i'],
         ];
     }
 }

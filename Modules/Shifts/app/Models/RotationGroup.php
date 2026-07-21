@@ -19,10 +19,12 @@ class RotationGroup extends Model
         'name',
         'group_index',
         'time_schedule_id',
+        'start_date',
     ];
 
     protected $casts = [
         'group_index' => 'integer',
+        'start_date' => 'date',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];

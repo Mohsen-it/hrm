@@ -47,6 +47,7 @@ const currentStatus = ref('');
 const stepsLog = ref([]);
 
 let eventSource = null;
+let syncTimeout = null;
 
 const deviceOptions = computed(() =>
     props.devices.map((d) => ({
@@ -131,6 +132,15 @@ function runSync() {
 
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 
+    // Timeout: if no SSE event received in 30s, show error
+    let lastEventTime = Date.now();
+    syncTimeout = setInterval(() => {
+        if (Date.now() - lastEventTime > 30000 && isRunning.value) {
+            clearInterval(syncTimeout);
+            errorMessage.value = 'جاري الاتصال بالجهاز... قد يستغرق هذا بعض الوقت';
+        }
+    }, 35000);
+
     fetch(route('fingerprint-devices.sync.stream'), {
         method: 'POST',
         headers: {
@@ -155,10 +165,12 @@ function runSync() {
 
         function processChunk({ done, value }) {
             if (done) {
+                if (syncTimeout) clearInterval(syncTimeout);
                 isRunning.value = false;
                 return;
             }
 
+            lastEventTime = Date.now();
             buffer += decoder.decode(value, { stream: true });
             const lines = buffer.split('\n');
             buffer = lines.pop() || '';
@@ -183,6 +195,7 @@ function runSync() {
 
         return reader.read().then(processChunk);
     }).catch((err) => {
+        if (syncTimeout) clearInterval(syncTimeout);
         errorMessage.value = err?.message || 'Network error';
         isRunning.value = false;
     });
@@ -201,6 +214,14 @@ function runPush() {
     stepsLog.value = [];
 
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+
+    let lastEventTime = Date.now();
+    syncTimeout = setInterval(() => {
+        if (Date.now() - lastEventTime > 30000 && isRunning.value) {
+            clearInterval(syncTimeout);
+            errorMessage.value = 'جاري الاتصال بالجهاز... قد يستغرق هذا بعض الوقت';
+        }
+    }, 35000);
 
     fetch(route('fingerprint-devices.sync.push-stream'), {
         method: 'POST',
@@ -231,10 +252,12 @@ function runPush() {
 
         function processChunk({ done, value }) {
             if (done) {
+                if (syncTimeout) clearInterval(syncTimeout);
                 isRunning.value = false;
                 return;
             }
 
+            lastEventTime = Date.now();
             buffer += decoder.decode(value, { stream: true });
             const lines = buffer.split('\n');
             buffer = lines.pop() || '';
@@ -259,6 +282,7 @@ function runPush() {
 
         return reader.read().then(processChunk);
     }).catch((err) => {
+        if (syncTimeout) clearInterval(syncTimeout);
         errorMessage.value = err?.message || 'Network error';
         isRunning.value = false;
     });
@@ -277,6 +301,14 @@ function runBidirectional() {
     stepsLog.value = [];
 
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+
+    let lastEventTime = Date.now();
+    syncTimeout = setInterval(() => {
+        if (Date.now() - lastEventTime > 30000 && isRunning.value) {
+            clearInterval(syncTimeout);
+            errorMessage.value = 'جاري الاتصال بالجهاز... قد يستغرق هذا بعض الوقت';
+        }
+    }, 35000);
 
     fetch(route('fingerprint-devices.sync.bidirectional'), {
         method: 'POST',
@@ -315,10 +347,12 @@ function runBidirectional() {
 
         function processChunk({ done, value }) {
             if (done) {
+                if (syncTimeout) clearInterval(syncTimeout);
                 isRunning.value = false;
                 return;
             }
 
+            lastEventTime = Date.now();
             buffer += decoder.decode(value, { stream: true });
             const lines = buffer.split('\n');
             buffer = lines.pop() || '';
@@ -343,6 +377,7 @@ function runBidirectional() {
 
         return reader.read().then(processChunk);
     }).catch((err) => {
+        if (syncTimeout) clearInterval(syncTimeout);
         errorMessage.value = err?.message || 'Network error';
         isRunning.value = false;
     });
@@ -399,6 +434,10 @@ function cancelSync() {
         eventSource.close();
         eventSource = null;
     }
+    if (syncTimeout) {
+        clearInterval(syncTimeout);
+        syncTimeout = null;
+    }
     isRunning.value = false;
     progress.value = 0;
 }
@@ -428,6 +467,9 @@ function formatDuration(s) {
 onBeforeUnmount(() => {
     if (eventSource) {
         eventSource.close();
+    }
+    if (syncTimeout) {
+        clearInterval(syncTimeout);
     }
 });
 

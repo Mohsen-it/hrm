@@ -11,6 +11,7 @@ const { t } = useTranslations()
 const props = defineProps({
     dailyData: { type: Object, default: () => ({ expected: [], absent: [], total_expected: 0, total_absent: 0, date: '' }) },
     monthlyData: { type: Array, default: () => [] },
+    rotations: { type: Array, default: () => [] },
     filters: { type: Object, default: () => ({}) },
 })
 
@@ -19,6 +20,8 @@ const selectedDate = ref(props.filters?.date || new Date().toISOString().split('
 const selectedMonth = ref(props.filters?.month || new Date().getMonth() + 1)
 const selectedYear = ref(props.filters?.year || new Date().getFullYear())
 const selectedEmployeeId = ref(props.filters?.employee_id || null)
+const selectedRotationId = ref(props.filters?.rotation_id || null)
+const selectedRotationGroupId = ref(props.filters?.rotation_group_id || null)
 
 const employeeSearch = ref('')
 const employeeResults = ref([])
@@ -26,10 +29,38 @@ const searchingEmployees = ref(false)
 const showEmployeeDropdown = ref(false)
 const selectedEmployeeName = ref('')
 
+const rotationOptions = computed(() => [
+    { value: '', label: t('shifts.all_rotations') },
+    ...props.rotations.map((r) => ({ value: r.id, label: r.name })),
+])
+
+const groupOptions = computed(() => {
+    const rotation = props.rotations.find((r) => r.id === selectedRotationId.value)
+    if (!rotation || !rotation.groups?.length) {
+        return [{ value: '', label: t('shifts.all_groups') }]
+    }
+
+    return [
+        { value: '', label: t('shifts.all_groups') },
+        ...rotation.groups.map((g) => ({ value: g.id, label: g.name })),
+    ]
+})
+
+watch(selectedRotationId, () => {
+    selectedRotationGroupId.value = null
+    loadDaily()
+})
+
+watch(selectedRotationGroupId, () => {
+    loadDaily()
+})
+
 const columns = computed(() => [
     { key: 'name', label: t('shifts.employee_name'), sortable: true, filterable: true },
-    { key: 'employee_code', label: t('shifts.code'), sortable: true, filterable: true },
-    { key: 'department_id', label: t('shifts.department'), sortable: true, filterable: true },
+    { key: 'employee_code', label: t('shifts.employee_code'), sortable: true, filterable: true },
+    { key: 'department_name', label: t('shifts.department'), sortable: true, filterable: true },
+    { key: 'rotation_name', label: t('shifts.rotation'), sortable: true, filterable: true, filterType: 'select', filterOptions: rotationOptions.value },
+    { key: 'rotation_group_name', label: t('shifts.rotation_group'), sortable: true, filterable: true, filterType: 'select', filterOptions: groupOptions.value },
 ])
 
 let searchTimeout = null
@@ -77,6 +108,8 @@ function loadDaily() {
     router.get(route('smart-absence.daily'), {
         date: selectedDate.value,
         department_id: props.filters?.department_id,
+        rotation_id: selectedRotationId.value || null,
+        rotation_group_id: selectedRotationGroupId.value || null,
     }, { preserveState: true, preserveScroll: true, replace: true })
 }
 
@@ -86,6 +119,23 @@ function loadMonthly() {
         month: selectedMonth.value,
         year: selectedYear.value,
     }, { preserveState: true, preserveScroll: true, replace: true })
+}
+
+function buildExportParams() {
+    const params = new URLSearchParams()
+    params.set('date', selectedDate.value)
+    if (props.filters?.department_id) params.set('department_id', String(props.filters.department_id))
+    if (selectedRotationId.value) params.set('rotation_id', String(selectedRotationId.value))
+    if (selectedRotationGroupId.value) params.set('rotation_group_id', String(selectedRotationGroupId.value))
+    return params
+}
+
+function handleExport(payload) {
+    const format = payload?.format === 'csv' ? 'csv' : 'excel'
+    if (format !== 'excel') return
+
+    const url = route('smart-absence.daily.export') + '?' + buildExportParams().toString()
+    window.location.href = url
 }
 
 function statusColor(status) {
@@ -133,7 +183,7 @@ const monthOptions = computed(() =>
         <div v-if="activeTab === 'daily'">
             <Card variant="base" padding="none" class="mb-6">
                 <div class="p-5 sm:p-6">
-                    <div class="flex items-center gap-4 flex-wrap">
+                    <div class="flex items-end gap-4 flex-wrap">
                         <FormInput
                             v-model="selectedDate"
                             type="date"
@@ -141,7 +191,20 @@ const monthOptions = computed(() =>
                             name="selected_date"
                             @change="loadDaily"
                         />
-                        <div class="flex gap-4 text-sm">
+                        <FormSelect
+                            v-model="selectedRotationId"
+                            :label="t('shifts.rotation')"
+                            name="rotation_id"
+                            :options="rotationOptions"
+                        />
+                        <FormSelect
+                            v-model="selectedRotationGroupId"
+                            :label="t('shifts.rotation_group')"
+                            name="rotation_group_id"
+                            :options="groupOptions"
+                            :disabled="!selectedRotationId"
+                        />
+                        <div class="flex gap-4 text-sm pb-2">
                             <span class="text-mistral-slate">{{ t('shifts.expected') }}: <strong class="text-mistral-ink">{{ dailyData.total_expected || 0 }}</strong></span>
                             <span class="text-mistral-danger">{{ t('shifts.absent') }}: <strong>{{ dailyData.total_absent || 0 }}</strong></span>
                         </div>
@@ -156,9 +219,16 @@ const monthOptions = computed(() =>
                 @search="(q) => loadDaily()"
                 @page-change="(p) => loadDaily()"
                 @per-page-change="(p) => loadDaily()"
+                @export="handleExport"
             >
-                <template #cell-department_id="{ row }">
-                    <span class="text-mistral-ink">{{ row.department_id || '—' }}</span>
+                <template #cell-department_name="{ row }">
+                    <span class="text-mistral-ink">{{ row.department_name || row.department_id || '—' }}</span>
+                </template>
+                <template #cell-rotation_name="{ row }">
+                    <span class="text-mistral-ink">{{ row.rotation_name || '—' }}</span>
+                </template>
+                <template #cell-rotation_group_name="{ row }">
+                    <span class="text-mistral-ink">{{ row.rotation_group_name || '—' }}</span>
                 </template>
             </DataTable>
         </div>

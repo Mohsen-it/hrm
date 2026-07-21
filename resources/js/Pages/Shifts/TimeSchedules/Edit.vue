@@ -18,6 +18,10 @@ const form = reactive({
     is_multi_day: props.schedule?.is_multi_day ?? false,
     late_margin: props.schedule?.late_margin ?? 0,
     early_margin: props.schedule?.early_margin ?? 0,
+    in_ahead_margin: props.schedule?.in_ahead_margin ? String(props.schedule.in_ahead_margin).slice(0, 5) : '',
+    in_above_margin: props.schedule?.in_above_margin ? String(props.schedule.in_above_margin).slice(0, 5) : '',
+    out_ahead_margin: props.schedule?.out_ahead_margin ? String(props.schedule.out_ahead_margin).slice(0, 5) : '',
+    out_above_margin: props.schedule?.out_above_margin ? String(props.schedule.out_above_margin).slice(0, 5) : '',
 });
 
 const breaks = ref(
@@ -127,6 +131,34 @@ function submit() {
                         min="0"
                         :hint="t('shifts.minutes')"
                         :error="errorFor('early_margin')"
+                    />
+                    <FormInput
+                        v-model="form.in_ahead_margin"
+                        :label="t('shifts.in_ahead_margin')"
+                        name="in_ahead_margin"
+                        type="time"
+                        :error="errorFor('in_ahead_margin')"
+                    />
+                    <FormInput
+                        v-model="form.in_above_margin"
+                        :label="t('shifts.in_above_margin')"
+                        name="in_above_margin"
+                        type="time"
+                        :error="errorFor('in_above_margin')"
+                    />
+                    <FormInput
+                        v-model="form.out_ahead_margin"
+                        :label="t('shifts.out_ahead_margin')"
+                        name="out_ahead_margin"
+                        type="time"
+                        :error="errorFor('out_ahead_margin')"
+                    />
+                    <FormInput
+                        v-model="form.out_above_margin"
+                        :label="t('shifts.out_above_margin')"
+                        name="out_above_margin"
+                        type="time"
+                        :error="errorFor('out_above_margin')"
                     />
                 </div>
             </FormSection>

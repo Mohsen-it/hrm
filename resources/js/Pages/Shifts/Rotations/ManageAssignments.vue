@@ -11,10 +11,11 @@ const props = defineProps({
     rotations: { type: Array, default: () => [] },
     departments: { type: Array, default: () => [] },
     preselected_rotation_id: { type: Number, default: null },
+    preselected_group_id: { type: Number, default: null },
 });
 
 const selectedRotationId = ref(props.preselected_rotation_id || '');
-const selectedGroupId = ref('');
+const selectedGroupId = ref(props.preselected_group_id || '');
 const departmentFilter = ref('');
 const searchQuery = ref('');
 const employees = ref([]);
@@ -137,6 +138,7 @@ const fetchEmployees = async () => {
     try {
         const params = new URLSearchParams();
         if (departmentFilter.value) params.set('department_id', departmentFilter.value);
+        if (selectedGroupId.value) params.set('group_id', selectedGroupId.value);
 
         const response = await fetch(
             route('rotations.employees', selectedRotationId.value) + '?' + params.toString(),
@@ -152,7 +154,14 @@ const fetchEmployees = async () => {
 };
 
 watch(selectedRotationId, () => {
-    selectedGroupId.value = '';
+    if (!props.preselected_group_id) {
+        selectedGroupId.value = '';
+    }
+    selectedEmployees.value = [];
+    fetchEmployees();
+});
+
+watch(selectedGroupId, () => {
     selectedEmployees.value = [];
     fetchEmployees();
 });

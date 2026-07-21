@@ -23,6 +23,13 @@ interface DeviceAdapterInterface
 
     public function getFingerprintTemplates(string $ip, int $port, string $commKey, int $timeout, int $uid): array;
 
+    /**
+     * Fetch ALL fingerprint templates from the device in a single call.
+     *
+     * @return array<int, array{uid:int, fid:int, valid:int, template:string}>
+     */
+    public function getAllFingerprintTemplates(string $ip, int $port, string $commKey = '', int $timeout = 30): array;
+
     public function setFingerprintTemplate(string $ip, int $port, string $commKey, int $timeout, FingerprintTemplateData $template): bool;
 
     public function clearAttendance(string $ip, int $port, string $commKey, int $timeout): bool;

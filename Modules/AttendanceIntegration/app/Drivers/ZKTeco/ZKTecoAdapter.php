@@ -149,6 +149,26 @@ class ZKTecoAdapter implements DeviceAdapterInterface
         }
     }
 
+    /**
+     * Fetch ALL fingerprint templates from the device in one call.
+     *
+     * @return array<int, array{uid:int, fid:int, valid:int, template:string}>
+     */
+    public function getAllFingerprintTemplates(string $ip, int $port, string $commKey = '', int $timeout = 30): array
+    {
+        try {
+            $payload = $this->buildPayload($ip, $port, $commKey, $timeout);
+            $response = Http::timeout($this->bridgeTimeout)
+                ->post("{$this->bridgeUrl}/device/get-all-templates", $payload);
+
+            return $response->successful() ? ($response->json('templates') ?? []) : [];
+        } catch (\Throwable $e) {
+            Log::warning('ZKTecoAdapter::getAllFingerprintTemplates failed', ['error' => $e->getMessage()]);
+
+            return [];
+        }
+    }
+
     public function setFingerprintTemplate(string $ip, int $port, string $commKey, int $timeout, FingerprintTemplateData $template): bool
     {
         try {

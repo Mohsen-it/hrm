@@ -215,11 +215,15 @@ class FingerprintDevicesController extends Controller
             abort(404);
         }
 
-        $records = $this->deviceService->syncAttendance($device);
+        $result = $this->deviceService->syncAttendance($device);
 
         return redirect()->back()->with(
             'success',
-            __('fingerprint_devices.sync_complete', ['count' => count($records)])
+            __('fingerprint_devices.sync_complete', [
+                'count' => $result['pulled'],
+                'imported' => $result['imported'],
+                'sessions' => $result['sessions'],
+            ])
         );
     }
 

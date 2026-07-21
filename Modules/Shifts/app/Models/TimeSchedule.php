@@ -35,6 +35,10 @@ class TimeSchedule extends Model
         'is_multi_day',
         'late_margin',
         'early_margin',
+        'in_ahead_margin',
+        'in_above_margin',
+        'out_ahead_margin',
+        'out_above_margin',
     ];
 
     /**

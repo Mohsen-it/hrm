@@ -39,14 +39,6 @@ class DevicePushController extends Controller
             $device = $this->deviceRepository->findBySerial((string) $serialNumber);
         }
 
-        if (! $device) {
-            $devices = $this->deviceRepository->getOnline();
-            foreach ($devices as $d) {
-                $device = $d;
-                break;
-            }
-        }
-
         $driver = $device ? $device->getDriverName() : config('attendanceintegration.default_driver', 'zkteco');
         $parser = $this->adapterResolver->getParser($driver);
         $normalizer = $this->adapterResolver->getNormalizer($driver);

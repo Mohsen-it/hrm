@@ -30,6 +30,10 @@ class Rotation extends Model
         'work_on_holidays',
         'grace_minutes',
         'color',
+        'in_ahead_margin',
+        'in_above_margin',
+        'out_ahead_margin',
+        'out_above_margin',
     ];
 
     protected $casts = [
@@ -42,6 +46,10 @@ class Rotation extends Model
         'overtime_enabled' => 'boolean',
         'work_on_holidays' => 'boolean',
         'grace_minutes' => 'integer',
+        'in_ahead_margin' => 'datetime:H:i',
+        'in_above_margin' => 'datetime:H:i',
+        'out_ahead_margin' => 'datetime:H:i',
+        'out_above_margin' => 'datetime:H:i',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];
@@ -89,11 +97,21 @@ class Rotation extends Model
 
     /**
      * Get the work pattern for a specific group on a given date.
+     *
+     * Offset is `group_index * work_days_count` so each group works a contiguous
+     * block of work days and the groups tile the cycle without overlap.
      */
     public function resolveForDate(Carbon $date, int $groupIndex): bool
     {
         $daysSinceAnchor = (int) $date->startOfDay()->diffInDays($this->anchor_start_date->startOfDay());
-        $positionInCycle = ($daysSinceAnchor + $groupIndex) % $this->cycle_length;
+        $workDaysCount = $this->work_days_count
+            ?: count(array_filter(is_array($this->pattern) ? $this->pattern : [], fn ($v) => $v == 1));
+        $offset = $groupIndex * (int) $workDaysCount;
+        $positionInCycle = ($daysSinceAnchor + $offset) % $this->cycle_length;
+
+        if ($positionInCycle < 0) {
+            $positionInCycle += $this->cycle_length;
+        }
 
         return $this->isWorkDayAtPosition($positionInCycle);
     }

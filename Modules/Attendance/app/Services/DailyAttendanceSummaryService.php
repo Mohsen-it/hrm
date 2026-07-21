@@ -133,12 +133,15 @@ class DailyAttendanceSummaryService
             'updated_at' => now(),
         ]);
 
-        DB::table('daily_attendance_summaries')->updateOrInsert(
+        DailyAttendanceSummary::updateOrCreate(
             ['user_id' => $userId, 'summary_date' => $date],
             $payload,
         );
 
-        return DailyAttendanceSummary::forUser($userId)->onDate($date)->first();
+        return DailyAttendanceSummary::forUser($userId)
+            ->onDate($date)
+            ->with(['user', 'shift'])
+            ->first();
     }
 
     // ------------------------------------------------------------------
@@ -163,8 +166,8 @@ class DailyAttendanceSummaryService
             $totalWork += (int) $session->work_minutes;
             $totalBreak += (int) ($session->break_minutes ?? 0);
             $totalOvertime += (int) $session->overtime_minutes;
-            $late = max($late, (int) $session->late_minutes);
-            $earlyLeave = max($earlyLeave, (int) $session->early_leave_minutes);
+            $late += (int) $session->late_minutes;
+            $earlyLeave += (int) $session->early_leave_minutes;
         }
 
         return [

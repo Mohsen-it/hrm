@@ -15,6 +15,13 @@ class RotationGroupResource extends JsonResource
             'name' => $this->name,
             'group_index' => $this->group_index,
             'time_schedule_id' => $this->time_schedule_id,
+            'start_date' => $this->start_date?->format('Y-m-d'),
+            'rotation' => $this->whenLoaded('rotation', function () {
+                return [
+                    'id' => $this->rotation->id,
+                    'name' => $this->rotation->name,
+                ];
+            }),
             'time_schedule' => $this->whenLoaded('timeSchedule', function () {
                 return $this->timeSchedule ? [
                     'id' => $this->timeSchedule->id,

@@ -6,8 +6,8 @@ use DateTimeImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
-use Modules\Attendance\Models\AttendanceSession;
 use Modules\Attendance\Models\RawAttendanceLog;
+use Modules\Attendance\Services\RawAttendanceLogService;
 use Modules\AttendanceIntegration\Contracts\DeviceAdapterInterface;
 use Modules\AttendanceIntegration\Services\DeviceAdapterResolver;
 use Modules\FingerprintDevices\Models\FingerprintDevice;
@@ -42,6 +42,7 @@ class DeviceFullSyncService
         private FingerprintDeviceRepository $deviceRepository,
         private UserFingerprintRepository $fingerprintRepository,
         private DeviceAdapterResolver $adapterResolver,
+        private RawAttendanceLogService $rawLogService,
     ) {}
 
     private function resolveAdapter(FingerprintDevice $device): DeviceAdapterInterface
@@ -411,6 +412,28 @@ class DeviceFullSyncService
         $errors = [];
 
         try {
+            // Fetch ALL templates from the device ONCE (much faster than per-user)
+            $allTemplates = $adapter->getAllFingerprintTemplates(
+                $device->ip_address,
+                $device->port,
+                (string) $device->comm_key,
+                (int) ($device->timeout ?? 30),
+            );
+            $allTemplates = is_array($allTemplates) ? $allTemplates : [];
+
+            // Index templates by uid for fast lookup
+            $templatesByUid = [];
+            foreach ($allTemplates as $tpl) {
+                $uid = (int) ($tpl['uid'] ?? 0);
+                $templatesByUid[$uid][] = $tpl;
+            }
+
+            // Build lookup: device uid => user_pk from matched
+            $uidToUserPk = [];
+            foreach ($matched as $entry) {
+                $uidToUserPk[(int) $entry['uid']] = (int) $entry['user_pk'];
+            }
+
             foreach ($matched as $entry) {
                 $userPk = (int) $entry['user_pk'];
                 $uid = (int) $entry['uid'];
@@ -419,20 +442,8 @@ class DeviceFullSyncService
                     $removed += $this->fingerprintRepository->deleteForUser($userPk);
                 }
 
-                try {
-                    $templates = $adapter->getFingerprintTemplates(
-                        $device->ip_address,
-                        $device->port,
-                        (string) $device->comm_key,
-                        (int) ($device->timeout ?? 30),
-                        $uid,
-                    );
-                    $templates = is_array($templates) ? $templates : [];
-                } catch (\Throwable $e) {
-                    $errors[] = sprintf('user %s templates: %s', $entry['user_id'], $e->getMessage());
-
-                    continue;
-                }
+                // Get templates for this user from the pre-fetched index
+                $templates = $templatesByUid[$uid] ?? [];
 
                 foreach ($templates as $tpl) {
                     $pulled++;
@@ -492,13 +503,6 @@ class DeviceFullSyncService
                 'saved' => $saved,
                 'removed' => $removed,
             ];
-
-            if (! empty($errors)) {
-                $step['warnings'] = $errors;
-                foreach ($errors as $err) {
-                    $result['errors'][] = 'fingerprints: '.$err;
-                }
-            }
         } catch (\Throwable $e) {
             $step['status'] = 'failed';
             $step['message'] = $e->getMessage();
@@ -688,8 +692,19 @@ class DeviceFullSyncService
                 }
 
                 $userPk = $matchedByUserId[$externalId] ?? null;
-
                 $punchType = $this->resolvePunchType($log);
+
+                // Avoid duplicates: if the same punch already exists for this
+                // device + user + timestamp, skip the insert.
+                $existing = RawAttendanceLog::query()
+                    ->where('device_id', $device->id)
+                    ->where('device_user_id', $externalId)
+                    ->where('punch_time', $stamp->format('Y-m-d H:i:s'))
+                    ->first();
+
+                if ($existing) {
+                    continue;
+                }
 
                 $raw = RawAttendanceLog::create([
                     'user_id' => $userPk,
@@ -707,7 +722,7 @@ class DeviceFullSyncService
 
                 $saved++;
 
-                if ($userPk && $session = $this->reconcileSession($raw, $userPk, $device, $stamp, $punchType)) {
+                if ($userPk && $session = $this->rawLogService->processLog($raw)) {
                     $sessions++;
                 }
             }
@@ -734,60 +749,6 @@ class DeviceFullSyncService
             'sessions_created' => $sessions,
         ];
         $result['steps'][] = $step;
-    }
-
-    /**
-     * Best-effort reconciliation: an open session becomes a check-out,
-     * otherwise a check-in.
-     */
-    protected function reconcileSession(
-        RawAttendanceLog $raw,
-        int $userPk,
-        FingerprintDevice $device,
-        DateTimeImmutable $stamp,
-        string $punchType,
-    ): ?AttendanceSession {
-        $open = AttendanceSession::query()
-            ->where('user_id', $userPk)
-            ->whereNull('check_out_at')
-            ->orderByDesc('check_in_at')
-            ->first();
-
-        try {
-            if ($punchType === 'check_out' && $open) {
-                $open->update([
-                    'check_out_at' => $stamp,
-                    'raw_log_id' => $raw->id,
-                    'updated_at' => now(),
-                ]);
-                $raw->markProcessed();
-
-                return $open->fresh();
-            }
-
-            if ($punchType === 'check_in' && ! $open) {
-                $session = AttendanceSession::create([
-                    'user_id' => $userPk,
-                    'device_id' => $device->id,
-                    'raw_log_id' => $raw->id,
-                    'attendance_date' => $stamp->format('Y-m-d'),
-                    'check_in_at' => $stamp,
-                    'status' => 'open',
-                    'session_type' => 'normal',
-                    'source' => 'device_pull',
-                ]);
-                $raw->markProcessed();
-
-                return $session;
-            }
-        } catch (\Throwable $e) {
-            Log::warning('DeviceFullSyncService::reconcileSession failed', [
-                'user_id' => $userPk,
-                'error' => $e->getMessage(),
-            ]);
-        }
-
-        return null;
     }
 
     protected function resolvePunchType(array $log): string

@@ -41,4 +41,5 @@ return [
     'group_schedules' => 'Group Schedules',
     'rotations' => 'Rotations',
     'rotation_assignments' => 'Rotation Assignments',
+    'rotation_groups' => 'Rotation Groups',
 ];

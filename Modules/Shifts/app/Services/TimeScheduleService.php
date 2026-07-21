@@ -151,6 +151,10 @@ class TimeScheduleService
             'is_multi_day' => $original->is_multi_day,
             'late_margin' => $original->late_margin,
             'early_margin' => $original->early_margin,
+            'in_ahead_margin' => $original->in_ahead_margin,
+            'in_above_margin' => $original->in_above_margin,
+            'out_ahead_margin' => $original->out_ahead_margin,
+            'out_above_margin' => $original->out_above_margin,
         ]);
 
         foreach ($original->breaks as $break) {

@@ -10,16 +10,40 @@ use Modules\Shifts\Models\RotationGroup;
 /**
  * RotationEngine — the core calculation engine for rotation schedules.
  *
- * Given a rotation definition, a group offset, and a target date,
+ * Given a rotation definition, a group index, and a target date,
  * it determines whether the employee should work or rest using
  * closed-form date math (no loops, no database queries).
  *
  * Formula:
- *   position_in_cycle = ((target_date - anchor_start_date) + group_offset) % cycle_length
+ *   position_in_cycle = ((target_date - anchor_start_date) + (group_index * work_days_count)) % cycle_length
  *   is_work_day = pattern[position_in_cycle] == 1
+ *
+ * The offset is `group_index * work_days_count` (not just `group_index`) so that
+ * each group works a contiguous block of `work_days_count` days and the groups
+ * tile the cycle without overlap. This is the only formula that yields
+ * continuous coverage when number_of_groups × work_days_count <= cycle_length.
  */
 class RotationEngine
 {
+    /**
+     * Resolve the cycle offset for a given group.
+     *
+     * Each group works a contiguous block of `work_days_count` days, evenly
+     * distributed across the cycle by multiplying the group index by the
+     * number of work days.
+     */
+    private function groupOffset(Rotation $rotation): int
+    {
+        $workDaysCount = $rotation->work_days_count;
+
+        if (! $workDaysCount) {
+            $pattern = is_array($rotation->pattern) ? $rotation->pattern : [];
+            $workDaysCount = count(array_filter($pattern, fn ($v) => $v == 1));
+        }
+
+        return (int) $workDaysCount;
+    }
+
     /**
      * Determine if a date is a work day for a given rotation and group.
      */
@@ -34,7 +58,12 @@ class RotationEngine
         }
 
         $daysSinceAnchor = (int) $date->diffInDays($anchor);
-        $positionInCycle = ($daysSinceAnchor + $groupIndex) % $rotation->cycle_length;
+        $offset = $groupIndex * $this->groupOffset($rotation);
+        $positionInCycle = ($daysSinceAnchor + $offset) % $rotation->cycle_length;
+
+        if ($positionInCycle < 0) {
+            $positionInCycle += $rotation->cycle_length;
+        }
 
         return ($pattern[$positionInCycle] ?? 0) == 1;
     }
@@ -55,7 +84,12 @@ class RotationEngine
         }
 
         $daysSinceAnchor = (int) $date->diffInDays($anchor);
-        $positionInCycle = ($daysSinceAnchor + $groupIndex) % $cycleLength;
+        $offset = $groupIndex * $this->groupOffset($rotation);
+        $positionInCycle = ($daysSinceAnchor + $offset) % $cycleLength;
+
+        if ($positionInCycle < 0) {
+            $positionInCycle += $cycleLength;
+        }
 
         return $positionInCycle + 1;
     }
@@ -228,8 +262,13 @@ class RotationEngine
         $timeSchedule = $assignment->rotationGroup?->timeSchedule;
 
         if ($timeSchedule) {
-            $checkIn = $timeSchedule->in_time ? $timeSchedule->in_time->format('H:i') : null;
-            $checkOut = $timeSchedule->out_time ? $timeSchedule->out_time->format('H:i') : null;
+            $inTime = $timeSchedule->in_time;
+            $outTime = $timeSchedule->out_time;
+
+            // time columns may be returned as strings or Carbon instances depending on the driver
+            $checkIn = $inTime ? $this->formatTime($inTime) : null;
+            $checkOut = $outTime ? $this->formatTime($outTime) : null;
+
             $breaks = $timeSchedule->breaks->map(fn ($b) => [
                 'break_start' => $b->break_start,
                 'break_end' => $b->break_end,
@@ -254,6 +293,32 @@ class RotationEngine
             'early_margin' => null,
             'break_minutes' => 0,
         ];
+    }
+
+    /**
+     * Format a time value (string or Carbon) as H:i.
+     */
+    private function formatTime(mixed $time): ?string
+    {
+        if (! $time) {
+            return null;
+        }
+
+        if ($time instanceof \DateTimeInterface) {
+            return $time->format('H:i');
+        }
+
+        $time = (string) $time;
+
+        if (preg_match('/^(\d{2}:\d{2})/', $time, $matches) === 1) {
+            return $matches[1];
+        }
+
+        try {
+            return Carbon::parse($time)->format('H:i');
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /**

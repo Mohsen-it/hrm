@@ -29,6 +29,10 @@ const fields = computed(() => [
     },
     { label: t('shifts.late_margin'), value: props.schedule.late_margin ?? 0 },
     { label: t('shifts.early_margin'), value: props.schedule.early_margin ?? 0 },
+    { label: t('shifts.in_ahead_margin'), value: props.schedule.in_ahead_margin ?? 0 },
+    { label: t('shifts.in_above_margin'), value: props.schedule.in_above_margin ?? 0 },
+    { label: t('shifts.out_ahead_margin'), value: props.schedule.out_ahead_margin ?? 0 },
+    { label: t('shifts.out_above_margin'), value: props.schedule.out_above_margin ?? 0 },
 ]);
 
 const breaksList = computed(() => {

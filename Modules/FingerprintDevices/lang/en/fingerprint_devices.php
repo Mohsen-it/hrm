@@ -36,7 +36,7 @@ return [
     'test_connection' => 'Test Connection',
     'connection_success' => 'Device connected successfully',
     'connection_failed' => 'Failed to connect to device',
-    'sync_complete' => 'Sync completed successfully (:count records)',
+    'sync_complete' => 'Sync completed successfully (:count records, :imported new, :sessions sessions)',
     'device_created' => 'Device created successfully',
     'device_updated' => 'Device updated successfully',
     'device_deleted' => 'Device deleted successfully',

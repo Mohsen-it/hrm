@@ -68,10 +68,17 @@ return new class extends Migration
 
     /**
      * Check if a foreign key exists on a table.
+     *
+     * SQLite does not expose information_schema, so we skip the check there.
      */
     protected function hasForeignKey(string $table, string $constraint): bool
     {
         $connection = Schema::getConnection();
+
+        if ($connection->getDriverName() === 'sqlite') {
+            return false;
+        }
+
         $database = $connection->getDatabaseName();
         $table = $connection->getTablePrefix().$table;
 

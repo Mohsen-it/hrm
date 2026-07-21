@@ -5,6 +5,10 @@ use Modules\Users\Http\Controllers\UsersController;
 
 Route::middleware(['auth', 'permission:view-users'])
     ->group(function () {
+        // Export
+        Route::get('users/export/excel', [UsersController::class, 'export'])
+            ->name('users.export');
+
         // Bulk operations
         Route::post('users/bulk-delete', [UsersController::class, 'bulkDelete'])
             ->name('users.bulk-delete');

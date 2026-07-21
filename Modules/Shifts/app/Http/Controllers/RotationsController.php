@@ -3,12 +3,16 @@
 namespace Modules\Shifts\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Traits\ExcelExportable;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 use Modules\Departments\Models\Department;
+use Modules\Shifts\Exports\RotationGroupsExport;
+use Modules\Shifts\Exports\RotationTimelineExport;
+use Modules\Shifts\Exports\RotationsExport;
 use Modules\Shifts\Http\Requests\AssignRotationRequest;
 use Modules\Shifts\Http\Requests\BulkAssignRotationRequest;
 use Modules\Shifts\Http\Requests\StoreRotationRequest;
@@ -26,6 +30,8 @@ use Modules\Users\Models\User;
 
 class RotationsController extends Controller
 {
+    use ExcelExportable;
+
     public function __construct(
         private RotationService $rotationService,
         private RotationEngine $rotationEngine,
@@ -367,6 +373,8 @@ class RotationsController extends Controller
 
         $from = $request->get('from', now()->startOfMonth()->toDateString());
         $to = $request->get('to', now()->addDays(90)->toDateString());
+        $search = $request->get('search', '');
+        $groupId = $request->get('group_id', '');
 
         $groups = $rotation->groups()->orderBy('group_index')->get();
 
@@ -374,12 +382,17 @@ class RotationsController extends Controller
             ->with(['employee:id,name,employee_code,department_id', 'rotationGroup:id,name,rotation_id,group_index,start_date'])
             ->where('rotation_id', $id)
             ->whereNull('end_date')
+            ->when($groupId, fn ($q) => $q->where('rotation_group_id', $groupId))
             ->get();
 
         $timeline = [];
         foreach ($assignments as $assignment) {
             $employee = $assignment->employee;
             if (! $employee) {
+                continue;
+            }
+
+            if ($search && stripos($employee->name, $search) === false && stripos($employee->employee_code, $search) === false) {
                 continue;
             }
 
@@ -398,6 +411,9 @@ class RotationsController extends Controller
                 $current->addDay();
             }
 
+            $workDaysCount = collect($days)->where('is_work_day', true)->count();
+            $restDaysCount = count($days) - $workDaysCount;
+
             $timeline[] = [
                 'employee_id' => $employee->id,
                 'employee_name' => $employee->name,
@@ -407,6 +423,8 @@ class RotationsController extends Controller
                 'group_index' => $groupIndex,
                 'start_date' => $assignment->start_date,
                 'days' => $days,
+                'work_days_count' => $workDaysCount,
+                'rest_days_count' => $restDaysCount,
             ];
         }
 
@@ -416,6 +434,82 @@ class RotationsController extends Controller
             'timeline' => fn () => $timeline,
             'from' => $from,
             'to' => $to,
+            'filters' => [
+                'search' => $search,
+                'group_id' => $groupId,
+            ],
+        ]);
+    }
+
+    /**
+     * Export rotation timeline as Excel.
+     */
+    public function timelineExport(int|string $id, Request $request)
+    {
+        $this->authorize('view-rotations');
+        $id = (int) $id;
+
+        $rotation = $this->rotationService->getById($id);
+
+        if (! $rotation) {
+            abort(404);
+        }
+
+        $from = $request->get('from', now()->startOfMonth()->toDateString());
+        $to = $request->get('to', now()->addDays(90)->toDateString());
+        $groupId = $request->get('group_id', '');
+
+        $groups = $rotation->groups()->orderBy('group_index')->get();
+
+        $assignments = RotationAssignment::query()
+            ->with(['employee:id,name,employee_code,department_id', 'rotationGroup:id,name,rotation_id,group_index,start_date'])
+            ->where('rotation_id', $id)
+            ->whereNull('end_date')
+            ->when($groupId, fn ($q) => $q->where('rotation_group_id', $groupId))
+            ->get();
+
+        $timeline = [];
+        foreach ($assignments as $assignment) {
+            $employee = $assignment->employee;
+            if (! $employee) {
+                continue;
+            }
+
+            $group = $assignment->rotationGroup;
+            $days = [];
+            $current = Carbon::parse($from)->startOfDay();
+            $end = Carbon::parse($to)->startOfDay();
+
+            while ($current->lte($end)) {
+                $days[] = [
+                    'date' => $current->format('Y-m-d'),
+                    'is_work_day' => $this->rotationEngine->isWorkDay($rotation, $group, $current),
+                ];
+                $current->addDay();
+            }
+
+            $timeline[] = [
+                'employee_name' => $employee->name,
+                'employee_code' => $employee->employee_code,
+                'group_name' => $group?->name ?? '—',
+                'days' => $days,
+            ];
+        }
+
+        $export = new RotationTimelineExport(
+            rotation: $rotation,
+            groups: $groups,
+            timeline: $timeline,
+            from: $from,
+            to: $to,
+        );
+
+        $fileName = "rotation-{$rotation->name}-timeline-{$from}-{$to}.xlsx";
+        $content = $export->toBinary();
+
+        return response($content, 200, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Content-Disposition' => "attachment; filename=\"{$fileName}\"",
         ]);
     }
 
@@ -601,6 +695,54 @@ class RotationsController extends Controller
             'message' => __('shifts.rotation_employees_transferred_count', ['count' => $count]),
             'count' => $count,
         ]);
+    }
+
+    /**
+     * Export rotations to Excel.
+     */
+    public function export(Request $request)
+    {
+        $this->authorize('view-rotations');
+
+        $rotations = $this->rotationService->getAll(
+            $request->only(['search', 'company_id'])
+        );
+
+        $export = new RotationsExport($rotations->getCollection());
+
+        return $this->downloadExcel($export->build(), 'rotations');
+    }
+
+    /**
+     * Export all rotation groups to Excel.
+     */
+    public function exportGroups(Request $request)
+    {
+        $this->authorize('view-rotations');
+
+        $query = RotationGroup::with(['rotation:id,name', 'timeSchedule:id,name,in_time,out_time'])
+            ->orderBy('rotation_id')
+            ->orderBy('group_index');
+
+        if ($search = $request->input('search')) {
+            $query->whereHas('rotation', function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%");
+            })->orWhere('name', 'like', "%{$search}%");
+        }
+
+        $groups = $query->get()->map(function (RotationGroup $g) {
+            $schedule = $g->timeSchedule;
+            $g->time_schedule_label = $schedule
+                ? sprintf('%s (%s - %s)', $schedule->name, $schedule->in_time, $schedule->out_time)
+                : '—';
+            $g->employees_count = $g->assignments()->whereNull('end_date')->count();
+
+            return $g;
+        });
+
+        $export = new RotationGroupsExport($groups);
+
+        return $this->downloadExcel($export->build(), 'rotation-groups');
     }
 
     // ── Rotation Groups Management ──────────────────────────────────

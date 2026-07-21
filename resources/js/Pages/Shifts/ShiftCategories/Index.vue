@@ -103,7 +103,7 @@ function onSearch(value) {
     router.get(
         route('shift-categories.index'),
         { ...props.filters, search: value },
-        { preserveState: true, preserveScroll: true, replace: true },
+        { preserveState: true, preserveScroll: true, replace: true, only: ['categories'] },
     );
 }
 
@@ -116,23 +116,7 @@ function onFilterChange(filters) {
             next[key] = value;
         }
     }
-    router.get(route('shift-categories.index'), next, { preserveState: true, preserveScroll: true, replace: true });
-}
-
-function onPageChange(page) {
-    router.get(
-        route('shift-categories.index'),
-        { ...props.filters, page },
-        { preserveState: true, preserveScroll: true, replace: true },
-    );
-}
-
-function onPerPageChange(perPage) {
-    router.get(
-        route('shift-categories.index'),
-        { ...props.filters, per_page: perPage },
-        { preserveState: true, preserveScroll: true, replace: true },
-    );
+    router.get(route('shift-categories.index'), next, { preserveState: true, preserveScroll: true, replace: true, only: ['categories'] });
 }
 
 function confirmDelete(category) {
@@ -176,11 +160,12 @@ const flashError = computed(() => page.props.flash?.error);
         <DataTable
             :columns="columns"
             :data="categories"
+            :filters="filters"
+            :route-name="'shift-categories.index'"
+            :only="['categories']"
             storage-key="shift-categories"
             @search="onSearch"
             @filter-change="onFilterChange"
-            @page-change="onPageChange"
-            @per-page-change="onPerPageChange"
         >
             <template #cell-type="{ row }">
                 <Badge :text="typeLabel(row.type)" :variant="typeVariant(row.type)" />

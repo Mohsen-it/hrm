@@ -3,6 +3,7 @@
 namespace Modules\Shifts\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Traits\ExcelExportable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -14,6 +15,8 @@ use Modules\Shifts\Services\TimeScheduleService;
 
 class TimeSchedulesController extends Controller
 {
+    use ExcelExportable;
+
     public function __construct(
         private TimeScheduleService $timeScheduleService
     ) {}
@@ -131,5 +134,31 @@ class TimeSchedulesController extends Controller
 
         return redirect()->route('time-schedules.index')
             ->with('success', __('shifts.copy_success'));
+    }
+
+    /**
+     * Export time schedules to Excel.
+     */
+    public function export(Request $request)
+    {
+        $this->authorize('view-time-schedules');
+
+        $schedules = $this->timeScheduleService->getAll(
+            $request->only(['search', 'company_id'])
+        );
+
+        $headers = ['#', 'اسم الجدول', 'وقت الدخول', 'وقت الخروج', 'فترة الراحة', 'ساعات العمل', 'الشركة', 'الوصف'];
+        $columns = [
+            'index' => ['key' => 'id', 'type' => 'integer', 'width' => 8],
+            'name' => ['key' => 'name', 'type' => 'string', 'width' => 25],
+            'in_time' => ['key' => 'in_time', 'type' => 'string', 'width' => 12],
+            'out_time' => ['key' => 'out_time', 'type' => 'string', 'width' => 12],
+            'break' => ['key' => 'break_duration', 'type' => 'integer', 'width' => 12],
+            'hours' => ['key' => 'working_hours', 'type' => 'float', 'width' => 12, 'decimals' => 1],
+            'company' => ['key' => 'company.company_name', 'type' => 'string', 'width' => 25],
+            'description' => ['key' => 'description', 'type' => 'string', 'width' => 35],
+        ];
+
+        return $this->quickExcelExport('جداول الوقت', $headers, $schedules->getCollection(), $columns, 'time-schedules');
     }
 }

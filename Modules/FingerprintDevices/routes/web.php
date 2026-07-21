@@ -57,6 +57,9 @@ Route::middleware(['auth'])->group(function () {
             ->whereNumber('logId')
             ->name('fingerprint-devices.sync.log-status');
 
+        Route::get('devices/export/excel', [FingerprintDevicesController::class, 'export'])
+            ->name('fingerprint-devices.export');
+
         Route::resource('devices', FingerprintDevicesController::class)
             ->names('fingerprint-devices')
             ->parameters(['devices' => 'id']);

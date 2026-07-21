@@ -3,10 +3,12 @@
 namespace Modules\Vacations\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Traits\ExcelExportable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
+use Modules\Vacations\Exports\VacationTypesExport;
 use Modules\Vacations\Http\Requests\StoreVacationTypeRequest;
 use Modules\Vacations\Http\Requests\UpdateVacationTypeRequest;
 use Modules\Vacations\Http\Resources\VacationTypeResource;
@@ -20,6 +22,8 @@ use Modules\Vacations\Services\VacationTypeService;
  */
 class VacationTypesController extends Controller
 {
+    use ExcelExportable;
+
     /**
      * Create a new controller instance.
      */
@@ -151,5 +155,23 @@ class VacationTypesController extends Controller
             $filters,
             fn ($v) => $v !== null && $v !== '' && $v !== [],
         );
+    }
+
+    /**
+     * Export vacation types to Excel.
+     */
+    public function export(Request $request)
+    {
+        $this->authorize('view-vacation-types');
+
+        $filters = $this->cleanFilters($request->only([
+            'search', 'is_active', 'is_paid', 'requires_approval',
+        ]));
+
+        $types = $this->typeService->getAllTypes($filters, 10000);
+
+        $export = new VacationTypesExport($types->getCollection());
+
+        return $this->downloadExcel($export->build(), 'vacation-types');
     }
 }

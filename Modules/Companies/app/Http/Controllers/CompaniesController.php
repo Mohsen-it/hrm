@@ -3,10 +3,12 @@
 namespace Modules\Companies\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Traits\ExcelExportable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
+use Modules\Companies\Exports\CompaniesExport;
 use Modules\Companies\Http\Requests\StoreCompanyRequest;
 use Modules\Companies\Http\Requests\UpdateCompanyRequest;
 use Modules\Companies\Http\Resources\CompanyResource;
@@ -14,6 +16,8 @@ use Modules\Companies\Services\CompanyService;
 
 class CompaniesController extends Controller
 {
+    use ExcelExportable;
+
     public function __construct(
         private CompanyService $companyService
     ) {}
@@ -143,5 +147,22 @@ class CompaniesController extends Controller
                 )
             ),
         ]);
+    }
+
+    /**
+     * Export companies to Excel.
+     */
+    public function export(Request $request)
+    {
+        $this->authorize('view-companies');
+
+        $companies = $this->companyService->getAllCompanies(
+            $request->only(['search', 'status', 'is_default']),
+            10000 // جلب جميع السجلات للتصدير
+        );
+
+        $export = new CompaniesExport($companies->getCollection());
+
+        return $this->downloadExcel($export->build(), 'companies');
     }
 }

@@ -41,23 +41,7 @@ function onSearch(value) {
     router.get(
         route('rotations.index'),
         { ...props.filters, search: value },
-        { preserveState: true, preserveScroll: true, replace: true },
-    );
-}
-
-function handlePageChange(page) {
-    router.get(
-        route('rotations.index'),
-        { ...props.filters, page },
-        { preserveState: true, preserveScroll: true, replace: true },
-    );
-}
-
-function handlePerPageChange(perPage) {
-    router.get(
-        route('rotations.index'),
-        { ...props.filters, per_page: perPage },
-        { preserveState: true, preserveScroll: true, replace: true },
+        { preserveState: true, preserveScroll: true, replace: true, only: ['rotations'] },
     );
 }
 
@@ -95,10 +79,11 @@ const flashSuccess = computed(() => page.props.flash?.success);
         <DataTable
             :columns="columns"
             :data="rotations"
+            :filters="filters"
+            :route-name="'rotations.index'"
+            :only="['rotations']"
             storage-key="rotations"
             @search="onSearch"
-            @page-change="handlePageChange"
-            @per-page-change="handlePerPageChange"
         >
             <template #cell-name="{ row }">
                 <div class="flex items-center gap-2">

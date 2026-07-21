@@ -72,7 +72,7 @@ function onSearch(value) {
     router.get(
         route('attendance.daily-summaries.index'),
         { ...props.filters, search: value },
-        { preserveState: true, preserveScroll: true, replace: true },
+        { preserveState: true, preserveScroll: true, replace: true, only: ['summaries'] },
     );
 }
 
@@ -89,23 +89,8 @@ function onFilterChange(filters) {
         preserveState: true,
         preserveScroll: true,
         replace: true,
+        only: ['summaries'],
     });
-}
-
-function onPageChange(page) {
-    router.get(
-        route('attendance.daily-summaries.index'),
-        { ...props.filters, page },
-        { preserveState: true, preserveScroll: true, replace: true },
-    );
-}
-
-function onPerPageChange(perPage) {
-    router.get(
-        route('attendance.daily-summaries.index'),
-        { ...props.filters, per_page: perPage },
-        { preserveState: true, preserveScroll: true, replace: true },
-    );
 }
 
 function performRecalc() {
@@ -150,12 +135,13 @@ const flashSuccess = computed(() => page.props.flash?.success);
         <DataTable
             :columns="columns"
             :data="summaries"
+            :filters="filters"
+            :route-name="'attendance.daily-summaries.index'"
+            :only="['summaries']"
             :empty-title="t('attendance.messages.empty_summaries')"
             storage-key="attendance-summaries"
             @search="onSearch"
             @filter-change="onFilterChange"
-            @page-change="onPageChange"
-            @per-page-change="onPerPageChange"
         >
             <template #cell-user="{ row }">
                 <div>

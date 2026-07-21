@@ -31,23 +31,7 @@ function onSearch(value) {
     router.get(
         route('rotation-groups.index'),
         { ...props.filters, search: value },
-        { preserveState: true, preserveScroll: true, replace: true },
-    );
-}
-
-function onPageChange(page) {
-    router.get(
-        route('rotation-groups.index'),
-        { ...props.filters, page },
-        { preserveState: true, preserveScroll: true, replace: true },
-    );
-}
-
-function onPerPageChange(perPage) {
-    router.get(
-        route('rotation-groups.index'),
-        { ...props.filters, per_page: perPage },
-        { preserveState: true, preserveScroll: true, replace: true },
+        { preserveState: true, preserveScroll: true, replace: true, only: ['groups'] },
     );
 }
 
@@ -68,10 +52,11 @@ const flashError = computed(() => page.props.flash?.error);
         <DataTable
             :columns="columns"
             :data="groups"
+            :filters="filters"
+            :route-name="'rotation-groups.index'"
+            :only="['groups']"
             storage-key="rotation-groups"
             @search="onSearch"
-            @page-change="onPageChange"
-            @per-page-change="onPerPageChange"
         >
             <template #cell-rotation_name="{ row }">
                 <span class="font-medium text-mistral-ink">{{ row.rotation?.name ?? '—' }}</span>

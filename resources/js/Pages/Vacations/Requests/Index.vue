@@ -42,19 +42,11 @@ const columns = computed(() => [
 ]);
 
 function onSearch(value) {
-    router.get(route('vacations.requests.index'), { ...props.filters, search: value }, { preserveState: true, preserveScroll: true, replace: true });
+    router.get(route('vacations.requests.index'), { ...props.filters, search: value }, { preserveState: true, preserveScroll: true, replace: true, only: ['requests'] });
 }
 
 function onFilterChange(key, value) {
-    router.get(route('vacations.requests.index'), { ...props.filters, [key]: value, page: 1 }, { preserveState: true, preserveScroll: true, replace: true });
-}
-
-function onPageChange(page) {
-    router.get(route('vacations.requests.index'), { ...props.filters, page }, { preserveState: true, preserveScroll: true, replace: true });
-}
-
-function onPerPageChange(perPage) {
-    router.get(route('vacations.requests.index'), { ...props.filters, per_page: perPage, page: 1 }, { preserveState: true, preserveScroll: true, replace: true });
+    router.get(route('vacations.requests.index'), { ...props.filters, [key]: value, page: 1 }, { preserveState: true, preserveScroll: true, replace: true, only: ['requests'] });
 }
 
 const flashSuccess = computed(() => page.props.flash?.success);
@@ -75,11 +67,12 @@ const flashSuccess = computed(() => page.props.flash?.success);
         <DataTable
             :columns="columns"
             :data="requests"
+            :filters="filters"
+            :route-name="'vacations.requests.index'"
+            :only="['requests']"
             storage-key="vacation-requests"
             @search="onSearch"
             @filter-change="onFilterChange"
-            @page-change="onPageChange"
-            @per-page-change="onPerPageChange"
         >
             <template #cell-status="{ row }">
                 <Badge :text="t('vacations.' + row.status)" :variant="statusVariant(row.status)" />

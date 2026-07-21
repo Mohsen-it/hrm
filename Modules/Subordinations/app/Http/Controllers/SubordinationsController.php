@@ -3,6 +3,7 @@
 namespace Modules\Subordinations\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Traits\ExcelExportable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -14,6 +15,8 @@ use Modules\Subordinations\Services\SubordinationService;
 
 class SubordinationsController extends Controller
 {
+    use ExcelExportable;
+
     public function __construct(
         private SubordinationService $subordinationService,
     ) {}
@@ -183,5 +186,38 @@ class SubordinationsController extends Controller
             $filters,
             fn ($v) => $v !== null && $v !== '' && $v !== [],
         );
+    }
+
+    /**
+     * Export subordinations to Excel.
+     */
+    public function export(Request $request)
+    {
+        $this->authorize('view-subordinations');
+
+        $filters = $this->cleanFilters($request->only(['search', 'status']));
+        $subordinations = $this->subordinationService->getAllSubordinations($filters, 10000);
+
+        $headers = ['#', 'الرمز', 'الاسم بالعربية', 'الاسم بالإنجليزية', 'الوصف', 'ترتيب العرض', 'الحالة'];
+        $columns = [
+            'index' => ['key' => 'id', 'type' => 'integer', 'width' => 8],
+            'code' => ['key' => 'code', 'type' => 'string', 'width' => 15],
+            'name_ar' => ['key' => 'name_ar', 'type' => 'string', 'width' => 25],
+            'name_en' => ['key' => 'name_en', 'type' => 'string', 'width' => 25],
+            'description' => ['key' => 'description', 'type' => 'string', 'width' => 35],
+            'sort_order' => ['key' => 'sort_order', 'type' => 'integer', 'width' => 12],
+            'status' => [
+                'key' => 'status',
+                'type' => 'status',
+                'width' => 12,
+                'map' => [1 => 'نشط', 0 => 'غير نشط'],
+                'status_color' => [
+                    1 => ['text' => '16A34A', 'bg' => 'DCFCE7'],
+                    0 => ['text' => 'DC2626', 'bg' => 'FEE2E2'],
+                ],
+            ],
+        ];
+
+        return $this->quickExcelExport('قائمة الإدارات', $headers, $subordinations->getCollection(), $columns, 'subordinations');
     }
 }

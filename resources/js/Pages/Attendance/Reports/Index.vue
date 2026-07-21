@@ -28,6 +28,10 @@ function applyFilters() {
     );
 }
 
+function exportReport() {
+    window.location.href = route('attendance.reports.export', { from: from.value, to: to.value, date: date.value });
+}
+
 const trendMax = computed(() => {
     return Math.max(1, ...props.trend.map((d) => (d.present || 0) + (d.absent || 0) + (d.late || 0)));
 });
@@ -58,7 +62,13 @@ const topLateData = computed(() => ({ data: props.topLate, links: [] }));
         <PageHeader
             :title="t('attendance.reports_page.title')"
             :description="t('attendance.reports_page.index_description')"
-        />
+        >
+            <template #actions>
+                <Button variant="primary" icon="fas fa-download" @click="exportReport">
+                    {{ t('common.export') }}
+                </Button>
+            </template>
+        </PageHeader>
 
         <Alert v-if="flashSuccess" type="success" :message="flashSuccess" class="mb-4" />
 

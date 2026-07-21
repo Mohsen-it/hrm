@@ -5,6 +5,9 @@ use Modules\Zones\Http\Controllers\ZoneBranchesController;
 use Modules\Zones\Http\Controllers\ZonesController;
 
 Route::middleware(['auth', 'permission:view-zones'])->group(function () {
+    Route::get('zones/export/excel', [ZonesController::class, 'export'])
+        ->name('zones.export');
+
     Route::get('zones/dashboard', [ZonesController::class, 'dashboard'])
         ->name('zones.dashboard');
 

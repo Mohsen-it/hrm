@@ -3,6 +3,7 @@
 namespace Modules\Zones\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Traits\ExcelExportable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -26,6 +27,8 @@ use Modules\Zones\Services\ZoneService;
  */
 class ZonesController extends Controller
 {
+    use ExcelExportable;
+
     public function __construct(
         private ZoneService $zoneService,
         private ZoneBranchService $zoneBranchService,
@@ -290,5 +293,55 @@ class ZonesController extends Controller
 
         return redirect()->route('zones.show', $zone)
             ->with('success', __('zones.recalculate_queued'));
+    }
+
+    /**
+     * Export zones to Excel.
+     */
+    public function export(Request $request)
+    {
+        $this->authorize('view-zones');
+
+        $filters = $this->cleanFilters($request->only([
+            'search', 'company_id', 'zone_type', 'city', 'region', 'is_active',
+        ]));
+
+        $zones = $this->zoneService->getAllZones($filters, 10000);
+
+        $headers = ['#', 'اسم المنطقة', 'الرمز', 'النوع', 'المدينة', 'المنطقة', 'الشركة', 'الفروع', 'الموظفين', 'الأجهزة', 'نشط'];
+        $columns = [
+            'index' => ['key' => 'id', 'type' => 'integer', 'width' => 8],
+            'name' => ['key' => 'name', 'type' => 'string', 'width' => 25],
+            'code' => ['key' => 'code', 'type' => 'string', 'width' => 15],
+            'type' => [
+                'key' => 'zone_type',
+                'type' => 'status',
+                'width' => 15,
+                'map' => [
+                    'headquarters' => 'المقر الرئيسي',
+                    'branch' => 'فرع',
+                    'region' => 'منطقة',
+                    'city' => 'مدينة',
+                ],
+            ],
+            'city' => ['key' => 'city', 'type' => 'string', 'width' => 15],
+            'region' => ['key' => 'region', 'type' => 'string', 'width' => 15],
+            'company' => ['key' => 'company.company_name', 'type' => 'string', 'width' => 20],
+            'branches' => ['key' => 'branches_count', 'type' => 'integer', 'width' => 10],
+            'employees' => ['key' => 'employees_count', 'type' => 'integer', 'width' => 10],
+            'devices' => ['key' => 'devices_count', 'type' => 'integer', 'width' => 10],
+            'is_active' => [
+                'key' => 'is_active',
+                'type' => 'status',
+                'width' => 10,
+                'map' => [true => 'نشط', false => 'غير نشط'],
+                'status_color' => [
+                    true => ['text' => '16A34A', 'bg' => 'DCFCE7'],
+                    false => ['text' => 'DC2626', 'bg' => 'FEE2E2'],
+                ],
+            ],
+        ];
+
+        return $this->quickExcelExport('قائمة المناطق', $headers, $zones->getCollection(), $columns, 'zones');
     }
 }

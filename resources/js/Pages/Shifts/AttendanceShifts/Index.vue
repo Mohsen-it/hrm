@@ -32,14 +32,6 @@ function onSearch(value) {
     router.get(route('attendance.shifts.index'), { search: value }, { preserveState: true });
 }
 
-function onPageChange(page) {
-    router.get(route('attendance.shifts.index', { page }));
-}
-
-function onPerPageChange(perPage) {
-    router.get(route('attendance.shifts.index', { per_page: perPage }));
-}
-
 const confirmDelete = (shift) => {
     deletingShift.value = shift;
     showDeleteDialog.value = true;
@@ -72,10 +64,11 @@ const deleteShift = () => {
             <DataTable
                 :columns="columns"
                 :data="shifts"
+                :filters="filters"
+                :route-name="'attendance.shifts.index'"
+            :only="['shifts']"
                 storage-key="attendance-shifts"
                 @search="onSearch"
-                @page-change="onPageChange"
-                @per-page-change="onPerPageChange"
             >
                 <template #cell-alias="{ row }">
                     <span class="text-[13px] font-medium">{{ row.alias }}</span>

@@ -38,12 +38,14 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/', [LiveAttendanceController::class, 'index'])->name('index');
         Route::get('snapshot', [LiveAttendanceController::class, 'snapshot'])->name('snapshot');
         Route::get('punch-feed', [LiveAttendanceController::class, 'punchFeed'])->name('punch-feed');
+        Route::get('export/excel', [LiveAttendanceController::class, 'export'])->name('export');
         Route::post('daily-scan', [LiveAttendanceController::class, 'runDailyScan'])->name('daily-scan');
     });
 
     // Reports
     Route::middleware('permission:view-attendance')->prefix('attendance/reports')->name('attendance.reports.')->group(function () {
         Route::get('/', [ReportsController::class, 'index'])->name('index');
+        Route::get('export/excel', [ReportsController::class, 'export'])->name('export');
         Route::get('user/{user}', [ReportsController::class, 'userReport'])->name('user');
         Route::get('monthly', [MonthlyReportController::class, 'index'])->name('monthly');
         Route::get('yearly', [YearlyReportController::class, 'index'])->name('yearly');
@@ -51,6 +53,7 @@ Route::middleware(['auth'])->group(function () {
 
     // Sessions
     Route::middleware('permission:view-attendance')->prefix('attendance/sessions')->name('attendance.sessions.')->group(function () {
+        Route::get('/export/excel', [AttendanceSessionsController::class, 'export'])->name('export');
         Route::get('/', [AttendanceSessionsController::class, 'index'])->name('index');
         Route::get('create', [AttendanceSessionsController::class, 'create'])
             ->middleware('permission:create-attendance')
@@ -72,6 +75,7 @@ Route::middleware(['auth'])->group(function () {
 
     // Daily summaries
     Route::middleware('permission:view-attendance')->prefix('attendance/daily-summaries')->name('attendance.daily-summaries.')->group(function () {
+        Route::get('/export/excel', [DailySummariesController::class, 'export'])->name('export');
         Route::get('/', [DailySummariesController::class, 'index'])->name('index');
         Route::get('{id}', [DailySummariesController::class, 'show'])->name('show');
         Route::put('{id}', [DailySummariesController::class, 'update'])
@@ -87,6 +91,7 @@ Route::middleware(['auth'])->group(function () {
 
     // Raw logs
     Route::middleware('permission:view-attendance')->prefix('attendance/raw-logs')->name('attendance.raw-logs.')->group(function () {
+        Route::get('/export/excel', [RawLogsController::class, 'export'])->name('export');
         Route::get('/', [RawLogsController::class, 'index'])->name('index');
         Route::get('{id}', [RawLogsController::class, 'show'])->name('show');
         Route::post('/', [RawLogsController::class, 'store'])

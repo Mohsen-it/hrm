@@ -3,6 +3,7 @@
 namespace Modules\Attendance\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Traits\ExcelExportable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -10,6 +11,7 @@ use Inertia\Response;
 use Modules\Attendance\Events\SessionCreated;
 use Modules\Attendance\Events\SessionDeleted;
 use Modules\Attendance\Events\SessionUpdated;
+use Modules\Attendance\Exports\AttendanceSessionsExport;
 use Modules\Attendance\Http\Requests\StoreAttendanceSessionRequest;
 use Modules\Attendance\Http\Requests\UpdateAttendanceSessionRequest;
 use Modules\Attendance\Http\Resources\AttendanceSessionResource;
@@ -26,6 +28,8 @@ use Modules\Users\Services\UserService;
  */
 class AttendanceSessionsController extends Controller
 {
+    use ExcelExportable;
+
     /**
      * Create a new controller instance.
      */
@@ -189,5 +193,24 @@ class AttendanceSessionsController extends Controller
             $filters,
             fn ($v) => $v !== null && $v !== '' && $v !== [],
         );
+    }
+
+    /**
+     * Export attendance sessions to Excel.
+     */
+    public function export(Request $request)
+    {
+        $this->authorize('view-attendance');
+
+        $filters = $this->cleanFilters($request->only([
+            'search', 'user_id', 'shift_id', 'status',
+            'session_type', 'source', 'date', 'from', 'to', 'open',
+        ]));
+
+        $sessions = $this->sessionService->getAllSessions($filters, 10000);
+
+        $export = new AttendanceSessionsExport($sessions->getCollection());
+
+        return $this->downloadExcel($export->build(), 'attendance-sessions');
     }
 }

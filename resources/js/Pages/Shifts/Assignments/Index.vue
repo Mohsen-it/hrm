@@ -77,7 +77,7 @@ function onSearch(value) {
     router.get(
         route('shift-assignments.index'),
         { ...props.filters, search: value },
-        { preserveState: true, preserveScroll: true, replace: true },
+        { preserveState: true, preserveScroll: true, replace: true, only: ['assignments'] },
     );
 }
 
@@ -91,29 +91,13 @@ function applyFilter(key, value) {
     router.get(
         route('shift-assignments.index'),
         next,
-        { preserveState: true, preserveScroll: true, replace: true },
+        { preserveState: true, preserveScroll: true, replace: true, only: ['assignments'] },
     );
 }
 
 function onFilterChange({ key, value }) {
     const filterKey = key === 'category' ? 'category_id' : key;
     applyFilter(filterKey, value);
-}
-
-function onPageChange(page) {
-    router.get(
-        route('shift-assignments.index'),
-        { ...props.filters, page },
-        { preserveState: true, preserveScroll: true, replace: true },
-    );
-}
-
-function onPerPageChange(perPage) {
-    router.get(
-        route('shift-assignments.index'),
-        { ...props.filters, per_page: perPage },
-        { preserveState: true, preserveScroll: true, replace: true },
-    );
 }
 
 function confirmUnassign(assignment) {
@@ -205,11 +189,12 @@ const flashError = computed(() => page.props.flash?.error);
         <DataTable
             :columns="columns"
             :data="assignments"
+            :filters="filters"
+            :route-name="'shift-assignments.index'"
+            :only="['assignments']"
             storage-key="shift-assignments"
             @search="onSearch"
             @filter-change="onFilterChange"
-            @page-change="onPageChange"
-            @per-page-change="onPerPageChange"
         >
             <template #cell-employee="{ row }">
                 <div class="flex flex-col">

@@ -3,11 +3,13 @@
 namespace Modules\Attendance\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Traits\ExcelExportable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
+use Modules\Attendance\Exports\LiveAttendanceExport;
 use Modules\Attendance\Http\Resources\AttendanceSessionResource;
 use Modules\Attendance\Http\Resources\RawAttendanceLogResource;
 use Modules\Attendance\Models\RawAttendanceLog;
@@ -23,6 +25,8 @@ use Modules\Attendance\Services\AttendanceNotificationService;
  */
 class LiveAttendanceController extends Controller
 {
+    use ExcelExportable;
+
     /**
      * Create a new controller instance.
      */
@@ -152,5 +156,24 @@ class LiveAttendanceController extends Controller
         return response()->json([
             'punches' => RawAttendanceLogResource::collection($logs)->resolve(),
         ]);
+    }
+
+    /**
+     * Export the current live attendance snapshot to Excel.
+     */
+    public function export(Request $request)
+    {
+        $this->authorize('view-attendance');
+
+        $date = (string) $request->input('date', now()->toDateString());
+
+        $live = $this->monitoring->getLiveSessions($date);
+        $missing = $this->monitoring->getMissingCheckouts($date);
+        $anomalies = $this->monitoring->getAnomalies($date);
+        $health = $this->monitoring->getHealthSnapshot($date);
+
+        $export = new LiveAttendanceExport($date, $live, $missing, $anomalies, $health);
+
+        return $this->downloadExcel($export->build(), 'attendance-live-'.$date);
     }
 }

@@ -3,6 +3,7 @@
 namespace Modules\Positions\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Traits\ExcelExportable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -17,6 +18,8 @@ use Modules\Positions\Services\PositionService;
 
 class PositionsController extends Controller
 {
+    use ExcelExportable;
+
     public function __construct(
         private PositionService $positionService,
         private CompanyService $companyService,
@@ -151,5 +154,40 @@ class PositionsController extends Controller
 
         return redirect()->route('positions.index')
             ->with('success', __('positions.deleted_successfully'));
+    }
+
+    /**
+     * Export positions to Excel.
+     */
+    public function export(Request $request)
+    {
+        $this->authorize('view-positions');
+
+        $positions = $this->positionService->getAllPositions(
+            $request->only(['search', 'status', 'company_id', 'branch_id', 'department_id']),
+            10000
+        );
+
+        $headers = ['#', 'رمز الوظيفة', 'اسم الوظيفة', 'القسم', 'الفرع', 'الشركة', 'الحالة'];
+        $columns = [
+            'index' => ['key' => 'id', 'type' => 'integer', 'width' => 8],
+            'code' => ['key' => 'position_code', 'type' => 'string', 'width' => 15],
+            'name' => ['key' => 'position_name', 'type' => 'string', 'width' => 30],
+            'department' => ['key' => 'department.department_name', 'type' => 'string', 'width' => 25],
+            'branch' => ['key' => 'branch.branch_name', 'type' => 'string', 'width' => 25],
+            'company' => ['key' => 'company.company_name', 'type' => 'string', 'width' => 25],
+            'status' => [
+                'key' => 'status',
+                'type' => 'status',
+                'width' => 12,
+                'map' => [1 => 'نشط', 0 => 'غير نشط'],
+                'status_color' => [
+                    1 => ['text' => '16A34A', 'bg' => 'DCFCE7'],
+                    0 => ['text' => 'DC2626', 'bg' => 'FEE2E2'],
+                ],
+            ],
+        ];
+
+        return $this->quickExcelExport('قائمة الوظائف', $headers, $positions->getCollection(), $columns, 'positions');
     }
 }

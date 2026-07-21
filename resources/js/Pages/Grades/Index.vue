@@ -28,19 +28,11 @@ const columns = computed(() => [
 ]);
 
 function onSearch(value) {
-    router.get(route('grades.index'), { ...props.filters, search: value }, { preserveState: true, preserveScroll: true, replace: true });
+    router.get(route('grades.index'), { ...props.filters, search: value }, { preserveState: true, preserveScroll: true, replace: true, only: ['grades'] });
 }
 
 function onFilterChange(filters) {
-    router.get(route('grades.index'), { ...props.filters, ...filters }, { preserveState: true, preserveScroll: true, replace: true });
-}
-
-function onPageChange(page) {
-    router.get(route('grades.index'), { ...props.filters, page }, { preserveState: true, preserveScroll: true, replace: true });
-}
-
-function onPerPageChange(perPage) {
-    router.get(route('grades.index'), { ...props.filters, per_page: perPage }, { preserveState: true, preserveScroll: true, replace: true });
+    router.get(route('grades.index'), { ...props.filters, ...filters }, { preserveState: true, preserveScroll: true, replace: true, only: ['grades'] });
 }
 
 function confirmDelete(grade) {
@@ -78,11 +70,12 @@ const flashError = computed(() => page.props.flash?.error);
         <DataTable
             :columns="columns"
             :data="grades"
+            :filters="filters"
+            :route-name="'grades.index'"
+            :only="['grades']"
             storage-key="grades"
             @search="onSearch"
             @filter-change="onFilterChange"
-            @page-change="onPageChange"
-            @per-page-change="onPerPageChange"
         >
             <template #cell-level="{ row }">
                 <span>{{ row.level }}</span>

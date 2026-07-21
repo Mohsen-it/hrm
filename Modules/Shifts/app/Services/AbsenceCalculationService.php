@@ -19,17 +19,39 @@ class AbsenceCalculationService
     ) {}
 
     /**
+     * Normalize a rotation filter (single id or array) into a list of ids.
+     *
+     * @return array<int, int>
+     */
+    private function normalizeRotationFilter(int|array|null $rotationIds): array
+    {
+        if ($rotationIds === null || $rotationIds === '' || $rotationIds === []) {
+            return [];
+        }
+
+        return collect((array) $rotationIds)
+            ->filter(fn ($id) => $id !== null && $id !== '' && $id !== false)
+            ->map(fn ($id) => (int) $id)
+            ->values()
+            ->all();
+    }
+
+    /**
      * Get employee IDs expected to work on the given date.
      *
+     * @param  int|array<int, int>|null  $rotationIds
+     * @param  int|array<int, int>|null  $rotationGroupIds
      * @return Collection<int, int>
      */
     public function getExpectedEmployees(
         Carbon $date,
         ?int $departmentId = null,
-        ?int $rotationId = null,
-        ?int $rotationGroupId = null,
+        int|array|null $rotationIds = null,
+        int|array|null $rotationGroupIds = null,
     ): Collection {
         $dateStr = $date->toDateString();
+        $rotationIdList = $this->normalizeRotationFilter($rotationIds);
+        $groupIdList = $this->normalizeRotationFilter($rotationGroupIds);
 
         $rotationAssignments = $this->rotationAssignmentRepository->getAssignmentsForDate($dateStr);
         $expectedIds = collect();
@@ -38,11 +60,11 @@ class AbsenceCalculationService
             $rotation = $rotationAssignment->rotation;
             $group = $rotationAssignment->rotationGroup;
 
-            if ($rotationId !== null && $rotation->id !== $rotationId) {
+            if ($rotationIdList !== [] && ! in_array($rotation->id, $rotationIdList, true)) {
                 continue;
             }
 
-            if ($rotationGroupId !== null && $group->id !== $rotationGroupId) {
+            if ($groupIdList !== [] && ! in_array($group->id, $groupIdList, true)) {
                 continue;
             }
 
@@ -76,15 +98,17 @@ class AbsenceCalculationService
     /**
      * Get the list of absent employees for a given date.
      *
+     * @param  int|array<int, int>|null  $rotationIds
+     * @param  int|array<int, int>|null  $rotationGroupIds
      * @return Collection<int, int>
      */
     public function getAbsentEmployees(
         Carbon $date,
         ?int $departmentId = null,
-        ?int $rotationId = null,
-        ?int $rotationGroupId = null,
+        int|array|null $rotationIds = null,
+        int|array|null $rotationGroupIds = null,
     ): Collection {
-        $expected = $this->getExpectedEmployees($date, $departmentId, $rotationId, $rotationGroupId);
+        $expected = $this->getExpectedEmployees($date, $departmentId, $rotationIds, $rotationGroupIds);
 
         if ($expected->isEmpty()) {
             return collect();

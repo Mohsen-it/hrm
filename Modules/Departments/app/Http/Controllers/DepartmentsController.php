@@ -3,12 +3,14 @@
 namespace Modules\Departments\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Traits\ExcelExportable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 use Modules\Branches\Services\BranchService;
 use Modules\Companies\Services\CompanyService;
+use Modules\Departments\Exports\DepartmentsExport;
 use Modules\Departments\Http\Requests\StoreDepartmentRequest;
 use Modules\Departments\Http\Requests\UpdateDepartmentRequest;
 use Modules\Departments\Http\Resources\DepartmentResource;
@@ -16,6 +18,8 @@ use Modules\Departments\Services\DepartmentService;
 
 class DepartmentsController extends Controller
 {
+    use ExcelExportable;
+
     public function __construct(
         private DepartmentService $departmentService,
         private BranchService $branchService,
@@ -147,5 +151,22 @@ class DepartmentsController extends Controller
 
         return redirect()->route('departments.index')
             ->with('success', __('departments.deleted_successfully'));
+    }
+
+    /**
+     * Export departments to Excel.
+     */
+    public function export(Request $request)
+    {
+        $this->authorize('view-departments');
+
+        $departments = $this->departmentService->getAllDepartments(
+            $request->only(['search', 'status', 'company_id', 'branch_id', 'parent_id', 'roots_only']),
+            10000
+        );
+
+        $export = new DepartmentsExport($departments->getCollection());
+
+        return $this->downloadExcel($export->build(), 'departments');
     }
 }

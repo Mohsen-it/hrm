@@ -3,11 +3,13 @@
 namespace Modules\Vacations\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Traits\ExcelExportable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 use Modules\Users\Services\UserService;
+use Modules\Vacations\Exports\VacationRequestsExport;
 use Modules\Vacations\Http\Requests\DecisionVacationRequestRequest;
 use Modules\Vacations\Http\Requests\StoreVacationRequestRequest;
 use Modules\Vacations\Http\Requests\UpdateVacationRequestRequest;
@@ -24,6 +26,8 @@ use Modules\Vacations\Services\VacationTypeService;
  */
 class VacationRequestsController extends Controller
 {
+    use ExcelExportable;
+
     /**
      * Create a new controller instance.
      */
@@ -235,5 +239,24 @@ class VacationRequestsController extends Controller
             $filters,
             fn ($v) => $v !== null && $v !== '' && $v !== [],
         );
+    }
+
+    /**
+     * Export vacation requests to Excel.
+     */
+    public function export(Request $request)
+    {
+        $this->authorize('view-vacation-requests');
+
+        $filters = $this->cleanFilters($request->only([
+            'search', 'user_id', 'manager_id', 'vacation_type_id',
+            'status', 'start_date', 'from', 'to', 'year',
+        ]));
+
+        $requests = $this->requestService->getAllRequests($filters, 10000);
+
+        $export = new VacationRequestsExport($requests->getCollection());
+
+        return $this->downloadExcel($export->build(), 'vacation-requests');
     }
 }

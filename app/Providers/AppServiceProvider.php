@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Services\ExcelExportService;
 use App\Services\ZKTecoPythonBridgeService;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\ServiceProvider;
@@ -15,6 +16,10 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->app->singleton(ZKTecoPythonBridgeService::class, function () {
             return new ZKTecoPythonBridgeService;
+        });
+
+        $this->app->singleton(ExcelExportService::class, function () {
+            return new ExcelExportService;
         });
     }
 

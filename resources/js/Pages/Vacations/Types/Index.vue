@@ -27,15 +27,7 @@ const columns = computed(() => [
 ]);
 
 function onSearch(value) {
-    router.get(route('vacations.types.index'), { ...props.filters, search: value }, { preserveState: true, preserveScroll: true, replace: true });
-}
-
-function onPageChange(page) {
-    router.get(route('vacations.types.index'), { ...props.filters, page }, { preserveState: true, preserveScroll: true, replace: true });
-}
-
-function onPerPageChange(perPage) {
-    router.get(route('vacations.types.index'), { ...props.filters, per_page: perPage, page: 1 }, { preserveState: true, preserveScroll: true, replace: true });
+    router.get(route('vacations.types.index'), { ...props.filters, search: value }, { preserveState: true, preserveScroll: true, replace: true, only: ['types'] });
 }
 
 function confirmDelete(type) {
@@ -66,10 +58,11 @@ const flashSuccess = computed(() => page.props.flash?.success);
         <DataTable
             :columns="columns"
             :data="types"
+            :filters="filters"
+            :route-name="'vacations.types.index'"
+            :only="['types']"
             storage-key="vacation-types"
             @search="onSearch"
-            @page-change="onPageChange"
-            @per-page-change="onPerPageChange"
         >
             <template #cell-is_paid="{ row }">
                 <Badge v-if="row.is_paid" :text="t('common.yes')" variant="active" />

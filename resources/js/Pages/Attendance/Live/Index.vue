@@ -103,6 +103,10 @@ function runDailyScan() {
     });
 }
 
+function exportLive() {
+    window.location.href = route('attendance.live.export', { date: date.value });
+}
+
 onMounted(() => {
     liveData.value = props.live || [];
     missingData.value = props.missing || [];
@@ -126,6 +130,9 @@ onMounted(() => {
                         <span class="w-2 h-2 rounded-full" :class="isConnected ? 'bg-mistral-success animate-pulse' : 'bg-mistral-danger'"></span>
                         {{ isConnected ? 'Live' : 'Offline' }}
                     </span>
+                    <Button variant="secondary" icon="fas fa-download" @click="exportLive">
+                        {{ t('common.export') }}
+                    </Button>
                     <Button variant="primary" icon="fas fa-bolt" @click="runDailyScan">
                         {{ t('attendance.actions.daily_scan') }}
                     </Button>

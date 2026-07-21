@@ -3,9 +3,11 @@
 namespace Modules\Attendance\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Traits\ExcelExportable;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
+use Modules\Attendance\Exports\AttendanceReportExport;
 use Modules\Attendance\Services\AttendanceReportService;
 use Modules\Users\Services\UserService;
 
@@ -15,6 +17,8 @@ use Modules\Users\Services\UserService;
  */
 class ReportsController extends Controller
 {
+    use ExcelExportable;
+
     /**
      * Create a new controller instance.
      */
@@ -67,6 +71,30 @@ class ReportsController extends Controller
             'report' => fn () => $report,
             'overtime' => fn () => $overtime,
         ]);
+    }
+
+    /**
+     * Export the ad-hoc attendance report to Excel.
+     */
+    public function export(Request $request)
+    {
+        $this->authorize('view-attendance');
+
+        $from = (string) $request->input('from', now()->subDays(7)->toDateString());
+        $to = (string) $request->input('to', now()->toDateString());
+        $date = (string) $request->input('date', now()->toDateString());
+
+        $export = new AttendanceReportExport(
+            fromDate: $from,
+            toDate: $to,
+            date: $date,
+            kpis: $this->reportService->getDailyKpis($date),
+            trend: $this->reportService->getDailyTrend($from, $to),
+            departmentComparison: $this->reportService->getDepartmentComparison($from, $to),
+            topLate: $this->reportService->getTopLateEmployees($from, $to, 10),
+        );
+
+        return $this->downloadExcel($export->build(), 'attendance-report-'.$from.'_'.$to);
     }
 
     /**

@@ -28,6 +28,7 @@ Route::middleware(['auth'])->group(function () {
     // Vacation types (catalog)
     // ----------------------------------------------------------------
     Route::middleware('permission:view-vacation-types')->prefix('vacations/types')->name('vacations.types.')->group(function () {
+        Route::get('/export/excel', [VacationTypesController::class, 'export'])->name('export');
         Route::get('/', [VacationTypesController::class, 'index'])->name('index');
         Route::get('create', [VacationTypesController::class, 'create'])
             ->middleware('permission:create-vacation-types')
@@ -51,6 +52,7 @@ Route::middleware(['auth'])->group(function () {
     // Vacation requests (HR / manager view)
     // ----------------------------------------------------------------
     Route::middleware('permission:view-vacation-requests')->prefix('vacations/requests')->name('vacations.requests.')->group(function () {
+        Route::get('/export/excel', [VacationRequestsController::class, 'export'])->name('export');
         Route::get('/', [VacationRequestsController::class, 'index'])->name('index');
         Route::get('create', [VacationRequestsController::class, 'create'])
             ->middleware('permission:create-vacation-requests')
@@ -103,6 +105,7 @@ Route::middleware(['auth'])->group(function () {
     // Holidays
     // ----------------------------------------------------------------
     Route::middleware('permission:view-holidays')->prefix('holidays')->name('holidays.')->group(function () {
+        Route::get('/export/excel', [HolidaysController::class, 'export'])->name('export');
         Route::get('/', [HolidaysController::class, 'index'])->name('index');
         Route::get('create', [HolidaysController::class, 'create'])
             ->middleware('permission:create-holidays')

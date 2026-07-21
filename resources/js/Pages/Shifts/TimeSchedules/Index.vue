@@ -37,23 +37,7 @@ function onSearch(value) {
     router.get(
         route('time-schedules.index'),
         { ...props.filters, search: value },
-        { preserveState: true, preserveScroll: true, replace: true },
-    );
-}
-
-function onPageChange(page) {
-    router.get(
-        route('time-schedules.index'),
-        { ...props.filters, page },
-        { preserveState: true, preserveScroll: true, replace: true },
-    );
-}
-
-function onPerPageChange(perPage) {
-    router.get(
-        route('time-schedules.index'),
-        { ...props.filters, per_page: perPage },
-        { preserveState: true, preserveScroll: true, replace: true },
+        { preserveState: true, preserveScroll: true, replace: true, only: ['schedules'] },
     );
 }
 
@@ -103,10 +87,11 @@ const flashError = computed(() => page.props.flash?.error);
         <DataTable
             :columns="columns"
             :data="schedules"
+            :filters="filters"
+            :route-name="'time-schedules.index'"
+            :only="['schedules']"
             storage-key="time-schedules"
             @search="onSearch"
-            @page-change="onPageChange"
-            @per-page-change="onPerPageChange"
         >
             <template #cell-in_time="{ row }">
                 <span dir="ltr">{{ row.in_time ? String(row.in_time).slice(0, 5) : '—' }}</span>

@@ -46,7 +46,7 @@ const permissionGroups = computed(() => {
 })
 
 function onSearch(value) {
-    router.get(route('roles.index'), { search: value }, { preserveState: true, preserveScroll: true })
+    router.get(route('roles.index'), { ...props.filters, search: value, page: 1 }, { preserveState: true, preserveScroll: true, replace: true })
 }
 
 const openCreate = () => {
@@ -104,6 +104,9 @@ const executeDelete = () => {
         <DataTable
             :columns="columns"
             :data="roles"
+            :filters="filters"
+            :route-name="'roles.index'"
+            :only="['roles']"
             storage-key="roles"
             @search="onSearch"
         >

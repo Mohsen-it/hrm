@@ -3,10 +3,12 @@
 namespace Modules\Attendance\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Traits\ExcelExportable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
+use Modules\Attendance\Exports\RawLogsExport;
 use Modules\Attendance\Http\Requests\StoreRawAttendanceLogRequest;
 use Modules\Attendance\Http\Resources\RawAttendanceLogResource;
 use Modules\Attendance\Jobs\ProcessRawLogsChunk;
@@ -21,6 +23,8 @@ use Modules\Users\Services\UserService;
  */
 class RawLogsController extends Controller
 {
+    use ExcelExportable;
+
     /**
      * Create a new controller instance.
      */
@@ -133,6 +137,26 @@ class RawLogsController extends Controller
 
         return redirect()->route('attendance.raw-logs.index')
             ->with('success', __('attendance.raw_log_deleted_successfully'));
+    }
+
+    /**
+     * Export raw attendance logs to Excel.
+     */
+    public function export(Request $request)
+    {
+        $this->authorize('view-attendance');
+
+        $filters = $this->cleanFilters($request->only([
+            'search', 'user_id', 'device_id', 'device_user_id',
+            'punch_type', 'verify_type', 'source', 'processed',
+            'from', 'to',
+        ]));
+
+        $logs = $this->rawLogService->getAllLogs($filters, 10000);
+
+        $export = new RawLogsExport($logs->getCollection());
+
+        return $this->downloadExcel($export->build(), 'attendance-raw-logs');
     }
 
     /**

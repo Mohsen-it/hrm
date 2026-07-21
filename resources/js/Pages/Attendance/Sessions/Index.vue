@@ -85,7 +85,7 @@ function onSearch(value) {
     router.get(
         route('attendance.sessions.index'),
         { ...props.filters, search: value },
-        { preserveState: true, preserveScroll: true, replace: true },
+        { preserveState: true, preserveScroll: true, replace: true, only: ['sessions'] },
     );
 }
 
@@ -102,23 +102,8 @@ function onFilterChange(filters) {
         preserveState: true,
         preserveScroll: true,
         replace: true,
+        only: ['sessions'],
     });
-}
-
-function onPageChange(page) {
-    router.get(
-        route('attendance.sessions.index'),
-        { ...props.filters, page },
-        { preserveState: true, preserveScroll: true, replace: true },
-    );
-}
-
-function onPerPageChange(perPage) {
-    router.get(
-        route('attendance.sessions.index'),
-        { ...props.filters, per_page: perPage },
-        { preserveState: true, preserveScroll: true, replace: true },
-    );
 }
 
 function confirmDelete(session) {
@@ -156,12 +141,13 @@ const flashError = computed(() => page.props.flash?.error);
         <DataTable
             :columns="columns"
             :data="sessions"
+            :filters="filters"
+            :route-name="'attendance.sessions.index'"
+            :only="['sessions']"
             :empty-title="t('attendance.messages.empty_sessions')"
             storage-key="attendance-sessions"
             @search="onSearch"
             @filter-change="onFilterChange"
-            @page-change="onPageChange"
-            @per-page-change="onPerPageChange"
         >
             <template #cell-user="{ row }">
                 <div>

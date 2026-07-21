@@ -3,6 +3,7 @@
 namespace Modules\Shifts\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Traits\ExcelExportable;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -19,6 +20,8 @@ use Modules\Shifts\Services\TimeScheduleService;
 
 class ShiftCategoriesController extends Controller
 {
+    use ExcelExportable;
+
     public function __construct(
         private ShiftCategoryService $shiftCategoryService,
         private TimeScheduleService $timeScheduleService,
@@ -199,5 +202,39 @@ class ShiftCategoriesController extends Controller
 
         return redirect()->route('shift-categories.index')
             ->with('success', __('shifts.category_deleted'));
+    }
+
+    /**
+     * Export shift categories to Excel.
+     */
+    public function export(Request $request)
+    {
+        $this->authorize('view-shift-categories');
+
+        $categories = $this->shiftCategoryService->getAll(
+            $request->only(['search', 'type', 'company_id'])
+        );
+
+        $headers = ['#', 'اسم الفئة', 'النوع', 'أيام العمل', 'أيام الراحة', 'الشركة', 'الوصف'];
+        $columns = [
+            'index' => ['key' => 'id', 'type' => 'integer', 'width' => 8],
+            'name' => ['key' => 'name', 'type' => 'string', 'width' => 25],
+            'type' => [
+                'key' => 'type',
+                'type' => 'status',
+                'width' => 15,
+                'map' => [
+                    'cyclic' => 'دوري',
+                    'weekly' => 'أسبوعي',
+                    'hours' => 'ساعات',
+                ],
+            ],
+            'work_days' => ['key' => 'work_days', 'type' => 'integer', 'width' => 12],
+            'rest_days' => ['key' => 'rest_days', 'type' => 'integer', 'width' => 12],
+            'company' => ['key' => 'company.company_name', 'type' => 'string', 'width' => 25],
+            'description' => ['key' => 'description', 'type' => 'string', 'width' => 35],
+        ];
+
+        return $this->quickExcelExport('فئات الورديات', $headers, $categories->getCollection(), $columns, 'shift-categories');
     }
 }

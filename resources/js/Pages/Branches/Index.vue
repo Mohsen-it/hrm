@@ -30,19 +30,11 @@ const columns = computed(() => [
 ]);
 
 function onSearch(value) {
-    router.get(route('branches.index'), { ...props.filters, search: value }, { preserveState: true, preserveScroll: true, replace: true });
+    router.get(route('branches.index'), { ...props.filters, search: value }, { preserveState: true, preserveScroll: true, replace: true, only: ['branches'] });
 }
 
 function onFilterChange(filters) {
-    router.get(route('branches.index'), { ...props.filters, ...filters }, { preserveState: true, preserveScroll: true, replace: true });
-}
-
-function onPageChange(page) {
-    router.get(route('branches.index'), { ...props.filters, page }, { preserveState: true, preserveScroll: true, replace: true });
-}
-
-function onPerPageChange(perPage) {
-    router.get(route('branches.index'), { ...props.filters, per_page: perPage }, { preserveState: true, preserveScroll: true, replace: true });
+    router.get(route('branches.index'), { ...props.filters, ...filters }, { preserveState: true, preserveScroll: true, replace: true, only: ['branches'] });
 }
 
 function confirmDelete(branch) {
@@ -75,11 +67,12 @@ const flashError = computed(() => page.props.flash?.error);
         <DataTable
             :columns="columns"
             :data="branches"
+            :filters="filters"
+            :route-name="'branches.index'"
+            :only="['branches']"
             storage-key="branches"
             @search="onSearch"
             @filter-change="onFilterChange"
-            @page-change="onPageChange"
-            @per-page-change="onPerPageChange"
         >
             <template #cell-company="{ row }">
                 <span>{{ row.company?.company_name || '—' }}</span>

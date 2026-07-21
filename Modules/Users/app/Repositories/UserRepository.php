@@ -18,11 +18,8 @@ class UserRepository
         'company',
         'branch',
         'department',
-        'position',
-        'grade',
         'subordination',
         'shift',
-        'manager',
     ];
 
     /**
@@ -42,7 +39,15 @@ class UserRepository
     public function getAll(array $filters = [], int $perPage = 20): LengthAwarePaginator
     {
         return $this->applyFilters(
-            $this->query()->with($this->defaultWith),
+            $this->query()
+                ->select(['id', 'employee_code', 'first_name', 'last_name', 'avatar', 'email', 'company_id', 'branch_id', 'department_id', 'subordination_id', 'shift_id', 'status', 'created_at'])
+                ->with([
+                    'company:id,company_name',
+                    'branch:id,branch_name',
+                    'department:id,department_name',
+                    'subordination:id,code,name_ar,name_en',
+                    'shift:id,shift_name',
+                ]),
             $filters
         )
             ->latest()
@@ -56,7 +61,14 @@ class UserRepository
     {
         return $this->query()
             ->with([
-                ...$this->defaultWith,
+                'company',
+                'branch',
+                'department',
+                'position',
+                'grade',
+                'subordination',
+                'shift',
+                'manager',
                 'shifts',
                 'roles',
                 'permissions',

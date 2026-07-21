@@ -30,23 +30,7 @@ function onSearch(value) {
     router.get(
         route('fingerprint-device-types.index'),
         { ...props.filters, search: value },
-        { preserveState: true, preserveScroll: true, replace: true },
-    );
-}
-
-function onPageChange(page) {
-    router.get(
-        route('fingerprint-device-types.index'),
-        { ...props.filters, page },
-        { preserveState: true, preserveScroll: true, replace: true },
-    );
-}
-
-function onPerPageChange(perPage) {
-    router.get(
-        route('fingerprint-device-types.index'),
-        { ...props.filters, per_page: perPage },
-        { preserveState: true, preserveScroll: true, replace: true },
+        { preserveState: true, preserveScroll: true, replace: true, only: ['deviceTypes'] },
     );
 }
 
@@ -83,12 +67,13 @@ const flashSuccess = computed(() => page.props.flash?.success);
         <DataTable
             :columns="columns"
             :data="deviceTypes"
+            :filters="filters"
+            :route-name="'fingerprint-device-types.index'"
+            :only="['deviceTypes']"
             :empty-title="t('fingerprint_devices.no_types_title')"
             :empty-description="t('fingerprint_devices.no_types_description')"
             storage-key="fingerprint-device-types"
             @search="onSearch"
-            @page-change="onPageChange"
-            @per-page-change="onPerPageChange"
         >
             <template #cell-is_active="{ row }">
                 <Badge

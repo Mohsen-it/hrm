@@ -62,7 +62,7 @@ function onSearch(value) {
     router.get(
         route('attendance.raw-logs.index'),
         { ...props.filters, search: value },
-        { preserveState: true, preserveScroll: true, replace: true },
+        { preserveState: true, preserveScroll: true, replace: true, only: ['logs'] },
     );
 }
 
@@ -79,23 +79,8 @@ function onFilterChange(filters) {
         preserveState: true,
         preserveScroll: true,
         replace: true,
+        only: ['logs'],
     });
-}
-
-function onPageChange(page) {
-    router.get(
-        route('attendance.raw-logs.index'),
-        { ...props.filters, page },
-        { preserveState: true, preserveScroll: true, replace: true },
-    );
-}
-
-function onPerPageChange(perPage) {
-    router.get(
-        route('attendance.raw-logs.index'),
-        { ...props.filters, per_page: perPage },
-        { preserveState: true, preserveScroll: true, replace: true },
-    );
 }
 
 function confirmDelete(log) {
@@ -159,12 +144,13 @@ const flashSuccess = computed(() => page.props.flash?.success);
         <DataTable
             :columns="columns"
             :data="logs"
+            :filters="filters"
+            :route-name="'attendance.raw-logs.index'"
+            :only="['logs']"
             :empty-title="t('attendance.messages.empty_logs')"
             storage-key="attendance-raw-logs"
             @search="onSearch"
             @filter-change="onFilterChange"
-            @page-change="onPageChange"
-            @per-page-change="onPerPageChange"
         >
             <template #cell-punch_time="{ row }">
                 <span dir="ltr" class="text-[12px]">{{ row.punch_time }}</span>

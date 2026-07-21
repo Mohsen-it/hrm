@@ -41,19 +41,11 @@ const columns = computed(() => [
 ]);
 
 function onSearch(value) {
-    router.get(route('holidays.index'), { ...props.filters, search: value }, { preserveState: true, preserveScroll: true, replace: true });
+    router.get(route('holidays.index'), { ...props.filters, search: value }, { preserveState: true, preserveScroll: true, replace: true, only: ['holidays'] });
 }
 
 function onFilterChange(filters) {
-    router.get(route('holidays.index'), { ...props.filters, ...filters }, { preserveState: true, preserveScroll: true, replace: true });
-}
-
-function onPageChange(page) {
-    router.get(route('holidays.index'), { ...props.filters, page }, { preserveState: true, preserveScroll: true, replace: true });
-}
-
-function onPerPageChange(perPage) {
-    router.get(route('holidays.index'), { ...props.filters, per_page: perPage }, { preserveState: true, preserveScroll: true, replace: true });
+    router.get(route('holidays.index'), { ...props.filters, ...filters }, { preserveState: true, preserveScroll: true, replace: true, only: ['holidays'] });
 }
 
 function confirmDelete(holiday) {
@@ -110,11 +102,12 @@ const flashSuccess = computed(() => page.props.flash?.success);
         <DataTable
             :columns="columns"
             :data="holidays"
+            :filters="filters"
+            :route-name="'holidays.index'"
+            :only="['holidays']"
             storage-key="holidays"
             @search="onSearch"
             @filter-change="onFilterChange"
-            @page-change="onPageChange"
-            @per-page-change="onPerPageChange"
         >
             <template #cell-is_recurring="{ row }">
                 <Badge v-if="row.is_recurring" :text="t('holidays.yes_recurring')" variant="info" />

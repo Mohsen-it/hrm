@@ -3,10 +3,12 @@
 namespace Modules\Attendance\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Traits\ExcelExportable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
+use Modules\Attendance\Exports\DailySummariesExport;
 use Modules\Attendance\Http\Requests\UpdateDailyAttendanceSummaryRequest;
 use Modules\Attendance\Http\Resources\DailyAttendanceSummaryResource;
 use Modules\Attendance\Jobs\RecalculateDailySummariesChunk;
@@ -23,6 +25,8 @@ use Modules\Users\Services\UserService;
  */
 class DailySummariesController extends Controller
 {
+    use ExcelExportable;
+
     /**
      * Create a new controller instance.
      */
@@ -132,6 +136,28 @@ class DailySummariesController extends Controller
 
         return redirect()->back()
             ->with('success', __('attendance.recalculate_range_dispatched'));
+    }
+
+    /**
+     * Export daily attendance summaries to Excel.
+     */
+    public function export(Request $request)
+    {
+        $this->authorize('view-attendance');
+
+        $filters = $this->cleanFilters($request->only([
+            'search', 'user_id', 'status', 'session_type', 'date', 'from', 'to', 'is_complete',
+        ]));
+
+        $from = (string) ($filters['from'] ?? now()->subDays(30)->toDateString());
+        $to = (string) ($filters['to'] ?? now()->toDateString());
+        $userId = isset($filters['user_id']) ? (int) $filters['user_id'] : null;
+
+        $summaries = $this->summaryService->getForDateRange($from, $to, $userId);
+
+        $export = new DailySummariesExport($summaries, $from, $to);
+
+        return $this->downloadExcel($export->build(), 'attendance-daily-summaries');
     }
 
     /**

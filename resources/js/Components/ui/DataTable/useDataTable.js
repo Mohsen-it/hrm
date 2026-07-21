@@ -53,6 +53,59 @@ export function useDataTable({
     const focusedRowIndex = ref(-1);
     const savedFilters = ref(loadStorage(`${STORAGE_KEY_SAVED_FILTERS}-${storageKey}`, []));
 
+    const isNavigating = ref(false);
+    const isPageChanging = ref(false);
+    const isPerPageChanging = ref(false);
+    const isSearchChanging = ref(false);
+    const isFilterChanging = ref(false);
+
+    let navTimer = null;
+    const handleInertiaStart = (event) => {
+        if (navTimer) clearTimeout(navTimer);
+        navTimer = setTimeout(() => {
+            isNavigating.value = true;
+            const url = event?.detail?.visit?.url;
+            if (url) {
+                try {
+                    const params = new URL(url, window.location.origin).searchParams;
+                    if (params.has('page')) isPageChanging.value = true;
+                    if (params.has('per_page')) isPerPageChanging.value = true;
+                    if (params.has('search')) isSearchChanging.value = true;
+                    const hasOtherFilter = Array.from(params.keys()).some(
+                        (k) => !['page', 'per_page', 'search'].includes(k),
+                    );
+                    if (hasOtherFilter) isFilterChanging.value = true;
+                } catch {}
+            }
+        }, 60);
+    };
+
+    const handleInertiaFinish = () => {
+        if (navTimer) clearTimeout(navTimer);
+        navTimer = setTimeout(() => {
+            isNavigating.value = false;
+            isPageChanging.value = false;
+            isPerPageChanging.value = false;
+            isSearchChanging.value = false;
+            isFilterChanging.value = false;
+        }, 80);
+    };
+
+    onMounted(() => {
+        if (typeof window !== 'undefined') {
+            window.addEventListener('inertia:start', handleInertiaStart);
+            window.addEventListener('inertia:finish', handleInertiaFinish);
+        }
+    });
+
+    onUnmounted(() => {
+        if (typeof window !== 'undefined') {
+            window.removeEventListener('inertia:start', handleInertiaStart);
+            window.removeEventListener('inertia:finish', handleInertiaFinish);
+        }
+        if (navTimer) clearTimeout(navTimer);
+    });
+
     function setDensity(d) {
         density.value = d;
         saveStorage(STORAGE_KEY_DENSITY, d);
@@ -216,6 +269,11 @@ export function useDataTable({
         densityClass,
         hasActiveFilters,
         activeFilterCount,
+        isNavigating,
+        isPageChanging,
+        isPerPageChanging,
+        isSearchChanging,
+        isFilterChanging,
         setDensity,
         toggleColumn,
         toggleSort,

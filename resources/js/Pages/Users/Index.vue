@@ -77,8 +77,8 @@ const allSelected = computed(() => {
 function onSearch(value) {
     router.get(
         route('users.index'),
-        { ...props.filters, search: value },
-        { preserveState: true, preserveScroll: true, replace: true },
+        { ...props.filters, search: value, page: 1 },
+        { preserveState: true, preserveScroll: true, replace: true, only: ['users'] },
     );
 }
 
@@ -93,7 +93,12 @@ function applyFilter(key, value) {
         preserveState: true,
         preserveScroll: true,
         replace: true,
+        only: ['users'],
     });
+}
+
+function onExport() {
+    window.location.href = route('users.export', props.filters);
 }
 
 function confirmDelete(user) {
@@ -236,7 +241,8 @@ const flashError = computed(() => page.props.flash?.error);
             </div>
         </Card>
 
-        <DataTable :columns="columns" :data="users">
+        <DataTable :columns="columns" :data="users" :filters="filters" :route-name="'users.index'" @search="onSearch" @export="onExport">
+            :only="['users']"
             <template #cell-select="{ row }">
                 <div class="flex justify-center" @click.stop>
                     <FormCheckbox

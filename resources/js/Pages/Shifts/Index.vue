@@ -52,7 +52,7 @@ function onSearch(value) {
     router.get(
         route('shifts.index'),
         { ...props.filters, search: value },
-        { preserveState: true, preserveScroll: true, replace: true },
+        { preserveState: true, preserveScroll: true, replace: true, only: ['shifts'] },
     );
 }
 
@@ -66,23 +66,7 @@ function onFilterChange(key, value) {
     router.get(
         route('shifts.index'),
         next,
-        { preserveState: true, preserveScroll: true, replace: true },
-    );
-}
-
-function onPageChange(page) {
-    router.get(
-        route('shifts.index'),
-        { ...props.filters, page },
-        { preserveState: true, preserveScroll: true, replace: true },
-    );
-}
-
-function onPerPageChange(perPage) {
-    router.get(
-        route('shifts.index'),
-        { ...props.filters, per_page: perPage },
-        { preserveState: true, preserveScroll: true, replace: true },
+        { preserveState: true, preserveScroll: true, replace: true, only: ['shifts'] },
     );
 }
 
@@ -121,11 +105,12 @@ const flashError = computed(() => page.props.flash?.error);
         <DataTable
             :columns="columns"
             :data="shifts"
+            :filters="filters"
+            :route-name="'shifts.index'"
+            :only="['shifts']"
             storage-key="shifts"
             @search="onSearch"
             @filter-change="onFilterChange"
-            @page-change="onPageChange"
-            @per-page-change="onPerPageChange"
         >
             <template #cell-company="{ row }">
                 <span>{{ row.company?.company_name || '—' }}</span>

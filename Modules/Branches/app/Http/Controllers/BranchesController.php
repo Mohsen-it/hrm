@@ -3,10 +3,12 @@
 namespace Modules\Branches\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Traits\ExcelExportable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
+use Modules\Branches\Exports\BranchesExport;
 use Modules\Branches\Http\Requests\StoreBranchRequest;
 use Modules\Branches\Http\Requests\UpdateBranchRequest;
 use Modules\Branches\Http\Resources\BranchResource;
@@ -15,6 +17,8 @@ use Modules\Companies\Services\CompanyService;
 
 class BranchesController extends Controller
 {
+    use ExcelExportable;
+
     public function __construct(
         private BranchService $branchService,
         private CompanyService $companyService
@@ -135,5 +139,22 @@ class BranchesController extends Controller
 
         return redirect()->route('branches.index')
             ->with('success', __('branches.deleted_successfully'));
+    }
+
+    /**
+     * Export branches to Excel.
+     */
+    public function export(Request $request)
+    {
+        $this->authorize('view-branches');
+
+        $branches = $this->branchService->getAllBranches(
+            $request->only(['search', 'status', 'company_id', 'is_main']),
+            10000
+        );
+
+        $export = new BranchesExport($branches->getCollection());
+
+        return $this->downloadExcel($export->build(), 'branches');
     }
 }

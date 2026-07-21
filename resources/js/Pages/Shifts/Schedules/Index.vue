@@ -103,22 +103,6 @@ function onFilterChange(filters) {
     router.get(route('schedules.index'), next, { preserveState: true, replace: true });
 }
 
-function onPageChange(page) {
-    router.get(
-        route('schedules.index'),
-        { ...props.filters, page },
-        { preserveState: true, preserveScroll: true, replace: true },
-    );
-}
-
-function onPerPageChange(perPage) {
-    router.get(
-        route('schedules.index'),
-        { ...props.filters, per_page: perPage },
-        { preserveState: true, preserveScroll: true, replace: true },
-    );
-}
-
 function confirmPublish(period) {
     selectedPeriod.value = period;
     showPublishDialog.value = true;
@@ -166,10 +150,11 @@ const flashError = computed(() => page.props.flash?.error);
         <DataTable
             :columns="columns"
             :data="periods"
+            :filters="filters"
+            :route-name="'schedules.index'"
+            :only="['periods']"
             storage-key="schedules"
             @filter-change="onFilterChange"
-            @page-change="onPageChange"
-            @per-page-change="onPerPageChange"
         >
             <template #cell-month="{ row }">
                 <span class="text-[13px]">{{ formatMonth(row.month) }}</span>

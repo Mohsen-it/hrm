@@ -42,15 +42,7 @@ const columns = computed(() => [
 ]);
 
 function onFilterChange(key, value) {
-    router.get(route('vacations.my.index'), { ...props.filters, [key]: value, page: 1 }, { preserveState: true, preserveScroll: true, replace: true });
-}
-
-function onPageChange(page) {
-    router.get(route('vacations.my.index'), { ...props.filters, page }, { preserveState: true, preserveScroll: true, replace: true });
-}
-
-function onPerPageChange(perPage) {
-    router.get(route('vacations.my.index'), { ...props.filters, per_page: perPage, page: 1 }, { preserveState: true, preserveScroll: true, replace: true });
+    router.get(route('vacations.my.index'), { ...props.filters, [key]: value, page: 1 }, { preserveState: true, preserveScroll: true, replace: true, only: ['requests'] });
 }
 
 const flashSuccess = computed(() => page.props.flash?.success);
@@ -87,10 +79,11 @@ const flashSuccess = computed(() => page.props.flash?.success);
         <DataTable
             :columns="columns"
             :data="requests"
+            :filters="filters"
+            :route-name="'vacations.my.index'"
+            :only="['requests']"
             storage-key="my-vacations"
             @filter-change="onFilterChange"
-            @page-change="onPageChange"
-            @per-page-change="onPerPageChange"
         >
             <template #cell-status="{ row }">
                 <Badge :text="t('vacations.' + row.status)" :variant="statusVariant(row.status)" />

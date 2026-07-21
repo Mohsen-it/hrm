@@ -27,23 +27,7 @@ function onSearch(value) {
     router.get(
         route('attendance.group-schedules.index'),
         { ...props.filters, search: value },
-        { preserveState: true, preserveScroll: true, replace: true },
-    );
-}
-
-function handlePageChange(page) {
-    router.get(
-        route('attendance.group-schedules.index'),
-        { ...props.filters, page },
-        { preserveState: true, preserveScroll: true, replace: true },
-    );
-}
-
-function handlePerPageChange(perPage) {
-    router.get(
-        route('attendance.group-schedules.index'),
-        { ...props.filters, per_page: perPage },
-        { preserveState: true, preserveScroll: true, replace: true },
+        { preserveState: true, preserveScroll: true, replace: true, only: ['schedules'] },
     );
 }
 
@@ -79,10 +63,11 @@ const deleteSchedule = () => {
             <DataTable
                 :columns="columns"
                 :data="schedules"
+                :filters="filters"
+                :route-name="'attendance.group-schedules.index'"
+            :only="['schedules']"
                 storage-key="group-schedules"
                 @search="onSearch"
-                @page-change="handlePageChange"
-                @per-page-change="handlePerPageChange"
             >
                 <template #cell-group="{ row }">
                     <span class="text-[13px] font-medium">{{ row.group?.name }}</span>

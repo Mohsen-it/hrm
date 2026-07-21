@@ -28,19 +28,15 @@ const columns = computed(() => [
 ]);
 
 function onSearch(value) {
-    router.get(route('companies.index'), { ...props.filters, search: value }, { preserveState: true, preserveScroll: true, replace: true });
+    router.get(route('companies.index'), { ...props.filters, search: value }, { preserveState: true, preserveScroll: true, replace: true, only: ['companies'] });
+}
+
+function onExport() {
+    window.location.href = route('companies.export', props.filters);
 }
 
 function onFilterChange(filters) {
-    router.get(route('companies.index'), { ...props.filters, ...filters }, { preserveState: true, preserveScroll: true, replace: true });
-}
-
-function onPageChange(page) {
-    router.get(route('companies.index'), { ...props.filters, page }, { preserveState: true, preserveScroll: true, replace: true });
-}
-
-function onPerPageChange(perPage) {
-    router.get(route('companies.index'), { ...props.filters, per_page: perPage }, { preserveState: true, preserveScroll: true, replace: true });
+    router.get(route('companies.index'), { ...props.filters, ...filters }, { preserveState: true, preserveScroll: true, replace: true, only: ['companies'] });
 }
 
 function confirmDelete(company) {
@@ -73,11 +69,13 @@ const flashError = computed(() => page.props.flash?.error);
         <DataTable
             :columns="columns"
             :data="companies"
+            :filters="filters"
+            :route-name="'companies.index'"
+            :only="['companies']"
             storage-key="companies"
             @search="onSearch"
             @filter-change="onFilterChange"
-            @page-change="onPageChange"
-            @per-page-change="onPerPageChange"
+            @export="onExport"
         >
             <template #cell-is_default="{ row }">
                 <Badge v-if="row.is_default" :text="t('common.yes')" variant="info" />

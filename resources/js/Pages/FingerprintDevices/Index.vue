@@ -97,7 +97,7 @@ function onSearch(value) {
     router.get(
         route('fingerprint-devices.index'),
         { ...props.filters, search: value },
-        { preserveState: true, preserveScroll: true, replace: true },
+        { preserveState: true, preserveScroll: true, replace: true, only: ['devices'] },
     );
 }
 
@@ -111,23 +111,7 @@ function onFilterChange(filters) {
     router.get(
         route('fingerprint-devices.index'),
         payload,
-        { preserveState: true, preserveScroll: true, replace: true },
-    );
-}
-
-function onPageChange(page) {
-    router.get(
-        route('fingerprint-devices.index'),
-        { ...props.filters, page },
-        { preserveState: true, preserveScroll: true, replace: true },
-    );
-}
-
-function onPerPageChange(perPage) {
-    router.get(
-        route('fingerprint-devices.index'),
-        { ...props.filters, per_page: perPage },
-        { preserveState: true, preserveScroll: true, replace: true },
+        { preserveState: true, preserveScroll: true, replace: true, only: ['devices'] },
     );
 }
 
@@ -210,13 +194,14 @@ async function syncAllDevices() {
         <DataTable
             :columns="columns"
             :data="devices"
+            :filters="filters"
+            :route-name="'fingerprint-devices.index'"
+            :only="['devices']"
             :empty-title="t('fingerprint_devices.no_devices_title')"
             :empty-description="t('fingerprint_devices.no_devices_description')"
             storage-key="fingerprint-devices"
             @search="onSearch"
             @filter-change="onFilterChange"
-            @page-change="onPageChange"
-            @per-page-change="onPerPageChange"
         >
             <template #cell-device_type="{ row }">
                 <span v-if="row.device_type">{{ row.device_type.name }}</span>

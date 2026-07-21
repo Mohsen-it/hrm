@@ -5,6 +5,7 @@ use Modules\Subordinations\Http\Controllers\SubordinationsController;
 
 Route::middleware(['auth'])->group(function () {
     Route::middleware('permission:view-subordinations')->group(function () {
+        Route::get('subordinations/export/excel', [SubordinationsController::class, 'export'])->name('subordinations.export');
         Route::get('subordinations', [SubordinationsController::class, 'index'])->name('subordinations.index');
         Route::get('subordinations/{subordination}', [SubordinationsController::class, 'show'])->name('subordinations.show');
     });

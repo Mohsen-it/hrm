@@ -3,6 +3,7 @@
 namespace Modules\Holidays\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Traits\ExcelExportable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -22,6 +23,8 @@ use Modules\Holidays\Services\HolidayService;
  */
 class HolidaysController extends Controller
 {
+    use ExcelExportable;
+
     /**
      * Create a new controller instance.
      */
@@ -239,5 +242,54 @@ class HolidaysController extends Controller
             $filters,
             fn ($v) => $v !== null && $v !== '' && $v !== [],
         );
+    }
+
+    /**
+     * Export holidays to Excel.
+     */
+    public function export(Request $request)
+    {
+        $this->authorize('view-holidays');
+
+        $holidays = $this->holidayService->getAllHolidays(
+            $this->cleanFilters($request->only([
+                'search', 'category', 'is_active', 'is_recurring', 'date', 'from', 'to', 'year',
+            ])),
+            10000
+        );
+
+        $headers = ['#', 'الاسم بالعربية', 'الاسم بالإنجليزية', 'الرمز', 'التصنيف', 'التاريخ', 'متكرر', 'مدفوع', 'نشط'];
+        $columns = [
+            'index' => ['key' => 'id', 'type' => 'integer', 'width' => 8],
+            'name_ar' => ['key' => 'name_ar', 'type' => 'string', 'width' => 25],
+            'name_en' => ['key' => 'name_en', 'type' => 'string', 'width' => 25],
+            'code' => ['key' => 'code', 'type' => 'string', 'width' => 15],
+            'category' => [
+                'key' => 'category',
+                'type' => 'status',
+                'width' => 15,
+                'map' => [
+                    'national' => 'وطني',
+                    'religious' => 'ديني',
+                    'official' => 'رسمي',
+                    'company' => 'شركة',
+                ],
+            ],
+            'date' => ['key' => 'date', 'type' => 'string', 'width' => 15],
+            'is_recurring' => ['key' => 'is_recurring', 'type' => 'boolean', 'width' => 10],
+            'is_paid' => ['key' => 'is_paid', 'type' => 'boolean', 'width' => 10],
+            'is_active' => [
+                'key' => 'is_active',
+                'type' => 'status',
+                'width' => 10,
+                'map' => [true => 'نشط', false => 'غير نشط'],
+                'status_color' => [
+                    true => ['text' => '16A34A', 'bg' => 'DCFCE7'],
+                    false => ['text' => 'DC2626', 'bg' => 'FEE2E2'],
+                ],
+            ],
+        ];
+
+        return $this->quickExcelExport('قائمة الإجازات', $headers, $holidays->getCollection(), $columns, 'holidays');
     }
 }

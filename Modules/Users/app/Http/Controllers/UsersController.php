@@ -3,6 +3,7 @@
 namespace Modules\Users\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Traits\ExcelExportable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -18,14 +19,18 @@ use Modules\Shifts\Services\ShiftService;
 use Modules\Subordinations\Services\SubordinationService;
 use Modules\Users\Http\Requests\StoreUserRequest;
 use Modules\Users\Http\Requests\UpdateUserRequest;
+use Modules\Users\Http\Resources\UserIndexResource;
 use Modules\Users\Http\Resources\UserResource;
 use Modules\Users\Models\User;
 use Modules\Users\Services\UserService;
+use Modules\Users\Exports\UsersExport;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 
 class UsersController extends Controller
 {
+    use ExcelExportable;
+
     public function __construct(
         private UserService $userService,
         private CompanyService $companyService,
@@ -54,15 +59,16 @@ class UsersController extends Controller
             'filters' => fn () => $request->only([
                 'search', 'company_id', 'branch_id', 'department_id',
                 'position_id', 'grade_id', 'subordination_id', 'shift_id', 'status',
-                'employment_type', 'role', 'is_active_employee',
+                'employment_type', 'role', 'is_active_employee', 'per_page',
             ]),
-            'users' => fn () => UserResource::collection(
+            'users' => fn () => UserIndexResource::collection(
                 $this->userService->getAllUsers(
                     $request->only([
                         'search', 'company_id', 'branch_id', 'department_id',
                         'position_id', 'grade_id', 'subordination_id', 'shift_id', 'status',
                         'employment_type', 'role', 'is_active_employee',
-                    ])
+                    ]),
+                    (int) $request->input('per_page', 20)
                 )
             ),
             'companies' => fn () => $this->companyService->getActiveCompanies()
@@ -382,5 +388,26 @@ class UsersController extends Controller
                 ->getCollection()
                 ->map(fn ($g) => ['id' => $g->id, 'name' => $g->name, 'code' => $g->code]),
         ];
+    }
+
+    /**
+     * Export users to Excel.
+     */
+    public function export(Request $request)
+    {
+        $this->authorize('view-users');
+
+        $users = $this->userService->getAllUsers(
+            $request->only([
+                'search', 'company_id', 'branch_id', 'department_id',
+                'position_id', 'grade_id', 'subordination_id', 'shift_id', 'status',
+                'employment_type', 'role', 'is_active_employee',
+            ]),
+            10000
+        );
+
+        $export = new UsersExport($users->getCollection());
+
+        return $this->downloadExcel($export->build(), 'users');
     }
 }

@@ -35,19 +35,11 @@ const columns = computed(() => [
 ]);
 
 function onSearch(value) {
-    router.get(route('subordinations.index'), { ...props.filters, search: value }, { preserveState: true, preserveScroll: true, replace: true });
+    router.get(route('subordinations.index'), { ...props.filters, search: value }, { preserveState: true, preserveScroll: true, replace: true, only: ['subordinations'] });
 }
 
 function onFilterChange(filters) {
-    router.get(route('subordinations.index'), { ...props.filters, ...filters }, { preserveState: true, preserveScroll: true, replace: true });
-}
-
-function onPageChange(pageNum) {
-    router.get(route('subordinations.index'), { ...props.filters, page: pageNum }, { preserveState: true, preserveScroll: true, replace: true });
-}
-
-function onPerPageChange(perPage) {
-    router.get(route('subordinations.index'), { ...props.filters, per_page: perPage }, { preserveState: true, preserveScroll: true, replace: true });
+    router.get(route('subordinations.index'), { ...props.filters, ...filters }, { preserveState: true, preserveScroll: true, replace: true, only: ['subordinations'] });
 }
 
 function confirmDelete(sub) {
@@ -89,11 +81,12 @@ const isEmpty = computed(() => !props.subordinations?.data?.length && !props.fil
             v-else
             :columns="columns"
             :data="subordinations"
+            :filters="filters"
+            :route-name="'subordinations.index'"
+            :only="['subordinations']"
             storage-key="subordinations"
             @search="onSearch"
             @filter-change="onFilterChange"
-            @page-change="onPageChange"
-            @per-page-change="onPerPageChange"
         >
             <template #cell-name_ar="{ row }">
                 <div class="font-medium text-mistral-ink">{{ displayName(row) }}</div>

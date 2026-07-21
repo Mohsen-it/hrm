@@ -3,6 +3,7 @@
 namespace Modules\FingerprintDevices\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Traits\ExcelExportable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -23,6 +24,8 @@ use Modules\Subordinations\Services\SubordinationService;
  */
 class FingerprintDevicesController extends Controller
 {
+    use ExcelExportable;
+
     public function __construct(
         private FingerprintDeviceService $deviceService,
         private FingerprintDeviceTypeService $typeService,
@@ -285,5 +288,51 @@ class FingerprintDevicesController extends Controller
         $preview = $this->previewService->preview($device, $options);
 
         return response()->json($preview);
+    }
+
+    /**
+     * Export fingerprint devices to Excel.
+     */
+    public function export(Request $request)
+    {
+        $this->authorize('view-fingerprint-devices');
+
+        $filters = $this->cleanFilters($request->only([
+            'search', 'status', 'device_type_id', 'branch_id', 'connection_type',
+        ]));
+
+        $devices = $this->deviceService->getAllDevices($filters, 10000);
+
+        $headers = ['#', 'اسم الجهاز', 'الرمز', 'النوع', 'الطراز', 'الفرع', 'الشركة', 'نوع الاتصال', 'العنوان IP', 'المنفذ', 'الحالة'];
+        $columns = [
+            'index' => ['key' => 'id', 'type' => 'integer', 'width' => 8],
+            'name' => ['key' => 'name', 'type' => 'string', 'width' => 25],
+            'code' => ['key' => 'device_code', 'type' => 'string', 'width' => 15],
+            'type' => ['key' => 'deviceType.name', 'type' => 'string', 'width' => 15],
+            'model' => ['key' => 'model', 'type' => 'string', 'width' => 15],
+            'branch' => ['key' => 'branch.branch_name', 'type' => 'string', 'width' => 20],
+            'company' => ['key' => 'company.company_name', 'type' => 'string', 'width' => 20],
+            'connection' => [
+                'key' => 'connection_type',
+                'type' => 'status',
+                'width' => 12,
+                'map' => ['tcp' => 'TCP', 'wifi' => 'WiFi', 'usb' => 'USB', 'serial' => 'تسلسلي'],
+            ],
+            'ip' => ['key' => 'ip_address', 'type' => 'string', 'width' => 15],
+            'port' => ['key' => 'port', 'type' => 'integer', 'width' => 8],
+            'status' => [
+                'key' => 'status',
+                'type' => 'status',
+                'width' => 12,
+                'map' => ['active' => 'نشط', 'inactive' => 'غير نشط', 'maintenance' => 'صيانة'],
+                'status_color' => [
+                    'active' => ['text' => '16A34A', 'bg' => 'DCFCE7'],
+                    'inactive' => ['text' => 'DC2626', 'bg' => 'FEE2E2'],
+                    'maintenance' => ['text' => 'D97706', 'bg' => 'FEF3C7'],
+                ],
+            ],
+        ];
+
+        return $this->quickExcelExport('قائمة أجهزة البصمة', $headers, $devices->getCollection(), $columns, 'fingerprint-devices');
     }
 }

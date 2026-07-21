@@ -46,19 +46,11 @@ const columns = computed(() => [
 ]);
 
 function onSearch(value) {
-    router.get(route('zones.index'), { ...props.filters, search: value }, { preserveState: true, preserveScroll: true, replace: true });
+    router.get(route('zones.index'), { ...props.filters, search: value }, { preserveState: true, preserveScroll: true, replace: true, only: ['zones'] });
 }
 
 function onFilterChange(filters) {
-    router.get(route('zones.index'), { ...props.filters, ...filters }, { preserveState: true, preserveScroll: true, replace: true });
-}
-
-function onPageChange(page) {
-    router.get(route('zones.index'), { ...props.filters, page }, { preserveState: true, preserveScroll: true, replace: true });
-}
-
-function onPerPageChange(perPage) {
-    router.get(route('zones.index'), { ...props.filters, per_page: perPage }, { preserveState: true, preserveScroll: true, replace: true });
+    router.get(route('zones.index'), { ...props.filters, ...filters }, { preserveState: true, preserveScroll: true, replace: true, only: ['zones'] });
 }
 
 function confirmDelete(zone) {
@@ -97,11 +89,12 @@ function zoneTypeLabel(value) {
         <DataTable
             :columns="columns"
             :data="zones"
+            :filters="filters"
+            :route-name="'zones.index'"
+            :only="['zones']"
             storage-key="zones"
             @search="onSearch"
             @filter-change="onFilterChange"
-            @page-change="onPageChange"
-            @per-page-change="onPerPageChange"
         >
             <template #cell-name_ar="{ row }">
                 <a :href="route('zones.show', row.id)" class="font-medium text-mistral-primary hover:underline">

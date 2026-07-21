@@ -18,6 +18,9 @@ Route::middleware(['auth', 'permission:view-shifts'])
 // Shift Categories (T040)
 Route::middleware(['auth', 'permission:view-shift-categories'])
     ->group(function () {
+        Route::get('shift-categories/export/excel', [ShiftCategoriesController::class, 'export'])
+            ->name('shift-categories.export');
+
         Route::resource('shift-categories', ShiftCategoriesController::class)
             ->names('shift-categories');
         Route::get('shift-categories/{id}/schedule-preview', [ShiftCategoriesController::class, 'schedulePreview'])
@@ -27,6 +30,9 @@ Route::middleware(['auth', 'permission:view-shift-categories'])
 // Time Schedules (T041)
 Route::middleware(['auth', 'permission:view-time-schedules'])
     ->group(function () {
+        Route::get('time-schedules/export/excel', [TimeSchedulesController::class, 'export'])
+            ->name('time-schedules.export');
+
         Route::resource('time-schedules', TimeSchedulesController::class)
             ->names('time-schedules');
         Route::post('time-schedules/{id}/copy', [TimeSchedulesController::class, 'copy'])
@@ -136,12 +142,17 @@ Route::middleware(['auth', 'permission:assign-employees-to-rotation'])
 
 Route::middleware(['auth', 'permission:view-rotations'])
     ->group(function () {
+        Route::get('rotations/export/excel', [RotationsController::class, 'export'])
+            ->name('rotations.export');
+
         Route::get('rotations', [RotationsController::class, 'index'])
             ->name('rotations.index');
         Route::get('rotations/{id}/preview', [RotationsController::class, 'preview'])
             ->name('rotations.preview');
         Route::get('rotations/{id}/timeline', [RotationsController::class, 'timeline'])
             ->name('rotations.timeline');
+        Route::get('rotations/{id}/timeline/export', [RotationsController::class, 'timelineExport'])
+            ->name('rotations.timeline.export');
         Route::get('rotations/{id}/groups', [RotationsController::class, 'getGroups'])
             ->name('rotations.groups');
         Route::get('rotations/{id}', [RotationsController::class, 'show'])
@@ -184,6 +195,8 @@ Route::middleware(['auth', 'permission:view-rotations'])
     ->group(function () {
         Route::get('rotation-groups', [RotationsController::class, 'groupsIndex'])
             ->name('rotation-groups.index');
+        Route::get('rotation-groups/export/excel', [RotationsController::class, 'exportGroups'])
+            ->name('rotation-groups.export');
     });
 
 Route::middleware(['auth', 'permission:edit-rotations'])

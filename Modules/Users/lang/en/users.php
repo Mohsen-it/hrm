@@ -123,6 +123,8 @@ return [
     'select_marital_status' => '— Select marital status —',
     'select_employment_type' => '— Select employment type —',
 
+    'rotation' => 'Rotation',
+    'rotation_group' => 'Rotation Group',
     'rotation_assignment' => 'Rotation Assignment',
     'current_rotation' => 'Current Rotation',
     'current_rotation_group' => 'Current Group',

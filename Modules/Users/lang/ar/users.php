@@ -123,6 +123,8 @@ return [
     'select_marital_status' => '— اختر الحالة الاجتماعية —',
     'select_employment_type' => '— اختر نوع التوظيف —',
 
+    'rotation' => 'الدورية',
+    'rotation_group' => 'مجموعة الدورية',
     'rotation_assignment' => 'إسناد الدورية',
     'current_rotation' => 'الدورية الحالية',
     'current_rotation_group' => 'المجموعة الحالية',

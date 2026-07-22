@@ -1,3 +1,4 @@
 ﻿{
-  "feature_directory": "specs/007-aleppo-airport-subordination"
+    "feature_directory": "specs/008-database-indexing-performance",
+    "branch": "008-database-indexing-performance"
 }

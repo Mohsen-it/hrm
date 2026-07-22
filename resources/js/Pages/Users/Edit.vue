@@ -121,7 +121,9 @@ const filteredDepartments = computed(() => {
 const hasRotationAssignment = computed(() => !!props.currentRotationAssignment);
 
 const availableRotationGroups = computed(() => {
-    const rotation = props.rotations.find((r) => r.id === form.rotation_assignment.rotation_id);
+    const selectedId = Number(form.rotation_assignment.rotation_id);
+    if (!selectedId) return [];
+    const rotation = props.rotations.find((r) => r.id === selectedId);
     return rotation?.groups || [];
 });
 

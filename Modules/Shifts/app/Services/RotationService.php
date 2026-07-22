@@ -193,9 +193,9 @@ class RotationService
      */
     public function assignEmployee(int $employeeId, int $rotationId, int $groupId, string $startDate, ?string $endDate = null): RotationAssignment
     {
-        $this->validateAssignment($employeeId, $rotationId, $startDate, $endDate);
-
         $this->closePreviousAssignment($employeeId, $startDate);
+
+        $this->validateAssignment($employeeId, $rotationId, $startDate, $endDate);
 
         $rotation = $this->rotationRepository->findById($rotationId);
         $group = $this->groupRepository->findById($groupId);

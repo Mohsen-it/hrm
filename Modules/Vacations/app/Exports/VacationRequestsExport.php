@@ -5,6 +5,7 @@ namespace Modules\Vacations\Exports;
 use App\Services\ExcelExportService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
+use Modules\Vacations\Models\UserVacationRequest;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 
 /**
@@ -17,7 +18,7 @@ class VacationRequestsExport
     private ExcelExportService $exporter;
 
     /**
-     * @param  Collection<int, \Modules\Vacations\Models\UserVacationRequest>|LengthAwarePaginator  $requests
+     * @param  Collection<int, UserVacationRequest>|LengthAwarePaginator  $requests
      */
     public function __construct(
         private Collection|LengthAwarePaginator $requests,

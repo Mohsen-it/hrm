@@ -5,6 +5,7 @@ namespace Modules\Attendance\Exports;
 use App\Services\ExcelExportService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
+use Modules\Attendance\Models\AttendanceSession;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 
 /**
@@ -17,7 +18,7 @@ class AttendanceSessionsExport
     private ExcelExportService $exporter;
 
     /**
-     * @param  Collection<int, \Modules\Attendance\Models\AttendanceSession>|LengthAwarePaginator  $sessions
+     * @param  Collection<int, AttendanceSession>|LengthAwarePaginator  $sessions
      */
     public function __construct(
         private Collection|LengthAwarePaginator $sessions,

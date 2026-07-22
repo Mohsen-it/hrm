@@ -17,13 +17,13 @@ use Modules\Positions\Services\PositionService;
 use Modules\Shifts\Services\RotationService;
 use Modules\Shifts\Services\ShiftService;
 use Modules\Subordinations\Services\SubordinationService;
+use Modules\Users\Exports\UsersExport;
 use Modules\Users\Http\Requests\StoreUserRequest;
 use Modules\Users\Http\Requests\UpdateUserRequest;
 use Modules\Users\Http\Resources\UserIndexResource;
 use Modules\Users\Http\Resources\UserResource;
 use Modules\Users\Models\User;
 use Modules\Users\Services\UserService;
-use Modules\Users\Exports\UsersExport;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 

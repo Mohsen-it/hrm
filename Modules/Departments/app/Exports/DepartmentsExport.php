@@ -5,6 +5,7 @@ namespace Modules\Departments\Exports;
 use App\Services\ExcelExportService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
+use Modules\Departments\Models\Department;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 
 /**
@@ -17,7 +18,7 @@ class DepartmentsExport
     private ExcelExportService $exporter;
 
     /**
-     * @param  Collection<int, \Modules\Departments\Models\Department>|LengthAwarePaginator  $departments
+     * @param  Collection<int, Department>|LengthAwarePaginator  $departments
      */
     public function __construct(
         private Collection|LengthAwarePaginator $departments,

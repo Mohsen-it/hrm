@@ -5,6 +5,7 @@ namespace Modules\Attendance\Exports;
 use App\Services\ExcelExportService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
+use Modules\Attendance\Models\RawAttendanceLog;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 
 /**
@@ -17,7 +18,7 @@ class RawLogsExport
     private ExcelExportService $exporter;
 
     /**
-     * @param  Collection<int, \Modules\Attendance\Models\RawAttendanceLog>|LengthAwarePaginator  $logs
+     * @param  Collection<int, RawAttendanceLog>|LengthAwarePaginator  $logs
      */
     public function __construct(
         private Collection|LengthAwarePaginator $logs,

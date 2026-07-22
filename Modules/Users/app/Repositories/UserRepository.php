@@ -50,7 +50,7 @@ class UserRepository
                 ]),
             $filters
         )
-            ->latest()
+            ->orderBy('users.id', 'desc')
             ->paginate($perPage);
     }
 
@@ -180,6 +180,21 @@ class UserRepository
             ->active()
             ->with($this->defaultWith)
             ->orderBy('name')
+            ->get();
+    }
+
+    /**
+     * Get active users belonging to a specific company.
+     *
+     * @return Collection<int, User>
+     */
+    public function getActiveByCompany(int $companyId): Collection
+    {
+        return $this->query()
+            ->active()
+            ->with($this->defaultWith)
+            ->where('company_id', $companyId)
+            ->orderBy('users.id', 'desc')
             ->get();
     }
 

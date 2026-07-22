@@ -5,6 +5,7 @@ namespace Modules\Shifts\Exports;
 use App\Services\ExcelExportService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
+use Modules\Shifts\Models\Rotation;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 
 /**
@@ -17,7 +18,7 @@ class RotationsExport
     private ExcelExportService $exporter;
 
     /**
-     * @param  Collection<int, \Modules\Shifts\Models\Rotation>|LengthAwarePaginator  $rotations
+     * @param  Collection<int, Rotation>|LengthAwarePaginator  $rotations
      */
     public function __construct(
         private Collection|LengthAwarePaginator $rotations,

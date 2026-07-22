@@ -5,6 +5,7 @@ namespace Modules\Users\Exports;
 use App\Services\ExcelExportService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
+use Modules\Users\Models\User;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 
 /**
@@ -17,7 +18,7 @@ class UsersExport
     private ExcelExportService $exporter;
 
     /**
-     * @param  Collection<int, \Modules\Users\Models\User>|LengthAwarePaginator  $users
+     * @param  Collection<int, User>|LengthAwarePaginator  $users
      */
     public function __construct(
         private Collection|LengthAwarePaginator $users,

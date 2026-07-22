@@ -5,6 +5,7 @@ namespace Modules\Attendance\Exports;
 use App\Services\ExcelExportService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
+use Modules\Attendance\Models\DailyAttendanceSummary;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 
 /**
@@ -17,7 +18,7 @@ class DailySummariesExport
     private ExcelExportService $exporter;
 
     /**
-     * @param  Collection<int, \Modules\Attendance\Models\DailyAttendanceSummary>|LengthAwarePaginator  $summaries
+     * @param  Collection<int, DailyAttendanceSummary>|LengthAwarePaginator  $summaries
      */
     public function __construct(
         private Collection|LengthAwarePaginator $summaries,

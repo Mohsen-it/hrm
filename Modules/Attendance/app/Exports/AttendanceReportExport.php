@@ -3,8 +3,10 @@
 namespace Modules\Attendance\Exports;
 
 use App\Services\ExcelExportService;
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 
 /**
@@ -98,7 +100,7 @@ class AttendanceReportExport
         $sheet->getStyle('A'.$startRow.':B'.($row - 1))->applyFromArray([
             'borders' => [
                 'allBorders' => [
-                    'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN,
+                    'borderStyle' => Border::BORDER_THIN,
                     'color' => ['rgb' => 'DDDDDD'],
                 ],
             ],
@@ -147,7 +149,7 @@ class AttendanceReportExport
             $sheet->getStyle('A'.($startRow + 1).':'.$this->col($lastColumn).($row - 1))->applyFromArray([
                 'borders' => [
                     'allBorders' => [
-                        'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN,
+                        'borderStyle' => Border::BORDER_THIN,
                         'color' => ['rgb' => 'EEEEEE'],
                     ],
                 ],
@@ -197,7 +199,7 @@ class AttendanceReportExport
             $sheet->getStyle('A'.($startRow + 1).':'.$this->col($lastColumn).($row - 1))->applyFromArray([
                 'borders' => [
                     'allBorders' => [
-                        'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN,
+                        'borderStyle' => Border::BORDER_THIN,
                         'color' => ['rgb' => 'EEEEEE'],
                     ],
                 ],
@@ -248,7 +250,7 @@ class AttendanceReportExport
             $sheet->getStyle('A'.($startRow + 1).':'.$this->col($lastColumn).($row - 1))->applyFromArray([
                 'borders' => [
                     'allBorders' => [
-                        'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN,
+                        'borderStyle' => Border::BORDER_THIN,
                         'color' => ['rgb' => 'EEEEEE'],
                     ],
                 ],
@@ -260,7 +262,7 @@ class AttendanceReportExport
 
     private function col(int $index): string
     {
-        return \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($index);
+        return Coordinate::stringFromColumnIndex($index);
     }
 
     public function toBinary(): string

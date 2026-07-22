@@ -5,6 +5,7 @@ namespace Modules\Branches\Exports;
 use App\Services\ExcelExportService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
+use Modules\Branches\Models\Branch;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 
 /**
@@ -17,7 +18,7 @@ class BranchesExport
     private ExcelExportService $exporter;
 
     /**
-     * @param  Collection<int, \Modules\Branches\Models\Branch>|LengthAwarePaginator  $branches
+     * @param  Collection<int, Branch>|LengthAwarePaginator  $branches
      */
     public function __construct(
         private Collection|LengthAwarePaginator $branches,

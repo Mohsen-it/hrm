@@ -4,6 +4,7 @@ namespace Modules\Shifts\Exports;
 
 use App\Services\ExcelExportService;
 use Illuminate\Support\Collection;
+use Modules\Shifts\Models\RotationGroup;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 
 /**
@@ -16,7 +17,7 @@ class RotationGroupsExport
     private ExcelExportService $exporter;
 
     /**
-     * @param  Collection<int, \Modules\Shifts\Models\RotationGroup>  $groups
+     * @param  Collection<int, RotationGroup>  $groups
      */
     public function __construct(
         private Collection $groups,

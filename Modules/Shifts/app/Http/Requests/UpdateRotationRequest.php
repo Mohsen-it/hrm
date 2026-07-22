@@ -20,6 +20,7 @@ class UpdateRotationRequest extends FormRequest
             'pattern' => ['sometimes', 'required', 'array', 'min:2'],
             'pattern.*' => ['required', 'in:0,1'],
             'number_of_groups' => ['sometimes', 'required', 'integer', 'min:1', 'max:26'],
+            'time_schedule_id' => ['nullable', 'integer', 'exists:att_time_schedules,id'],
             'overtime_enabled' => ['boolean'],
             'work_on_holidays' => ['boolean'],
             'grace_minutes' => ['nullable', 'integer', 'min:0', 'max:120'],

@@ -19,11 +19,10 @@ const props = defineProps({
 });
 
 const columns = computed(() => [
-    { key: 'rotation.name', label: t('shifts.rotation'), sortable: true },
+    { key: 'rotation_name', label: t('shifts.rotation'), sortable: false },
     { key: 'name', label: t('shifts.group_name'), sortable: true },
     { key: 'group_index', label: t('shifts.group_index'), cellClass: 'text-center' },
     { key: 'start_date', label: t('shifts.start_date'), cellClass: 'text-center' },
-    { key: 'time_schedule', label: t('shifts.time_schedule') },
     { key: 'actions', label: t('common.actions'), cellClass: 'text-center w-[120px]' },
 ]);
 
@@ -68,11 +67,6 @@ const flashError = computed(() => page.props.flash?.error);
 
             <template #cell-start_date="{ row }">
                 <span dir="ltr">{{ row.start_date ?? '—' }}</span>
-            </template>
-
-            <template #cell-time_schedule="{ row }">
-                <span v-if="row.time_schedule">{{ row.time_schedule.name }}</span>
-                <span v-else class="text-mistral-muted">—</span>
             </template>
 
             <template #cell-actions="{ row }">

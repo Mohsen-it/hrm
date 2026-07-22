@@ -9,7 +9,7 @@ use Modules\Shifts\Models\RotationGroup;
 
 class RotationGroupRepository
 {
-    protected array $defaultWith = ['timeSchedule'];
+    protected array $defaultWith = [];
 
     public function query(): Builder
     {

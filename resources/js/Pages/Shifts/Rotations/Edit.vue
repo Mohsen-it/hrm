@@ -9,6 +9,7 @@ const { t } = useTranslations();
 
 const props = defineProps({
     rotation: { type: Object, required: true },
+    timeSchedules: { type: Array, default: () => [] },
 });
 
 const form = reactive({
@@ -17,6 +18,7 @@ const form = reactive({
     anchor_start_date: props.rotation.anchor_start_date || '',
     pattern: props.rotation.pattern || [],
     number_of_groups: props.rotation.number_of_groups || 1,
+    time_schedule_id: props.rotation.time_schedule_id || null,
     overtime_enabled: props.rotation.overtime_enabled || false,
     work_on_holidays: props.rotation.work_on_holidays || false,
     grace_minutes: props.rotation.grace_minutes || 0,
@@ -193,6 +195,13 @@ function submit() {
 
             <FormSection :title="t('shifts.options')" icon="fas fa-cog" :collapsible="true" :default-open="true">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <FormSelect
+                        v-model="form.time_schedule_id"
+                        :label="t('shifts.time_schedule')"
+                        name="time_schedule_id"
+                        :options="timeSchedules.map(ts => ({ value: ts.id, label: ts.name }))"
+                        :error="errorFor('time_schedule_id')"
+                    />
                     <FormSwitch v-model="form.overtime_enabled" :label="t('shifts.overtime_enabled')" name="overtime_enabled" />
                     <FormSwitch v-model="form.work_on_holidays" :label="t('shifts.work_on_holidays')" name="work_on_holidays" />
                     <FormInput

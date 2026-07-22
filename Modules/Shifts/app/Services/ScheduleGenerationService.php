@@ -59,8 +59,8 @@ class ScheduleGenerationService
                 $rotation = $assignment->rotation;
                 $group = $assignment->rotationGroup;
 
-                $dutyCategoryId = $group->timeSchedule?->category?->id
-                    ?? $group->timeSchedule?->categoryTimeSchedule?->shift_category_id;
+                $dutyCategoryId = $rotation->timeSchedule?->category?->id
+                    ?? $rotation->timeSchedule?->categoryTimeSchedule?->shift_category_id;
 
                 $current = $periodStart->copy();
                 while ($current->lte($periodEnd)) {

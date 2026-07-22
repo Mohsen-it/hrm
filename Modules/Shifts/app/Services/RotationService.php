@@ -203,7 +203,7 @@ class RotationService
         $snapshotData = [
             'rotation' => $rotation->toArray(),
             'group' => $group->toArray(),
-            'time_schedule' => $group->timeSchedule?->toArray(),
+            'time_schedule' => $rotation->timeSchedule?->toArray(),
         ];
 
         return $this->assignmentRepository->create([
@@ -309,7 +309,6 @@ class RotationService
                 'rotation_id' => $rotation->id,
                 'name' => $customData['name'] ?? chr(65 + $i),
                 'group_index' => $i * $offsetStep,
-                'time_schedule_id' => $customData['time_schedule_id'] ?? null,
             ]);
         }
     }

@@ -2,19 +2,17 @@
 import { reactive, ref } from 'vue';
 import { router, Head } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
-import { PageHeader, Button, Card, FormInput, FormSelect, FormActions, ErrorSummary } from '@/Components/ui';
+import { PageHeader, Button, Card, FormInput, FormActions, ErrorSummary } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
 
 const props = defineProps({
     group: { type: Object, required: true },
-    timeSchedules: { type: Array, default: () => [] },
 });
 
 const form = reactive({
     name: props.group.name || '',
-    time_schedule_id: props.group.time_schedule_id || null,
     start_date: props.group.start_date || '',
 });
 
@@ -29,7 +27,6 @@ function submit() {
 
     router.put(route('rotation-groups.update', props.group.id), {
         name: form.name,
-        time_schedule_id: form.time_schedule_id,
         start_date: form.start_date,
     }, {
         preserveScroll: true,
@@ -74,13 +71,6 @@ function submit() {
                         name="start_date"
                         type="date"
                         :error="errorFor('start_date')"
-                    />
-                    <FormSelect
-                        v-model="form.time_schedule_id"
-                        :label="t('shifts.time_schedule')"
-                        name="time_schedule_id"
-                        :options="timeSchedules.map(ts => ({ value: ts.id, label: ts.name }))"
-                        :error="errorFor('time_schedule_id')"
                     />
                 </div>
             </Card>

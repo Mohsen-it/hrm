@@ -284,7 +284,7 @@ class RotationEngine
             ];
         }
 
-        $timeSchedule = $assignment->rotationGroup?->timeSchedule;
+        $timeSchedule = $assignment->rotation?->timeSchedule;
 
         if ($timeSchedule) {
             $inTime = $timeSchedule->in_time;

@@ -11,9 +11,9 @@ class RotationAssignmentRepository
 {
     protected array $defaultWith = [
         'employee',
-        'rotation',
-        'rotationGroup.timeSchedule.categoryTimeSchedule',
-        'rotationGroup.timeSchedule.category',
+        'rotation.timeSchedule.categoryTimeSchedule',
+        'rotation.timeSchedule.category',
+        'rotationGroup',
     ];
 
     public function query(): Builder

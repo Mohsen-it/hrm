@@ -99,11 +99,10 @@ class RotationsController extends Controller
         $preview = $this->rotationService->getSchedulePreview($id, $from, $to);
 
         return Inertia::render('Shifts/Rotations/Show', [
-            'rotation' => fn () => new RotationResource($rotation),
+            'rotation' => fn () => new RotationResource($rotation->load('timeSchedule')),
             'preview' => fn () => $preview,
             'preview_from' => $from,
             'preview_to' => $to,
-            'time_schedules' => fn () => TimeSchedule::where('company_id', auth()->user()->company_id ?? 1)->get(['id', 'name']),
         ]);
     }
 
@@ -123,6 +122,7 @@ class RotationsController extends Controller
 
         return Inertia::render('Shifts/Rotations/Edit', [
             'rotation' => fn () => new RotationResource($rotation),
+            'timeSchedules' => fn () => $this->timeScheduleService->getList(),
         ]);
     }
 
@@ -161,11 +161,10 @@ class RotationsController extends Controller
 
         $request->validate([
             'name' => ['required', 'string', 'max:50'],
-            'time_schedule_id' => ['nullable', 'integer', 'exists:att_time_schedules,id'],
             'start_date' => ['nullable', 'date'],
         ]);
 
-        $this->rotationService->addGroup($rotationId, $request->only(['name', 'time_schedule_id', 'start_date']));
+        $this->rotationService->addGroup($rotationId, $request->only(['name', 'start_date']));
 
         return redirect()->route('rotations.show', $rotationId)
             ->with('success', __('shifts.rotation_group_added'));
@@ -180,11 +179,10 @@ class RotationsController extends Controller
 
         $request->validate([
             'name' => ['sometimes', 'required', 'string', 'max:50'],
-            'time_schedule_id' => ['nullable', 'integer', 'exists:att_time_schedules,id'],
             'start_date' => ['nullable', 'date'],
         ]);
 
-        $this->rotationService->updateGroup($groupId, $request->only(['name', 'time_schedule_id', 'start_date']));
+        $this->rotationService->updateGroup($groupId, $request->only(['name', 'start_date']));
 
         $group = RotationGroup::find($groupId);
 
@@ -720,7 +718,7 @@ class RotationsController extends Controller
     {
         $this->authorize('view-rotations');
 
-        $query = RotationGroup::with(['rotation:id,name', 'timeSchedule:id,name,in_time,out_time'])
+        $query = RotationGroup::with(['rotation:id,name'])
             ->orderBy('rotation_id')
             ->orderBy('group_index');
 
@@ -731,10 +729,6 @@ class RotationsController extends Controller
         }
 
         $groups = $query->get()->map(function (RotationGroup $g) {
-            $schedule = $g->timeSchedule;
-            $g->time_schedule_label = $schedule
-                ? sprintf('%s (%s - %s)', $schedule->name, $schedule->in_time, $schedule->out_time)
-                : '—';
             $g->employees_count = $g->assignments()->whereNull('end_date')->count();
 
             return $g;
@@ -754,7 +748,7 @@ class RotationsController extends Controller
     {
         $this->authorize('view-rotations');
 
-        $query = RotationGroup::with(['rotation:id,name', 'timeSchedule:id,name,in_time,out_time'])
+        $query = RotationGroup::with(['rotation:id,name'])
             ->orderBy('rotation_id')
             ->orderBy('group_index');
 
@@ -784,7 +778,7 @@ class RotationsController extends Controller
     {
         $this->authorize('edit-rotations');
 
-        $group = RotationGroup::with(['rotation:id,name', 'timeSchedule:id,name'])
+        $group = RotationGroup::with(['rotation:id,name'])
             ->findOrFail($id);
 
         return Inertia::render('Shifts/RotationGroups/Edit', [
@@ -803,11 +797,10 @@ class RotationsController extends Controller
 
         $request->validate([
             'name' => ['sometimes', 'required', 'string', 'max:50'],
-            'time_schedule_id' => ['nullable', 'integer', 'exists:att_time_schedules,id'],
             'start_date' => ['nullable', 'date'],
         ]);
 
-        $this->rotationService->updateGroup($id, $request->only(['name', 'time_schedule_id', 'start_date']));
+        $this->rotationService->updateGroup($id, $request->only(['name', 'start_date']));
 
         return redirect()->route('rotation-groups.index')
             ->with('success', __('shifts.rotation_group_updated'));

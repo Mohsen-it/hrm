@@ -32,7 +32,7 @@ class RotationGroupsExport
 
         $this->exporter->setupSheet($sheet, 'مجموعات الدوريات');
 
-        $lastColumn = 7;
+        $lastColumn = 6;
         $currentRow = $this->exporter->writeTitle(
             $sheet,
             'مجموعات الدوريات',
@@ -48,7 +48,7 @@ class RotationGroupsExport
 
         $headers = [
             '#', 'الدورية', 'اسم المجموعة', 'رقم المجموعة',
-            'الجدول الزمني', 'تاريخ البداية', 'عدد الموظفين',
+            'تاريخ البداية', 'عدد الموظفين',
         ];
         $this->exporter->writeHeaders($sheet, $headers, $currentRow);
         $currentRow++;
@@ -58,7 +58,6 @@ class RotationGroupsExport
             'rotation' => ['key' => 'rotation.name', 'type' => 'string', 'width' => 25],
             'name' => ['key' => 'name', 'type' => 'string', 'width' => 20],
             'group_index' => ['key' => 'group_index', 'type' => 'integer', 'width' => 14],
-            'schedule' => ['key' => 'time_schedule_label', 'type' => 'string', 'width' => 22],
             'start_date' => ['key' => 'start_date', 'type' => 'date', 'width' => 15, 'format' => 'Y-m-d'],
             'employees' => ['key' => 'employees_count', 'type' => 'integer', 'width' => 14],
         ];

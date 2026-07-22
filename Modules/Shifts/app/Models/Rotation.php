@@ -26,6 +26,7 @@ class Rotation extends Model
         'work_days_count',
         'rest_days_count',
         'number_of_groups',
+        'time_schedule_id',
         'overtime_enabled',
         'work_on_holidays',
         'grace_minutes',
@@ -57,6 +58,11 @@ class Rotation extends Model
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class, 'company_id');
+    }
+
+    public function timeSchedule(): BelongsTo
+    {
+        return $this->belongsTo(TimeSchedule::class, 'time_schedule_id');
     }
 
     public function groups(): HasMany

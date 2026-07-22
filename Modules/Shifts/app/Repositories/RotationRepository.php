@@ -10,7 +10,7 @@ use Modules\Shifts\Models\RotationAssignment;
 
 class RotationRepository
 {
-    protected array $defaultWith = ['company', 'groups'];
+    protected array $defaultWith = ['company', 'groups', 'timeSchedule'];
 
     public function query(): Builder
     {
@@ -42,9 +42,8 @@ class RotationRepository
         $rotation = $this->query()
             ->with([
                 'company',
-                'groups' => function ($q): void {
-                    $q->with('timeSchedule');
-                },
+                'groups',
+                'timeSchedule',
                 'assignments.employee',
             ])
             ->withCount('activeAssignments as active_employees_count')

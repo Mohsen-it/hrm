@@ -2,7 +2,7 @@
 import { ref, computed } from 'vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
-import { PageHeader, Button, Card, Badge, DataTable, LoadingSpinner, FormInput, FormSelect, FormModal } from '@/Components/ui';
+import { PageHeader, Button, Card, Badge, DataTable, LoadingSpinner, FormInput, FormModal } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
@@ -12,7 +12,6 @@ const props = defineProps({
     preview: { type: Array, required: true },
     preview_from: { type: String, required: true },
     preview_to: { type: String, required: true },
-    time_schedules: { type: Array, default: () => [] },
 });
 
 const previewData = ref(props.preview);
@@ -127,7 +126,6 @@ function prefetchIfNeeded() {
 const groupColumns = computed(() => [
     { key: 'name', label: t('shifts.group_name') },
     { key: 'group_index', label: t('shifts.group_index'), headerClass: 'text-center' },
-    { key: 'time_schedule', label: t('shifts.time_schedule'), headerClass: 'text-center' },
     { key: 'active_employees_count', label: t('shifts.employees_count'), headerClass: 'text-center' },
     { key: 'actions', label: '', headerClass: 'text-center', sortable: false },
 ]);
@@ -145,15 +143,13 @@ const groupsData = computed(() => ({
 
 const showGroupModal = ref(false);
 const editingGroup = ref(null);
-const groupForm = ref({ name: '', time_schedule_id: null, start_date: '' });
+const groupForm = ref({ name: '', start_date: '' });
 const groupErrors = ref({});
 const processingGroup = ref(false);
 
-const timeSchedules = computed(() => props.time_schedules || []);
-
 function openAddGroup() {
     editingGroup.value = null;
-    groupForm.value = { name: '', time_schedule_id: null, start_date: props.rotation.anchor_start_date || '' };
+    groupForm.value = { name: '', start_date: props.rotation.anchor_start_date || '' };
     groupErrors.value = {};
     showGroupModal.value = true;
 }
@@ -162,7 +158,6 @@ function openEditGroup(group) {
     editingGroup.value = group;
     groupForm.value = {
         name: group.name || '',
-        time_schedule_id: group.time_schedule?.id || null,
         start_date: group.start_date || '',
     };
     groupErrors.value = {};
@@ -176,7 +171,6 @@ function submitGroup() {
     if (editingGroup.value) {
         router.put(route('rotations.groups.update', editingGroup.value.id), {
             name: groupForm.value.name,
-            time_schedule_id: groupForm.value.time_schedule_id,
             start_date: groupForm.value.start_date,
         }, {
             preserveScroll: true,
@@ -186,7 +180,6 @@ function submitGroup() {
     } else {
         router.post(route('rotations.groups.add', props.rotation.id), {
             name: groupForm.value.name,
-            time_schedule_id: groupForm.value.time_schedule_id,
             start_date: groupForm.value.start_date,
         }, {
             preserveScroll: true,
@@ -331,10 +324,6 @@ function deleteGroup(group) {
                         <span class="font-medium">{{ value }}</span>
                     </div>
                 </template>
-                <template #cell-time_schedule="{ row }">
-                    <span v-if="row.time_schedule">{{ row.time_schedule.name }}</span>
-                    <span v-else class="text-mistral-muted">—</span>
-                </template>
                 <template #cell-actions="{ row }">
                     <div class="flex items-center gap-1">
                         <Button
@@ -370,13 +359,6 @@ function deleteGroup(group) {
                 name="start_date"
                 type="date"
                 :error="groupErrors.start_date"
-            />
-            <FormSelect
-                v-model="groupForm.time_schedule_id"
-                :label="t('shifts.time_schedule')"
-                name="time_schedule_id"
-                :options="timeSchedules.map(ts => ({ value: ts.id, label: ts.name }))"
-                :error="groupErrors.time_schedule_id"
             />
         </FormModal>
 

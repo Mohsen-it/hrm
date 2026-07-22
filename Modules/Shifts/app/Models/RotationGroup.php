@@ -18,7 +18,6 @@ class RotationGroup extends Model
         'rotation_id',
         'name',
         'group_index',
-        'time_schedule_id',
         'start_date',
     ];
 
@@ -32,11 +31,6 @@ class RotationGroup extends Model
     public function rotation(): BelongsTo
     {
         return $this->belongsTo(Rotation::class, 'rotation_id');
-    }
-
-    public function timeSchedule(): BelongsTo
-    {
-        return $this->belongsTo(TimeSchedule::class, 'time_schedule_id');
     }
 
     public function assignments(): HasMany

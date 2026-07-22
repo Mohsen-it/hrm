@@ -184,8 +184,8 @@ class SmartAbsenceController extends Controller
                 $assignment = $absentAssignments->firstWhere('employee_id', $row->id);
                 $row->rotation_name = $assignment?->rotation?->name;
                 $row->rotation_group_name = $assignment?->rotationGroup?->name;
-                $row->expected_in = $assignment?->rotationGroup?->timeSchedule?->in_time;
-                $row->expected_out = $assignment?->rotationGroup?->timeSchedule?->out_time;
+                $row->expected_in = $assignment?->rotation?->timeSchedule?->in_time;
+                $row->expected_out = $assignment?->rotation?->timeSchedule?->out_time;
                 $row->status = 'absent';
 
                 return $row;

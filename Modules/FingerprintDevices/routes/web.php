@@ -9,9 +9,16 @@ use Modules\FingerprintDevices\Http\Controllers\FingerprintDevicesController;
 use Modules\FingerprintDevices\Http\Controllers\FingerprintDeviceTypesController;
 use Modules\FingerprintDevices\Http\Controllers\FingerprintTemplateController;
 use Modules\FingerprintDevices\Http\Controllers\LiveScanController;
+use Modules\FingerprintDevices\Http\Controllers\UnregisteredEmployeesController;
 
 Route::middleware(['auth'])->group(function () {
     Route::prefix('fingerprint-devices')->group(function () {
+        Route::get('unregistered-employees', [UnregisteredEmployeesController::class, 'index'])
+            ->name('fingerprint-devices.unregistered-employees');
+
+        Route::get('unregistered-employees/export', [UnregisteredEmployeesController::class, 'export'])
+            ->name('fingerprint-devices.unregistered-employees.export');
+
         Route::get('dashboard', FingerprintDashboardController::class)
             ->name('fingerprint-devices.dashboard');
 

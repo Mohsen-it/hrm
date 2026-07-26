@@ -42,4 +42,5 @@ return [
     'rotations' => 'الدوريات',
     'rotation_assignments' => 'إسناد الدوريات',
     'rotation_groups' => 'مجموعات الدوريات',
+    'unregistered_employees' => 'الموظفون غير المسجلين للبصمة',
 ];

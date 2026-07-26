@@ -115,10 +115,15 @@ watch(() => table.filters.value, (f) => {
     emit('filter-change', f);
 }, { deep: true });
 
+function resolveNested(obj, path) {
+    return path.split('.').reduce((acc, key) => acc?.[key], obj);
+}
+
 function cellValue(row, col) {
     if (typeof col.accessor === 'function') return col.accessor(row);
-    if (typeof col.accessor === 'string') return row[col.accessor];
-    return row[col.key];
+    const key = col.accessor || col.key;
+    if (key.includes('.')) return resolveNested(row, key);
+    return row[key];
 }
 
 function onRowClick(row) {

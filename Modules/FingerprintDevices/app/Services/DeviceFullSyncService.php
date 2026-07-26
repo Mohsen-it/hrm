@@ -311,7 +311,7 @@ class DeviceFullSyncService
                 }
 
                 $user = User::query()
-                    ->where('employee_code', $externalId)
+                    ->whereRaw('LOWER(employee_code) = LOWER(?)', [$externalId])
                     ->first();
 
                 if (! $user && $name !== '') {
@@ -324,11 +324,19 @@ class DeviceFullSyncService
                 if (! $user) {
                     $autoName = $name !== '' ? $name : 'User '.$externalId;
 
+                    $emailBase = 'device_'.strtolower($externalId).'@hrm.local';
+                    $email = $emailBase;
+                    $suffix = 1;
+                    while (User::where('email', $email)->exists()) {
+                        $email = 'device_'.strtolower($externalId).'_'.$suffix.'@hrm.local';
+                        $suffix++;
+                    }
+
                     $userData = [
                         'employee_code' => $externalId,
                         'name' => $autoName,
                         'full_name_ar' => $autoName,
-                        'email' => 'device_'.strtolower($externalId).'@hrm.local',
+                        'email' => $email,
                         'password' => bcrypt('password'),
                         'status' => 1,
                         'is_active_employee' => true,
@@ -434,9 +442,23 @@ class DeviceFullSyncService
                 $uidToUserPk[(int) $entry['uid']] = (int) $entry['user_pk'];
             }
 
+            // Get all user IDs that already have fingerprints stored
+            $userIdsWithFingerprints = UserFingerprint::query()
+                ->whereIn('user_id', array_column($matched, 'user_pk'))
+                ->whereNull('deleted_at')
+                ->pluck('user_id')
+                ->unique()
+                ->flip()
+                ->toArray();
+
             foreach ($matched as $entry) {
                 $userPk = (int) $entry['user_pk'];
                 $uid = (int) $entry['uid'];
+
+                // Skip users who already have fingerprints stored
+                if (! $clearLocal && isset($userIdsWithFingerprints[$userPk])) {
+                    continue;
+                }
 
                 if ($clearLocal) {
                     $removed += $this->fingerprintRepository->deleteForUser($userPk);
@@ -573,49 +595,102 @@ class DeviceFullSyncService
             $matchedByExtId[$entry['user_id']] = (int) $entry['user_pk'];
         }
 
-        // Ensure storage directory exists
-        $storageDir = storage_path('app/face_photos/'.$device->serial_number);
-        File::makeDirectory($storageDir, 0755, true, true);
+        // Check if this is ZKTeco face template mode
+        $isZktecoFace = ! empty($photos[0]['template_type']) && $photos[0]['template_type'] === 'zkteco-face';
 
-        foreach ($photos as $photo) {
-            $employeeNo = (string) ($photo['employee_no'] ?? '');
-            $photoBase64 = $photo['photo_base64'] ?? null;
-            $faceUrl = $photo['face_url'] ?? '';
+        if ($isZktecoFace) {
+            // ZKTeco: Store face templates in user_fingerprints table (finger_id 50-54)
+            foreach ($photos as $photo) {
+                $employeeNo = (string) ($photo['employee_no'] ?? '');
+                $templateData = $photo['photo_base64'] ?? '';
+                $faceId = (int) ($photo['face_id'] ?? 50);
 
-            if ($employeeNo === '' || (! $photoBase64 && ! $faceUrl)) {
-                continue;
-            }
-
-            $userPk = $matchedByExtId[$employeeNo] ?? null;
-            if (! $userPk) {
-                continue;
-            }
-
-            try {
-                // If we have base64 data, save directly; otherwise skip
-                if ($photoBase64) {
-                    $imageData = base64_decode($photoBase64);
-                    if ($imageData === false) {
-                        continue;
-                    }
-                } else {
+                if ($employeeNo === '' || $templateData === '') {
                     continue;
                 }
 
-                $filename = $employeeNo.'.jpg';
-                $filepath = $storageDir.'/'.$filename;
-                file_put_contents($filepath, $imageData);
+                $userPk = $matchedByExtId[$employeeNo] ?? null;
+                if (! $userPk) {
+                    continue;
+                }
 
-                // Update user record with photo path
-                $relativePath = 'face_photos/'.$device->serial_number.'/'.$filename;
-                User::where('id', $userPk)->update(['face_photo_path' => $relativePath]);
+                try {
+                    $existing = UserFingerprint::query()
+                        ->where('device_id', $device->id)
+                        ->where('user_id', $userPk)
+                        ->where('finger_id', $faceId)
+                        ->first();
 
-                $saved++;
-            } catch (\Throwable $e) {
-                Log::warning('Face photo save failed', [
-                    'employee_no' => $employeeNo,
-                    'error' => $e->getMessage(),
-                ]);
+                    $payload = [
+                        'user_id' => $userPk,
+                        'device_id' => $device->id,
+                        'finger_id' => $faceId,
+                        'template_data' => $templateData,
+                        'template_format' => 'zkteco-face',
+                        'template_version' => 9,
+                        'quality' => 0,
+                        'is_master' => $faceId === 50,
+                        'captured_at' => now(),
+                        'synced_at' => now(),
+                    ];
+
+                    if ($existing) {
+                        $existing->update($payload);
+                    } else {
+                        UserFingerprint::create($payload);
+                    }
+
+                    $saved++;
+                } catch (\Throwable $e) {
+                    Log::warning('Face template save failed', [
+                        'employee_no' => $employeeNo,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+        } else {
+            // Hikvision/others: Save as JPEG files (original behavior)
+            $storageDir = storage_path('app/face_photos/'.$device->serial_number);
+            File::makeDirectory($storageDir, 0755, true, true);
+
+            foreach ($photos as $photo) {
+                $employeeNo = (string) ($photo['employee_no'] ?? '');
+                $photoBase64 = $photo['photo_base64'] ?? null;
+                $faceUrl = $photo['face_url'] ?? '';
+
+                if ($employeeNo === '' || (! $photoBase64 && ! $faceUrl)) {
+                    continue;
+                }
+
+                $userPk = $matchedByExtId[$employeeNo] ?? null;
+                if (! $userPk) {
+                    continue;
+                }
+
+                try {
+                    if ($photoBase64) {
+                        $imageData = base64_decode($photoBase64);
+                        if ($imageData === false) {
+                            continue;
+                        }
+                    } else {
+                        continue;
+                    }
+
+                    $filename = $employeeNo.'.jpg';
+                    $filepath = $storageDir.'/'.$filename;
+                    file_put_contents($filepath, $imageData);
+
+                    $relativePath = 'face_photos/'.$device->serial_number.'/'.$filename;
+                    User::where('id', $userPk)->update(['face_photo_path' => $relativePath]);
+
+                    $saved++;
+                } catch (\Throwable $e) {
+                    Log::warning('Face photo save failed', [
+                        'employee_no' => $employeeNo,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
             }
         }
 

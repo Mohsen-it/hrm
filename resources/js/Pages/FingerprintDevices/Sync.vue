@@ -288,6 +288,61 @@ function runPush() {
     });
 }
 
+function runPushAll() {
+    if (isRunning.value) return;
+
+    isRunning.value = true;
+    errorMessage.value = '';
+    result.value = null;
+    progress.value = 0;
+    currentStep.value = '';
+    currentMessage.value = '';
+    currentStatus.value = '';
+    stepsLog.value = [];
+
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+
+    fetch(route('fingerprint-devices.sync.push-all'), {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+            'X-CSRF-TOKEN': csrfToken,
+            'X-Requested-With': 'XMLHttpRequest',
+        },
+        credentials: 'same-origin',
+        body: JSON.stringify({
+            options: {
+                push_users: options.value.push_users,
+                push_fingerprints: options.value.push_fingerprints,
+            },
+        }),
+    }).then(async (response) => {
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            throw new Error(data.message || data.errors?.[0] || `HTTP ${response.status}`);
+        }
+        result.value = {
+            success: true,
+            summary: {
+                pushed_users: data.totals?.pushed_users || 0,
+                pushed_fingerprints: data.totals?.pushed_fingerprints || 0,
+                failed_users: data.totals?.failed_users || 0,
+                failed_fingerprints: data.totals?.failed_fingerprints || 0,
+            },
+            duration_seconds: 0,
+            errors: data.errors?.map(e => e.error || JSON.stringify(e)) || [],
+            sync_log_id: null,
+        };
+        progress.value = 100;
+        currentMessage.value = 'اكتملت العملية';
+        isRunning.value = false;
+    }).catch((err) => {
+        errorMessage.value = err?.message || 'Network error';
+        isRunning.value = false;
+    });
+}
+
 function runBidirectional() {
     if (!deviceId.value || isRunning.value) return;
 
@@ -636,6 +691,17 @@ watch(deviceId, (v) => {
                             @click="runPush"
                         >
                             {{ t('fingerprint_devices.sync_push_run') }}
+                        </Button>
+
+                        <Button
+                            v-if="!isRunning"
+                            variant="danger"
+                            icon="fas fa-server"
+                            block
+                            :disabled="!options.push_users && !options.push_fingerprints"
+                            @click="runPushAll"
+                        >
+                            {{ t('fingerprint_devices.sync_push_all') || 'Push to All Devices' }}
                         </Button>
 
                         <Button

@@ -259,6 +259,33 @@ class ZKTecoPythonBridgeService
     }
 
     /**
+     * Push a face photo to a device.
+     */
+    public function pushFacePhoto(string $ip, int $port, int $password, int $uid, string $photoBase64): array
+    {
+        return $this->post('/device/push-face-photo', [
+            'ip' => $ip,
+            'port' => $port,
+            'password' => $password,
+            'uid' => $uid,
+            'photo_base64' => $photoBase64,
+        ]);
+    }
+
+    /**
+     * Push multiple face photos to a device in one request.
+     */
+    public function pushFacePhotosBatch(string $ip, int $port, int $password, array $photos): array
+    {
+        return $this->post('/device/push-face-photos-batch', [
+            'ip' => $ip,
+            'port' => $port,
+            'password' => $password,
+            'photos' => $photos,
+        ]);
+    }
+
+    /**
      * Best-effort post that gracefully returns an error payload on failure.
      *
      * @param  array<string, mixed>  $payload

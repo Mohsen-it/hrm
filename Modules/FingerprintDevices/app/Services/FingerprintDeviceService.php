@@ -77,7 +77,13 @@ class FingerprintDeviceService
 
     public function updateDevice(UpdateFingerprintDeviceRequest $request, FingerprintDevice $device): FingerprintDevice
     {
-        return $this->repository->update($device, $request->validated());
+        $data = $request->validated();
+
+        if (array_key_exists('comm_key', $data) && is_null($data['comm_key'])) {
+            $data['comm_key'] = $device->comm_key ?? '0';
+        }
+
+        return $this->repository->update($device, $data);
     }
 
     public function deleteDevice(FingerprintDevice $device): bool

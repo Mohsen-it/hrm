@@ -210,7 +210,67 @@ class ZKTecoAdapter implements DeviceAdapterInterface
 
     public function getFacePhotos(string $ip, int $port, string $commKey, int $timeout): array
     {
-        return [];
+        try {
+            $payload = $this->buildPayload($ip, $port, $commKey, $timeout);
+            $response = Http::timeout($this->bridgeTimeout)
+                ->post("{$this->bridgeUrl}/device/get-all-face-templates", $payload);
+
+            if (! $response->successful()) {
+                return [];
+            }
+
+            $templates = $response->json('templates') ?? [];
+
+            // Convert face templates to the format expected by DeviceFullSyncService
+            // Group by uid, each face template becomes an entry
+            $result = [];
+            foreach ($templates as $tpl) {
+                $uid = (int) ($tpl['uid'] ?? 0);
+                $faceId = (int) ($tpl['fid'] ?? 50);
+                $templateData = $tpl['template'] ?? '';
+
+                if ($templateData === '') {
+                    continue;
+                }
+
+                $result[] = [
+                    'employee_no' => (string) $uid,
+                    'photo_base64' => $templateData,
+                    'face_url' => '',
+                    'face_id' => $faceId,
+                    'template_type' => 'zkteco-face',
+                ];
+            }
+
+            return $result;
+        } catch (\Throwable $e) {
+            Log::warning('ZKTecoAdapter::getFacePhotos failed', ['error' => $e->getMessage()]);
+
+            return [];
+        }
+    }
+
+    /**
+     * Upload a face template to the device.
+     */
+    public function setFacePhoto(string $ip, int $port, string $commKey, int $timeout, int $uid, int $faceId, string $templateData): bool
+    {
+        try {
+            $payload = array_merge($this->buildPayload($ip, $port, $commKey, $timeout), [
+                'uid' => $uid,
+                'face_id' => $faceId,
+                'template_data' => $templateData,
+            ]);
+
+            $response = Http::timeout($this->bridgeTimeout)
+                ->post("{$this->bridgeUrl}/device/export-face-template", $payload);
+
+            return $response->successful() && ($response->json('success') === true);
+        } catch (\Throwable $e) {
+            Log::warning('ZKTecoAdapter::setFacePhoto failed', ['error' => $e->getMessage()]);
+
+            return false;
+        }
     }
 
     private function buildPayload(string $ip, int $port, string $commKey, int $timeout): array

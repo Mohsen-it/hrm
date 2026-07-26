@@ -5,6 +5,9 @@ namespace Modules\FingerprintDevices\Providers;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\ServiceProvider;
 use Modules\FingerprintDevices\Console\Commands\BackfillDeviceOrgDefaults;
+use Modules\FingerprintDevices\Console\Commands\ExportFacePhotosToUsb;
+use Modules\FingerprintDevices\Console\Commands\FullSyncAllDevices;
+use Modules\FingerprintDevices\Console\Commands\ImportFacePhotosFromUsb;
 use Modules\FingerprintDevices\Console\Commands\ImportHikvisionEmployees;
 use Nwidart\Modules\Traits\PathNamespace;
 use RecursiveDirectoryIterator;
@@ -39,6 +42,9 @@ class FingerprintDevicesServiceProvider extends ServiceProvider
         $this->commands([
             ImportHikvisionEmployees::class,
             BackfillDeviceOrgDefaults::class,
+            FullSyncAllDevices::class,
+            ImportFacePhotosFromUsb::class,
+            ExportFacePhotosToUsb::class,
         ]);
     }
 

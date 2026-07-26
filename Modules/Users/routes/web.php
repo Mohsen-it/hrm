@@ -23,6 +23,9 @@ Route::middleware(['auth', 'permission:view-users'])
             Route::get('fingerprints', [UsersController::class, 'fingerprints'])
                 ->name('fingerprints');
 
+            Route::get('fingerprint-history', [UsersController::class, 'fingerprintHistory'])
+                ->name('fingerprint-history');
+
             Route::post('roles', [UsersController::class, 'updateRoles'])
                 ->name('roles.update');
             Route::post('permissions', [UsersController::class, 'updatePermissions'])

@@ -38,6 +38,7 @@ return [
     'delete' => 'Delete',
     'update' => 'Update',
     'view' => 'View',
+    'export' => 'Export',
     'search' => 'Search',
     'actions' => 'Actions',
     'action' => 'Action',

@@ -1,8 +1,9 @@
 <script setup>
 import { ref, computed, watch } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
+import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
-import { PageHeader, DataTable, SearchInput, ConfirmDialog, Badge, Button, Card, IconButton, FormSelect, FormCheckbox, Alert, Avatar } from '@/Components/ui';
+import { PageHeader, DataTable, SearchInput, ConfirmDialog, Badge, Button, Card, IconButton, FormSelect, FormCheckbox, Alert, Avatar, FormModal } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
@@ -27,6 +28,13 @@ const selectedUser = ref(null);
 const selectedIds = ref([]);
 const showBulkDelete = ref(false);
 
+const showFingerprintHistory = ref(false);
+const fingerprintUser = ref(null);
+const fingerprintLogs = ref([]);
+const fingerprintLoading = ref(false);
+const fingerprintPage = ref(1);
+const fingerprintPagination = ref({ total: 0, per_page: 50, current_page: 1, last_page: 1 });
+
 const columns = computed(() => [
     { key: 'select', label: '', cellClass: 'text-center w-[40px]' },
     { key: 'employee_code', label: t('users.employee_code'), sortable: true },
@@ -38,7 +46,7 @@ const columns = computed(() => [
     { key: 'department', label: t('users.department') },
     { key: 'shift', label: t('users.shift') },
     { key: 'status', label: t('common.status'), cellClass: 'text-center' },
-    { key: 'actions', label: t('common.actions'), cellClass: 'text-center w-[200px]' },
+    { key: 'actions', label: t('common.actions'), cellClass: 'text-center w-[240px]' },
 ]);
 
 const companyOptions = computed(() => [
@@ -144,6 +152,30 @@ function performBulkDelete() {
             selectedIds.value = [];
         },
     });
+}
+
+function openFingerprintHistory(user) {
+    fingerprintUser.value = user;
+    fingerprintLogs.value = [];
+    fingerprintPage.value = 1;
+    showFingerprintHistory.value = true;
+    fetchFingerprintLogs();
+}
+
+async function fetchFingerprintLogs(page = 1) {
+    fingerprintLoading.value = true;
+    try {
+        const { data } = await axios.get(route('users.fingerprint-history', fingerprintUser.value.id), {
+            params: { page, per_page: 20 },
+        });
+        fingerprintLogs.value = data.data;
+        fingerprintPagination.value = data.pagination;
+        fingerprintPage.value = page;
+    } catch {
+        fingerprintLogs.value = [];
+    } finally {
+        fingerprintLoading.value = false;
+    }
 }
 
 watch(
@@ -297,6 +329,7 @@ const flashError = computed(() => page.props.flash?.error);
                 <div class="flex items-center justify-center gap-1.5">
                     <IconButton icon="fas fa-eye" :aria-label="t('common.view')" variant="info" :href="route('users.show', row.id)" />
                     <IconButton icon="fas fa-pen" :aria-label="t('common.edit')" variant="primary" :href="route('users.edit', row.id)" />
+                    <IconButton icon="fas fa-fingerprint" :aria-label="t('users.fingerprint_history')" variant="success" @click="openFingerprintHistory(row)" />
                     <IconButton icon="fas fa-clock" :aria-label="t('users.manage_shifts')" variant="secondary" :href="route('users.shifts', row.id)" />
                     <IconButton icon="fas fa-trash" :aria-label="t('common.delete')" variant="danger" @click="confirmDelete(row)" />
                 </div>
@@ -322,5 +355,81 @@ const flashError = computed(() => page.props.flash?.error);
             confirm-variant="danger"
             @confirm="performBulkDelete"
         />
+
+        <FormModal v-model="showFingerprintHistory" :title="t('users.fingerprint_history') + ' — ' + (fingerprintUser?.name || '')" size="lg">
+            <div v-if="fingerprintLoading" class="flex items-center justify-center py-12">
+                <i class="fas fa-spinner fa-spin text-2xl text-mistral-primary"></i>
+            </div>
+            <div v-else-if="fingerprintLogs.length === 0" class="text-center py-12 text-mistral-steel">
+                <i class="fas fa-fingerprint text-4xl mb-3 block text-mistral-hairline"></i>
+                <p>{{ t('common.no_data') }}</p>
+            </div>
+            <div v-else class="max-h-[60vh] overflow-y-auto">
+                <table class="w-full text-[13px]">
+                    <thead class="sticky top-0 bg-white z-10">
+                        <tr class="border-b border-mistral-hairline-soft">
+                            <th class="text-start py-2 px-2.5 text-mistral-steel font-medium">{{ t('attendance.fields.punch_time') }}</th>
+                            <th class="text-start py-2 px-2.5 text-mistral-steel font-medium">{{ t('attendance.fields.punch_type') }}</th>
+                            <th class="text-start py-2 px-2.5 text-mistral-steel font-medium">{{ t('attendance.fields.verify_type') }}</th>
+                            <th class="text-start py-2 px-2.5 text-mistral-steel font-medium">{{ t('fingerprint_devices.device_name') }}</th>
+                            <th class="text-start py-2 px-2.5 text-mistral-steel font-medium">{{ t('common.status') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="log in fingerprintLogs" :key="log.id" class="border-b border-mistral-hairline-soft/50 hover:bg-mistral-surface/40 transition-colors">
+                            <td class="py-2 px-2.5 text-mistral-ink font-medium whitespace-nowrap">{{ log.punch_time }}</td>
+                            <td class="py-2 px-2.5">
+                                <Badge
+                                    :text="log.punch_type === 'check_in' ? t('attendance.punch_type.check_in') : log.punch_type === 'check_out' ? t('attendance.punch_type.check_out') : log.punch_type"
+                                    :variant="log.punch_type === 'check_in' ? 'active' : log.punch_type === 'check_out' ? 'warning' : 'inactive'"
+                                />
+                            </td>
+                            <td class="py-2 px-2.5 text-mistral-steel capitalize">{{ log.verify_type }}</td>
+                            <td class="py-2 px-2.5">
+                                <div v-if="log.device" class="text-mistral-ink">
+                                    <div class="font-medium">{{ log.device.name }}</div>
+                                    <div v-if="log.device.serial_number" class="text-[11px] text-mistral-steel">{{ log.device.serial_number }}</div>
+                                </div>
+                                <span v-else class="text-mistral-hairline">—</span>
+                            </td>
+                            <td class="py-2 px-2.5">
+                                <Badge
+                                    :text="log.processed ? t('attendance.fields.processed') : t('common.pending')"
+                                    :variant="log.processed ? 'active' : 'warning'"
+                                />
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <template v-if="fingerprintPagination.last_page > 1" #footer>
+                <div class="flex items-center justify-between w-full">
+                    <span class="text-[13px] text-mistral-steel">
+                        {{ t('common.total') }}: {{ fingerprintPagination.total }}
+                    </span>
+                    <div class="flex items-center gap-1">
+                        <Button
+                            variant="secondary"
+                            size="sm"
+                            :disabled="fingerprintPage <= 1"
+                            @click="fetchFingerprintLogs(fingerprintPage - 1)"
+                        >
+                            <i class="fas fa-chevron-right text-[11px]"></i>
+                        </Button>
+                        <span class="text-[13px] text-mistral-steel px-2">
+                            {{ fingerprintPage }} / {{ fingerprintPagination.last_page }}
+                        </span>
+                        <Button
+                            variant="secondary"
+                            size="sm"
+                            :disabled="fingerprintPage >= fingerprintPagination.last_page"
+                            @click="fetchFingerprintLogs(fingerprintPage + 1)"
+                        >
+                            <i class="fas fa-chevron-left text-[11px]"></i>
+                        </Button>
+                    </div>
+                </div>
+            </template>
+        </FormModal>
     </AppLayout>
 </template>

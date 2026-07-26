@@ -42,4 +42,11 @@ interface DeviceAdapterInterface
      * Default: empty array (not all devices support face photos).
      */
     public function getFacePhotos(string $ip, int $port, string $commKey, int $timeout): array;
+
+    /**
+     * Upload a face template/photo to the device.
+     *
+     * @return bool true on success
+     */
+    public function setFacePhoto(string $ip, int $port, string $commKey, int $timeout, int $uid, int $faceId, string $templateData): bool;
 }

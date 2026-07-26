@@ -268,6 +268,13 @@ export const navigationGroups = [
         icon: 'fa-solid fa-id-card',
         permissions: ['view-fingerprint-devices'],
       },
+      {
+        id: 'devices.unregistered',
+        label: 'menu.unregistered_employees',
+        route: 'fingerprint-devices.unregistered-employees',
+        icon: 'fa-solid fa-user-xmark',
+        permissions: ['view-fingerprint-devices'],
+      },
     ],
   },
   {

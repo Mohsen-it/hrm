@@ -335,6 +335,11 @@ class HikvisionAdapter implements DeviceAdapterInterface
         }
     }
 
+    public function setFacePhoto(string $ip, int $port, string $commKey, int $timeout, int $uid, int $faceId, string $templateData): bool
+    {
+        return false;
+    }
+
     /**
      * Hikvision uses username:password as commKey (Digest Auth credentials).
      * Format: "username:password" or falls back to config env vars.

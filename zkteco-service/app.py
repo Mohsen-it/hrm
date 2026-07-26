@@ -522,6 +522,161 @@ class ZKTecoService:
             logger.error(f"Get all templates failed: {str(e)}")
             raise
     
+    # ================================================================
+    # Face Template Methods (ZKTeco Face IDs: 50-54)
+    # ================================================================
+
+    def get_all_face_templates(self):
+        """
+        Get all face templates from device.
+        Face templates on ZKTeco iFace devices are stored as binary data
+        accessible via read_with_buffer with FCT values 3 or similar.
+        """
+        try:
+            if not self.conn:
+                raise Exception("Not connected")
+
+            result = []
+            self.conn.read_sizes()
+            face_count = self.conn.faces
+            logger.info(f"Device reports {face_count} face templates")
+
+            if face_count == 0:
+                return result
+
+            # Method 1: Try bulk read via read_with_buffer with FCT_FACE
+            # Try FCT values 3, 9, 10 for face data
+            for fct in [3, 9, 10, 11, 12]:
+                try:
+                    logger.info(f"Trying bulk face read with FCT={fct}")
+                    face_data, size = self.conn.read_with_buffer(7, fct)  # CMD_DB_RRQ=7
+                    logger.info(f"FCT={fct}: got {size} bytes")
+
+                    if size >= 4:
+                        total_size = unpack('i', face_data[0:4])[0]
+                        logger.info(f"FCT={fct}: total_size={total_size}")
+                        face_data = face_data[4:]
+
+                        while total_size >= 6:
+                            tpl_size, uid, fid, valid = unpack('HHbb', face_data[:6])
+                            if tpl_size < 6 or tpl_size > total_size:
+                                logger.info(f"FCT={fct}: invalid tpl_size={tpl_size}, stopping")
+                                break
+                            template = unpack("%is" % (tpl_size - 6), face_data[6:tpl_size])[0]
+                            result.append({
+                                'uid': uid,
+                                'fid': fid,
+                                'valid': valid,
+                                'template': base64.b64encode(template).decode('utf-8'),
+                                'tpl_size': tpl_size,
+                            })
+                            face_data = face_data[tpl_size:]
+                            total_size -= tpl_size
+
+                        if result:
+                            logger.info(f"Retrieved {len(result)} face templates via FCT={fct}")
+                            return result
+                except Exception as e:
+                    logger.info(f"FCT={fct} failed: {str(e)[:200]}")
+                    continue
+
+            # Method 2: Try CMD_USERTEMP_RRQ (9) with face IDs 50-54 per user
+            if not result:
+                try:
+                    logger.info("Trying per-user face read via CMD_USERTEMP_RRQ")
+                    users = self.conn.get_users()
+                    for user in users:
+                        for face_id in range(50, 55):
+                            try:
+                                cmd = 9  # CMD_USERTEMP_RRQ
+                                uid_bytes = pack('<H', user.uid)
+                                face_id_byte = bytes([face_id])
+                                command_string = uid_bytes + face_id_byte
+
+                                cmd_response = self.conn._ZK__send_command(cmd, command_string, response_size=1024)
+                                if cmd_response.get('status'):
+                                    template_data = self.conn._ZK__data
+                                    if template_data and len(template_data) > 0:
+                                        if any(b != 0 for b in template_data[:min(16, len(template_data))]):
+                                            result.append({
+                                                'uid': user.uid,
+                                                'fid': face_id,
+                                                'valid': 1,
+                                                'template': base64.b64encode(template_data).decode('utf-8'),
+                                                'tpl_size': len(template_data),
+                                            })
+                            except Exception:
+                                continue
+                except Exception as e:
+                    logger.warning(f"Per-user face read failed: {str(e)}")
+
+            logger.info(f"Retrieved {len(result)} face templates total")
+            return result
+
+        except Exception as e:
+            logger.error(f"Get face templates failed: {str(e)}")
+            raise
+
+    def export_face_template(self, uid, face_id, template_data):
+        """
+        Export (upload) a face template to the device.
+
+        Args:
+            uid: User ID on device
+            face_id: Face template ID (50-54)
+            template_data: Base64 encoded face template data
+
+        Returns:
+            dict with success status
+        """
+        try:
+            if not self.conn:
+                raise Exception("Not connected")
+
+            template_bytes = base64.b64decode(template_data)
+
+            logger.info(f"Exporting face template: UID={uid}, FaceID={face_id}, Size={len(template_bytes)}")
+
+            # Get user object
+            users = self.conn.get_users()
+            target_user = None
+            for user in users:
+                if user.uid == uid:
+                    target_user = user
+                    break
+
+            if not target_user:
+                raise Exception(f"User with UID {uid} not found on device")
+
+            # Use CMD_USERTEMP_WRQ (10) to upload face template
+            # Format: [size_lo][size_hi][uid_lo][uid_hi][face_id][flag][data...]
+            template_size = len(template_bytes)
+            prefix = pack('<HHBB', template_size, uid, face_id, 1)
+            command_string = prefix + template_bytes
+
+            cmd_response = self.conn._ZK__send_command(10, command_string, response_size=1024)
+
+            if cmd_response.get('status'):
+                logger.info(f"✅ Face template exported successfully: UID={uid}, FaceID={face_id}")
+                return {'success': True, 'uid': uid, 'face_id': face_id}
+            else:
+                # Try chunked transfer for large templates
+                if len(command_string) > 1024:
+                    self.conn._ZK__send_command(1500, pack('<I', len(command_string)))  # CMD_PREPARE_DATA
+                    for i in range(0, len(command_string), 1024):
+                        chunk = command_string[i:i + 1024]
+                        self.conn._ZK__send_command(1501, chunk)  # CMD_DATA
+                    cmd_response = self.conn._ZK__send_command(10, b'')  # CMD_USERTEMP_WRQ
+                    if cmd_response.get('status'):
+                        logger.info(f"✅ Face template exported via chunked transfer: UID={uid}, FaceID={face_id}")
+                        return {'success': True, 'uid': uid, 'face_id': face_id}
+
+                raise Exception(f"Device returned error for face template upload")
+
+        except Exception as e:
+            logger.error(f"Export face template failed: {str(e)}")
+            return {'success': False, 'error': str(e)}
+
     def clear_attendance(self):
         """Clear all attendance logs from device"""
         try:
@@ -536,6 +691,41 @@ class ZKTecoService:
         except Exception as e:
             logger.error(f"Clear attendance failed: {str(e)}")
             return False
+
+    def set_user_face(self, uid, photo_data):
+        """
+        Upload a face photo (JPEG) to the device.
+
+        Args:
+            uid: User ID on device (internal uid)
+            photo_data: Raw JPEG bytes
+
+        Returns:
+            dict with success status
+        """
+        try:
+            if not self.conn:
+                raise Exception("Not connected")
+
+            logger.info(f"Uploading face photo: UID={uid}, Size={len(photo_data)} bytes")
+
+            # Use CMD_USERPIC_WRQ (1107) to upload face photo
+            # Protocol: [uid_lo][uid_hi][0x00][photo_size_4_bytes][photo_data...]
+            uid_bytes = struct.pack('<H', uid)
+            size_bytes = struct.pack('<I', len(photo_data))
+            command_string = uid_bytes + b'\x00' + size_bytes + photo_data
+
+            # Send via CMD_PREPARE_DATA first for large payloads
+            prep = struct.pack('<IH', len(command_string), 0)
+            self.conn._ZK__send_command(1500, prep)  # CMD_PREPARE_DATA
+            cmd_response = self.conn._ZK__send_command(1501, command_string)  # CMD_DATA
+
+            logger.info(f"✅ Face photo uploaded: UID={uid}")
+            return {'success': True, 'uid': uid, 'size': len(photo_data)}
+
+        except Exception as e:
+            logger.error(f"Upload face photo failed: {str(e)}")
+            return {'success': False, 'error': str(e)}
     
     def get_device_info(self):
         """Get device information - fast version (no template counting)"""
@@ -551,7 +741,20 @@ class ZKTecoService:
                 'users_count': 0,
                 'attendance_count': 0,
                 'templates_count': 0,
+                'faces_count': 0,
+                'faces_cap': 0,
             }
+            
+            # Get counts from read_sizes
+            try:
+                self.conn.read_sizes()
+                info['users_count'] = self.conn.users
+                info['faces_count'] = self.conn.faces
+                info['faces_cap'] = self.conn.faces_cap
+                info['templates_count'] = self.conn.fingers
+                logger.info(f"read_sizes: users={self.conn.users}, faces={self.conn.faces}/{self.conn.faces_cap}, fingers={self.conn.fingers}")
+            except Exception as e:
+                logger.warning(f"read_sizes failed: {str(e)}")
             
             # Get users count (fast)
             try:
@@ -569,6 +772,105 @@ class ZKTecoService:
         except Exception as e:
             logger.error(f"Get device info failed: {str(e)}")
             raise
+
+
+@app.route('/device/debug-face', methods=['POST'])
+def debug_face():
+    """Debug endpoint to test face photo download - final attempt with raw protocol"""
+    import threading
+    import socket
+    import struct as struct_mod
+    
+    try:
+        data = request.json
+        ip = data.get('ip')
+        port = data.get('port', 4370)
+        password = data.get('password', 0)
+        
+        if not ip:
+            return jsonify({'success': False, 'error': 'IP required'}), 400
+        
+        service = ZKTecoService(ip, port, password)
+        if not service.connect():
+            return jsonify({'success': False, 'error': 'Could not connect'}), 500
+        
+        conn = service.conn
+        conn.read_sizes()
+        
+        debug_info = {
+            'faces': conn.faces,
+            'faces_cap': conn.faces_cap,
+            'fingers': conn.fingers,
+            'users': conn.users,
+            'face_version': None,
+            'tests': []
+        }
+        
+        try:
+            debug_info['face_version'] = conn.get_face_version()
+        except Exception as e:
+            debug_info['face_version'] = f'error: {str(e)[:100]}'
+
+        # Get users list to find uid for a user with face
+        users = conn.get_users()
+        user_with_face = None
+        for u in users:
+            if hasattr(u, 'uid'):
+                user_with_face = u
+                break
+        
+        test_uid = user_with_face.uid if user_with_face else 1
+        test_pin = user_with_face.user_id if user_with_face else '1'
+        debug_info['test_user'] = {'uid': test_uid, 'pin': test_pin}
+
+        # Method 1: CMD_USERTEMP_RRQ (9) - the documented protocol command
+        # Protocol format: pack('<Hb', user_sn, finger_index) where finger_index=50 for face
+        CMD_USERTEMP_RRQ = 9
+        for temp_id in [50, 0]:
+            try:
+                command_string = struct_mod.pack('<Hb', test_uid, temp_id)
+                cmd_response = conn._ZK__send_command(CMD_USERTEMP_RRQ, command_string, response_size=1024+8)
+                data_result = None
+                try:
+                    data_result = conn._ZK__recieve_chunk()
+                except:
+                    pass
+                debug_info['tests'].append({
+                    'method': f'CMD_USERTEMP_RRQ(9) uid={test_uid} temp_id={temp_id}',
+                    'status': cmd_response.get('status'),
+                    'code': cmd_response.get('code'),
+                    'response': conn._ZK__response,
+                    'data_len': len(data_result) if data_result else 0,
+                    'data_hex': data_result[:80].hex() if data_result else 'empty',
+                })
+            except Exception as e:
+                debug_info['tests'].append({
+                    'method': f'CMD_USERTEMP_RRQ(9) uid={test_uid} temp_id={temp_id}',
+                    'error': str(e)[:200],
+                })
+            
+            # Reconnect if needed
+            try:
+                service.disconnect()
+                import time
+                time.sleep(2)
+                service = ZKTecoService(ip, port, password)
+                if not service.connect():
+                    break
+                conn = service.conn
+            except:
+                break
+
+        try:
+            service.disconnect()
+        except:
+            pass
+        
+        return jsonify({'success': True, 'debug': debug_info})
+        
+    except Exception as e:
+        logger.error(f"Debug face error: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 # API Endpoints
@@ -990,6 +1292,152 @@ def get_all_templates():
         
     except Exception as e:
         logger.error(f"Get all templates error: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/device/get-all-face-templates', methods=['POST'])
+def get_all_face_templates():
+    """Get ALL face templates from device"""
+    try:
+        data = request.json
+
+        ip = data.get('ip')
+        port = data.get('port', 4370)
+        password = data.get('password', 0)
+
+        if not ip:
+            return jsonify({'success': False, 'error': 'IP required'}), 400
+
+        service = ZKTecoService(ip, port, password)
+
+        if not service.connect():
+            return jsonify({'success': False, 'error': 'Could not connect'}), 500
+
+        templates = service.get_all_face_templates()
+
+        service.disconnect()
+
+        return jsonify({
+            'success': True,
+            'templates': templates,
+            'count': len(templates)
+        })
+
+    except Exception as e:
+        logger.error(f"Get face templates error: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/device/export-face-template', methods=['POST'])
+def export_face_template():
+    """Export (upload) a face template to device"""
+    try:
+        data = request.json
+
+        ip = data.get('ip')
+        port = data.get('port', 4370)
+        password = data.get('password', 0)
+        uid = data.get('uid')
+        face_id = data.get('face_id', 50)
+        template_data = data.get('template_data')
+
+        if not ip or uid is None or not template_data:
+            return jsonify({'success': False, 'error': 'IP, uid, and template_data required'}), 400
+
+        service = ZKTecoService(ip, port, password)
+
+        if not service.connect():
+            return jsonify({'success': False, 'error': 'Could not connect'}), 500
+
+        result = service.export_face_template(uid, face_id, template_data)
+
+        service.disconnect()
+
+        return jsonify(result)
+
+    except Exception as e:
+        logger.error(f"Export face template error: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/device/push-face-photo', methods=['POST'])
+def push_face_photo():
+    """Push a face photo (JPEG) to device"""
+    try:
+        data = request.json
+
+        ip = data.get('ip')
+        port = data.get('port', 4370)
+        password = data.get('password', 0)
+        uid = data.get('uid')
+        photo_base64 = data.get('photo_base64')
+
+        if not ip or uid is None or not photo_base64:
+            return jsonify({'success': False, 'error': 'IP, uid, and photo_base64 required'}), 400
+
+        photo_data = base64.b64decode(photo_base64)
+
+        service = ZKTecoService(ip, port, password)
+
+        if not service.connect():
+            return jsonify({'success': False, 'error': 'Could not connect'}), 500
+
+        result = service.set_user_face(uid, photo_data)
+
+        service.disconnect()
+
+        return jsonify(result)
+
+    except Exception as e:
+        logger.error(f"Push face photo error: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/device/push-face-photos-batch', methods=['POST'])
+def push_face_photos_batch():
+    """Push multiple face photos to device"""
+    try:
+        data = request.json
+
+        ip = data.get('ip')
+        port = data.get('port', 4370)
+        password = data.get('password', 0)
+        photos = data.get('photos', [])
+
+        if not ip or not photos:
+            return jsonify({'success': False, 'error': 'IP and photos array required'}), 400
+
+        service = ZKTecoService(ip, port, password)
+
+        if not service.connect():
+            return jsonify({'success': False, 'error': 'Could not connect'}), 500
+
+        results = []
+        for photo in photos:
+            uid = photo.get('uid')
+            photo_base64 = photo.get('photo_base64')
+
+            if uid is None or not photo_base64:
+                results.append({'uid': uid, 'success': False, 'error': 'Missing uid or photo'})
+                continue
+
+            photo_data = base64.b64decode(photo_base64)
+            result = service.set_user_face(uid, photo_data)
+            results.append(result)
+
+        service.disconnect()
+
+        success_count = sum(1 for r in results if r.get('success'))
+        return jsonify({
+            'success': True,
+            'total': len(photos),
+            'success_count': success_count,
+            'fail_count': len(photos) - success_count,
+            'results': results,
+        })
+
+    except Exception as e:
+        logger.error(f"Push face photos batch error: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 

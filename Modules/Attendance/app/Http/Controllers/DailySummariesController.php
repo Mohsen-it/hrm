@@ -4,15 +4,20 @@ namespace Modules\Attendance\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Traits\ExcelExportable;
+use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 use Modules\Attendance\Exports\DailySummariesExport;
+use Modules\Attendance\Exports\LateCheckInsExport;
+use Modules\Attendance\Exports\LateForVacationExport;
+use Modules\Attendance\Exports\MissingCheckOutsExport;
 use Modules\Attendance\Http\Requests\UpdateDailyAttendanceSummaryRequest;
 use Modules\Attendance\Http\Resources\DailyAttendanceSummaryResource;
 use Modules\Attendance\Jobs\RecalculateDailySummariesChunk;
 use Modules\Attendance\Jobs\RecalculateDateRangeChunk;
+use Modules\Attendance\Services\AttendanceViolationService;
 use Modules\Attendance\Services\DailyAttendanceSummaryService;
 use Modules\Users\Services\UserService;
 
@@ -32,6 +37,7 @@ class DailySummariesController extends Controller
      */
     public function __construct(
         private DailyAttendanceSummaryService $summaryService,
+        private AttendanceViolationService $violationService,
         private UserService $userService,
     ) {}
 
@@ -158,6 +164,231 @@ class DailySummariesController extends Controller
         $export = new DailySummariesExport($summaries, $from, $to);
 
         return $this->downloadExcel($export->build(), 'attendance-daily-summaries');
+    }
+
+    // ------------------------------------------------------------------
+    // Violation reports
+    // ------------------------------------------------------------------
+
+    /**
+     * Get employees who checked in after the specified cutoff time.
+     */
+    public function lateCheckIns(Request $request)
+    {
+        $this->authorize('view-attendance');
+
+        $data = $request->validate([
+            'from' => ['required', 'date_format:Y-m-d'],
+            'to' => ['required', 'date_format:Y-m-d', 'after_or_equal:from'],
+            'cutoff_time' => ['required', 'date_format:H:i'],
+            'user_id' => ['nullable', 'integer', 'exists:users,id'],
+        ]);
+
+        $results = $this->violationService->getLateCheckIns(
+            $data['from'],
+            $data['to'],
+            $data['cutoff_time'],
+            $data['user_id'] ?? null,
+        );
+
+        return response()->json([
+            'data' => $results->map(fn ($s) => [
+                'id' => $s->id,
+                'user_id' => $s->user_id,
+                'user_name' => $s->user?->name ?? '—',
+                'employee_code' => $s->user?->employee_code ?? '',
+                'summary_date' => $s->attendance_date?->format('Y-m-d') ?? '',
+                'first_check_in_at' => $s->check_in_at?->format('Y-m-d H:i') ?? '',
+                'cutoff_time' => $data['cutoff_time'],
+                'late_minutes' => $this->calculateLateMinutes($s->check_in_at, $data['cutoff_time']),
+            ]),
+        ]);
+    }
+
+    /**
+     * Export late check-ins to Excel.
+     */
+    public function exportLateCheckIns(Request $request)
+    {
+        $this->authorize('view-attendance');
+
+        $data = $request->validate([
+            'from' => ['required', 'date_format:Y-m-d'],
+            'to' => ['required', 'date_format:Y-m-d', 'after_or_equal:from'],
+            'cutoff_time' => ['required', 'date_format:H:i'],
+            'user_id' => ['nullable', 'integer', 'exists:users,id'],
+        ]);
+
+        $results = $this->violationService->getLateCheckIns(
+            $data['from'],
+            $data['to'],
+            $data['cutoff_time'],
+            $data['user_id'] ?? null,
+        );
+
+        $export = new LateCheckInsExport($results, $data['from'], $data['to'], $data['cutoff_time']);
+
+        return $this->downloadExcel($export->build(), 'late-check-ins-report');
+    }
+
+    /**
+     * Get employees with missing check-outs.
+     */
+    public function missingCheckOuts(Request $request)
+    {
+        $this->authorize('view-attendance');
+
+        $data = $request->validate([
+            'from' => ['required', 'date_format:Y-m-d'],
+            'to' => ['required', 'date_format:Y-m-d', 'after_or_equal:from'],
+            'cutoff_time' => ['nullable', 'date_format:H:i'],
+            'user_id' => ['nullable', 'integer', 'exists:users,id'],
+        ]);
+
+        $cutoffTime = $data['cutoff_time'] ?? '15:00';
+
+        $results = $this->violationService->getMissingCheckOuts(
+            $data['from'],
+            $data['to'],
+            $cutoffTime,
+            $data['user_id'] ?? null,
+        );
+
+        return response()->json([
+            'data' => $results->map(fn ($s) => [
+                'id' => $s->id,
+                'user_id' => $s->user_id,
+                'user_name' => $s->user?->name ?? '—',
+                'employee_code' => $s->user?->employee_code ?? '',
+                'summary_date' => $s->attendance_date?->format('Y-m-d') ?? '',
+                'first_check_in_at' => $s->check_in_at?->format('Y-m-d H:i') ?? '',
+                'last_check_out_at' => null,
+                'cutoff_time' => $cutoffTime,
+                'late_minutes' => $this->calculateWorkMinutesSince($s->check_in_at),
+            ]),
+        ]);
+    }
+
+    /**
+     * Export missing check-outs to Excel.
+     */
+    public function exportMissingCheckOuts(Request $request)
+    {
+        $this->authorize('view-attendance');
+
+        $data = $request->validate([
+            'from' => ['required', 'date_format:Y-m-d'],
+            'to' => ['required', 'date_format:Y-m-d', 'after_or_equal:from'],
+            'cutoff_time' => ['nullable', 'date_format:H:i'],
+            'user_id' => ['nullable', 'integer', 'exists:users,id'],
+        ]);
+
+        $cutoffTime = $data['cutoff_time'] ?? '17:00';
+
+        $results = $this->violationService->getMissingCheckOuts(
+            $data['from'],
+            $data['to'],
+            $cutoffTime,
+            $data['user_id'] ?? null,
+        );
+
+        $export = new MissingCheckOutsExport($results, $data['from'], $data['to'], $cutoffTime);
+
+        return $this->downloadExcel($export->build(), 'missing-checkouts-report');
+    }
+
+    /**
+     * Get employees who arrived late and need to file a vacation request.
+     */
+    public function lateForVacation(Request $request)
+    {
+        $this->authorize('view-attendance');
+
+        $data = $request->validate([
+            'from' => ['required', 'date_format:Y-m-d'],
+            'to' => ['required', 'date_format:Y-m-d', 'after_or_equal:from'],
+            'cutoff_time' => ['required', 'date_format:H:i'],
+            'user_id' => ['nullable', 'integer', 'exists:users,id'],
+        ]);
+
+        $results = $this->violationService->getLateForVacation(
+            $data['from'],
+            $data['to'],
+            $data['cutoff_time'],
+            $data['user_id'] ?? null,
+        );
+
+        return response()->json([
+            'data' => $results->map(fn ($s) => [
+                'id' => $s->id,
+                'user_id' => $s->user_id,
+                'user_name' => $s->user?->name ?? '—',
+                'employee_code' => $s->user?->employee_code ?? '',
+                'summary_date' => $s->attendance_date?->format('Y-m-d') ?? '',
+                'first_check_in_at' => $s->check_in_at?->format('Y-m-d H:i') ?? '',
+                'cutoff_time' => $data['cutoff_time'],
+                'late_minutes' => $this->calculateLateMinutes($s->check_in_at, $data['cutoff_time']),
+            ]),
+        ]);
+    }
+
+    /**
+     * Export late-for-vacation employees to Excel.
+     */
+    public function exportLateForVacation(Request $request)
+    {
+        $this->authorize('view-attendance');
+
+        $data = $request->validate([
+            'from' => ['required', 'date_format:Y-m-d'],
+            'to' => ['required', 'date_format:Y-m-d', 'after_or_equal:from'],
+            'cutoff_time' => ['required', 'date_format:H:i'],
+            'user_id' => ['nullable', 'integer', 'exists:users,id'],
+        ]);
+
+        $results = $this->violationService->getLateForVacation(
+            $data['from'],
+            $data['to'],
+            $data['cutoff_time'],
+            $data['user_id'] ?? null,
+        );
+
+        $export = new LateForVacationExport($results, $data['from'], $data['to'], $data['cutoff_time']);
+
+        return $this->downloadExcel($export->build(), 'late-for-vacation-report');
+    }
+
+    /**
+     * Calculate late minutes between a check-in time and a cutoff time.
+     */
+    private function calculateLateMinutes(?string $checkInAt, string $cutoffTime): int
+    {
+        if (! $checkInAt) {
+            return 0;
+        }
+
+        $checkIn = Carbon::parse($checkInAt);
+        $cutoff = Carbon::parse($checkIn->format('Y-m-d').' '.$cutoffTime);
+
+        if ($checkIn->lte($cutoff)) {
+            return 0;
+        }
+
+        return (int) $checkIn->diffInMinutes($cutoff);
+    }
+
+    /**
+     * Calculate total work minutes from check-in until now.
+     */
+    private function calculateWorkMinutesSince(?string $checkInAt): int
+    {
+        if (! $checkInAt) {
+            return 0;
+        }
+
+        $checkIn = Carbon::parse($checkInAt);
+
+        return (int) $checkIn->diffInMinutes(Carbon::now());
     }
 
     /**

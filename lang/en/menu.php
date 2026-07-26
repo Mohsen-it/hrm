@@ -42,4 +42,5 @@ return [
     'rotations' => 'Rotations',
     'rotation_assignments' => 'Rotation Assignments',
     'rotation_groups' => 'Rotation Groups',
+    'unregistered_employees' => 'Unregistered Employees',
 ];

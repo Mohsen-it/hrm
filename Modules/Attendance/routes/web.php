@@ -77,6 +77,15 @@ Route::middleware(['auth'])->group(function () {
     Route::middleware('permission:view-attendance')->prefix('attendance/daily-summaries')->name('attendance.daily-summaries.')->group(function () {
         Route::get('/export/excel', [DailySummariesController::class, 'export'])->name('export');
         Route::get('/', [DailySummariesController::class, 'index'])->name('index');
+
+        // Violation reports — must be before {id} to avoid parameter conflicts
+        Route::get('late-check-ins', [DailySummariesController::class, 'lateCheckIns'])->name('late-check-ins');
+        Route::get('export/late-check-ins', [DailySummariesController::class, 'exportLateCheckIns'])->name('export-late-check-ins');
+        Route::get('missing-check-outs', [DailySummariesController::class, 'missingCheckOuts'])->name('missing-check-outs');
+        Route::get('export/missing-check-outs', [DailySummariesController::class, 'exportMissingCheckOuts'])->name('export-missing-check-outs');
+        Route::get('late-for-vacation', [DailySummariesController::class, 'lateForVacation'])->name('late-for-vacation');
+        Route::get('export/late-for-vacation', [DailySummariesController::class, 'exportLateForVacation'])->name('export-late-for-vacation');
+
         Route::get('{id}', [DailySummariesController::class, 'show'])->name('show');
         Route::put('{id}', [DailySummariesController::class, 'update'])
             ->middleware('permission:edit-attendance')

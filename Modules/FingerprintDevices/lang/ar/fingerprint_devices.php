@@ -174,6 +174,8 @@ return [
     'sync_select_users_by_branch' => 'حسب الفرع',
     'sync_select_users_missing' => 'من لم يُدفع سابقاً',
     'sync_push_run' => 'دفع إلى الجهاز',
+    'sync_push_all' => 'دفع لكل الأجهزة',
+    'sync_push_all_description' => 'دفع الموظفين والبصمات لكل الأجهزة النشطة',
     'sync_bidirectional' => 'مزامنة ثنائية',
     'sync_bidirectional_description' => 'سحب ثم دفع في عملية واحدة',
     'queued_success' => 'تم وضع العملية في قائمة الانتظار. ستكتمل في الخلفية.',
@@ -244,4 +246,11 @@ return [
     'preview_session_expired' => 'انتهت جلستك. سجّل الدخول من جديد.',
     'preview_no_permission' => 'ليست لديك صلاحية تنفيذ هذه العملية (تحتاج صلاحية تعديل الأجهزة).',
     'preview_unexpected_response' => 'استجابة غير متوقعة من الخادم (HTTP :status).',
+
+    // ===== Unregistered employees =====
+    'unregistered_employees' => 'الموظفون غير المسجلين للبصمة',
+    'unregistered_employees_description' => 'قائمة الموظفين الذين لم تُسجَّل لهم أي بصمة حيوية في النظام',
+    'unregistered_count_label' => 'موظف بدون بصمة',
+    'no_unregistered_title' => 'جميع المسجلين',
+    'no_unregistered_description' => 'جميع الموظفين لديهم بصمات مسجلة في النظام',
 ];

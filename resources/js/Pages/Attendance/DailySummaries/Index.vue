@@ -2,7 +2,7 @@
 import { ref, computed } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
-import { PageHeader, Button, DataTable, FormModal, FormInput, FormSelect, FormCheckbox, Badge, Alert } from '@/Components/ui';
+import { PageHeader, Button, Card, DataTable, FormModal, FormInput, FormSelect, FormCheckbox, Badge, Alert, EmptyState } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
@@ -68,6 +68,97 @@ const columns = computed(() => [
     { key: 'to', label: t('attendance.fields.to'), filterable: true, filterType: 'date', filterKey: 'to' },
 ]);
 
+// ------------------------------------------------------------------
+// Violation sections
+// ------------------------------------------------------------------
+
+const today = new Date().toISOString().slice(0, 10);
+const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+
+// Section 1: Late check-ins
+const lateCheckInForm = ref({ from: thirtyDaysAgo, to: today, cutoff_time: '08:00', user_id: '' });
+const lateCheckInData = ref([]);
+const lateCheckInLoading = ref(false);
+
+// Section 2: Missing check-outs
+const missingCheckOutForm = ref({ from: thirtyDaysAgo, to: today, cutoff_time: '15:30', user_id: '' });
+const missingCheckOutData = ref([]);
+const missingCheckOutLoading = ref(false);
+
+// Section 3: Late for vacation
+const lateForVacationForm = ref({ from: thirtyDaysAgo, to: today, cutoff_time: '08:00', user_id: '' });
+const lateForVacationData = ref([]);
+const lateForVacationLoading = ref(false);
+
+async function fetchLateCheckIns() {
+    lateCheckInLoading.value = true;
+    try {
+        const params = new URLSearchParams({ ...lateCheckInForm.value });
+        if (!lateCheckInForm.value.user_id) params.delete('user_id');
+        const res = await fetch(route('attendance.daily-summaries.late-check-ins') + '?' + params.toString(), {
+            credentials: 'same-origin',
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+        });
+        const json = await res.json();
+        lateCheckInData.value = json.data || [];
+    } catch {
+        lateCheckInData.value = [];
+    } finally {
+        lateCheckInLoading.value = false;
+    }
+}
+
+async function fetchMissingCheckOuts() {
+    missingCheckOutLoading.value = true;
+    try {
+        const params = new URLSearchParams({ ...missingCheckOutForm.value });
+        if (!missingCheckOutForm.value.user_id) params.delete('user_id');
+        const res = await fetch(route('attendance.daily-summaries.missing-check-outs') + '?' + params.toString(), {
+            credentials: 'same-origin',
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+        });
+        const json = await res.json();
+        missingCheckOutData.value = json.data || [];
+    } catch {
+        missingCheckOutData.value = [];
+    } finally {
+        missingCheckOutLoading.value = false;
+    }
+}
+
+async function fetchLateForVacation() {
+    lateForVacationLoading.value = true;
+    try {
+        const params = new URLSearchParams({ ...lateForVacationForm.value });
+        if (!lateForVacationForm.value.user_id) params.delete('user_id');
+        const res = await fetch(route('attendance.daily-summaries.late-for-vacation') + '?' + params.toString(), {
+            credentials: 'same-origin',
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+        });
+        const json = await res.json();
+        lateForVacationData.value = json.data || [];
+    } catch {
+        lateForVacationData.value = [];
+    } finally {
+        lateForVacationLoading.value = false;
+    }
+}
+
+function exportLateCheckIns() {
+    const params = new URLSearchParams({ ...lateCheckInForm.value });
+    window.location.href = route('attendance.daily-summaries.export-late-check-ins') + '?' + params.toString();
+}
+
+function exportMissingCheckOuts() {
+    const params = new URLSearchParams({ ...missingCheckOutForm.value });
+    window.location.href = route('attendance.daily-summaries.export-missing-check-outs') + '?' + params.toString();
+}
+
+function exportLateForVacation() {
+    const params = new URLSearchParams({ ...lateForVacationForm.value });
+    window.location.href = route('attendance.daily-summaries.export-late-for-vacation') + '?' + params.toString();
+}
+
 function onSearch(value) {
     router.get(
         route('attendance.daily-summaries.index'),
@@ -132,6 +223,7 @@ const flashSuccess = computed(() => page.props.flash?.success);
 
         <Alert v-if="flashSuccess" type="success" :message="flashSuccess" class="mb-4" />
 
+        <!-- Main summaries table -->
         <DataTable
             :columns="columns"
             :data="summaries"
@@ -167,6 +259,256 @@ const flashSuccess = computed(() => page.props.flash?.success);
             </template>
         </DataTable>
 
+        <!-- ============================================================ -->
+        <!-- Section 1: Late Check-ins                                     -->
+        <!-- ============================================================ -->
+        <Card variant="base" class="mt-8">
+            <template #header>
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="text-lg font-bold text-mistral-ink">
+                            {{ t('attendance.violations.late_check_ins') }}
+                        </h3>
+                        <p class="text-sm text-mistral-stone mt-1">
+                            {{ t('attendance.violations.late_check_ins_description') }}
+                        </p>
+                    </div>
+                    <Button
+                        v-if="lateCheckInData.length > 0"
+                        variant="secondary"
+                        icon="fas fa-file-excel"
+                        @click="exportLateCheckIns"
+                    >
+                        {{ t('attendance.violations.export') }}
+                    </Button>
+                </div>
+            </template>
+
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                <FormInput
+                    v-model="lateCheckInForm.from"
+                    :label="t('attendance.violations.from_date')"
+                    type="date"
+                />
+                <FormInput
+                    v-model="lateCheckInForm.to"
+                    :label="t('attendance.violations.to_date')"
+                    type="date"
+                />
+                <FormInput
+                    v-model="lateCheckInForm.cutoff_time"
+                    :label="t('attendance.violations.cutoff_time')"
+                    type="time"
+                />
+                <div class="flex items-end">
+                    <Button variant="primary" icon="fas fa-search" :loading="lateCheckInLoading" class="w-full" @click="fetchLateCheckIns">
+                        {{ t('attendance.violations.search') }}
+                    </Button>
+                </div>
+            </div>
+
+            <div v-if="lateCheckInData.length > 0" class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="border-b border-mistral-border bg-mistral-cream/30">
+                            <th class="px-4 py-3 text-start font-semibold text-mistral-ink">#</th>
+                            <th class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.employee_name') }}</th>
+                            <th class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.employee_code') }}</th>
+                            <th class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.date') }}</th>
+                            <th class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.check_in_time') }}</th>
+                            <th class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.cutoff') }}</th>
+                            <th class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.late_minutes') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="(row, idx) in lateCheckInData" :key="row.id" class="border-b border-mistral-border hover:bg-mistral-cream/20">
+                            <td class="px-4 py-3 text-mistral-stone">{{ idx + 1 }}</td>
+                            <td class="px-4 py-3 font-medium text-mistral-ink">{{ row.user_name }}</td>
+                            <td class="px-4 py-3 text-mistral-stone">{{ row.employee_code }}</td>
+                            <td class="px-4 py-3 text-mistral-stone" dir="ltr">{{ row.summary_date }}</td>
+                            <td class="px-4 py-3 text-mistral-stone" dir="ltr">{{ row.first_check_in_at }}</td>
+                            <td class="px-4 py-3 text-mistral-stone" dir="ltr">{{ row.cutoff_time }}</td>
+                            <td class="px-4 py-3">
+                                <Badge :text="`${row.late_minutes} ${t('attendance.units.minutes_short')}`" variant="pending" />
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <EmptyState
+                v-else-if="!lateCheckInLoading && lateCheckInData.length === 0"
+                :title="t('attendance.violations.no_data')"
+                icon="fas fa-clock"
+            />
+        </Card>
+
+        <!-- ============================================================ -->
+        <!-- Section 2: Missing Check-outs                                 -->
+        <!-- ============================================================ -->
+        <Card variant="base" class="mt-8">
+            <template #header>
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="text-lg font-bold text-mistral-ink">
+                            {{ t('attendance.violations.missing_check_outs') }}
+                        </h3>
+                        <p class="text-sm text-mistral-stone mt-1">
+                            {{ t('attendance.violations.missing_check_outs_description') }}
+                        </p>
+                    </div>
+                    <Button
+                        v-if="missingCheckOutData.length > 0"
+                        variant="secondary"
+                        icon="fas fa-file-excel"
+                        @click="exportMissingCheckOuts"
+                    >
+                        {{ t('attendance.violations.export') }}
+                    </Button>
+                </div>
+            </template>
+
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                <FormInput
+                    v-model="missingCheckOutForm.from"
+                    :label="t('attendance.violations.from_date')"
+                    type="date"
+                />
+                <FormInput
+                    v-model="missingCheckOutForm.to"
+                    :label="t('attendance.violations.to_date')"
+                    type="date"
+                />
+                <FormInput
+                    v-model="missingCheckOutForm.cutoff_time"
+                    :label="t('attendance.violations.cutoff_time')"
+                    type="time"
+                />
+                <div class="flex items-end">
+                    <Button variant="primary" icon="fas fa-search" :loading="missingCheckOutLoading" class="w-full" @click="fetchMissingCheckOuts">
+                        {{ t('attendance.violations.search') }}
+                    </Button>
+                </div>
+            </div>
+
+            <div v-if="missingCheckOutData.length > 0" class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="border-b border-mistral-border bg-mistral-cream/30">
+                            <th class="px-4 py-3 text-start font-semibold text-mistral-ink">#</th>
+                            <th class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.employee_name') }}</th>
+                            <th class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.employee_code') }}</th>
+                            <th class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.date') }}</th>
+                            <th class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.check_in_time') }}</th>
+                            <th class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.cutoff') }}</th>
+                            <th class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.missing_checkout_duration') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="(row, idx) in missingCheckOutData" :key="row.id" class="border-b border-mistral-border hover:bg-mistral-cream/20">
+                            <td class="px-4 py-3 text-mistral-stone">{{ idx + 1 }}</td>
+                            <td class="px-4 py-3 font-medium text-mistral-ink">{{ row.user_name }}</td>
+                            <td class="px-4 py-3 text-mistral-stone">{{ row.employee_code }}</td>
+                            <td class="px-4 py-3 text-mistral-stone" dir="ltr">{{ row.summary_date }}</td>
+                            <td class="px-4 py-3 text-mistral-stone" dir="ltr">{{ row.first_check_in_at }}</td>
+                            <td class="px-4 py-3 text-mistral-stone" dir="ltr">{{ row.cutoff_time }}</td>
+                            <td class="px-4 py-3">
+                                <Badge :text="`${row.late_minutes} ${t('attendance.units.minutes_short')}`" variant="absent" />
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <EmptyState
+                v-else-if="!missingCheckOutLoading && missingCheckOutData.length === 0"
+                :title="t('attendance.violations.no_data')"
+                icon="fas fa-sign-out-alt"
+            />
+        </Card>
+
+        <!-- ============================================================ -->
+        <!-- Section 3: Late for Vacation                                  -->
+        <!-- ============================================================ -->
+        <Card variant="base" class="mt-8 mb-8">
+            <template #header>
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="text-lg font-bold text-mistral-ink">
+                            {{ t('attendance.violations.late_for_vacation') }}
+                        </h3>
+                        <p class="text-sm text-mistral-stone mt-1">
+                            {{ t('attendance.violations.late_for_vacation_description') }}
+                        </p>
+                    </div>
+                    <Button
+                        v-if="lateForVacationData.length > 0"
+                        variant="secondary"
+                        icon="fas fa-file-excel"
+                        @click="exportLateForVacation"
+                    >
+                        {{ t('attendance.violations.export') }}
+                    </Button>
+                </div>
+            </template>
+
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                <FormInput
+                    v-model="lateForVacationForm.from"
+                    :label="t('attendance.violations.from_date')"
+                    type="date"
+                />
+                <FormInput
+                    v-model="lateForVacationForm.to"
+                    :label="t('attendance.violations.to_date')"
+                    type="date"
+                />
+                <FormInput
+                    v-model="lateForVacationForm.cutoff_time"
+                    :label="t('attendance.violations.cutoff_time')"
+                    type="time"
+                />
+                <div class="flex items-end">
+                    <Button variant="primary" icon="fas fa-search" :loading="lateForVacationLoading" class="w-full" @click="fetchLateForVacation">
+                        {{ t('attendance.violations.search') }}
+                    </Button>
+                </div>
+            </div>
+
+            <div v-if="lateForVacationData.length > 0" class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="border-b border-mistral-border bg-mistral-cream/30">
+                            <th class="px-4 py-3 text-start font-semibold text-mistral-ink">#</th>
+                            <th class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.employee_name') }}</th>
+                            <th class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.employee_code') }}</th>
+                            <th class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.date') }}</th>
+                            <th class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.check_in_time') }}</th>
+                            <th class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.cutoff') }}</th>
+                            <th class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.late_minutes') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="(row, idx) in lateForVacationData" :key="row.id" class="border-b border-mistral-border hover:bg-mistral-cream/20">
+                            <td class="px-4 py-3 text-mistral-stone">{{ idx + 1 }}</td>
+                            <td class="px-4 py-3 font-medium text-mistral-ink">{{ row.user_name }}</td>
+                            <td class="px-4 py-3 text-mistral-stone">{{ row.employee_code }}</td>
+                            <td class="px-4 py-3 text-mistral-stone" dir="ltr">{{ row.summary_date }}</td>
+                            <td class="px-4 py-3 text-mistral-stone" dir="ltr">{{ row.first_check_in_at }}</td>
+                            <td class="px-4 py-3 text-mistral-stone" dir="ltr">{{ row.cutoff_time }}</td>
+                            <td class="px-4 py-3">
+                                <Badge :text="`${row.late_minutes} ${t('attendance.units.minutes_short')}`" variant="pending" />
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <EmptyState
+                v-else-if="!lateForVacationLoading && lateForVacationData.length === 0"
+                :title="t('attendance.violations.no_data')"
+                icon="fas fa-calendar-times"
+            />
+        </Card>
+
+        <!-- Recalculate modals -->
         <FormModal v-model="showRecalc" :title="t('attendance.actions.recalculate')" size="sm">
             <div class="grid grid-cols-1 gap-3">
                 <FormSelect

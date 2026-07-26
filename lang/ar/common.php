@@ -38,6 +38,7 @@ return [
     'delete' => 'حذف',
     'update' => 'تحديث',
     'view' => 'عرض',
+    'export' => 'تصدير',
     'search' => 'بحث',
     'actions' => 'إجراءات',
     'action' => 'إجراء',

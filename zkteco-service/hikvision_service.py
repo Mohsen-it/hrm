@@ -36,6 +36,9 @@ logger = logging.getLogger(__name__)
 SERVICE_HOST = os.getenv('HIKVISION_SERVICE_HOST', '0.0.0.0')
 SERVICE_PORT = int(os.getenv('HIKVISION_SERVICE_PORT', '5001'))
 
+# تاريخ القطع - 15 يوليو 2026
+CUTOFF_DATE = datetime(2026, 7, 15)
+
 
 class HikvisionService:
     """Hikvision ISAPI Device Service"""
@@ -169,15 +172,24 @@ class HikvisionService:
             total += u.get('num_of_fp', 0)
         return total
 
-    def get_users(self, max_per_page=32):
+    def get_users(self, max_per_page=32, filter_by_validity=True):
         """Get all users from device with pagination and retry on auth failure.
-        Creates a fresh session on each page to avoid throttling."""
+        Creates a fresh session on each page to avoid throttling.
+        
+        Args:
+            max_per_page: Number of users per page
+            filter_by_validity: If True, only return users with validity end date > CUTOFF_DATE
+        
+        Returns:
+            List of users with their validity information
+        """
         all_users = []
         position = 0
         seen_ids = set()
         total_matches = 0
         page = 0
         max_retries = 8
+        filtered_count = 0
 
         while True:
             search_cond = {
@@ -234,14 +246,47 @@ class HikvisionService:
                 if isinstance(valid_info, dict):
                     valid_begin = valid_info.get('beginTime', '')
                     valid_end = valid_info.get('endTime', '')
+                    valid_enable = valid_info.get('enable', True)
                 else:
                     valid_begin = ''
                     valid_end = ''
+                    valid_enable = True
 
+                # التحقق من تاريخ الصلاحية إذا كان التصفية مفعلة
+                if filter_by_validity:
+                    # تخطي المستخدمين الذين ليس لديهم تاريخ صلاحية أو صلاحيتهم منتهية
+                    if not valid_end:
+                        logger.debug(f"Skipping user {eno} - no validity end date")
+                        continue
+                    
+                    try:
+                        # محاولة تحويل تاريخ الصلاحية إلى كائن datetime
+                        # تنسيق Hikvision: YYYY-MM-DDThh:mm:ss أو YYYY-MM-DD
+                        valid_date = None
+                        if 'T' in valid_end:
+                            valid_date = datetime.strptime(valid_end.split('T')[0], '%Y-%m-%d')
+                        else:
+                            valid_date = datetime.strptime(valid_end, '%Y-%m-%d')
+                        
+                        # التحقق إذا كان تاريخ الصلاحية > 15 يوليو 2026
+                        if valid_date <= CUTOFF_DATE:
+                            logger.debug(f"Skipping user {eno} - validity ends on {valid_end} (<= {CUTOFF_DATE.strftime('%Y-%m-%d')})")
+                            continue
+                        else:
+                            logger.debug(f"Including user {eno} - validity ends on {valid_end} (> {CUTOFF_DATE.strftime('%Y-%m-%d')})")
+                    except (ValueError, TypeError) as e:
+                        logger.warning(f"Cannot parse validity end date '{valid_end}' for user {eno}: {e}")
+                        continue
+
+                # الحصول على اسم المستخدم - نضعه في حقل first_name
+                user_name = user.get('name', '')
+                
+                # إضافة المستخدم إلى القائمة مع first_name
                 all_users.append({
-                    'uid': int(user.get('employeeNo', 0)) if str(user.get('employeeNo', '')).isdigit() else hash(user.get('employeeNo', '')) % (2**31),
-                    'user_id': user.get('employeeNo', ''),
-                    'name': user.get('name', ''),
+                    'uid': int(eno) if str(eno).isdigit() else hash(str(eno)) % (2**31),
+                    'user_id': eno,
+                    'first_name': user_name,  # تغيير من 'name' إلى 'first_name'
+                    'name': user_name,        # الاحتفاظ بالاسم أيضاً للتوسع
                     'privilege': 0,
                     'password': '',
                     'card': 0,
@@ -252,6 +297,7 @@ class HikvisionService:
                     'user_type': user.get('userType', 'normal'),
                     'valid_begin': valid_begin,
                     'valid_end': valid_end,
+                    'valid_enable': valid_enable,
                 })
 
             if response_status != 'MORE' or position >= total_matches:
@@ -260,7 +306,7 @@ class HikvisionService:
             position += max_per_page
             time.sleep(1)
 
-        logger.info(f"Retrieved {len(all_users)} unique users from device (total_matches={total_matches})")
+        logger.info(f"Retrieved {len(all_users)} unique users from device (filtered) out of {total_matches} total")
         return all_users
 
     def add_user(self, employee_no, name, password='', gender='unknown', user_type='normal'):
@@ -460,6 +506,7 @@ class HikvisionService:
                         if isinstance(valid_info, dict):
                             return {
                                 'user_id': u.get('employeeNo', str(employee_no)),
+                                'first_name': u.get('name', ''),  # تغيير إلى first_name
                                 'name': u.get('name', ''),
                                 'valid_begin': valid_info.get('beginTime', ''),
                                 'valid_end': valid_info.get('endTime', ''),
@@ -471,6 +518,8 @@ class HikvisionService:
 
         return {
             'user_id': str(employee_no),
+            'first_name': '',
+            'name': '',
             'valid_begin': '',
             'valid_end': '',
             'valid_enable': True,
@@ -503,6 +552,7 @@ class HikvisionService:
                         valid_info = u.get('Valid', {})
                         all_users.append({
                             'user_id': u.get('employeeNo', ''),
+                            'first_name': u.get('name', ''),  # تغيير إلى first_name
                             'name': u.get('name', ''),
                             'valid_begin': valid_info.get('beginTime', '') if isinstance(valid_info, dict) else '',
                             'valid_end': valid_info.get('endTime', '') if isinstance(valid_info, dict) else '',
@@ -681,42 +731,65 @@ def get_device_info():
 
 @app.route('/device/get-users', methods=['POST'])
 def get_users():
+    """
+    استرجاع الموظفين من جهاز البصمة مع تصفية حسب تاريخ الصلاحية.
+    
+    المعايير المطلوبة:
+        ip: عنوان IP الجهاز
+        port: منفذ الجهاز (اختياري، افتراضي 80)
+        username: اسم المستخدم (افتراضي 'admin')
+        password: كلمة المرور
+        filter_by_validity: (اختياري) إذا كان True، يتم تصفية المستخدمين الذين تاريخ صلاحيتهم > 15/7/2026
+    
+    الإرجاع:
+        قائمة المستخدمين مع حقول:
+            - user_id: رقم الموظف
+            - first_name: اسم الموظف (العمود المطلوب)
+            - valid_end: تاريخ انتهاء الصلاحية
+            - وغيرها من المعلومات
+    """
     try:
         data = request.json
         ip = data.get('ip')
         port = data.get('port', 80)
         username = data.get('username', 'admin')
         password = data.get('password', '')
+        filter_by_validity = data.get('filter_by_validity', True)  # التصفية مفعلة افتراضياً
 
         if not ip:
             return jsonify({'success': False, 'error': 'IP required'}), 400
 
         service = HikvisionService(ip, port, username, password, data.get('timeout', 30))
 
-        # Also try raw XML to check if Valid block is included
-        search_cond = {
-            'UserInfoSearchCond': {
-                'searchID': '1',
-                'searchResultPosition': 0,
-                'maxResults': 1,
-                'userType': 'all',
-            }
-        }
-        try:
-            resp = service._isapi('/AccessControl/UserInfo/search', method='POST',
-                                   data=search_cond, raw=True)
-            logger.info(f"Raw XML search response (first user): {resp.text[:2000]}")
-        except Exception as e:
-            logger.error(f"Raw XML search failed: {e}")
+        # استرجاع المستخدمين مع التصفية حسب تاريخ الصلاحية
+        users = service.get_users(filter_by_validity=filter_by_validity)
 
-        users = service.get_users()
+        # إعادة البيانات بتنسيق مناسب للجدول
+        # العمود المطلوب هو first_name
+        response_users = []
+        for user in users:
+            response_users.append({
+                'user_id': user.get('user_id', ''),
+                'first_name': user.get('first_name', ''),  # العمود المطلوب
+                'name': user.get('name', ''),              # للتوافق مع الإصدارات السابقة
+                'valid_begin': user.get('valid_begin', ''),
+                'valid_end': user.get('valid_end', ''),
+                'gender': user.get('gender', 'unknown'),
+                'user_type': user.get('user_type', 'normal'),
+                'num_of_fp': user.get('num_of_fp', 0),
+                'num_of_face': user.get('num_of_face', 0),
+                'num_of_card': user.get('num_of_card', 0),
+            })
 
         return jsonify({
             'success': True,
-            'users': users,
-            'count': len(users)
+            'users': response_users,
+            'count': len(response_users),
+            'filtered_by': 'valid_end > 2026-07-15' if filter_by_validity else 'no filter',
+            'cutoff_date': CUTOFF_DATE.strftime('%Y-%m-%d')
         })
     except Exception as e:
+        logger.error(f"Error in get_users: {traceback.format_exc()}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -763,6 +836,7 @@ def debug_search():
             valid = u.get('Valid', {})
             user_list.append({
                 'employeeNo': u.get('employeeNo', ''),
+                'first_name': u.get('name', ''),  # تغيير إلى first_name
                 'name': u.get('name', ''),
                 'valid_end': valid.get('endTime', '') if isinstance(valid, dict) else '',
                 'numOfFP': u.get('numOfFP', 0),
@@ -827,6 +901,8 @@ def get_user_details_batch():
         for eno in employee_nos:
             detail = validity_map.get(str(eno), {
                 'user_id': str(eno),
+                'first_name': '',
+                'name': '',
                 'valid_begin': '',
                 'valid_end': '',
             })
@@ -839,6 +915,9 @@ def get_user_details_batch():
         })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/device/add-user', methods=['POST'])
 def add_user():
     try:
         data = request.json
@@ -847,19 +926,7 @@ def add_user():
         username = data.get('username', 'admin')
         password = data.get('password', '')
         employee_no = data.get('employee_no') or data.get('user_id')
-        name = data.get('name', '')
-
-        if not all([ip, employee_no, name]):
-            return jsonify({'success': False, 'error': 'Missing required parameters'}), 400
-
-        service = HikvisionService(ip, port, username, password, data.get('timeout', 30))
-        result = service.add_user(
-            employee_no=employee_no,
-            name=name,
-            password=data.get('password_value', ''),
-            gender=data.get('gender', 'unknown'),
-            user_type=data.get('user_type', 'normal'),
-        )
+        name = data.get('first_name') or data.get('name', '')  # دعم
 
         return jsonify({'success': result})
     except Exception as e:

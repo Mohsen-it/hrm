@@ -4,10 +4,12 @@ namespace Modules\Users\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Traits\ExcelExportable;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
+use Modules\Attendance\Models\RawAttendanceLog;
 use Modules\Attendance\Services\AttendanceGroupService;
 use Modules\Branches\Services\BranchService;
 use Modules\Companies\Services\CompanyService;
@@ -298,6 +300,55 @@ class UsersController extends Controller
 
         return Inertia::render('Users/Fingerprints', [
             'user' => fn () => new UserResource($user),
+        ]);
+    }
+
+    /**
+     * Return fingerprint punch history for a user as JSON (used by popup).
+     */
+    public function fingerprintHistory(int $id, Request $request): JsonResponse
+    {
+        $this->authorize('view-users');
+
+        $user = $this->userService->getUserById($id);
+
+        if (! $user) {
+            abort(404);
+        }
+
+        $query = RawAttendanceLog::with('device:id,name,serial_number,ip_address')
+            ->where('user_id', $id)
+            ->orderByDesc('punch_time');
+
+        if ($request->filled('from')) {
+            $query->where('punch_time', '>=', $request->input('from'));
+        }
+        if ($request->filled('to')) {
+            $query->where('punch_time', '<=', $request->input('to'));
+        }
+
+        $logs = $query->paginate($request->input('per_page', 50));
+
+        return response()->json([
+            'data' => $logs->getCollection()->map(fn ($log) => [
+                'id' => $log->id,
+                'punch_time' => $log->punch_time?->format('Y-m-d H:i:s'),
+                'punch_type' => $log->punch_type,
+                'verify_type' => $log->verify_type,
+                'device' => $log->device ? [
+                    'name' => $log->device->name,
+                    'serial_number' => $log->device->serial_number,
+                    'ip_address' => $log->device->ip_address,
+                ] : null,
+                'source' => $log->source,
+                'processed' => (bool) $log->processed,
+            ]),
+            'pagination' => [
+                'total' => $logs->total(),
+                'per_page' => $logs->perPage(),
+                'current_page' => $logs->currentPage(),
+                'last_page' => $logs->lastPage(),
+            ],
         ]);
     }
 

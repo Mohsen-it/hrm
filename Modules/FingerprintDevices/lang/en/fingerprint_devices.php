@@ -174,6 +174,8 @@ return [
     'sync_select_users_by_branch' => 'By branch',
     'sync_select_users_missing' => 'Never pushed before',
     'sync_push_run' => 'Push to device',
+    'sync_push_all' => 'Push to All Devices',
+    'sync_push_all_description' => 'Push users and fingerprints to all active devices',
     'sync_bidirectional' => 'Bidirectional Sync',
     'sync_bidirectional_description' => 'Pull then push in a single operation',
     'queued_success' => 'Operation queued. Will complete in background.',
@@ -243,4 +245,11 @@ return [
     'preview_session_expired' => 'Your session has expired. Please log in again.',
     'preview_no_permission' => 'You do not have permission for this action (requires edit-fingerprint-devices).',
     'preview_unexpected_response' => 'Unexpected server response (HTTP :status).',
+
+    // ===== Unregistered employees =====
+    'unregistered_employees' => 'Unregistered Employees',
+    'unregistered_employees_description' => 'List of employees who have no biometric fingerprints registered in the system',
+    'unregistered_count_label' => 'employees without fingerprint',
+    'no_unregistered_title' => 'All registered',
+    'no_unregistered_description' => 'All employees have fingerprint templates registered in the system',
 ];

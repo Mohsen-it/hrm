@@ -1,41 +1,37 @@
 #!/usr/bin/env python3
 """
 ZKTeco ADMS HTTP Server
-Handles HTTP push protocol from ZKTeco iClock devices.
-Device sends POST with attendance data after GET handshake.
-Usage: python adms_server.py --port 9000 --laravel http://127.0.0.1:8000
+Optimized Thread Pool and Non-Blocking forwarding to Laravel.
 """
 
 import argparse
 import json
 import logging
+import re
 import urllib.request
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from concurrent.futures import ThreadPoolExecutor
+from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 logger = logging.getLogger('adms')
 
 LARAVEL_URL = 'http://127.0.0.1:8000'
-
+# Increased workers to 50 to handle concurrent device pushes
+executor = ThreadPoolExecutor(max_workers=50)
 
 def forward_to_laravel(body_text, serial, ip):
-    """Send attendance data to Laravel push endpoint."""
     if not body_text or not body_text.strip():
         return False
-    
-    try:
-        body_line = f"ATT\t\t{body_text.strip()}\n"
-        data = json.dumps({
-            'SN': serial,
-            'Body': body_line
-        }).encode('utf-8')
 
+    try:
+        data = json.dumps({'SN': serial, 'Body': body_text}).encode('utf-8')
         req = urllib.request.Request(
             f'{LARAVEL_URL}/api/attendance-integration/push/adms',
             data=data,
             headers={'Content-Type': 'application/json'}
         )
 
+        # Reduced timeout to 10s to prevent worker starvation if Laravel is slow
         with urllib.request.urlopen(req, timeout=10) as resp:
             result = json.loads(resp.read().decode())
             logger.info(f'Forwarded to Laravel: received={result.get("received")}, processed={result.get("processed")}')
@@ -44,23 +40,28 @@ def forward_to_laravel(body_text, serial, ip):
         logger.error(f'Forward failed: {e}')
         return False
 
+def extract_attlog_lines(text):
+    lines = text.replace('\r\n', '\n').replace('\r', '\n').strip().split('\n')
+    att_lines = []
+    for line in lines:
+        line = line.strip()
+        if not line: continue
+        if re.match(r'^[A-Za-z0-9]+\s+\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}', line):
+            att_lines.append(line)
+    return att_lines
 
 class ADMSHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         logger.info(f'{self.client_address[0]} - {format % args}')
 
     def do_GET(self):
-        """Handle GET /iclock/getrequest?SN=... or /iclock/cdata?SN=..."""
-        serial = 'MED7254500092'
+        serial = ''
         if 'SN=' in self.path:
             for part in self.path.split('&'):
                 if part.startswith('SN='):
                     serial = part.split('=', 1)[-1]
                     break
 
-        logger.info(f'GET {self.path} from {self.client_address[0]}')
-
-        # ZKTeco push protocol response
         response = (
             f'GET OPTION FROM: {serial}\r\n'
             'ATTLOGStamp=None\r\n'
@@ -82,40 +83,43 @@ class ADMSHandler(BaseHTTPRequestHandler):
         self.wfile.write(response.encode())
 
     def do_POST(self):
-        """Handle POST /iclock/cdata?SN=... with attendance data."""
         content_length = int(self.headers.get('Content-Length', 0))
         body = self.rfile.read(content_length) if content_length else b''
 
-        serial = 'MED7254500092'
+        serial = ''
         if 'SN=' in self.path:
             for part in self.path.split('&'):
                 if part.startswith('SN='):
                     serial = part.split('=', 1)[-1]
                     break
 
-        logger.info(f'POST {self.path} from {self.client_address[0]}, {len(body)} bytes')
-
         text = body.decode('utf-8', errors='ignore')
-        logger.info(f'Body: {text[:500]}')
+
+        table_type = ''
+        if 'table=' in self.path:
+            for part in self.path.split('&'):
+                if part.startswith('table='):
+                    table_type = part.split('=', 1)[-1]
+                    break
+
+        if table_type and table_type not in ('ATTLOG', ''):
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/plain')
+            self.end_headers()
+            self.wfile.write(b'OK')
+            return
 
         if text.strip():
-            # Parse tab-separated attendance records
-            lines = text.replace('\r\n', '\n').replace('\r', '\n').strip().split('\n')
-            att_lines = []
-            for line in lines:
-                line = line.strip()
-                if line and not line.startswith('<') and not line.startswith('GET') and not line.startswith('POST'):
-                    att_lines.append(line)
-
+            att_lines = extract_attlog_lines(text)
             if att_lines:
-                body_text = '\n'.join(att_lines) + '\n'
-                forward_to_laravel(body_text, serial, self.client_address[0])
+                body_text = 'ATT\t\t' + '\nATT\t\t'.join(att_lines) + '\n'
+                # Fire and forget
+                executor.submit(forward_to_laravel, body_text, serial, self.client_address[0])
 
         self.send_response(200)
         self.send_header('Content-Type', 'text/plain')
         self.end_headers()
         self.wfile.write(b'OK')
-
 
 def main():
     parser = argparse.ArgumentParser(description='ZKTeco ADMS HTTP Server')
@@ -127,17 +131,16 @@ def main():
     global LARAVEL_URL
     LARAVEL_URL = args.laravel.rstrip('/')
 
-    server = HTTPServer((args.host, args.port), ADMSHandler)
+    server = ThreadingHTTPServer((args.host, args.port), ADMSHandler)
     logger.info(f'ADMS HTTP Server started on {args.host}:{args.port}')
     logger.info(f'Forwarding to Laravel: {LARAVEL_URL}/api/attendance-integration/push/adms')
-    logger.info('Waiting for device connections...')
 
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         logger.info('Shutting down...')
         server.shutdown()
-
+        executor.shutdown(wait=False)
 
 if __name__ == '__main__':
     main()

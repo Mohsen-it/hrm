@@ -12,6 +12,7 @@ use Modules\FingerprintDevices\Http\Requests\StoreFingerprintDeviceRequest;
 use Modules\FingerprintDevices\Http\Requests\UpdateFingerprintDeviceRequest;
 use Modules\FingerprintDevices\Models\FingerprintDevice;
 use Modules\FingerprintDevices\Repositories\FingerprintDeviceRepository;
+use Modules\Users\Models\User;
 
 class FingerprintDeviceService
 {
@@ -125,17 +126,23 @@ class FingerprintDeviceService
             return ['pulled' => 0, 'imported' => 0, 'sessions' => 0, 'records' => []];
         }
 
+        $userMap = $this->buildUserMap($device, $adapter, $records);
+
         $rows = [];
         foreach ($records as $record) {
             $externalId = trim((string) ($record['user_id'] ?? ''));
+            $uid = (int) ($record['uid'] ?? 0);
             $timestamp = $record['timestamp'] ?? null;
-            if ($externalId === '' || ! $timestamp) {
+            if (($externalId === '' && $uid === 0) || ! $timestamp) {
                 continue;
             }
 
+            $userPk = $userMap['byUserId'][$externalId] ?? $userMap['byUid'][$uid] ?? null;
+
             $rows[] = [
+                'user_id' => $userPk,
                 'device_id' => $device->id,
-                'device_user_id' => $externalId,
+                'device_user_id' => $externalId ?: (string) $uid,
                 'punch_time' => $timestamp,
                 'punch_type' => ((int) ($record['punch'] ?? 0)) === 1 ? 'check_out' : 'check_in',
                 'verify_type' => 'fingerprint',
@@ -157,6 +164,59 @@ class FingerprintDeviceService
             'sessions' => $processed['sessions'],
             'records' => $records,
         ];
+    }
+
+    private function buildUserMap(FingerprintDevice $device, DeviceAdapterInterface $adapter, array $records): array
+    {
+        $map = ['byUserId' => [], 'byUid' => []];
+
+        $deviceUsers = $adapter->getUsers(
+            $device->ip_address,
+            $device->port,
+            (string) $device->comm_key,
+            $device->timeout
+        );
+
+        foreach ($deviceUsers as $du) {
+            $uid = (int) ($du['uid'] ?? 0);
+            $externalId = trim((string) ($du['user_id'] ?? ''));
+            $name = (string) ($du['name'] ?? '');
+
+            if ($externalId === '' && $uid === 0) {
+                continue;
+            }
+
+            $user = null;
+            if ($externalId !== '') {
+                $user = User::query()
+                    ->whereRaw('LOWER(employee_code) = LOWER(?)', [$externalId])
+                    ->first();
+            }
+
+            if (! $user && $name !== '') {
+                $user = User::query()
+                    ->where('full_name_ar', $name)
+                    ->orWhere('name', $name)
+                    ->first();
+            }
+
+            if (! $user && $externalId !== '') {
+                $user = User::query()
+                    ->where('id', is_numeric($externalId) ? (int) $externalId : 0)
+                    ->first();
+            }
+
+            if ($user) {
+                if ($externalId !== '') {
+                    $map['byUserId'][$externalId] = (int) $user->id;
+                }
+                if ($uid > 0) {
+                    $map['byUid'][$uid] = (int) $user->id;
+                }
+            }
+        }
+
+        return $map;
     }
 
     public function syncUsers(FingerprintDevice $device): array

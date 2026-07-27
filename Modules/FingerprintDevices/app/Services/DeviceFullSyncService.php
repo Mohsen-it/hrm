@@ -754,19 +754,27 @@ class DeviceFullSyncService
         $sessions = 0;
 
         $matchedByUserId = [];
+        $matchedByUid = [];
         foreach ($matched as $entry) {
             $matchedByUserId[$entry['user_id']] = (int) $entry['user_pk'];
+            if (! empty($entry['uid'])) {
+                $matchedByUid[(int) $entry['uid']] = (int) $entry['user_pk'];
+            }
         }
 
-        DB::transaction(function () use ($logs, $device, $matchedByUserId, &$saved, &$sessions) {
+        DB::transaction(function () use ($logs, $device, $matchedByUserId, $matchedByUid, &$saved, &$sessions) {
             foreach ($logs as $log) {
                 $externalId = trim((string) ($log['user_id'] ?? ''));
+                $uid = (int) ($log['uid'] ?? 0);
                 $stamp = $this->parseTimestamp($log['timestamp'] ?? null);
-                if (! $stamp || $externalId === '') {
+                if (! $stamp) {
+                    continue;
+                }
+                if ($externalId === '' && $uid === 0) {
                     continue;
                 }
 
-                $userPk = $matchedByUserId[$externalId] ?? null;
+                $userPk = $matchedByUserId[$externalId] ?? $matchedByUid[$uid] ?? null;
                 $punchType = $this->resolvePunchType($log);
 
                 // Avoid duplicates: if the same punch already exists for this

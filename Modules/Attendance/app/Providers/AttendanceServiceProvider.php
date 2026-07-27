@@ -15,6 +15,7 @@ use Modules\Attendance\Console\Commands\MarkLateArrivalsCommand;
 use Modules\Attendance\Console\Commands\ProcessRawLogCommand;
 use Modules\Attendance\Console\Commands\ProcessRawLogsCommand;
 use Modules\Attendance\Console\Commands\RecalculateDateCommand;
+use Modules\Attendance\Console\Commands\ResolveRawLogUsersCommand;
 use Modules\Attendance\Console\Commands\RecalculateRangeCommand;
 use Modules\Attendance\Console\Commands\RecalculateSummariesCommand;
 use Modules\Attendance\Console\Commands\RecalculateUserCommand;
@@ -77,6 +78,7 @@ class AttendanceServiceProvider extends ServiceProvider
             SendDailyDigestCommand::class,
             SendWeeklyDigestCommand::class,
             SyncFingerprintsCommand::class,
+            ResolveRawLogUsersCommand::class,
         ]);
     }
 

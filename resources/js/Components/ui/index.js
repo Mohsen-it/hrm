@@ -16,6 +16,7 @@ export { default as FormDatepicker } from './FormDatepicker.vue';
 export { default as FormFileUpload } from './FormFileUpload.vue';
 export { default as FormActions } from './FormActions.vue';
 export { default as FormGroup } from './FormGroup.vue';
+export { default as FormSearchableSelect } from './FormSearchableSelect.vue';
 export { default as FormSection } from './FormSection.vue';
 export { default as FormInput } from './FormInput.vue';
 export { default as FormModal } from './FormModal.vue';

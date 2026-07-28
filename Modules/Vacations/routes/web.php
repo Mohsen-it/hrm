@@ -2,9 +2,10 @@
 
 use Illuminate\Support\Facades\Route;
 use Modules\Holidays\Http\Controllers\HolidaysController;
+use Modules\Vacations\Http\Controllers\VacationTypesController;
 use Modules\Vacations\Http\Controllers\MyVacationsController;
 use Modules\Vacations\Http\Controllers\VacationRequestsController;
-use Modules\Vacations\Http\Controllers\VacationTypesController;
+use Modules\Vacations\Http\Controllers\VacationBalancesController;
 
 /*
 | Routes for the Vacations + Holidays modules.
@@ -102,9 +103,15 @@ Route::middleware(['auth'])->group(function () {
     });
 
     // ----------------------------------------------------------------
+    // Vacation Balances (Admin / HR)
+    // ----------------------------------------------------------------
+    Route::post('vacations/balances/adjust', [VacationBalancesController::class, 'adjust'])
+        ->middleware('permission:edit-vacation-balance')
+        ->name('vacations.balances.adjust');
+    // ----------------------------------------------------------------
     // Holidays
     // ----------------------------------------------------------------
-    Route::middleware('permission:view-holidays')->prefix('holidays')->name('holidays.')->group(function () {
+    Route::prefix('holidays')->name('holidays.')->middleware('permission:view-holidays')->group(function () {
         Route::get('/export/excel', [HolidaysController::class, 'export'])->name('export');
         Route::get('/', [HolidaysController::class, 'index'])->name('index');
         Route::get('create', [HolidaysController::class, 'create'])

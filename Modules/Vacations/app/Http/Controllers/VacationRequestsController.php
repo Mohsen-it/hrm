@@ -46,14 +46,14 @@ class VacationRequestsController extends Controller
 
         $filters = $this->cleanFilters($request->only([
             'search', 'user_id', 'manager_id', 'vacation_type_id',
-            'status', 'start_date', 'from', 'to', 'year',
+            'status', 'start_date', 'from', 'to', 'year', 'per_page',
         ]));
 
         return Inertia::render('Vacations/Requests/Index', [
             'filters' => fn () => $filters,
             'requests' => fn () => UserVacationRequestResource::collection(
-                $this->requestService->getAllRequests($filters, 20)
-            )->response($request)->getData(true),
+                $this->requestService->getAllRequests($filters, (int) $request->input('per_page', 20))
+            ),
             'types' => fn () => $this->typeService->getActiveTypes()
                 ->map(fn (VacationType $t) => [
                     'id' => $t->id,
@@ -250,7 +250,7 @@ class VacationRequestsController extends Controller
 
         $filters = $this->cleanFilters($request->only([
             'search', 'user_id', 'manager_id', 'vacation_type_id',
-            'status', 'start_date', 'from', 'to', 'year',
+            'status', 'start_date', 'from', 'to', 'year', 'per_page',
         ]));
 
         $requests = $this->requestService->getAllRequests($filters, 10000);

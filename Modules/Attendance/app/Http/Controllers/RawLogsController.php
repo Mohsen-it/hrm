@@ -43,14 +43,14 @@ class RawLogsController extends Controller
         $filters = $this->cleanFilters($request->only([
             'search', 'user_id', 'device_id', 'device_user_id',
             'punch_type', 'verify_type', 'source', 'processed',
-            'from', 'to',
+            'from', 'to', 'per_page',
         ]));
 
         return Inertia::render('Attendance/RawLogs/Index', [
             'filters' => fn () => $filters,
             'logs' => fn () => RawAttendanceLogResource::collection(
                 $this->rawLogService->getAllLogs($filters, 25)
-            )->response($request)->getData(true),
+            ),
             'users' => fn () => $this->userService->getActiveUsers()
                 ->map(fn ($u) => ['id' => $u->id, 'name' => $u->name, 'employee_code' => $u->employee_code]),
         ]);
@@ -149,7 +149,7 @@ class RawLogsController extends Controller
         $filters = $this->cleanFilters($request->only([
             'search', 'user_id', 'device_id', 'device_user_id',
             'punch_type', 'verify_type', 'source', 'processed',
-            'from', 'to',
+            'from', 'to', 'per_page',
         ]));
 
         $logs = $this->rawLogService->getAllLogs($filters, 10000);

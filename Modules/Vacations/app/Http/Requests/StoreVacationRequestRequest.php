@@ -41,7 +41,7 @@ class StoreVacationRequestRequest extends FormRequest
                 Rule::notIn([10000]), // super-admin cannot take vacations
             ],
             'vacation_type_id' => ['required', 'integer', Rule::in($types)],
-            'start_date' => ['required', 'date_format:Y-m-d', 'after_or_equal:today'],
+            'start_date' => ['required', 'date_format:Y-m-d', 'after_or_equal:1900-01-01'],
             'end_date' => ['required', 'date_format:Y-m-d', 'after_or_equal:start_date'],
             'reason' => ['nullable', 'string', 'max:1000'],
             'attachments' => ['nullable', 'array'],

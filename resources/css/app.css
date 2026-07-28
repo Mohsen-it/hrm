@@ -1118,17 +1118,6 @@ body {
     box-shadow: 0 0 10px var(--color-mistral-primary), 0 0 5px var(--color-mistral-primary) !important;
 }
 
-/* Smooth transitions for page transitions */
-.page-enter-active,
-.page-leave-active {
-    transition: opacity 0.15s ease;
-}
-
-.page-enter-from,
-.page-leave-to {
-    opacity: 0;
-}
-
 /* Focus visible for accessibility */
 :focus-visible {
     outline: 2px solid var(--color-mistral-primary);

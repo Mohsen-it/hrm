@@ -49,7 +49,7 @@ class DailySummariesController extends Controller
         $this->authorize('view-attendance');
 
         $filters = $this->cleanFilters($request->only([
-            'search', 'user_id', 'status', 'session_type', 'date', 'from', 'to', 'is_complete',
+            'search', 'user_id', 'status', 'session_type', 'date', 'from', 'to', 'is_complete', 'per_page',
         ]));
 
         return Inertia::render('Attendance/DailySummaries/Index', [
@@ -60,7 +60,7 @@ class DailySummariesController extends Controller
                     $filters['to'] ?? now()->toDateString(),
                     $filters['user_id'] ?? null,
                 )
-            )->response($request)->getData(true),
+            ),
             'users' => fn () => $this->userService->getActiveUsers()
                 ->map(fn ($u) => ['id' => $u->id, 'name' => $u->name, 'employee_code' => $u->employee_code]),
         ]);
@@ -152,7 +152,7 @@ class DailySummariesController extends Controller
         $this->authorize('view-attendance');
 
         $filters = $this->cleanFilters($request->only([
-            'search', 'user_id', 'status', 'session_type', 'date', 'from', 'to', 'is_complete',
+            'search', 'user_id', 'status', 'session_type', 'date', 'from', 'to', 'is_complete', 'per_page',
         ]));
 
         $from = (string) ($filters['from'] ?? now()->subDays(30)->toDateString());

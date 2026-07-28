@@ -48,14 +48,14 @@ class AttendanceSessionsController extends Controller
 
         $filters = $this->cleanFilters($request->only([
             'search', 'user_id', 'shift_id', 'status',
-            'session_type', 'source', 'date', 'from', 'to', 'open',
+            'session_type', 'source', 'date', 'from', 'to', 'open', 'per_page',
         ]));
 
         return Inertia::render('Attendance/Sessions/Index', [
             'filters' => fn () => $filters,
             'sessions' => fn () => AttendanceSessionResource::collection(
-                $this->sessionService->getAllSessions($filters, 20)
-            )->response($request)->getData(true),
+                $this->sessionService->getAllSessions($filters, (int) $request->input('per_page', 20))
+            ),
             'users' => fn () => $this->userService->getActiveUsers()
                 ->map(fn ($u) => ['id' => $u->id, 'name' => $u->name, 'employee_code' => $u->employee_code]),
             'shifts' => fn () => $this->shiftService->getActiveShifts()
@@ -204,7 +204,7 @@ class AttendanceSessionsController extends Controller
 
         $filters = $this->cleanFilters($request->only([
             'search', 'user_id', 'shift_id', 'status',
-            'session_type', 'source', 'date', 'from', 'to', 'open',
+            'session_type', 'source', 'date', 'from', 'to', 'open', 'per_page',
         ]));
 
         $sessions = $this->sessionService->getAllSessions($filters, 10000);

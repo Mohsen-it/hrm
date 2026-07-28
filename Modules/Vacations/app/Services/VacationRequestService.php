@@ -111,12 +111,12 @@ class VacationRequestService
             );
         }
 
-        $today = new DateTimeImmutable('today');
-        if ($startDt < $today) {
-            throw new InvalidArgumentException(
-                __('vacations.start_date_must_be_today_or_later')
-            );
-        }
+        // $today = new DateTimeImmutable('today');
+        // if ($startDt < $today) {
+        //     throw new InvalidArgumentException(
+        //         __('vacations.start_date_must_be_today_or_later')
+        //     );
+        // }
 
         if ($type->advance_notice_days > 0) {
             $earliest = $today->modify("+{$type->advance_notice_days} days");

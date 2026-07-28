@@ -16,10 +16,10 @@ class RotationGroupResource extends JsonResource
             'group_index' => $this->group_index,
             'start_date' => $this->start_date?->format('Y-m-d'),
             'rotation' => $this->whenLoaded('rotation', function () {
-                return [
+                return $this->rotation ? [
                     'id' => $this->rotation->id,
                     'name' => $this->rotation->name,
-                ];
+                ] : null;
             }),
             'active_employees_count' => $this->when(isset($this->active_employees_count), fn () => $this->active_employees_count),
             'created_at' => $this->created_at?->format('Y-m-d H:i:s'),

@@ -3,6 +3,7 @@ import { computed } from 'vue';
 import { Link, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import { PageHeader, Button, Card, Badge, Alert } from '@/Components/ui';
+import { BalanceEditModal } from '@/Components/Vacations';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
@@ -77,6 +78,7 @@ const flashSuccess = computed(() => page.props.flash?.success);
             :description="user.name"
         >
             <template #actions>
+                <BalanceEditModal :user="user" :types="$page.props.vacation_types || []" />
                 <Button variant="secondary" icon="fas fa-arrow-right rtl-flip" :href="route('users.index')">{{ t('common.back') }}</Button>
                 <Button variant="primary" icon="fas fa-pen" :href="route('users.edit', user.id)">{{ t('common.edit') }}</Button>
                 <Button variant="secondary" icon="fas fa-clock" :href="route('users.shifts', user.id)">
@@ -267,7 +269,7 @@ const flashSuccess = computed(() => page.props.flash?.success);
         </Card>
 
         <!-- Banking -->
-        <Card variant="base" padding="none">
+        <Card variant="base" padding="none" class="mb-4">
             <div class="p-5 sm:p-6">
                 <h3 class="text-[16px] font-semibold text-mistral-ink mb-4">
                     {{ t('users.banking_info') }}
@@ -282,6 +284,37 @@ const flashSuccess = computed(() => page.props.flash?.success);
                         </dd>
                     </div>
                 </dl>
+            </div>
+        </Card>
+
+        <!-- Vacation Balances -->
+        <Card variant="base" padding="none">
+            <div class="p-5 sm:p-6">
+                <h3 class="text-[16px] font-semibold text-mistral-ink mb-4">
+                    {{ t('vacations.vacation_balances') }}
+                </h3>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-start text-[14px]">
+                        <thead class="text-mistral-stone border-b border-mistral-hairline-soft">
+                            <tr>
+                                <th class="py-2 px-3">{{ t('vacations.vacation_type') }}</th>
+                                <th class="py-2 px-3">{{ t('common.year') }}</th>
+                                <th class="py-2 px-3">{{ t('vacations.remaining_days') }}</th>
+                                <th class="py-2 px-3">{{ t('common.actions') }}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="balance in $page.props.vacation_balances" :key="balance.id" class="border-b border-mistral-hairline-soft">
+                                <td class="py-2 px-3">{{ balance.vacation_type.name_ar }}</td>
+                                <td class="py-2 px-3">{{ balance.year }}</td>
+                                <td class="py-2 px-3">{{ balance.days_entitled + balance.days_carried_over + balance.days_adjustment - balance.days_used - balance.days_pending }}</td>
+                                <td class="py-2 px-3">
+                                    <BalanceEditModal :user="user" :types="$page.props.vacation_types || []" :initial-type-id="balance.vacation_type_id" />
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </Card>
     </AppLayout>

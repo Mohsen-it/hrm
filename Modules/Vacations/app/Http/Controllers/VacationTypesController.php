@@ -39,14 +39,14 @@ class VacationTypesController extends Controller
         $this->authorize('view-vacation-types');
 
         $filters = $this->cleanFilters($request->only([
-            'search', 'is_active', 'is_paid', 'requires_approval',
+            'search', 'is_active', 'is_paid', 'requires_approval', 'per_page',
         ]));
 
         return Inertia::render('Vacations/Types/Index', [
             'filters' => fn () => $filters,
             'types' => fn () => VacationTypeResource::collection(
-                $this->typeService->getAllTypes($filters, 20)
-            )->response($request)->getData(true),
+                $this->typeService->getAllTypes($filters, (int) $request->input('per_page', 20))
+            ),
         ]);
     }
 
@@ -165,7 +165,7 @@ class VacationTypesController extends Controller
         $this->authorize('view-vacation-types');
 
         $filters = $this->cleanFilters($request->only([
-            'search', 'is_active', 'is_paid', 'requires_approval',
+            'search', 'is_active', 'is_paid', 'requires_approval', 'per_page',
         ]));
 
         $types = $this->typeService->getAllTypes($filters, 10000);

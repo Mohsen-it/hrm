@@ -326,6 +326,8 @@ return [
     'rotation_employee_transferred' => 'Employee transferred to new rotation successfully.',
     'rotation_employee_unassigned' => 'Employee unassigned from rotation successfully.',
     'employee_already_assigned_to_rotation' => 'This employee already has an active rotation assignment.',
+    'rotation_not_found' => 'The selected rotation was not found.',
+    'rotation_group_not_found' => 'The selected rotation group was not found.',
     'rotation_preview' => 'Rotation Preview',
     'rotation_info' => 'Rotation Information',
     'rotation_group' => 'Rotation Group',

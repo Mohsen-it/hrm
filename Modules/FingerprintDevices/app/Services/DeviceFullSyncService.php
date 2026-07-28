@@ -811,27 +811,99 @@ class DeviceFullSyncService
             }
         });
 
+        // Post-sync: resolve any remaining NULL user_id by matching
+        // device_user_id against employee_code, then process them.
+        $resolved = $this->resolveAndProcessUnresolvedLogs($device);
+
         if ($saved > 0) {
             $device->update(['attendance_log_count' => $saved]);
         }
 
         $result['totals']['attendance_pulled'] = $pulled;
         $result['totals']['attendance_saved'] = $saved;
-        $result['totals']['attendance_sessions'] = $sessions;
+        $result['totals']['attendance_sessions'] = $sessions + ($resolved['sessions'] ?? 0);
+        $result['totals']['attendance_resolved'] = $resolved['resolved'] ?? 0;
 
         $step['status'] = 'ok';
         $step['message'] = sprintf(
-            '%d pulled, %d saved, %d sessions',
+            '%d pulled, %d saved, %d sessions (%d auto-resolved)',
             $pulled,
             $saved,
-            $sessions
+            $sessions + ($resolved['sessions'] ?? 0),
+            $resolved['resolved'] ?? 0
         );
         $step['data'] = [
             'pulled' => $pulled,
             'saved' => $saved,
             'sessions_created' => $sessions,
+            'auto_resolved' => $resolved['resolved'] ?? 0,
+            'auto_sessions' => $resolved['sessions'] ?? 0,
         ];
         $result['steps'][] = $step;
+    }
+
+    /**
+     * Post-sync step: resolve NULL user_id in raw logs by matching
+     * device_user_id → employee_code, then process them into sessions.
+     *
+     * @return array{resolved: int, sessions: int}
+     */
+    protected function resolveAndProcessUnresolvedLogs(FingerprintDevice $device): array
+    {
+        $resolved = 0;
+        $sessions = 0;
+
+        // Find all raw logs for this device that have user_id = NULL
+        $unresolvedLogs = RawAttendanceLog::query()
+            ->where('device_id', $device->id)
+            ->whereNull('user_id')
+            ->where('processed', false)
+            ->orderBy('punch_time')
+            ->get();
+
+        if ($unresolvedLogs->isEmpty()) {
+            return ['resolved' => 0, 'sessions' => 0];
+        }
+
+        // Build a lookup: device_user_id (employee_code) → user.id
+        $employeeCodes = $unresolvedLogs->pluck('device_user_id')
+            ->filter(fn ($code) => $code !== '' && $code !== null)
+            ->unique()
+            ->values()
+            ->all();
+
+        if (empty($employeeCodes)) {
+            return ['resolved' => 0, 'sessions' => 0];
+        }
+
+        $lowerCodes = array_map('strtolower', $employeeCodes);
+        $placeholders = implode(',', array_fill(0, count($lowerCodes), '?'));
+        $userMap = User::query()
+            ->whereRaw("LOWER(employee_code) IN ($placeholders)", $lowerCodes)
+            ->get()
+            ->keyBy(fn ($u) => strtolower((string) $u->employee_code));
+
+        foreach ($unresolvedLogs as $log) {
+            $code = strtolower(trim((string) $log->device_user_id));
+            if ($code === '' || ! isset($userMap[$code])) {
+                continue;
+            }
+
+            $log->update(['user_id' => $userMap[$code]->id]);
+            $resolved++;
+
+            if ($session = $this->rawLogService->processLog($log)) {
+                $sessions++;
+            }
+        }
+
+        Log::info('DeviceFullSync: auto-resolved unresolved logs', [
+            'device_id' => $device->id,
+            'resolved' => $resolved,
+            'sessions' => $sessions,
+        ]);
+
+        return ['resolved' => $resolved, 'sessions' => $sessions];
     }
 
     protected function resolvePunchType(array $log): string

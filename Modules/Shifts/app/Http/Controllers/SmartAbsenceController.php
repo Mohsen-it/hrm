@@ -5,6 +5,7 @@ namespace Modules\Shifts\Http\Controllers;
 use App\Http\Controllers\Controller;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -60,11 +61,21 @@ class SmartAbsenceController extends Controller
             ? (int) round((($totalExpected - $totalAbsent) / $totalExpected) * 100)
             : 100;
 
+        $page = $request->integer('page', 1);
+        $perPage = $request->integer('per_page', 20);
+        $absentPaginator = new LengthAwarePaginator(
+            $report['absentDetails']->forPage($page, $perPage),
+            $report['absentDetails']->count(),
+            $perPage,
+            $page,
+            ['path' => route('smart-absence.daily')]
+        );
+
         return Inertia::render('Shifts/Absence/SmartAbsenceReport', [
             'dailyData' => [
                 'date' => $dateStr,
                 'expected' => $report['expected']->toArray(),
-                'absent' => $report['absentDetails'],
+                'absent' => $absentPaginator->toArray(),
                 'total_expected' => $totalExpected,
                 'total_absent' => $totalAbsent,
                 'attendance_rate' => $attendanceRate,

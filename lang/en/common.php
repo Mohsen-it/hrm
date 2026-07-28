@@ -61,6 +61,8 @@ return [
     'updated_at' => 'Updated at',
     'no_change' => '— No change —',
     'select_action' => '— Select action —',
+    'select_rotation' => '— Select rotation —',
+    'select_rotation_group' => '— Select rotation group —',
     'additional' => 'Additional',
     'basic_info' => 'Basic Information',
     'continue' => 'Continue',

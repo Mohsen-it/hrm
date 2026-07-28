@@ -2,7 +2,7 @@
 import { computed, reactive, ref } from 'vue';
 import { router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
-import { PageHeader, Button, FormInput, FormTextarea, FormSelect, FormSection, FormActions, ErrorSummary } from '@/Components/ui';
+import { PageHeader, Button, FormInput, FormTextarea, FormSearchableSelect, FormSelect, FormSection, FormActions, ErrorSummary } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
@@ -63,14 +63,13 @@ function submit() {
 
             <FormSection :title="t('vacations.request_info')" icon="fas fa-paper-plane" :collapsible="true" :default-open="true">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormSelect
+                    <FormSearchableSelect
                         v-model="form.user_id"
                         :label="t('vacations.employee')"
                         name="user_id"
                         :options="userOptions"
                         required
                         :error="errorFor('user_id')"
-                        autofocus
                     />
                     <FormSelect
                         v-model="form.vacation_type_id"

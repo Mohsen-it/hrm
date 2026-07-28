@@ -12,7 +12,7 @@ import { useTranslations } from '@/composables/useTranslations'
 const { t } = useTranslations()
 
 const props = defineProps({
-    dailyData: { type: Object, default: () => ({ expected: [], absent: [], total_expected: 0, total_absent: 0, attendance_rate: 100, date: '' }) },
+    dailyData: { type: Object, default: () => ({ expected: [], absent: { data: [] }, total_expected: 0, total_absent: 0, attendance_rate: 100, date: '' }) },
     monthlyData: { type: Array, default: () => [] },
     rotations: { type: Array, default: () => [] },
     departments: { type: Array, default: () => [] },
@@ -76,6 +76,13 @@ const multiGroupOptions = computed(() => {
     }
     return groups
 })
+
+const filterParams = computed(() => ({
+    date: selectedDate.value,
+    department_id: selectedDepartmentId.value || null,
+    rotation_ids: selectedRotationIds.value,
+    rotation_group_ids: selectedRotationGroupIds.value,
+}))
 
 const hasActiveFilters = computed(() =>
     selectedDepartmentId.value
@@ -413,13 +420,14 @@ const filterPills = computed(() => {
 
                 <DataTable
                     :columns="columns"
-                    :data="{ data: dailyData.absent || [] }"
+                    :data="dailyData.absent || { data: [] }"
+                    :filters="filterParams"
+                    route-name="smart-absence.daily"
+                    :only="['dailyData']"
                     :empty-title="t('shifts.no_absent_employees')"
                     :empty-description="t('shifts.no_absent_employees_description')"
                     storage-key="smart-absence-report-daily"
                     @search="(q) => loadDaily()"
-                    @page-change="(p) => loadDaily()"
-                    @per-page-change="(p) => loadDaily()"
                     @export="handleExport"
                 >
                     <template #cell-name="{ row }">

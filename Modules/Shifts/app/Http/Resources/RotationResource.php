@@ -24,10 +24,10 @@ class RotationResource extends JsonResource
             'work_on_holidays' => $this->work_on_holidays,
             'grace_minutes' => $this->grace_minutes,
             'color' => $this->color,
-            'in_ahead_margin' => $this->in_ahead_margin ? $this->in_ahead_margin->format('H:i') : null,
-            'in_above_margin' => $this->in_above_margin ? $this->in_above_margin->format('H:i') : null,
-            'out_ahead_margin' => $this->out_ahead_margin ? $this->out_ahead_margin->format('H:i') : null,
-            'out_above_margin' => $this->out_above_margin ? $this->out_above_margin->format('H:i') : null,
+            'in_ahead_margin' => $this->in_ahead_margin,
+            'in_above_margin' => $this->in_above_margin,
+            'out_ahead_margin' => $this->out_ahead_margin,
+            'out_above_margin' => $this->out_above_margin,
             'time_schedule' => $this->whenLoaded('timeSchedule', function () {
                 return $this->timeSchedule ? [
                     'id' => $this->timeSchedule->id,
@@ -37,7 +37,9 @@ class RotationResource extends JsonResource
                 ] : null;
             }),
             'active_employees_count' => $this->when(isset($this->active_employees_count), fn () => $this->active_employees_count),
-            'groups' => RotationGroupResource::collection($this->whenLoaded('groups')),
+            'groups' => $this->whenLoaded('groups', function () use ($request) {
+                return $this->groups->map(fn ($g) => (new RotationGroupResource($g))->resolve($request))->values()->all();
+            }),
             'created_at' => $this->created_at?->format('Y-m-d H:i:s'),
         ];
     }

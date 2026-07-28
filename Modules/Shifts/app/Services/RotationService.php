@@ -197,23 +197,7 @@ class RotationService
 
         $this->validateAssignment($employeeId, $rotationId, $startDate, $endDate);
 
-        $rotation = $this->rotationRepository->findById($rotationId);
-        $group = $this->groupRepository->findById($groupId);
-
-        $snapshotData = [
-            'rotation' => $rotation->toArray(),
-            'group' => $group->toArray(),
-            'time_schedule' => $rotation->timeSchedule?->toArray(),
-        ];
-
-        return $this->assignmentRepository->create([
-            'employee_id' => $employeeId,
-            'rotation_id' => $rotationId,
-            'rotation_group_id' => $groupId,
-            'start_date' => $startDate,
-            'end_date' => $endDate,
-            'snapshot_data' => $snapshotData,
-        ]);
+        return $this->createAssignment($employeeId, $rotationId, $groupId, $startDate, $endDate);
     }
 
     /**
@@ -225,7 +209,7 @@ class RotationService
 
         $this->closeCurrentAssignment($employeeId, $previousDay);
 
-        return $this->assignEmployee($employeeId, $newRotationId, $newGroupId, $effectiveDate);
+        return $this->createAssignment($employeeId, $newRotationId, $newGroupId, $effectiveDate);
     }
 
     /**
@@ -311,6 +295,42 @@ class RotationService
                 'group_index' => $i * $offsetStep,
             ]);
         }
+    }
+
+    /**
+     * Create a new rotation assignment (without close/validate — caller handles that).
+     */
+    private function createAssignment(int $employeeId, int $rotationId, int $groupId, string $startDate, ?string $endDate = null): RotationAssignment
+    {
+        $rotation = Rotation::find($rotationId);
+        $group = RotationGroup::find($groupId);
+
+        if (! $rotation) {
+            throw ValidationException::withMessages([
+                'rotation_id' => [__('shifts.rotation_not_found')],
+            ]);
+        }
+
+        if (! $group) {
+            throw ValidationException::withMessages([
+                'rotation_group_id' => [__('shifts.rotation_group_not_found')],
+            ]);
+        }
+
+        $snapshotData = [
+            'rotation' => $rotation->only(['id', 'name', 'description', 'anchor_start_date', 'pattern', 'cycle_length', 'work_days_count', 'rest_days_count', 'number_of_groups', 'time_schedule_id', 'overtime_enabled', 'work_on_holidays', 'grace_minutes', 'in_ahead_margin', 'in_above_margin', 'out_ahead_margin', 'out_above_margin', 'color']),
+            'group' => $group->only(['id', 'name', 'group_index']),
+            'time_schedule' => $rotation->timeSchedule?->only(['id', 'name', 'in_time', 'out_time', 'is_multi_day', 'late_margin', 'early_margin']),
+        ];
+
+        return $this->assignmentRepository->create([
+            'employee_id' => $employeeId,
+            'rotation_id' => $rotationId,
+            'rotation_group_id' => $groupId,
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+            'snapshot_data' => $snapshotData,
+        ]);
     }
 
     private function closePreviousAssignment(int $employeeId, string $startDate): void

@@ -48,7 +48,7 @@ class MyVacationsController extends Controller
         $this->authorize('view-vacations');
 
         $filters = $this->cleanFilters($request->only([
-            'status', 'vacation_type_id', 'year',
+            'status', 'vacation_type_id', 'year', 'per_page',
         ]));
         $filters['user_id'] = (int) $user->id;
 
@@ -57,8 +57,8 @@ class MyVacationsController extends Controller
         return Inertia::render('Vacations/My/Index', [
             'filters' => fn () => $filters,
             'requests' => fn () => UserVacationRequestResource::collection(
-                $this->requestService->getAllRequests($filters, 20)
-            )->response($request)->getData(true),
+                $this->requestService->getAllRequests($filters, (int) $request->input('per_page', 20))
+            ),
             'balances' => fn () => UserVacationBalanceResource::collection($balances)->resolve(),
             'types' => fn () => $this->typeService->getActiveTypes()
                 ->map(fn (VacationType $t) => [

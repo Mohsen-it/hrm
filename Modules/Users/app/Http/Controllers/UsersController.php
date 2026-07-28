@@ -19,6 +19,8 @@ use Modules\Positions\Services\PositionService;
 use Modules\Shifts\Services\RotationService;
 use Modules\Shifts\Services\ShiftService;
 use Modules\Subordinations\Services\SubordinationService;
+use Modules\Vacations\Services\VacationBalanceService;
+use Modules\Vacations\Services\VacationTypeService;
 use Modules\Users\Exports\UsersExport;
 use Modules\Users\Http\Requests\StoreUserRequest;
 use Modules\Users\Http\Requests\UpdateUserRequest;
@@ -44,6 +46,8 @@ class UsersController extends Controller
         private ShiftService $shiftService,
         private AttendanceGroupService $attendanceGroupService,
         private RotationService $rotationService,
+        private VacationTypeService $vacationTypeService,
+        private VacationBalanceService $balanceService,
     ) {}
 
     // ------------------------------------------------------------------
@@ -134,6 +138,8 @@ class UsersController extends Controller
 
         return Inertia::render('Users/Show', [
             'user' => fn () => new UserResource($user),
+            'vacation_types' => fn () => $this->vacationTypeService->getActiveTypes(),
+            'vacation_balances' => fn () => $this->balanceService->getBalancesForUser($user->id),
         ]);
     }
 
@@ -152,6 +158,16 @@ class UsersController extends Controller
 
         $currentRotationAssignment = $this->rotationService->getActiveAssignment($user->id);
 
+        $rotationsData = $this->rotationService->getAllList()
+            ->map(fn ($r) => [
+                'id' => $r->id ?? 0,
+                'name' => $r->name ?? 'Unnamed Rotation',
+                'groups' => ($r->groups ?? collect())->map(fn ($g) => [
+                    'id' => $g->id ?? 0,
+                    'name' => $g->name ?? 'Unnamed Group',
+                ])->values(),
+            ]);
+
         return Inertia::render('Users/Edit', array_merge(
             [
                 'user' => fn () => new UserResource($user),
@@ -159,20 +175,12 @@ class UsersController extends Controller
                     'id' => $currentRotationAssignment->id,
                     'rotation_id' => $currentRotationAssignment->rotation_id,
                     'rotation_group_id' => $currentRotationAssignment->rotation_group_id,
-                    'rotation_name' => $currentRotationAssignment->rotation->name ?? null,
-                    'group_name' => $currentRotationAssignment->rotationGroup->name ?? null,
+                    'rotation_name' => $currentRotationAssignment->rotation ? $currentRotationAssignment->rotation->name : null,
+                    'group_name' => $currentRotationAssignment->rotationGroup ? $currentRotationAssignment->rotationGroup->name : null,
                     'start_date' => $currentRotationAssignment->start_date?->format('Y-m-d'),
                     'end_date' => $currentRotationAssignment->end_date?->format('Y-m-d'),
                 ] : null,
-                'rotations' => fn () => $this->rotationService->getAllList()
-                    ->map(fn ($r) => [
-                        'id' => $r->id,
-                        'name' => $r->name,
-                        'groups' => $r->groups->map(fn ($g) => [
-                            'id' => $g->id,
-                            'name' => $g->name,
-                        ])->values(),
-                    ]),
+                'rotations' => fn () => $rotationsData,
             ],
             $this->formOptions()
         ));
@@ -189,7 +197,17 @@ class UsersController extends Controller
             abort(404);
         }
 
-        $this->userService->updateUser($user, $request->validated());
+        try {
+            $this->userService->updateUser($user, $request->validated());
+        } catch (\Throwable $e) {
+            \Log::error('User update failed: ' . $e->getMessage(), [
+                'user_id' => $id,
+                'exception' => $e,
+                'validated' => $request->validated(),
+            ]);
+
+            throw $e;
+        }
 
         return redirect()->route('users.edit', $id)
             ->with('success', __('users.updated_successfully'));

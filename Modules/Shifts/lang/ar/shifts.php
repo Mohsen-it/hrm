@@ -326,6 +326,8 @@ return [
     'rotation_employee_transferred' => 'تم نقل الموظف للدورية الجديدة بنجاح',
     'rotation_employee_unassigned' => 'تم إلغاء إسناد الموظف من الدورية بنجاح',
     'employee_already_assigned_to_rotation' => 'هذا الموظف لديه إسناد دورية نشط بالفعل',
+    'rotation_not_found' => 'الدورية المحددة غير موجودة.',
+    'rotation_group_not_found' => 'مجموعة الدورية المحددة غير موجودة.',
     'rotation_preview' => 'معاينة الدورية',
     'rotation_info' => 'معلومات الدورية',
     'rotation_group' => 'مجموعة الدورية',

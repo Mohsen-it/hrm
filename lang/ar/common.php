@@ -61,6 +61,8 @@ return [
     'updated_at' => 'تاريخ التعديل',
     'no_change' => '— بدون تغيير —',
     'select_action' => '— اختر إجراء —',
+    'select_rotation' => '— اختر الدورية —',
+    'select_rotation_group' => '— اختر مجموعة الدورية —',
     'additional' => 'إضافي',
     'basic_info' => 'معلومات أساسية',
     'continue' => 'متابعة',

@@ -1,6 +1,6 @@
 <script setup>
-import { reactive, ref, computed, watch } from 'vue';
-import { router, Link } from '@inertiajs/vue3';
+import { computed, watch } from 'vue';
+import { useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import { PageHeader, Button, Card, FormInput, FormTextarea, FormSelect, FormCheckbox, FormFileUpload, FormSection, FormActions, ErrorSummary } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
@@ -21,7 +21,7 @@ const props = defineProps({
     attendanceGroups: { type: Array, default: () => [] },
 });
 
-const form = reactive({
+const form = useForm({
     employee_code: '',
     name: '',
     first_name: '',
@@ -71,9 +71,6 @@ const form = reactive({
     permissions: [],
 });
 
-const errors = ref({});
-const processing = ref(false);
-
 const statusOptions = [
     { value: 1, label: t('common.active') },
     { value: 0, label: t('common.inactive') },
@@ -99,8 +96,6 @@ const employmentOptions = [
     { value: 'intern', label: t('users.employment_intern') },
 ];
 
-const errorFor = (key) => errors.value[key] || '';
-
 const filteredBranches = computed(() => {
     if (!form.company_id) return props.branches;
     return props.branches.filter((b) => b.company_id === form.company_id);
@@ -122,16 +117,8 @@ watch(
 );
 
 function submit() {
-    processing.value = true;
-    errors.value = {};
-    const payload = { ...form };
-    if (payload.roles.length === 0) delete payload.roles;
-    if (payload.permissions.length === 0) delete payload.permissions;
-    router.post(route('users.store'), payload, {
-        forceFormData: true,
+    form.post(route('users.store'), {
         preserveScroll: true,
-        onError: (err) => { errors.value = err; },
-        onFinish: () => { processing.value = false; },
     });
 }
 </script>
@@ -147,7 +134,7 @@ function submit() {
             </template>
         </PageHeader>
 
-        <ErrorSummary :errors="errors" />
+        <ErrorSummary :errors="form.errors" />
 
         <form class="space-y-6" @submit.prevent="submit">
             <!-- Personal Information -->
@@ -163,7 +150,7 @@ function submit() {
                         v-model="form.employee_code"
                         :label="t('users.employee_code')"
                         name="employee_code"
-                        :error="errorFor('employee_code')"
+                        :error="form.errors.employee_code"
                     />
                     <FormInput
                         v-model="form.name"
@@ -171,7 +158,7 @@ function submit() {
                         name="name"
                         required
                         autofocus
-                        :error="errorFor('name')"
+                        :error="form.errors.name"
                     />
                     <FormInput
                         v-model="form.email"
@@ -179,7 +166,7 @@ function submit() {
                         name="email"
                         type="email"
                         required
-                        :error="errorFor('email')"
+                        :error="form.errors.email"
                     />
                     <FormInput
                         v-model="form.password"
@@ -187,7 +174,7 @@ function submit() {
                         name="password"
                         type="password"
                         required
-                        :error="errorFor('password')"
+                        :error="form.errors.password"
                     />
                     <FormInput
                         v-model="form.password_confirmation"
@@ -199,50 +186,50 @@ function submit() {
                         v-model="form.national_id"
                         :label="t('users.national_id')"
                         name="national_id"
-                        :error="errorFor('national_id')"
+                        :error="form.errors.national_id"
                     />
                     <FormInput
                         v-model="form.first_name"
                         :label="t('users.first_name')"
                         name="first_name"
-                        :error="errorFor('first_name')"
+                        :error="form.errors.first_name"
                     />
                     <FormInput
                         v-model="form.last_name"
                         :label="t('users.last_name')"
                         name="last_name"
-                        :error="errorFor('last_name')"
+                        :error="form.errors.last_name"
                     />
                     <FormInput
                         v-model="form.full_name_ar"
                         :label="t('users.full_name_ar')"
                         name="full_name_ar"
-                        :error="errorFor('full_name_ar')"
+                        :error="form.errors.full_name_ar"
                     />
                     <FormInput
                         v-model="form.full_name_en"
                         :label="t('users.full_name_en')"
                         name="full_name_en"
-                        :error="errorFor('full_name_en')"
+                        :error="form.errors.full_name_en"
                     />
                     <FormInput
                         v-model="form.phone"
                         :label="t('users.phone')"
                         name="phone"
-                        :error="errorFor('phone')"
+                        :error="form.errors.phone"
                     />
                     <FormInput
                         v-model="form.phone2"
                         :label="t('users.phone2')"
                         name="phone2"
-                        :error="errorFor('phone2')"
+                        :error="form.errors.phone2"
                     />
                     <FormInput
                         v-model="form.date_of_birth"
                         :label="t('users.date_of_birth')"
                         name="date_of_birth"
                         type="date"
-                        :error="errorFor('date_of_birth')"
+                        :error="form.errors.date_of_birth"
                     />
                     <FormSelect
                         v-model="form.gender"
@@ -250,7 +237,7 @@ function submit() {
                         name="gender"
                         :options="genderOptions"
                         :placeholder="t('users.select_gender')"
-                        :error="errorFor('gender')"
+                        :error="form.errors.gender"
                     />
                     <FormSelect
                         v-model="form.marital_status"
@@ -258,13 +245,13 @@ function submit() {
                         name="marital_status"
                         :options="maritalOptions"
                         :placeholder="t('users.select_marital_status')"
-                        :error="errorFor('marital_status')"
+                        :error="form.errors.marital_status"
                     />
                     <FormInput
                         v-model="form.nationality"
                         :label="t('users.nationality')"
                         name="nationality"
-                        :error="errorFor('nationality')"
+                        :error="form.errors.nationality"
                     />
                 </div>
             </FormSection>
@@ -283,14 +270,14 @@ function submit() {
                         :label="t('users.hire_date')"
                         name="hire_date"
                         type="date"
-                        :error="errorFor('hire_date')"
+                        :error="form.errors.hire_date"
                     />
                     <FormInput
                         v-model="form.termination_date"
                         :label="t('users.termination_date')"
                         name="termination_date"
                         type="date"
-                        :error="errorFor('termination_date')"
+                        :error="form.errors.termination_date"
                     />
                     <FormSelect
                         v-model="form.employment_type"
@@ -298,19 +285,19 @@ function submit() {
                         name="employment_type"
                         :options="employmentOptions"
                         :placeholder="t('users.select_employment_type')"
-                        :error="errorFor('employment_type')"
+                        :error="form.errors.employment_type"
                     />
                     <FormInput
                         v-model="form.job_title"
                         :label="t('users.job_title')"
                         name="job_title"
-                        :error="errorFor('job_title')"
+                        :error="form.errors.job_title"
                     />
                     <FormInput
                         v-model="form.work_location"
                         :label="t('users.work_location')"
                         name="work_location"
-                        :error="errorFor('work_location')"
+                        :error="form.errors.work_location"
                     />
                     <FormSelect
                         v-model="form.status"
@@ -318,7 +305,7 @@ function submit() {
                         name="status"
                         :options="statusOptions"
                         required
-                        :error="errorFor('status')"
+                        :error="form.errors.status"
                     />
                 </div>
             </FormSection>
@@ -338,7 +325,7 @@ function submit() {
                         name="company_id"
                         :options="companies.map((c) => ({ value: c.id, label: c.company_name }))"
                         :placeholder="t('users.select_company')"
-                        :error="errorFor('company_id')"
+                        :error="form.errors.company_id"
                     />
                     <FormSelect
                         v-model="form.branch_id"
@@ -346,7 +333,7 @@ function submit() {
                         name="branch_id"
                         :options="filteredBranches.map((b) => ({ value: b.id, label: b.branch_name }))"
                         :placeholder="t('users.select_branch')"
-                        :error="errorFor('branch_id')"
+                        :error="form.errors.branch_id"
                     />
                     <FormSelect
                         v-model="form.department_id"
@@ -354,7 +341,7 @@ function submit() {
                         name="department_id"
                         :options="filteredDepartments.map((d) => ({ value: d.id, label: d.department_name }))"
                         :placeholder="t('users.select_department')"
-                        :error="errorFor('department_id')"
+                        :error="form.errors.department_id"
                     />
                     <FormSelect
                         v-model="form.position_id"
@@ -362,7 +349,7 @@ function submit() {
                         name="position_id"
                         :options="positions.map((p) => ({ value: p.id, label: p.position_name }))"
                         :placeholder="t('users.select_position')"
-                        :error="errorFor('position_id')"
+                        :error="form.errors.position_id"
                     />
                     <FormSelect
                         v-model="form.grade_id"
@@ -370,7 +357,7 @@ function submit() {
                         name="grade_id"
                         :options="grades.map((g) => ({ value: g.id, label: g.grade_name }))"
                         :placeholder="t('users.select_grade')"
-                        :error="errorFor('grade_id')"
+                        :error="form.errors.grade_id"
                     />
                     <FormSelect
                         v-model="form.subordination_id"
@@ -378,7 +365,7 @@ function submit() {
                         name="subordination_id"
                         :options="subordinations.map((s) => ({ value: s.id, label: s.display_name }))"
                         :placeholder="t('users.select_subordination')"
-                        :error="errorFor('subordination_id')"
+                        :error="form.errors.subordination_id"
                     />
                     <FormSelect
                         v-model="form.shift_id"
@@ -386,7 +373,7 @@ function submit() {
                         name="shift_id"
                         :options="shifts.map((s) => ({ value: s.id, label: s.shift_name }))"
                         :placeholder="t('users.select_shift')"
-                        :error="errorFor('shift_id')"
+                        :error="form.errors.shift_id"
                     />
                     <FormSelect
                         v-model="form.manager_id"
@@ -394,7 +381,7 @@ function submit() {
                         name="manager_id"
                         :options="managers.map((m) => ({ value: m.id, label: m.name }))"
                         :placeholder="t('users.select_manager')"
-                        :error="errorFor('manager_id')"
+                        :error="form.errors.manager_id"
                     />
                     <FormSelect
                         v-model="form.attendance_group_id"
@@ -402,7 +389,7 @@ function submit() {
                         name="attendance_group_id"
                         :options="attendanceGroups.map((g) => ({ value: g.id, label: g.name }))"
                         :placeholder="t('attendance.select_attendance_group')"
-                        :error="errorFor('attendance_group_id')"
+                        :error="form.errors.attendance_group_id"
                     />
                 </div>
             </FormSection>
@@ -420,31 +407,31 @@ function submit() {
                         v-model="form.address"
                         :label="t('users.address')"
                         name="address"
-                        :error="errorFor('address')"
+                        :error="form.errors.address"
                     />
                     <FormInput
                         v-model="form.city"
                         :label="t('users.city')"
                         name="city"
-                        :error="errorFor('city')"
+                        :error="form.errors.city"
                     />
                     <FormInput
                         v-model="form.state"
                         :label="t('users.state')"
                         name="state"
-                        :error="errorFor('state')"
+                        :error="form.errors.state"
                     />
                     <FormInput
                         v-model="form.country"
                         :label="t('users.country')"
                         name="country"
-                        :error="errorFor('country')"
+                        :error="form.errors.country"
                     />
                     <FormInput
                         v-model="form.postal_code"
                         :label="t('users.postal_code')"
                         name="postal_code"
-                        :error="errorFor('postal_code')"
+                        :error="form.errors.postal_code"
                     />
                 </div>
             </FormSection>
@@ -462,19 +449,19 @@ function submit() {
                         v-model="form.emergency_contact_name"
                         :label="t('users.emergency_contact_name')"
                         name="emergency_contact_name"
-                        :error="errorFor('emergency_contact_name')"
+                        :error="form.errors.emergency_contact_name"
                     />
                     <FormInput
                         v-model="form.emergency_contact_phone"
                         :label="t('users.emergency_contact_phone')"
                         name="emergency_contact_phone"
-                        :error="errorFor('emergency_contact_phone')"
+                        :error="form.errors.emergency_contact_phone"
                     />
                     <FormInput
                         v-model="form.emergency_contact_relation"
                         :label="t('users.emergency_contact_relation')"
                         name="emergency_contact_relation"
-                        :error="errorFor('emergency_contact_relation')"
+                        :error="form.errors.emergency_contact_relation"
                     />
                 </div>
             </FormSection>
@@ -492,19 +479,19 @@ function submit() {
                         v-model="form.bank_name"
                         :label="t('users.bank_name')"
                         name="bank_name"
-                        :error="errorFor('bank_name')"
+                        :error="form.errors.bank_name"
                     />
                     <FormInput
                         v-model="form.bank_account_number"
                         :label="t('users.bank_account_number')"
                         name="bank_account_number"
-                        :error="errorFor('bank_account_number')"
+                        :error="form.errors.bank_account_number"
                     />
                     <FormInput
                         v-model="form.iban"
                         :label="t('users.iban')"
                         name="iban"
-                        :error="errorFor('iban')"
+                        :error="form.errors.iban"
                     />
                 </div>
             </FormSection>
@@ -522,7 +509,7 @@ function submit() {
                         :label="t('users.avatar')"
                         accept="image/*"
                         name="avatar"
-                        :error="errorFor('avatar')"
+                        :error="form.errors.avatar"
                     />
                     <div class="flex items-center gap-6">
                         <FormCheckbox v-model="form.is_active_employee" :label="t('users.is_active_employee')" />
@@ -535,7 +522,7 @@ function submit() {
                 :save-label="t('common.save')"
                 :cancel-label="t('common.cancel')"
                 :cancel-href="route('users.index')"
-                :saving="processing"
+                :saving="form.processing"
             />
         </form>
     </AppLayout>

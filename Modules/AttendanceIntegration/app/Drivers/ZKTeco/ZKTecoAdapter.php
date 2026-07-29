@@ -82,7 +82,7 @@ class ZKTecoAdapter implements DeviceAdapterInterface
         }
     }
 
-    public function addUser(string $ip, int $port, string $commKey, int $timeout, UserData $user): bool
+    public function addUser(string $ip, int $port, string $commKey, int $timeout, UserData $user): int|bool
     {
         try {
             $payload = array_merge($this->buildPayload($ip, $port, $commKey, $timeout), [
@@ -96,9 +96,17 @@ class ZKTecoAdapter implements DeviceAdapterInterface
             $response = Http::timeout($this->bridgeTimeout)
                 ->post("{$this->bridgeUrl}/device/add-user", $payload);
 
-            return $response->successful() && ($response->json('success') === true);
+            if ($response->successful() && ($response->json('success') === true)) {
+                return $response->json('device_uid') ?? $user->uid ?: true;
+            }
+
+            return false;
         } catch (\Throwable $e) {
-            Log::warning('ZKTecoAdapter::addUser failed', ['error' => $e->getMessage()]);
+            Log::warning('ZKTecoAdapter::addUser failed', [
+                'ip' => $ip,
+                'port' => $port,
+                'error' => $e->getMessage(),
+            ]);
 
             return false;
         }

@@ -183,26 +183,32 @@ class DevicePushService
         }
 
         // Other devices: individual calls
+        $deviceUserMap = $this->getDeviceUserMap($device, $adapter);
+
         foreach ($users as $user) {
             try {
-                $ok = $adapter->addUser(
+                $uid = $this->resolveUid($device->id, $user, $deviceUserMap);
+
+                $result = $adapter->addUser(
                     $device->ip_address,
                     $device->port,
                     (string) $device->comm_key,
                     (int) $device->timeout,
                     UserData::fromArray([
-                        'uid' => 0,
+                        'uid' => $uid,
                         'user_id' => $user->employee_code,
                         'name' => $user->name,
                     ]),
                 );
 
-                if ($ok) {
+                $returnedUid = is_int($result) ? $result : $uid;
+
+                if ($result !== false) {
                     $totals['pushed_users']++;
-                    $rows[] = $this->buildResultRow($syncLog->id, $device->id, 'user', $user->id, null, 'success', null);
+                    $rows[] = $this->buildResultRow($syncLog->id, $device->id, 'user', $user->id, null, 'success', null, $returnedUid ?: null);
                 } else {
                     $totals['failed_users']++;
-                    $rows[] = $this->buildResultRow($syncLog->id, $device->id, 'user', $user->id, null, 'failed', 'adapter reported failure');
+                    $rows[] = $this->buildResultRow($syncLog->id, $device->id, 'user', $user->id, null, 'failed', 'adapter reported failure', $uid ?: null);
                 }
             } catch (\Throwable $e) {
                 $totals['failed_users']++;
@@ -237,16 +243,51 @@ class DevicePushService
     private function pushUsersBatch(FingerprintDevice $device, $users, DeviceSyncLog $syncLog, array &$totals, array &$errors, array &$rows): array
     {
         $bridgeUrl = rtrim(config('attendanceintegration.drivers.zkteco.bridge_url'), '/');
+
+        // CRITICAL: Fetch existing device users FIRST to get UIDs
+        // This prevents duplicate creation when editing users
+        $deviceUserMap = [];
+        try {
+            $existingResp = Http::timeout(60)->post("{$bridgeUrl}/device/get-users", [
+                'ip' => $device->ip_address,
+                'port' => $device->port,
+                'password' => (int) $device->comm_key,
+            ]);
+            if ($existingResp->successful()) {
+                $existingBody = $existingResp->json() ?? [];
+                foreach (($existingBody['users'] ?? []) as $du) {
+                    $code = (string) ($du['user_id'] ?? '');
+                    if ($code !== '') {
+                        $deviceUserMap[$code] = [
+                            'uid' => (int) ($du['uid'] ?? 0),
+                            'name' => (string) ($du['name'] ?? ''),
+                            'privilege' => (int) ($du['privilege'] ?? 0),
+                            'password' => (string) ($du['password'] ?? ''),
+                            'card' => (int) ($du['card'] ?? 0),
+                        ];
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            $errors[] = 'Could not fetch existing device users: '.$e->getMessage();
+        }
+
         $chunks = array_chunk($users->all(), 100);
 
         foreach ($chunks as $chunk) {
-            $payload = array_map(fn ($u) => [
-                'user_id' => (string) $u->employee_code,
-                'name' => (string) $u->name,
-                'password' => '',
-                'privilege' => 0,
-                'card' => 0,
-            ], $chunk);
+            $payload = array_map(function ($u) use ($deviceUserMap) {
+                $empCode = (string) $u->employee_code;
+                $existing = $deviceUserMap[$empCode] ?? null;
+
+                return [
+                    'uid' => $existing ? $existing['uid'] : 0,
+                    'user_id' => $empCode,
+                    'name' => (string) $u->name,
+                    'password' => $existing['password'] ?? '',
+                    'privilege' => $existing['privilege'] ?? 0,
+                    'card' => $existing['card'] ?? 0,
+                ];
+            }, $chunk);
 
             try {
                 $resp = Http::timeout(600)->retry(2, 1000)->post("{$bridgeUrl}/device/add-users-batch", [
@@ -258,11 +299,14 @@ class DevicePushService
                 $body = $resp->json() ?? [];
                 $ok = (int) ($body['success_count'] ?? 0);
                 $fail = (int) ($body['failed_count'] ?? 0);
+                $uidMap = $body['uid_map'] ?? [];
                 $totals['pushed_users'] += $ok;
                 $totals['failed_users'] += $fail;
 
                 foreach ($chunk as $u) {
-                    $rows[] = $this->buildResultRow($syncLog->id, $device->id, 'user', $u->id, null, 'success', null);
+                    $empCode = (string) $u->employee_code;
+                    $deviceUid = $uidMap[$empCode] ?? $deviceUserMap[$empCode]['uid'] ?? null;
+                    $rows[] = $this->buildResultRow($syncLog->id, $device->id, 'user', $u->id, null, 'success', null, $deviceUid);
                 }
                 if (! empty($body['errors'])) {
                     foreach ($body['errors'] as $e) {
@@ -297,11 +341,14 @@ class DevicePushService
             'pushed_fingerprints' => 0,
             'failed_fingerprints' => 0,
             'skipped_fingerprints' => 0,
+            'pushed_face_templates' => 0,
+            'failed_face_templates' => 0,
+            'skipped_face_templates' => 0,
         ];
         $errors = [];
         $rows = [];
 
-        $fingerprints = UserFingerprint::query()
+        $allTemplates = UserFingerprint::query()
             ->whereIn('user_id', $userIds)
             ->whereNotNull('template_data')
             ->where('template_data', '!=', '')
@@ -309,13 +356,15 @@ class DevicePushService
             ->orderBy('finger_id')
             ->get();
 
-        if ($fingerprints->isEmpty()) {
-            $errors[] = 'No fingerprints found for the selected users on this device.';
+        $fingerprints = $allTemplates->reject(fn ($fp) => $this->isFaceTemplate($fp));
+        $faceTemplates = $allTemplates->filter(fn ($fp) => $this->isFaceTemplate($fp));
+
+        if ($fingerprints->isEmpty() && $faceTemplates->isEmpty()) {
+            $errors[] = 'No fingerprints or face templates found for the selected users.';
 
             return ['totals' => $totals, 'errors' => $errors];
         }
 
-        // Build employee_code -> device_uid map (slow — full device sync)
         Log::info('pushFingerprints: fetching device user list…');
         $deviceUsers = $adapter->getUsers(
             $device->ip_address,
@@ -329,96 +378,144 @@ class DevicePushService
         }
 
         $empCodeByDbId = User::query()
-            ->whereIn('id', $fingerprints->pluck('user_id')->unique())
+            ->whereIn('id', $allTemplates->pluck('user_id')->unique())
             ->pluck('employee_code', 'id');
 
-        // Build fingerprint payload
-        $fpPayload = [];
-        foreach ($fingerprints as $fp) {
-            $empCode = (string) ($empCodeByDbId[$fp->user_id] ?? '');
-            $uid = $userIdToUid[$empCode] ?? null;
+        $driver = strtolower($device->deviceType->manufacturer ?? '');
+        $isZk = str_contains($driver, 'zkteco') || str_contains($driver, 'zk');
+        $bridgeUrl = $isZk ? rtrim(config('attendanceintegration.drivers.zkteco.bridge_url'), '/') : '';
 
-            if (! $uid) {
-                $totals['skipped_fingerprints']++;
-                $errors[] = "User {$empCode} (db#{$fp->user_id}) finger {$fp->finger_id}: user not on device — run user push first";
-                $rows[] = $this->buildResultRow($syncLog->id, $device->id, 'fingerprint', $fp->user_id, $fp->finger_id, 'skipped', 'user not on device');
+        if ($fingerprints->isNotEmpty()) {
+            $fpPayload = [];
+            foreach ($fingerprints as $fp) {
+                $empCode = (string) ($empCodeByDbId[$fp->user_id] ?? '');
+                $uid = $userIdToUid[$empCode] ?? null;
 
-                continue;
+                if (! $uid) {
+                    $totals['skipped_fingerprints']++;
+                    $rows[] = $this->buildResultRow($syncLog->id, $device->id, 'fingerprint', $fp->user_id, $fp->finger_id, 'skipped', 'user not on device');
+
+                    continue;
+                }
+
+                $fpPayload[] = [
+                    'uid' => $uid,
+                    'finger_id' => (int) $fp->finger_id,
+                    'template_data' => (string) $fp->template_data,
+                ];
             }
 
-            $fpPayload[] = [
-                'uid' => $uid,
-                'finger_id' => (int) $fp->finger_id,
-                'template_data' => (string) $fp->template_data,
-            ];
-        }
+            if (! empty($fpPayload)) {
+                if ($isZk) {
+                    $chunks = array_chunk($fpPayload, 100);
+                    foreach ($chunks as $chunk) {
+                        try {
+                            $resp = Http::timeout(600)->retry(2, 1000)->post("{$bridgeUrl}/device/export-templates-batch", [
+                                'ip' => $device->ip_address,
+                                'port' => $device->port,
+                                'password' => (int) $device->comm_key,
+                                'templates' => $chunk,
+                            ]);
+                            $body = $resp->json() ?? [];
+                            $totals['pushed_fingerprints'] += (int) ($body['success_count'] ?? 0);
+                            $totals['failed_fingerprints'] += (int) ($body['failed_count'] ?? 0);
 
-        if (empty($fpPayload)) {
-            $this->resultRepository->createMany($rows);
-
-            return ['totals' => $totals, 'errors' => $errors];
-        }
-
-        // ZK devices: use batch endpoint
-        $driver = strtolower($device->deviceType->manufacturer ?? '');
-        if (str_contains($driver, 'zkteco') || str_contains($driver, 'zk')) {
-            $bridgeUrl = rtrim(config('attendanceintegration.drivers.zkteco.bridge_url'), '/');
-            $chunks = array_chunk($fpPayload, 100);
-
-            foreach ($chunks as $chunk) {
-                try {
-                    $resp = Http::timeout(600)->retry(2, 1000)->post("{$bridgeUrl}/device/export-templates-batch", [
-                        'ip' => $device->ip_address,
-                        'port' => $device->port,
-                        'password' => (int) $device->comm_key,
-                        'templates' => $chunk,
-                    ]);
-                    $body = $resp->json() ?? [];
-                    $ok = (int) ($body['success_count'] ?? 0);
-                    $fail = (int) ($body['failed_count'] ?? 0);
-                    $totals['pushed_fingerprints'] += $ok;
-                    $totals['failed_fingerprints'] += $fail;
-
-                    foreach ($chunk as $t) {
-                        $rows[] = $this->buildResultRow($syncLog->id, $device->id, 'fingerprint', null, $t['finger_id'], 'success', null);
-                    }
-                    if (! empty($body['results'])) {
-                        foreach (array_filter($body['results'], fn ($r) => empty($r['success'])) as $r) {
-                            $errors[] = 'uid='.($r['uid'] ?? '?').' fid='.($r['finger_id'] ?? '?').': '.($r['error'] ?? 'unknown');
+                            foreach ($chunk as $t) {
+                                $rows[] = $this->buildResultRow($syncLog->id, $device->id, 'fingerprint', null, $t['finger_id'], 'success', null);
+                            }
+                            if (! empty($body['results'])) {
+                                foreach (array_filter($body['results'], fn ($r) => empty($r['success'])) as $r) {
+                                    $errors[] = 'uid='.($r['uid'] ?? '?').' fid='.($r['finger_id'] ?? '?').': '.($r['error'] ?? 'unknown');
+                                }
+                            }
+                        } catch (\Throwable $e) {
+                            $totals['failed_fingerprints'] += count($chunk);
+                            $errors[] = 'Batch fp push failed: '.$e->getMessage();
                         }
                     }
-                } catch (\Throwable $e) {
-                    $totals['failed_fingerprints'] += count($chunk);
-                    $errors[] = 'Batch fp push failed: '.$e->getMessage();
-                }
-            }
-        } else {
-            // Non-ZK: individual calls
-            foreach ($fpPayload as $fp) {
-                try {
-                    $ok = $adapter->setFingerprintTemplate(
-                        $device->ip_address,
-                        $device->port,
-                        (string) $device->comm_key,
-                        (int) $device->timeout,
-                        new FingerprintTemplateData(
-                            uid: $fp['uid'],
-                            fingerId: $fp['finger_id'],
-                            templateData: $fp['template_data'],
-                        ),
-                    );
-                    if ($ok) {
-                        $totals['pushed_fingerprints']++;
-                        $rows[] = $this->buildResultRow($syncLog->id, $device->id, 'fingerprint', null, $fp['finger_id'], 'success', null);
-                    } else {
-                        $totals['failed_fingerprints']++;
-                        $rows[] = $this->buildResultRow($syncLog->id, $device->id, 'fingerprint', null, $fp['finger_id'], 'failed', 'adapter reported failure');
+                } else {
+                    foreach ($fpPayload as $fp) {
+                        try {
+                            $ok = $adapter->setFingerprintTemplate(
+                                $device->ip_address,
+                                $device->port,
+                                (string) $device->comm_key,
+                                (int) $device->timeout,
+                                new FingerprintTemplateData(
+                                    uid: $fp['uid'],
+                                    fingerId: $fp['finger_id'],
+                                    templateData: $fp['template_data'],
+                                ),
+                            );
+                            if ($ok) {
+                                $totals['pushed_fingerprints']++;
+                                $rows[] = $this->buildResultRow($syncLog->id, $device->id, 'fingerprint', null, $fp['finger_id'], 'success', null);
+                            } else {
+                                $totals['failed_fingerprints']++;
+                                $rows[] = $this->buildResultRow($syncLog->id, $device->id, 'fingerprint', null, $fp['finger_id'], 'failed', 'adapter returned false');
+                            }
+                        } catch (\Throwable $e) {
+                            $totals['failed_fingerprints']++;
+                            $errors[] = "Fingerprint push failed for finger {$fp['finger_id']}: {$e->getMessage()}";
+                        }
                     }
-                } catch (\Throwable $e) {
-                    $totals['failed_fingerprints']++;
-                    $errors[] = "finger {$fp['finger_id']}: ".$e->getMessage();
                 }
             }
+        }
+
+        if ($faceTemplates->isNotEmpty() && $isZk) {
+            $facePayload = [];
+            foreach ($faceTemplates as $fp) {
+                $empCode = (string) ($empCodeByDbId[$fp->user_id] ?? '');
+                $uid = $userIdToUid[$empCode] ?? null;
+
+                if (! $uid) {
+                    $totals['skipped_face_templates']++;
+                    $rows[] = $this->buildResultRow($syncLog->id, $device->id, 'face_template', $fp->user_id, $fp->finger_id, 'skipped', 'user not on device');
+
+                    continue;
+                }
+
+                $facePayload[] = [
+                    'uid' => $uid,
+                    'user_id' => $empCode,
+                    'finger_id' => (int) $fp->finger_id,
+                    'template_data' => (string) $fp->template_data,
+                ];
+            }
+
+            if (! empty($facePayload)) {
+                $chunks = array_chunk($facePayload, 20);
+                foreach ($chunks as $chunk) {
+                    try {
+                        $resp = Http::timeout(600)->retry(2, 1000)->post("{$bridgeUrl}/device/push-face-templates-batch", [
+                            'ip' => $device->ip_address,
+                            'port' => $device->port,
+                            'password' => (int) $device->comm_key,
+                            'templates' => $chunk,
+                        ]);
+                        $body = $resp->json() ?? [];
+                        $totals['pushed_face_templates'] += (int) ($body['success_count'] ?? 0);
+                        $totals['failed_face_templates'] += (int) ($body['failed_count'] ?? 0);
+
+                        foreach ($chunk as $t) {
+                            $status = 'success';
+                            $rows[] = $this->buildResultRow($syncLog->id, $device->id, 'face_template', $t['user_id'] ?? null, $t['finger_id'], $status, null);
+                        }
+                        if (! empty($body['results'])) {
+                            foreach (array_filter($body['results'], fn ($r) => empty($r['success'])) as $r) {
+                                $errors[] = 'face uid='.($r['uid'] ?? '?').' fid='.($r['finger_id'] ?? '?').': '.($r['error'] ?? 'unknown');
+                            }
+                        }
+                    } catch (\Throwable $e) {
+                        $totals['failed_face_templates'] += count($chunk);
+                        $errors[] = 'Batch face template push failed: '.$e->getMessage();
+                    }
+                }
+            }
+        } elseif ($faceTemplates->isNotEmpty() && ! $isZk) {
+            $totals['skipped_face_templates'] = $faceTemplates->count();
+            $errors[] = 'Face template push only supported for ZKTeco devices.';
         }
 
         $this->resultRepository->createMany($rows);
@@ -427,11 +524,7 @@ class DevicePushService
     }
 
     /**
-     * Push face templates (finger_id 50-54) to a device.
-     *
-     * @return array{totals: array<string, int>, errors: array<int, string>}
-     */
-    public function pushFacePhotos(FingerprintDevice $device, DeviceAdapterInterface $adapter, array $userIds, DeviceSyncLog $syncLog, array $options = []): array
+     * Push face photos (JPEG images) to a device.
     {
         $totals = [
             'pushed_face_photos' => 0,
@@ -633,6 +726,7 @@ class DevicePushService
 
         $device = $originalLog->device;
         $adapter = $this->resolveAdapter($device);
+        $deviceUserMap = $this->getDeviceUserMap($device, $adapter);
 
         // Create a new sync log for the retry
         $newLog = $this->syncLogRepository->create([
@@ -647,7 +741,7 @@ class DevicePushService
         $succeeded = 0;
         $stillFailing = 0;
 
-        DB::transaction(function () use ($retryable, $device, $adapter, &$succeeded, &$stillFailing) {
+        DB::transaction(function () use ($retryable, $device, $adapter, $deviceUserMap, &$succeeded, &$stillFailing) {
             foreach (($retryable['user'] ?? []) as $result) {
                 $user = User::find($result->target_user_id);
                 if (! $user) {
@@ -655,20 +749,24 @@ class DevicePushService
                 }
 
                 try {
-                    $ok = $adapter->addUser(
+                    $uid = $this->resolveUid($device->id, $user, $deviceUserMap);
+
+                    $addResult = $adapter->addUser(
                         $device->ip_address,
                         $device->port,
                         (string) $device->comm_key,
                         (int) $device->timeout,
                         UserData::fromArray([
-                            'uid' => 0,
+                            'uid' => $uid,
                             'user_id' => $user->employee_code,
                             'name' => $user->name,
                         ]),
                     );
 
-                    if ($ok) {
-                        $result->update(['status' => 'success', 'error_message' => null]);
+                    $returnedUid = is_int($addResult) ? $addResult : $uid;
+
+                    if ($addResult !== false) {
+                        $result->update(['status' => 'success', 'error_message' => null, 'device_uid' => $returnedUid ?: null]);
                         $this->resultRepository->incrementRetry($result->id);
                         $succeeded++;
                     } else {
@@ -798,6 +896,56 @@ class DevicePushService
             ->all();
     }
 
+    private function resolveUid(int $deviceId, User $user, array $deviceUserMap): int
+    {
+        // 1. Try to match by current employee_code from the device's live user list
+        if (isset($deviceUserMap[(string) $user->employee_code])) {
+            return (int) $deviceUserMap[(string) $user->employee_code];
+        }
+
+        // 2. Try to find the UID from previous successful push results for this user on this device
+        $previousUid = DevicePushResult::query()
+            ->where('device_id', $deviceId)
+            ->where('target_user_id', $user->id)
+            ->where('record_type', 'user')
+            ->where('status', 'success')
+            ->whereNotNull('device_uid')
+            ->orderBy('id', 'desc')
+            ->value('device_uid');
+
+        if ($previousUid) {
+            return (int) $previousUid;
+        }
+
+        return 0;
+    }
+
+    private function getDeviceUserMap(FingerprintDevice $device, DeviceAdapterInterface $adapter): array
+    {
+        try {
+            $deviceUsers = $adapter->getUsers(
+                $device->ip_address,
+                $device->port,
+                (string) $device->comm_key,
+                (int) $device->timeout,
+            );
+
+            $map = [];
+            foreach ($deviceUsers as $du) {
+                $code = (string) ($du['user_id'] ?? '');
+                if ($code !== '') {
+                    $map[$code] = (int) ($du['uid'] ?? 0);
+                }
+            }
+
+            return $map;
+        } catch (\Throwable $e) {
+            Log::warning('getDeviceUserMap failed', ['error' => $e->getMessage()]);
+
+            return [];
+        }
+    }
+
     private function emitProgress(?callable $onProgress, string $step, string $status, string $message, int $percent, array $data = []): void
     {
         if ($onProgress) {
@@ -808,7 +956,7 @@ class DevicePushService
     /**
      * @return array<string, mixed>
      */
-    private function buildResultRow(int $syncLogId, int $deviceId, string $type, ?int $userId, ?int $fingerId, string $status, ?string $error): array
+    private function buildResultRow(int $syncLogId, int $deviceId, string $type, ?int $userId, ?int $fingerId, string $status, ?string $error, ?int $uid = null): array
     {
         return [
             'sync_log_id' => $syncLogId,
@@ -816,11 +964,21 @@ class DevicePushService
             'record_type' => $type,
             'target_user_id' => $userId,
             'target_finger_id' => $fingerId,
-            'device_uid' => null,
+            'device_uid' => $uid,
             'status' => $status,
             'error_message' => $error,
             'attempted_at' => now(),
             'retry_count' => 0,
         ];
+    }
+
+    private function isFaceTemplate(UserFingerprint $fp): bool
+    {
+        $format = $fp->template_format ?? '';
+        $fingerId = $fp->finger_id ?? 0;
+
+        return str_contains($format, 'face')
+            || str_contains($format, 'zkteco-face')
+            || $fingerId >= 50;
     }
 }

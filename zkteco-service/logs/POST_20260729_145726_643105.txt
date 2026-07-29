@@ -1,0 +1,14 @@
+PATH:
+/iclock/cdata?SN=MED7254500077&table=ATTLOG&Stamp=9999
+
+HEADERS:
+Host: 10.10.250.2:8081
+User-Agent: iClock Proxy/1.09
+Connection: close
+Accept: */*
+Content-Type: text/plain
+Content-Length: 44
+
+
+BODY:
+20327	2026-07-29 14:56:35	0	15	0	0	0	0	0	0	

@@ -25,7 +25,7 @@ class SupremaAdapter implements DeviceAdapterInterface
         throw new \RuntimeException('Suprema driver is not yet implemented.');
     }
 
-    public function addUser(string $ip, int $port, string $commKey, int $timeout, UserData $user): bool
+    public function addUser(string $ip, int $port, string $commKey, int $timeout, UserData $user): int|bool
     {
         throw new \RuntimeException('Suprema driver is not yet implemented.');
     }

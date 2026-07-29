@@ -15,7 +15,7 @@ interface DeviceAdapterInterface
 
     public function getUsers(string $ip, int $port, string $commKey = '', int $timeout = 30): array;
 
-    public function addUser(string $ip, int $port, string $commKey, int $timeout, UserData $user): bool;
+    public function addUser(string $ip, int $port, string $commKey, int $timeout, UserData $user): int|bool;
 
     public function deleteUser(string $ip, int $port, string $commKey, int $timeout, int $uid): bool;
 

@@ -1,0 +1,14 @@
+/iclock/getrequest?SN=MED7254500092&INFO=ZMM720-NF43HB-Ver1.2.16,859,1130,484,10.10.250.8,10,12,12,551,111,1,588,0
+
+GET OPTION FROM: MED7254500092
+ATTLOGStamp=None
+OPERLOGStamp=None
+ATTPHOTOStamp=None
+ErrorDelay=60
+Delay=30
+TransTimes=00:00;23:59
+TransInterval=1
+TransFlag=1111111111
+TimeZone=3
+Realtime=1
+Encrypt=0

@@ -344,8 +344,19 @@ class DeviceFullSyncService
 
                     $userData = $this->applyDeviceOrgDefaults($device, $userData);
 
-                    $user = User::create($userData);
-                    $created++;
+                    try {
+                        $user = User::create($userData);
+                        $created++;
+                    } catch (\Throwable $e) {
+                        if (str_contains($e->getMessage(), 'Duplicate entry')) {
+                            $email = 'device_'.strtolower($externalId).'_'.(time()).'@hrm.local';
+                            $userData['email'] = $email;
+                            $user = User::create($userData);
+                            $created++;
+                        } else {
+                            throw $e;
+                        }
+                    }
                 }
 
                 $matched[] = [

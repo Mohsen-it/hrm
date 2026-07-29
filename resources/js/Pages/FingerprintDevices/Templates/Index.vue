@@ -19,6 +19,7 @@ const selectedTemplate = ref(null);
 const columns = computed(() => [
     { key: 'id', label: t('fingerprint_devices.id'), sortable: true, cellClass: 'text-center w-[80px]' },
     { key: 'user', label: t('fingerprint_devices.user') },
+    { key: 'type_badge', label: t('fingerprint_devices.type'), cellClass: 'text-center' },
     { key: 'device', label: t('fingerprint_devices.device_name') },
     { key: 'finger_id', label: t('fingerprint_devices.finger_id'), cellClass: 'text-center' },
     { key: 'quality', label: t('fingerprint_devices.template_quality'), cellClass: 'text-center' },
@@ -82,13 +83,38 @@ const flashSuccess = computed(() => page.props.flash?.success);
             @search="onSearch"
         >
             <template #cell-user="{ row }">
-                <span v-if="row.user">{{ row.user.name }}</span>
-                <span v-else class="text-mistral-stone">—</span>
+                <div class="flex items-center gap-2">
+                    <img
+                        v-if="row.user?.face_photo_url"
+                        :src="row.user.face_photo_url"
+                        :alt="row.user?.name"
+                        class="w-7 h-7 rounded-full object-cover border border-mistral-hairline-soft"
+                    />
+                    <span v-if="row.user">{{ row.user.name }}</span>
+                    <span v-else class="text-mistral-stone">—</span>
+                </div>
+            </template>
+
+            <template #cell-type_badge="{ row }">
+                <Badge
+                    v-if="row.is_face_template"
+                    :text="t('fingerprint_devices.face_template')"
+                    variant="info"
+                />
+                <Badge
+                    v-else
+                    :text="t('fingerprint_devices.fingerprint_template')"
+                    variant="neutral"
+                />
             </template>
 
             <template #cell-device="{ row }">
                 <span v-if="row.device">{{ row.device.name }}</span>
                 <span v-else class="text-mistral-stone">—</span>
+            </template>
+
+            <template #cell-finger_id="{ row }">
+                <span class="text-[12px]">{{ row.finger_id_label }}</span>
             </template>
 
             <template #cell-is_master="{ row }">

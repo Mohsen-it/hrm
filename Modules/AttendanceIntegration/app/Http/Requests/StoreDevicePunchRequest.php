@@ -22,7 +22,8 @@ class StoreDevicePunchRequest extends FormRequest
             'punch_type' => ['nullable', 'string', 'in:check_in,check_out,auto,break_in,break_out'],
             'status' => ['nullable', 'integer', 'min:0', 'max:255'],
             'work_code' => ['nullable', 'integer', 'min:0', 'max:65535'],
-            'Body' => ['nullable', 'string', 'max:524288'],
+            'Body' => ['nullable', 'string', 'max:1048576'],
+            'table' => ['nullable', 'string', 'max:50'],
             'attendance' => ['nullable', 'array', 'max:500'],
             'attendance.*.user_id' => ['required', 'string', 'max:50'],
             'attendance.*.timestamp' => ['nullable', 'string', 'max:30'],
@@ -41,7 +42,7 @@ class StoreDevicePunchRequest extends FormRequest
         return [
             'SN.max' => 'Serial number must not exceed 100 characters.',
             'user_id.required_without_all' => 'A user_id, attendance array, punches array, or Body is required.',
-            'Body.max' => 'ADMS body payload must not exceed 512 KB.',
+            'Body.max' => 'ADMS body payload must not exceed 1 MB.',
             'attendance.max' => 'Attendance batch must not exceed 500 records per request.',
             'punches.max' => 'Punches batch must not exceed 500 records per request.',
             'attendance.*.user_id.required' => 'Each attendance record must have a user_id.',

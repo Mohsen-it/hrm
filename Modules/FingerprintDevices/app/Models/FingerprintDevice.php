@@ -98,6 +98,11 @@ class FingerprintDevice extends Model
         return $this->hasMany(DevicePushResult::class, 'device_id');
     }
 
+    public function commands(): HasMany
+    {
+        return $this->hasMany(DeviceCommand::class, 'device_id');
+    }
+
     public function scopeActive(Builder $query): Builder
     {
         return $query->where('status', '!=', 'deactivated');
@@ -159,5 +164,39 @@ class FingerprintDevice extends Model
         }
 
         return $this->attributes['lastSyncLogCached'] ?? null;
+    }
+
+    public function getDriverName(): string
+    {
+        $manufacturer = strtolower($this->deviceType?->manufacturer ?? '');
+
+        if (str_contains($manufacturer, 'zkteco') || str_contains($manufacturer, 'zk')) {
+            return 'zkteco';
+        }
+        if (str_contains($manufacturer, 'hikvision') || str_contains($manufacturer, 'hik')) {
+            return 'hikvision';
+        }
+        if (str_contains($manufacturer, 'suprema')) {
+            return 'suprema';
+        }
+
+        return config('attendanceintegration.default_driver', 'zkteco');
+    }
+
+    public function getPendingCommandsCountAttribute(): int
+    {
+        return $this->commands()
+            ->where('status', DeviceCommand::STATUS_PENDING)
+            ->count();
+    }
+
+    public function getFirmwareAttribute(): ?string
+    {
+        return $this->capabilities['firmware'] ?? null;
+    }
+
+    public function getFaceCountAttribute(): ?int
+    {
+        return $this->capabilities['face_count'] ?? null;
     }
 }

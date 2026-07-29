@@ -84,7 +84,7 @@ class HikvisionAdapter implements DeviceAdapterInterface
         }
     }
 
-    public function addUser(string $ip, int $port, string $commKey, int $timeout, UserData $user): bool
+    public function addUser(string $ip, int $port, string $commKey, int $timeout, UserData $user): int|bool
     {
         try {
             $credentials = $this->parseCredentials($commKey);

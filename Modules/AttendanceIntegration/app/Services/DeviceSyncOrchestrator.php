@@ -211,11 +211,20 @@ class DeviceSyncOrchestrator
 
                 if (! $user) {
                     $autoName = ! empty($du['name']) ? $du['name'] : 'User '.$externalId;
+
+                    $emailBase = 'device_'.strtolower($externalId).'@hrm.local';
+                    $email = $emailBase;
+                    $suffix = 1;
+                    while (User::where('email', $email)->exists()) {
+                        $email = 'device_'.strtolower($externalId).'_'.$suffix.'@hrm.local';
+                        $suffix++;
+                    }
+
                     $userData = [
                         'employee_code' => $externalId,
                         'name' => $autoName,
                         'full_name_ar' => $autoName,
-                        'email' => 'device_'.strtolower($externalId).'@hrm.local',
+                        'email' => $email,
                         'password' => bcrypt('password'),
                         'status' => 1,
                         'is_active_employee' => true,
@@ -223,8 +232,19 @@ class DeviceSyncOrchestrator
 
                     $userData = $this->applyDeviceOrgDefaults($rawDevice, $userData);
 
-                    $user = User::create($userData);
-                    $created++;
+                    try {
+                        $user = User::create($userData);
+                        $created++;
+                    } catch (\Throwable $e) {
+                        if (str_contains($e->getMessage(), 'Duplicate entry')) {
+                            $email = 'device_'.strtolower($externalId).'_'.(time()).'@hrm.local';
+                            $userData['email'] = $email;
+                            $user = User::create($userData);
+                            $created++;
+                        } else {
+                            throw $e;
+                        }
+                    }
                 }
 
                 $matched[] = [

@@ -1,0 +1,14 @@
+PATH:
+/iclock/cdata?SN=MED7254500092&table=OPERLOG&Stamp=9999
+
+HEADERS:
+Host: 10.10.250.2:8081
+User-Agent: iClock Proxy/1.09
+Connection: close
+Accept: */*
+Content-Type: text/plain
+Content-Length: 159
+
+
+BODY:
+USER PIN=18129	Name=عمر محمد هاشم كبة - عامل	Pri=0	Passwd=	Card=	Grp=1	TZ=0000000100000000	Verify=-1	ViceCard=	StartDatetime=0	EndDatetime=0

@@ -1,0 +1,16 @@
+PATH:
+/iclock/cdata?SN=MED7254500092&table=OPERLOG&Stamp=9999
+
+HEADERS:
+Host: 10.10.250.2:8081
+User-Agent: iClock Proxy/1.09
+Connection: close
+Accept: */*
+Content-Type: text/plain
+Content-Length: 134
+
+
+BODY:
+OPLOG 69	20079	2026-07-29 14:49:02	S22	0	0	0
+OPLOG 36	20079	2026-07-29 14:49:04	S22	0	0	0
+OPLOG 6	20079	2026-07-29 14:49:04	S22	0	0	0

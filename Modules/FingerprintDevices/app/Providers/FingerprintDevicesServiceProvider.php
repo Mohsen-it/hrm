@@ -9,6 +9,8 @@ use Modules\FingerprintDevices\Console\Commands\ExportFacePhotosToUsb;
 use Modules\FingerprintDevices\Console\Commands\FullSyncAllDevices;
 use Modules\FingerprintDevices\Console\Commands\ImportFacePhotosFromUsb;
 use Modules\FingerprintDevices\Console\Commands\ImportHikvisionEmployees;
+use Modules\FingerprintDevices\Console\Commands\PullTemplatesDirect;
+use Modules\FingerprintDevices\Console\Commands\QueueUsersForAdms;
 use Nwidart\Modules\Traits\PathNamespace;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
@@ -45,6 +47,8 @@ class FingerprintDevicesServiceProvider extends ServiceProvider
             FullSyncAllDevices::class,
             ImportFacePhotosFromUsb::class,
             ExportFacePhotosToUsb::class,
+            QueueUsersForAdms::class,
+            PullTemplatesDirect::class,
         ]);
     }
 

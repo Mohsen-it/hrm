@@ -24,8 +24,9 @@ function formatDateTime(value) {
 const fields = computed(() => [
     { label: t('fingerprint_devices.id'), value: String(props.template.id) },
     { label: t('fingerprint_devices.user'), value: props.template.user?.name ?? '—' },
+    { label: t('fingerprint_devices.type'), value: props.template.is_face_template ? t('fingerprint_devices.face_template') : t('fingerprint_devices.fingerprint_template') },
     { label: t('fingerprint_devices.device_name'), value: props.template.device?.name ?? '—' },
-    { label: t('fingerprint_devices.finger_id'), value: String(props.template.finger_id) },
+    { label: t('fingerprint_devices.finger_id'), value: props.template.finger_id_label ?? String(props.template.finger_id) },
     { label: t('fingerprint_devices.template_format'), value: props.template.template_format },
     { label: t('fingerprint_devices.template_version'), value: String(props.template.template_version) },
     { label: t('fingerprint_devices.template_quality'), value: String(props.template.quality) },
@@ -50,8 +51,14 @@ const fields = computed(() => [
         <Card variant="base" padding="none">
             <div class="p-5 sm:p-6">
                 <div class="flex items-center gap-4 mb-6 pb-6 border-b border-mistral-hairline-soft">
-                    <div class="w-20 h-20 rounded-lg bg-mistral-surface flex items-center justify-center border border-mistral-hairline-soft">
-                        <i class="fas fa-fingerprint text-[32px] text-mistral-stone"></i>
+                    <div class="w-20 h-20 rounded-lg bg-mistral-surface flex items-center justify-center border border-mistral-hairline-soft overflow-hidden">
+                        <img
+                            v-if="template.face_photo_url"
+                            :src="template.face_photo_url"
+                            :alt="template.user?.name"
+                            class="w-20 h-20 object-cover"
+                        />
+                        <i v-else class="fas fa-fingerprint text-[32px] text-mistral-stone"></i>
                     </div>
                     <div>
                         <h2 class="text-[20px] font-semibold text-mistral-ink">
@@ -62,14 +69,19 @@ const fields = computed(() => [
                         </p>
                         <div class="mt-2 flex items-center gap-2">
                             <Badge
-                                v-if="template.is_master"
-                                :text="t('fingerprint_devices.is_master')"
-                                variant="active"
+                                v-if="template.is_face_template"
+                                :text="t('fingerprint_devices.face_template')"
+                                variant="info"
                             />
                             <Badge
                                 v-else
-                                :text="t('fingerprint_devices.standard')"
-                                variant="inactive"
+                                :text="t('fingerprint_devices.fingerprint_template')"
+                                variant="neutral"
+                            />
+                            <Badge
+                                v-if="template.is_master"
+                                :text="t('fingerprint_devices.is_master')"
+                                variant="active"
                             />
                         </div>
                     </div>
@@ -95,6 +107,27 @@ const fields = computed(() => [
                             {{ template.template_data.substring(0, 200) }}{{ template.template_data.length > 200 ? '...' : '' }}
                         </template>
                         <span v-else>—</span>
+                    </div>
+                </div>
+
+                <div v-if="template.is_face_template && template.user?.face_photo_url" class="mt-6 pt-6 border-t border-mistral-hairline-soft">
+                    <p class="text-[12px] text-mistral-steel mb-2">
+                        {{ t('fingerprint_devices.face_photo') }}
+                    </p>
+                    <div class="flex items-center gap-4">
+                        <img
+                            :src="template.user.face_photo_url"
+                            :alt="template.user?.name"
+                            class="w-32 h-32 rounded-lg object-cover border border-mistral-hairline-soft"
+                        />
+                        <div>
+                            <p class="text-[13px] text-mistral-ink font-medium">
+                                {{ template.user?.name }}
+                            </p>
+                            <p class="text-[12px] text-mistral-steel mt-1">
+                                {{ t('fingerprint_devices.employee_code') }}: {{ template.user?.email ?? '—' }}
+                            </p>
+                        </div>
                     </div>
                 </div>
             </div>

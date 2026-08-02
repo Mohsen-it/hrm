@@ -34,6 +34,8 @@ class DevicePushService
         private DeviceSyncLogRepository $syncLogRepository,
         private DevicePushResultRepository $resultRepository,
         private DeviceAdapterResolver $adapterResolver,
+        private FaceTemplateDistributionService $faceTemplateDistribution,
+        private ZKTecoPythonBridgeService $zktecoBridge,
     ) {}
 
     /**
@@ -98,7 +100,10 @@ class DevicePushService
                 $result = $this->pushFingerprints($device, $adapter, $userIds, $syncLog, $options);
                 $totals = array_merge($totals, $result['totals']);
                 $errors = array_merge($errors, $result['errors']);
-                if ($result['totals']['failed_fingerprints'] > 0) {
+                if (
+                    $result['totals']['failed_fingerprints'] > 0
+                    || ($result['totals']['failed_face_templates'] ?? 0) > 0
+                ) {
                     $hasFailure = true;
                 }
                 $this->emitProgress($onProgress, 'push_fingerprints', 'ok', 'تم دفع البصمات', 85, $result['totals']);
@@ -342,6 +347,8 @@ class DevicePushService
             'failed_fingerprints' => 0,
             'skipped_fingerprints' => 0,
             'pushed_face_templates' => 0,
+            'queued_face_templates' => 0,
+            'duplicate_face_commands' => 0,
             'failed_face_templates' => 0,
             'skipped_face_templates' => 0,
         ];
@@ -365,27 +372,27 @@ class DevicePushService
             return ['totals' => $totals, 'errors' => $errors];
         }
 
-        Log::info('pushFingerprints: fetching device user list…');
-        $deviceUsers = $adapter->getUsers(
-            $device->ip_address,
-            $device->port,
-            (string) $device->comm_key,
-            (int) $device->timeout,
-        );
-        $userIdToUid = [];
-        foreach ($deviceUsers as $du) {
-            $userIdToUid[(string) ($du['user_id'] ?? '')] = (int) ($du['uid'] ?? 0);
-        }
-
-        $empCodeByDbId = User::query()
-            ->whereIn('id', $allTemplates->pluck('user_id')->unique())
-            ->pluck('employee_code', 'id');
-
         $driver = strtolower($device->deviceType->manufacturer ?? '');
         $isZk = str_contains($driver, 'zkteco') || str_contains($driver, 'zk');
         $bridgeUrl = $isZk ? rtrim(config('attendanceintegration.drivers.zkteco.bridge_url'), '/') : '';
 
         if ($fingerprints->isNotEmpty()) {
+            Log::info('pushFingerprints: fetching device user list...');
+            $deviceUsers = $adapter->getUsers(
+                $device->ip_address,
+                $device->port,
+                (string) $device->comm_key,
+                (int) $device->timeout,
+            );
+            $userIdToUid = [];
+            foreach ($deviceUsers as $du) {
+                $userIdToUid[(string) ($du['user_id'] ?? '')] = (int) ($du['uid'] ?? 0);
+            }
+
+            $empCodeByDbId = User::query()
+                ->whereIn('id', $fingerprints->pluck('user_id')->unique())
+                ->pluck('employee_code', 'id');
+
             $fpPayload = [];
             foreach ($fingerprints as $fp) {
                 $empCode = (string) ($empCodeByDbId[$fp->user_id] ?? '');
@@ -463,59 +470,14 @@ class DevicePushService
             }
         }
 
-        if ($faceTemplates->isNotEmpty() && $isZk) {
-            $facePayload = [];
-            foreach ($faceTemplates as $fp) {
-                $empCode = (string) ($empCodeByDbId[$fp->user_id] ?? '');
-                $uid = $userIdToUid[$empCode] ?? null;
-
-                if (! $uid) {
-                    $totals['skipped_face_templates']++;
-                    $rows[] = $this->buildResultRow($syncLog->id, $device->id, 'face_template', $fp->user_id, $fp->finger_id, 'skipped', 'user not on device');
-
-                    continue;
-                }
-
-                $facePayload[] = [
-                    'uid' => $uid,
-                    'user_id' => $empCode,
-                    'finger_id' => (int) $fp->finger_id,
-                    'template_data' => (string) $fp->template_data,
-                ];
-            }
-
-            if (! empty($facePayload)) {
-                $chunks = array_chunk($facePayload, 20);
-                foreach ($chunks as $chunk) {
-                    try {
-                        $resp = Http::timeout(600)->retry(2, 1000)->post("{$bridgeUrl}/device/push-face-templates-batch", [
-                            'ip' => $device->ip_address,
-                            'port' => $device->port,
-                            'password' => (int) $device->comm_key,
-                            'templates' => $chunk,
-                        ]);
-                        $body = $resp->json() ?? [];
-                        $totals['pushed_face_templates'] += (int) ($body['success_count'] ?? 0);
-                        $totals['failed_face_templates'] += (int) ($body['failed_count'] ?? 0);
-
-                        foreach ($chunk as $t) {
-                            $status = 'success';
-                            $rows[] = $this->buildResultRow($syncLog->id, $device->id, 'face_template', $t['user_id'] ?? null, $t['finger_id'], $status, null);
-                        }
-                        if (! empty($body['results'])) {
-                            foreach (array_filter($body['results'], fn ($r) => empty($r['success'])) as $r) {
-                                $errors[] = 'face uid='.($r['uid'] ?? '?').' fid='.($r['finger_id'] ?? '?').': '.($r['error'] ?? 'unknown');
-                            }
-                        }
-                    } catch (\Throwable $e) {
-                        $totals['failed_face_templates'] += count($chunk);
-                        $errors[] = 'Batch face template push failed: '.$e->getMessage();
-                    }
+        if ($faceTemplates->isNotEmpty()) {
+            $faceResult = $this->faceTemplateDistribution->queueForDevice($device, $userIds);
+            foreach (array_keys($totals) as $key) {
+                if (array_key_exists($key, $faceResult)) {
+                    $totals[$key] = $faceResult[$key];
                 }
             }
-        } elseif ($faceTemplates->isNotEmpty() && ! $isZk) {
-            $totals['skipped_face_templates'] = $faceTemplates->count();
-            $errors[] = 'Face template push only supported for ZKTeco devices.';
+            $errors = array_merge($errors, $faceResult['errors']);
         }
 
         $this->resultRepository->createMany($rows);
@@ -525,6 +487,10 @@ class DevicePushService
 
     /**
      * Push face photos (JPEG images) to a device.
+     *
+     * @return array{totals: array<string, int>, errors: array<int, string>}
+     */
+    public function pushFacePhotos(FingerprintDevice $device, DeviceAdapterInterface $adapter, array $userIds, DeviceSyncLog $syncLog, array $options = []): array
     {
         $totals = [
             'pushed_face_photos' => 0,
@@ -621,8 +587,7 @@ class DevicePushService
 
         // Push via Python bridge batch endpoint
         try {
-            $bridge = app(ZKTecoPythonBridgeService::class);
-            $result = $bridge->pushFacePhotosBatch(
+            $result = $this->zktecoBridge->pushFacePhotosBatch(
                 $device->ip_address,
                 (int) $device->port,
                 (string) $device->comm_key,

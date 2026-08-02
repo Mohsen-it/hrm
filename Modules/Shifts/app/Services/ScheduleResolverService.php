@@ -115,7 +115,12 @@ class ScheduleResolverService
         $times = $this->rotationEngine->resolveTimes($rotationAssignment);
 
         // Grace priority: rotation.grace_minutes → snapshot late_margin → global config (null = defer to consumer)
-        $graceMinutes = $rotation->grace_minutes ?? $times['late_margin'] ?? null;
+        // grace_minutes defaults to 0 (not null) in the DB, so treat 0 as
+        // "no rotation-level override" and fall through to the schedule margin.
+        $rotationGrace = $rotation->grace_minutes;
+        $graceMinutes = $rotationGrace !== null && (int) $rotationGrace > 0
+            ? (int) $rotationGrace
+            : ($times['late_margin'] ?? null);
 
         $timesMeta = [
             'grace_minutes' => $graceMinutes,

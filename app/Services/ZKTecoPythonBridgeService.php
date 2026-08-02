@@ -149,6 +149,20 @@ class ZKTecoPythonBridgeService
     }
 
     /**
+     * Pull face templates (fid >= 50) from the device.
+     *
+     * @return array{templates?: array<int, array<string, mixed>>, error?: string}
+     */
+    public function getAllFaceTemplates(string $ip, int $port = 4370, int $password = 0): array
+    {
+        return $this->post('/device/get-all-face-templates', [
+            'ip' => $ip,
+            'port' => $port,
+            'password' => $password,
+        ]);
+    }
+
+    /**
      * Read device metadata.
      *
      * @return array<string, mixed>

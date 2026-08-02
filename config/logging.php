@@ -126,8 +126,8 @@ return [
         'biodata' => [
             'driver' => 'daily',
             'path' => storage_path('logs/biodata.log'),
-            'level' => env('LOG_LEVEL', 'debug'),
-            'days' => 30,
+            'level' => env('BIODATA_LOG_LEVEL', 'warning'),
+            'days' => env('BIODATA_LOG_DAYS', 14),
             'replace_placeholders' => true,
         ],
 

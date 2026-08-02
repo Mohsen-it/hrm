@@ -177,6 +177,55 @@ class DeviceCommandService
         );
     }
 
+    /**
+     * Queue a ZKTeco Push SDK BIODATA face-template update.
+     *
+     * The ADMS listener adds the transport envelope `C:{command_id}:`.
+     *
+     * @param  array<string, int>  $attributes
+     */
+    public function queueFaceTemplate(
+        int $deviceId,
+        string $pin,
+        string $template,
+        array $attributes,
+        string $templateHash,
+    ): DeviceCommand {
+        $index = (int) ($attributes['index'] ?? 0);
+        $correlationId = 'face-'.substr(
+            hash('sha256', $deviceId.':'.$pin.':'.$index.':'.$templateHash),
+            0,
+            56,
+        );
+        $existing = $this->commandRepo->findActiveByCorrelation($deviceId, $correlationId);
+
+        if ($existing) {
+            return $existing;
+        }
+
+        $body = sprintf(
+            'DATA UPDATE BIODATA Pin=%s No=%d Index=%d Valid=%d Duress=%d Type=2 MajorVer=%d MinorVer=%d Format=%d Tmp=%s',
+            $this->sanitizeField($pin),
+            $attributes['no'] ?? 0,
+            $attributes['index'] ?? 0,
+            $attributes['valid'] ?? 1,
+            $attributes['duress'] ?? 0,
+            $attributes['major_ver'] ?? 0,
+            $attributes['minor_ver'] ?? 0,
+            $attributes['format'] ?? 0,
+            $this->sanitizeTemplate($template),
+        );
+
+        return $this->queueCommand(
+            $deviceId,
+            DeviceCommand::TYPE_FACE_TEMPLATE,
+            $body,
+            priority: 4,
+            correlationId: $correlationId,
+            expiresInMinutes: 1440,
+        );
+    }
+
     // -----------------------------------------------------------------------
     // Batch operations
     // -----------------------------------------------------------------------
@@ -247,19 +296,27 @@ class DeviceCommandService
     /**
      * Report the result of a command execution.
      */
-    public function reportResult(int $commandId, string $status, ?string $errorMessage = null): bool
-    {
-        $command = $this->commandRepo->findById($commandId);
+    public function reportResult(
+        int $commandId,
+        int $deviceId,
+        string $status,
+        ?string $errorMessage = null,
+    ): bool {
+        $command = $this->commandRepo->findByIdForDevice($commandId, $deviceId);
         if (! $command) {
-            Log::warning('COMMAND_RESULT_UNKNOWN', ['command_id' => $commandId, 'status' => $status]);
+            Log::warning('COMMAND_RESULT_UNKNOWN', [
+                'command_id' => $commandId,
+                'device_id' => $deviceId,
+                'status' => $status,
+            ]);
 
             return false;
         }
 
-        match ($status) {
+        $handled = match ($status) {
             'completed', 'success' => $command->markCompleted(),
             'failed' => $command->markFailed($errorMessage ?? 'Device reported failure'),
-            default => null,
+            default => false,
         };
 
         Log::info('COMMAND_RESULT', [
@@ -269,7 +326,7 @@ class DeviceCommandService
             'device_id' => $command->device_id,
         ]);
 
-        return true;
+        return $handled;
     }
 
     /**
@@ -330,5 +387,15 @@ class DeviceCommandService
     public function cleanupStaleCommands(int $maxAgeMinutes = 60): int
     {
         return $this->commandRepo->expireStaleCommands($maxAgeMinutes);
+    }
+
+    private function sanitizeField(string $value): string
+    {
+        return preg_replace('/[\r\n\t]/', '', trim($value)) ?? '';
+    }
+
+    private function sanitizeTemplate(string $template): string
+    {
+        return preg_replace('/\s+/', '', $template) ?? '';
     }
 }

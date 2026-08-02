@@ -22,13 +22,15 @@ import urllib.request
 import urllib.error
 import uuid
 from datetime import datetime
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs, unquote_plus
 
 LOG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
 os.makedirs(LOG_DIR, exist_ok=True)
 
 LARAVEL_URL = os.environ.get("LARAVEL_URL", "http://127.0.0.1:8000")
+SAVE_RAW = os.environ.get("ADMS_SAVE_RAW", "0").strip() in ("1", "true", "yes")
+VERBOSE_LOG = os.environ.get("ADMS_VERBOSE_LOG", "0").strip() in ("1", "true", "yes")
 
 logging.basicConfig(
     level=logging.INFO,
@@ -40,6 +42,7 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger("ADMS")
+routine_logger = logging.getLogger("ADMS.routine")
 
 # ---------------------------------------------------------------------------
 # Table type constants
@@ -127,23 +130,45 @@ def classify_payload(body: str, table_param: str, path: str) -> str:
 # ---------------------------------------------------------------------------
 # Laravel API helpers
 # ---------------------------------------------------------------------------
+_last_laravel_conn = None
+_last_laravel_host = None
+
+def _get_laravel_connection():
+    """Reuse HTTP connection to Laravel when possible."""
+    global _last_laravel_conn, _last_laravel_host
+    from urllib.parse import urlparse as _urlparse
+    host = _urlparse(LARAVEL_URL).netloc
+    if _last_laravel_conn is not None and _last_laravel_host == host:
+        try:
+            _last_laravel_conn.request("GET", "/up", timeout=2)
+            return _last_laravel_conn
+        except Exception:
+            _last_laravel_conn = None
+    import http.client
+    _last_laravel_conn = http.client.HTTPConnection(host, timeout=30)
+    _last_laravel_host = host
+    return _last_laravel_conn
+
 def _laravel_request(method: str, endpoint: str, data: dict = None, timeout: int = 30) -> dict | None:
-    """Make an HTTP request to the Laravel backend."""
+    """Make an HTTP request to the Laravel backend with connection reuse."""
     try:
-        url = f"{LARAVEL_URL}{endpoint}"
+        import http.client
+        from urllib.parse import urlparse as _urlparse
+        parsed = _urlparse(LARAVEL_URL)
+        conn = http.client.HTTPConnection(parsed.netloc, timeout=timeout)
         body = json.dumps(data).encode("utf-8") if data else None
-        req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"})
-        req.get_method = lambda: method
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return json.loads(resp.read().decode("utf-8"))
-    except urllib.error.HTTPError as e:
-        if e.code >= 500:
-            logger.warning("Laravel HTTP %s %s → %s", method, endpoint, e.code)
-        else:
-            logger.error("Laravel HTTP %s %s → %s: %s", method, endpoint, e.code, e.read().decode("utf-8", errors="ignore")[:200])
-        return None
+        headers = {"Content-Type": "application/json"} if body else {}
+        conn.request(method, endpoint, body=body, headers=headers)
+        resp = conn.getresponse()
+        resp_body = resp.read().decode("utf-8")
+        if resp.status >= 500:
+            logger.warning("Laravel HTTP %s %s → %s", method, endpoint, resp.status)
+            return None
+        if resp.status >= 400:
+            logger.error("Laravel HTTP %s %s → %s: %s", method, endpoint, resp.status, resp_body[:200])
+            return None
+        return json.loads(resp_body)
     except urllib.error.URLError as e:
-        # Connection refused - Laravel is down, log once per minute
         if not hasattr(_laravel_request, '_last_warn'):
             _laravel_request._last_warn = {}
         key = f"{method}:{endpoint}"
@@ -199,7 +224,13 @@ def fetch_commands(serial: str) -> list:
     return []
 
 
-def report_command_result(serial: str, command_id: int, status: str, result_data: dict = None) -> bool:
+def report_command_result(
+    serial: str,
+    command_id: int,
+    status: str,
+    result_data: dict = None,
+    error_message: str = None,
+) -> bool:
     """Report the result of a command execution back to Laravel."""
     payload = {
         "SN": serial,
@@ -208,6 +239,8 @@ def report_command_result(serial: str, command_id: int, status: str, result_data
     }
     if result_data:
         payload["result"] = result_data
+    if error_message:
+        payload["error_message"] = error_message
     resp = _laravel_request("POST", "/api/adms/commands/result", payload, timeout=10)
     return resp is not None
 
@@ -252,6 +285,27 @@ def _parse_device_info(info_str: str) -> dict:
     return info
 
 
+def parse_command_result(body: str) -> dict | None:
+    """Parse a standard ZKTeco /iclock/devicecmd acknowledgement."""
+    values = parse_qs(body.strip(), keep_blank_values=True)
+    raw_id = (values.get("ID") or values.get("id") or [""])[0]
+    raw_return = (values.get("Return") or values.get("return") or [""])[0]
+
+    try:
+        command_id = int(raw_id)
+    except (TypeError, ValueError):
+        return None
+
+    success = str(raw_return).strip().lower() in {"0", "ok", "success"}
+
+    return {
+        "command_id": command_id,
+        "status": "completed" if success else "failed",
+        "return_code": str(raw_return),
+        "error_message": None if success else f"Device returned {raw_return or 'unknown'}",
+    }
+
+
 # ---------------------------------------------------------------------------
 # ADMS Response builders
 # ---------------------------------------------------------------------------
@@ -288,7 +342,10 @@ def build_get_request_response(commands: list) -> str:
         cmd_type = cmd.get("command_type", "")
         cmd_body = cmd.get("command_body", "")
 
-        lines.append(f"CMD {cmd_id} {cmd_body}")
+        if cmd_type == "face_template":
+            lines.append(f"C:{cmd_id}:{cmd_body}")
+        else:
+            lines.append(f"CMD {cmd_id} {cmd_body}")
 
     return "\r\n".join(lines) + "\r\n"
 
@@ -316,13 +373,11 @@ class ADMSHandler(BaseHTTPRequestHandler):
         correlation_id = generate_correlation_id()
         client_ip = self.client_address[0]
 
-        logger.info("[%s] GET %s SN=%s IP=%s", correlation_id, self.path, sn, client_ip)
-
         if "/iclock/getrequest" in path_lower:
             # Device is polling for pending commands
             commands = fetch_commands(sn)
             response = build_get_request_response(commands)
-            logger.info("[%s] GETREQUEST SN=%s → %d commands", correlation_id, sn, len(commands))
+            routine_logger.debug("[%s] GETREQUEST SN=%s → %d commands", correlation_id, sn, len(commands))
 
             # Parse INFO parameter if present (device stats)
             info_str = params.get("INFO", "")
@@ -335,21 +390,22 @@ class ADMSHandler(BaseHTTPRequestHandler):
         elif "/iclock/cdata" in path_lower:
             # Device is requesting options/config
             response = build_get_option_response(sn)
-            logger.info("[%s] GET CDATA (options) SN=%s", correlation_id, sn)
+            routine_logger.debug("[%s] GET CDATA (options) SN=%s", correlation_id, sn)
 
         elif "/iclock/ping" in path_lower:
             # Device heartbeat
             report_heartbeat(sn, client_ip)
             response = build_ping_response(sn)
-            logger.info("[%s] PING SN=%s", correlation_id, sn)
+            routine_logger.debug("[%s] PING SN=%s", correlation_id, sn)
 
         else:
             # Default: return options
             response = build_get_option_response(sn)
             logger.info("[%s] DEFAULT GET SN=%s path=%s", correlation_id, sn, self.path)
 
-        # Save raw for debugging
-        save_raw("GET", f"PATH: {self.path}\nSN: {sn}\nIP: {client_ip}\n\nRESPONSE:\n{response}")
+        # Save raw for debugging (only when ADMS_SAVE_RAW=1)
+        if SAVE_RAW:
+            save_raw("GET", f"PATH: {self.path}\nSN: {sn}\nIP: {client_ip}\n\nRESPONSE:\n{response}")
 
         self.send_response(200)
         self.send_header("Content-Type", "text/plain")
@@ -371,13 +427,39 @@ class ADMSHandler(BaseHTTPRequestHandler):
 
         correlation_id = generate_correlation_id()
         client_ip = self.client_address[0]
+        response_status = 200
 
-        logger.info("=" * 80)
-        logger.info("[%s] POST %s SN=%s SIZE=%d TABLE=%s IP=%s",
-                     correlation_id, self.path, sn, len(body_bytes), table_param, client_ip)
+        if VERBOSE_LOG:
+            logger.info("=" * 80)
+            logger.info("[%s] POST %s SN=%s SIZE=%d TABLE=%s IP=%s",
+                         correlation_id, self.path, sn, len(body_bytes), table_param, client_ip)
 
         # ---- Route by path ----
-        if "/iclock/ping" in path_lower:
+        is_command_result = "/iclock/devicecmd" in path_lower
+
+        if is_command_result:
+            command_result = parse_command_result(body)
+            if command_result:
+                reported = report_command_result(
+                    sn,
+                    command_result["command_id"],
+                    command_result["status"],
+                    {"return_code": command_result["return_code"]},
+                    command_result["error_message"],
+                )
+                logger.info(
+                    "[%s] DEVICECMD SN=%s ID=%s STATUS=%s REPORTED=%s",
+                    correlation_id,
+                    sn,
+                    command_result["command_id"],
+                    command_result["status"],
+                    reported,
+                )
+            else:
+                logger.warning("[%s] Invalid DEVICECMD acknowledgement from SN=%s", correlation_id, sn)
+            response = "OK"
+
+        elif "/iclock/ping" in path_lower:
             # Device registration / heartbeat with body
             info = {}
             if body.strip():
@@ -394,9 +476,15 @@ class ADMSHandler(BaseHTTPRequestHandler):
             if table_type == "UNKNOWN":
                 logger.warning("[%s] UNKNOWN payload from SN=%s: %s", correlation_id, sn, body[:300])
 
-            if body.strip():
-                forward_to_laravel(sn, body, table_type, correlation_id, params)
-            response = "OK"
+            forwarded = not body.strip() or forward_to_laravel(
+                sn,
+                body,
+                table_type,
+                correlation_id,
+                params,
+            )
+            response = "OK" if forwarded else "ERROR"
+            response_status = 200 if forwarded else 503
 
         elif "/iclock/getrequest" in path_lower:
             # Device also POSTs getrequest sometimes
@@ -409,21 +497,33 @@ class ADMSHandler(BaseHTTPRequestHandler):
             table_type = classify_payload(body, table_param, self.path)
             logger.info("[%s] GENERIC POST classified as TABLE=%s", correlation_id, table_type)
 
-            if body.strip():
-                forward_to_laravel(sn, body, table_type, correlation_id, params)
-            response = "OK"
+            forwarded = not body.strip() or forward_to_laravel(
+                sn,
+                body,
+                table_type,
+                correlation_id,
+                params,
+            )
+            response = "OK" if forwarded else "ERROR"
+            response_status = 200 if forwarded else 503
 
-        # Save raw for debugging
-        raw_dump = f"PATH: {self.path}\nSN: {sn}\nIP: {client_ip}\nTABLE: {table_param}\n\nHEADERS:\n"
-        for k, v in self.headers.items():
-            raw_dump += f"{k}: {v}\n"
-        raw_dump += f"\nBODY:\n{body[:5000]}\n\nRESPONSE:\n{response}"
-        save_raw("POST", raw_dump)
+        # Save raw for debugging (only when ADMS_SAVE_RAW=1)
+        if SAVE_RAW:
+            raw_dump = f"PATH: {self.path}\nSN: {sn}\nIP: {client_ip}\nTABLE: {table_param}\n\nHEADERS:\n"
+            for k, v in self.headers.items():
+                raw_dump += f"{k}: {v}\n"
+            saved_body = "[command acknowledgement redacted]" if is_command_result else body[:5000]
+            raw_dump += f"\nBODY:\n{saved_body}\n\nRESPONSE:\n{response}"
+            save_raw("POST", raw_dump)
 
-        logger.info("[%s] Response: %s", correlation_id, response.replace("\r\n", "\\r\\n")[:100])
-        logger.info("=" * 80)
+        if VERBOSE_LOG:
+            logger.info("[%s] Response: %s", correlation_id, response.replace("\r\n", "\\r\\n")[:100])
+            logger.info("=" * 80)
+        else:
+            routine_logger.debug("[%s] POST %s SN=%s TABLE=%s → %s",
+                                 correlation_id, self.path, sn, table_param, response.replace("\r\n", "\\r\\n")[:50])
 
-        self.send_response(200)
+        self.send_response(response_status)
         self.send_header("Content-Type", "text/plain")
         self.send_header("Connection", "close")
         self.end_headers()
@@ -465,12 +565,16 @@ def main():
     global LARAVEL_URL
     LARAVEL_URL = args.laravel.rstrip("/")
 
-    server = HTTPServer((args.host, args.port), ADMSHandler)
+    # Devices poll independently. A threaded listener prevents one slow
+    # Laravel forward from delaying realtime BIODATA from another terminal.
+    server = ThreadingHTTPServer((args.host, args.port), ADMSHandler)
 
     logger.info("=" * 60)
     logger.info("ZKTeco ADMS Server starting on %s:%s", args.host, args.port)
     logger.info("Laravel API: %s", LARAVEL_URL)
     logger.info("Log directory: %s", LOG_DIR)
+    logger.info("Save raw dumps: %s", "ON" if SAVE_RAW else "OFF (set ADMS_SAVE_RAW=1 to enable)")
+    logger.info("Verbose logging: %s", "ON" if VERBOSE_LOG else "OFF (set ADMS_VERBOSE_LOG=1 to enable)")
     logger.info("Protocol endpoints:")
     logger.info("  POST /iclock/cdata      → Inbound data (ATTLOG, BIODATA, USERINFO, etc.)")
     logger.info("  GET  /iclock/getrequest → Device polls for commands")

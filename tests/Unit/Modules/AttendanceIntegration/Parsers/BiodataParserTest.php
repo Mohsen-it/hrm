@@ -227,4 +227,16 @@ class BiodataParserTest extends TestCase
         $this->assertSame('500', $records[0]['pin']);
         $this->assertSame(2, $records[0]['type']);
     }
+
+    public function test_parse_preserves_unknown_device_fields(): void
+    {
+        $body = "BIODATA Pin=500 No=1 Index=2 Valid=1 Duress=0 Type=2 MajorVer=12 MinorVer=0 Format=0\nTmp=DATA\n";
+
+        $records = BiodataParser::parse($body);
+
+        $this->assertSame('1', $records[0]['extra_fields']['No']);
+        $this->assertSame('2', $records[0]['extra_fields']['Index']);
+        $this->assertSame('1', $records[0]['extra_fields']['Valid']);
+        $this->assertSame('0', $records[0]['extra_fields']['Duress']);
+    }
 }

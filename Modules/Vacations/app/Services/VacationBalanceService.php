@@ -69,7 +69,7 @@ class VacationBalanceService
             );
         }
 
-        return $this->grant($userId, $type, $year, 0, null, false);
+        return $this->grant($userId, $type, $year);
     }
 
     /**

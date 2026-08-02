@@ -14,13 +14,12 @@ use Modules\Attendance\Services\AttendanceGroupService;
 use Modules\Branches\Services\BranchService;
 use Modules\Companies\Services\CompanyService;
 use Modules\Departments\Services\DepartmentService;
+use Modules\FingerprintDevices\Services\MasterFingerprintService;
 use Modules\Grades\Services\GradeService;
 use Modules\Positions\Services\PositionService;
 use Modules\Shifts\Services\RotationService;
 use Modules\Shifts\Services\ShiftService;
 use Modules\Subordinations\Services\SubordinationService;
-use Modules\Vacations\Services\VacationBalanceService;
-use Modules\Vacations\Services\VacationTypeService;
 use Modules\Users\Exports\UsersExport;
 use Modules\Users\Http\Requests\StoreUserRequest;
 use Modules\Users\Http\Requests\UpdateUserRequest;
@@ -28,6 +27,8 @@ use Modules\Users\Http\Resources\UserIndexResource;
 use Modules\Users\Http\Resources\UserResource;
 use Modules\Users\Models\User;
 use Modules\Users\Services\UserService;
+use Modules\Vacations\Services\VacationBalanceService;
+use Modules\Vacations\Services\VacationTypeService;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 
@@ -48,6 +49,7 @@ class UsersController extends Controller
         private RotationService $rotationService,
         private VacationTypeService $vacationTypeService,
         private VacationBalanceService $balanceService,
+        private MasterFingerprintService $masterFingerprintService,
     ) {}
 
     // ------------------------------------------------------------------
@@ -200,7 +202,7 @@ class UsersController extends Controller
         try {
             $this->userService->updateUser($user, $request->validated());
         } catch (\Throwable $e) {
-            \Log::error('User update failed: ' . $e->getMessage(), [
+            \Log::error('User update failed: '.$e->getMessage(), [
                 'user_id' => $id,
                 'exception' => $e,
                 'validated' => $request->validated(),
@@ -318,6 +320,17 @@ class UsersController extends Controller
 
         return Inertia::render('Users/Fingerprints', [
             'user' => fn () => new UserResource($user),
+            'faceTemplates' => fn () => $this->masterFingerprintService
+                ->getUserFaceTemplates($user->id)
+                ->map(fn ($template) => [
+                    'id' => $template->id,
+                    'type' => $template->template_type ?? 'face',
+                    'component_index' => $template->template_index,
+                    'set_id' => $template->face_template_set_id,
+                    'version' => $template->template_version,
+                    'updated_at' => $template->updated_at?->toDateTimeString(),
+                    'device' => $template->device?->name ?? $template->device_serial,
+                ])->values(),
         ]);
     }
 

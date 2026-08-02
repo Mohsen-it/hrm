@@ -2,7 +2,7 @@
 import { ref, computed } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
-import { PageHeader, DataTable, ConfirmDialog, Badge, Button, Card, IconButton, Alert } from '@/Components/ui';
+import { PageHeader, DataTable, ConfirmDialog, FormModal, Badge, Button, Card, IconButton, Alert } from '@/Components/ui';
 import QuickPushModal from '@/Components/FingerprintDevices/QuickPushModal.vue';
 import { useTranslations } from '@/composables/useTranslations';
 
@@ -263,20 +263,7 @@ async function syncAllDevices() {
             @pushed="onPushComplete"
         />
 
-        <Teleport to="body">
-            <div v-if="showSyncResult" class="fixed inset-0 z-[9999] flex items-center justify-center" style="background: rgba(0,0,0,0.5);">
-                <Card variant="base" padding="none" class="w-[520px] max-h-[85vh] overflow-y-auto mx-4 shadow-level-4 z-10">
-                    <div class="flex items-center justify-between px-6 py-5 border-b border-mistral-hairline-soft">
-                        <h3 class="text-xl font-bold text-mistral-ink">{{ t('fingerprint_devices.sync_result_title') }}</h3>
-                        <Button
-                            variant="icon"
-                            icon="fas fa-times"
-                            :aria-label="t('fingerprint_devices.close')"
-                            @click="showSyncResult = false"
-                        />
-                    </div>
-
-                    <div class="p-6">
+        <FormModal v-model="showSyncResult" :title="t('fingerprint_devices.sync_result_title')" size="lg">
                         <div v-if="syncResult?.success" class="space-y-5">
                             <Alert
                                 type="success"
@@ -333,15 +320,11 @@ async function syncAllDevices() {
                                 </div>
                             </div>
                         </div>
-                    </div>
-
-                    <div class="px-6 py-4 border-t border-mistral-hairline-soft flex justify-end">
-                        <Button variant="primary" @click="showSyncResult = false">
-                            {{ t('fingerprint_devices.ok') }}
-                        </Button>
-                    </div>
-                </Card>
-            </div>
-        </Teleport>
+            <template #footer>
+                <Button variant="primary" @click="showSyncResult = false">
+                    {{ t('fingerprint_devices.ok') }}
+                </Button>
+            </template>
+        </FormModal>
     </AppLayout>
 </template>

@@ -1,6 +1,6 @@
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
-import { router, Link } from '@inertiajs/vue3';
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
+import { Link } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import { Badge, Avatar, EmptyState, Button, FormDatepicker } from '@/Components/ui';
 import DashboardWidget from '@/Components/dashboard/DashboardWidget.vue';
@@ -25,6 +25,7 @@ const props = defineProps({
             monthlyKpis: {},
             topLate: [],
             shiftOverview: { shifts: [], upcoming: [] },
+            workforceBreakdown: { grades: [], categories: [], rotations: [] },
             recentApprovals: [],
             recentSyncs: [],
             anomalies: [],
@@ -240,7 +241,7 @@ async function fetchJson(url) {
 }
 
 async function poll() {
-    if (isPolling || !isTabVisible || !isComponentMounted) {
+    if (isPolling || !isTabVisible || !isComponentMounted || selectedDate.value !== new Date().toISOString().slice(0, 10)) {
         scheduleNext();
         return;
     }
@@ -248,7 +249,7 @@ async function poll() {
     try {
         const [pullJson, snapshotJson] = await Promise.all([
             fetchJson(route('dashboard.pullEvents')),
-            fetchJson(route('dashboard.snapshot')),
+            fetchJson(route('dashboard.snapshot', { date: selectedDate.value })),
         ]);
         if (pullJson?.events) recentData.value = pullJson.events;
         if (snapshotJson?.dashboard) data.value = snapshotJson.dashboard;
@@ -271,12 +272,12 @@ function handleVisibilityChange() {
 
 function refreshDashboard() {
     isRefreshing.value = true;
-    router.reload({
-        only: ['dashboard', 'recentAttendance'],
-        onFinish: () => {
-            isRefreshing.value = false;
-        },
-    });
+    fetchJson(route('dashboard.snapshot', { date: selectedDate.value }))
+        .then((snapshot) => {
+            if (snapshot?.dashboard) data.value = snapshot.dashboard;
+            if (snapshot?.recentAttendance) recentData.value = snapshot.recentAttendance;
+        })
+        .finally(() => { isRefreshing.value = false; });
 }
 
 function exportDashboard() {
@@ -286,6 +287,17 @@ function exportDashboard() {
 onMounted(() => {
     document.addEventListener('visibilitychange', handleVisibilityChange);
     poll();
+});
+
+watch(selectedDate, async (date) => {
+    if (!date) return;
+    isRefreshing.value = true;
+    try {
+        const snapshot = await fetchJson(route('dashboard.snapshot', { date }));
+        if (snapshot?.dashboard) data.value = snapshot.dashboard;
+    } finally {
+        isRefreshing.value = false;
+    }
 });
 
 onBeforeUnmount(() => {
@@ -564,6 +576,45 @@ onBeforeUnmount(() => {
             >
                 <AttendanceHeatmap :data="data.heatmapData || []" />
             </DashboardWidget>
+
+            <!-- ===== OFFICIAL WORKFORCE CONFIGURATION ===== -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                <DashboardWidget :title="t('dashboard.grade_distribution')" icon="fas fa-layer-group" icon-color="primary" :padded="false">
+                    <div class="divide-y divide-mistral-hairline-soft/60">
+                        <div v-for="grade in data.workforceBreakdown?.grades" :key="grade.id" class="flex items-center justify-between gap-3 px-5 py-3">
+                            <div class="min-w-0">
+                                <div class="text-[13px] font-medium text-mistral-ink truncate">{{ grade.name || t('dashboard.unassigned') }}</div>
+                                <div v-if="grade.level !== null" class="text-[11px] text-mistral-stone">{{ t('dashboard.grade_level') }} {{ grade.level }}</div>
+                            </div>
+                            <Badge :text="String(grade.employees)" variant="primary" size="sm" />
+                        </div>
+                        <EmptyState v-if="!data.workforceBreakdown?.grades?.length" icon="fas fa-layer-group" :title="t('common.no_data')" class="py-8" />
+                    </div>
+                </DashboardWidget>
+
+                <DashboardWidget :title="t('dashboard.category_distribution')" icon="fas fa-tags" icon-color="info" :padded="false">
+                    <div class="divide-y divide-mistral-hairline-soft/60">
+                        <div v-for="category in data.workforceBreakdown?.categories" :key="category.id" class="flex items-center justify-between gap-3 px-5 py-3">
+                            <div class="min-w-0">
+                                <div class="text-[13px] font-medium text-mistral-ink truncate">{{ category.name }}</div>
+                                <div class="text-[11px] text-mistral-stone">{{ category.type }}</div>
+                            </div>
+                            <Badge :text="String(category.employees)" variant="info" size="sm" />
+                        </div>
+                        <EmptyState v-if="!data.workforceBreakdown?.categories?.length" icon="fas fa-tags" :title="t('common.no_data')" class="py-8" />
+                    </div>
+                </DashboardWidget>
+
+                <DashboardWidget :title="t('dashboard.rotation_distribution')" icon="fas fa-arrows-rotate" icon-color="success" :padded="false">
+                    <div class="divide-y divide-mistral-hairline-soft/60">
+                        <div v-for="rotation in data.workforceBreakdown?.rotations" :key="rotation.id" class="flex items-center justify-between gap-3 px-5 py-3">
+                            <div class="text-[13px] font-medium text-mistral-ink truncate">{{ rotation.name }}</div>
+                            <Badge :text="String(rotation.employees)" variant="success" size="sm" />
+                        </div>
+                        <EmptyState v-if="!data.workforceBreakdown?.rotations?.length" icon="fas fa-arrows-rotate" :title="t('common.no_data')" class="py-8" />
+                    </div>
+                </DashboardWidget>
+            </div>
 
             <!-- ===== SHIFTS + UPCOMING ===== -->
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">

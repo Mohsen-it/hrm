@@ -1,4 +1,5 @@
 <?php
+
 // Test: what happens with the exact validation rules for rotation_assignment
 use Illuminate\Support\Facades\Validator;
 
@@ -31,19 +32,19 @@ $rules = [
 
 $v = Validator::make($data1, $rules);
 if ($v->fails()) {
-    echo "FAIL: " . json_encode($v->errors()->toArray()) . PHP_EOL;
+    echo 'FAIL: '.json_encode($v->errors()->toArray()).PHP_EOL;
 } else {
-    echo "PASS" . PHP_EOL;
+    echo 'PASS'.PHP_EOL;
 }
 
-// Scenario 2: What if rotation_id is empty string? 
+// Scenario 2: What if rotation_id is empty string?
 $data2 = $data1;
 $data2['rotation_assignment']['rotation_id'] = '';
 $v2 = Validator::make($data2, $rules);
 if ($v2->fails()) {
-    echo "Empty rotation_id FAIL: " . json_encode($v2->errors()->toArray()) . PHP_EOL;
+    echo 'Empty rotation_id FAIL: '.json_encode($v2->errors()->toArray()).PHP_EOL;
 } else {
-    echo "Empty rotation_id PASS" . PHP_EOL;
+    echo 'Empty rotation_id PASS'.PHP_EOL;
 }
 
 // Scenario 3: What if rotation_group_id is empty?
@@ -51,9 +52,9 @@ $data3 = $data1;
 $data3['rotation_assignment']['rotation_group_id'] = '';
 $v3 = Validator::make($data3, $rules);
 if ($v3->fails()) {
-    echo "Empty group_id FAIL: " . json_encode($v3->errors()->toArray()) . PHP_EOL;
+    echo 'Empty group_id FAIL: '.json_encode($v3->errors()->toArray()).PHP_EOL;
 } else {
-    echo "Empty group_id PASS" . PHP_EOL;
+    echo 'Empty group_id PASS'.PHP_EOL;
 }
 
 // Scenario 4: What if start_date is empty?
@@ -61,7 +62,7 @@ $data4 = $data1;
 $data4['rotation_assignment']['start_date'] = '';
 $v4 = Validator::make($data4, $rules);
 if ($v4->fails()) {
-    echo "Empty start_date FAIL: " . json_encode($v4->errors()->toArray()) . PHP_EOL;
+    echo 'Empty start_date FAIL: '.json_encode($v4->errors()->toArray()).PHP_EOL;
 } else {
-    echo "Empty start_date PASS" . PHP_EOL;
+    echo 'Empty start_date PASS'.PHP_EOL;
 }

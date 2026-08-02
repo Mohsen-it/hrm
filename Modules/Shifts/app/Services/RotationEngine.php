@@ -272,6 +272,12 @@ class RotationEngine
             $checkIn = substr((string) $expectedIn, 0, 5);
             $checkOut = substr((string) $expectedOut, 0, 5);
 
+            // Older assignments snapshotted before breaks were stored fall back
+            // to the live time schedule so break minutes are never silently 0.
+            if (! is_array($breaksData)) {
+                $breaksData = $this->liveBreaks($assignment);
+            }
+
             return [
                 'check_in' => $checkIn,
                 'check_out' => $checkOut,
@@ -294,11 +300,7 @@ class RotationEngine
             $checkIn = $inTime ? $this->formatTime($inTime) : null;
             $checkOut = $outTime ? $this->formatTime($outTime) : null;
 
-            $breaks = $timeSchedule->breaks->map(fn ($b) => [
-                'break_start' => $b->break_start,
-                'break_end' => $b->break_end,
-                'duration' => $b->duration,
-            ])->toArray();
+            $breaks = is_array($breaksData) ? $breaksData : $this->liveBreaks($assignment);
 
             return [
                 'check_in' => $checkIn,
@@ -318,6 +320,26 @@ class RotationEngine
             'early_margin' => null,
             'break_minutes' => 0,
         ];
+    }
+
+    /**
+     * Read the live breaks from the assignment's current time schedule.
+     *
+     * @return array<int, array{break_start?: mixed, break_end?: mixed, duration?: mixed}>|null
+     */
+    private function liveBreaks(RotationAssignment $assignment): ?array
+    {
+        $timeSchedule = $assignment->rotation?->timeSchedule;
+
+        if (! $timeSchedule) {
+            return null;
+        }
+
+        return $timeSchedule->breaks->map(fn ($b) => [
+            'break_start' => $b->break_start,
+            'break_end' => $b->break_end,
+            'duration' => $b->duration,
+        ])->values()->all();
     }
 
     /**

@@ -290,6 +290,38 @@ class DeviceFullSyncService
             );
             $deviceUsers = is_array($deviceUsers) ? $deviceUsers : [];
 
+            // Pre-fetch all HRM users by employee_code (case-insensitive) in one query
+            $externalIds = array_filter(array_map(fn ($du) => trim((string) ($du['user_id'] ?? '')), $deviceUsers), fn ($id) => $id !== '');
+            $uniqueExternalIds = array_unique($externalIds);
+
+            $userMapByCode = [];
+            $userMapByName = [];
+            if (! empty($uniqueExternalIds)) {
+                $lowerCodes = array_map('strtolower', $uniqueExternalIds);
+                $placeholders = implode(',', array_fill(0, count($lowerCodes), '?'));
+                $users = User::query()
+                    ->whereRaw("LOWER(employee_code) IN ($placeholders)", $lowerCodes)
+                    ->get();
+                foreach ($users as $u) {
+                    $userMapByCode[strtolower((string) $u->employee_code)] = $u;
+                }
+
+                // Also build a name-based index for fallback matching
+                $allUsers = User::query()
+                    ->where('status', 1)
+                    ->where('is_active_employee', true)
+                    ->select('id', 'name', 'full_name_ar', 'employee_code')
+                    ->get();
+                foreach ($allUsers as $u) {
+                    if ($u->full_name_ar) {
+                        $userMapByName[$u->full_name_ar] = $u;
+                    }
+                    if ($u->name) {
+                        $userMapByName[$u->name] = $u;
+                    }
+                }
+            }
+
             $matched = [];
             $unmatched = [];
             $created = 0;
@@ -310,15 +342,12 @@ class DeviceFullSyncService
                     continue;
                 }
 
-                $user = User::query()
-                    ->whereRaw('LOWER(employee_code) = LOWER(?)', [$externalId])
-                    ->first();
+                // Try matching by employee_code (case-insensitive) from pre-fetched map
+                $user = $userMapByCode[strtolower($externalId)] ?? null;
 
+                // Fallback: match by name from pre-fetched map
                 if (! $user && $name !== '') {
-                    $user = User::query()
-                        ->where('full_name_ar', $name)
-                        ->orWhere('name', $name)
-                        ->first();
+                    $user = $userMapByName[$name] ?? null;
                 }
 
                 if (! $user) {
@@ -462,6 +491,14 @@ class DeviceFullSyncService
                 ->flip()
                 ->toArray();
 
+            // Bulk-fetch existing fingerprints for this device to avoid per-fingerprint queries
+            $existingFingerprints = UserFingerprint::query()
+                ->where('device_id', $device->id)
+                ->whereIn('user_id', array_column($matched, 'user_pk'))
+                ->whereNull('deleted_at')
+                ->get()
+                ->keyBy(fn ($fp) => $fp->user_id.'_'.$fp->finger_id);
+
             foreach ($matched as $entry) {
                 $userPk = (int) $entry['user_pk'];
                 $uid = (int) $entry['uid'];
@@ -488,12 +525,6 @@ class DeviceFullSyncService
 
                     $fingerId = (int) ($tpl['fid'] ?? 0);
 
-                    $existing = UserFingerprint::query()
-                        ->where('device_id', $device->id)
-                        ->where('user_id', $userPk)
-                        ->where('finger_id', $fingerId)
-                        ->first();
-
                     $payload = [
                         'user_id' => $userPk,
                         'device_id' => $device->id,
@@ -506,6 +537,8 @@ class DeviceFullSyncService
                         'captured_at' => now(),
                         'synced_at' => now(),
                     ];
+
+                    $existing = $existingFingerprints->get($userPk.'_'.$fingerId);
 
                     if ($existing) {
                         $existing->update($payload);
@@ -600,10 +633,13 @@ class DeviceFullSyncService
         $pulled = count($photos);
         $saved = 0;
 
-        // Build lookup: employee_no => user_pk from matched
+        // Build lookup: user_id (employee_code) => user_pk
         $matchedByExtId = [];
+        // Build lookup: uid (internal device ID) => user_pk
+        $matchedByUid = [];
         foreach ($matched as $entry) {
             $matchedByExtId[$entry['user_id']] = (int) $entry['user_pk'];
+            $matchedByUid[(int) $entry['uid']] = (int) $entry['user_pk'];
         }
 
         // Check if this is ZKTeco face template mode
@@ -611,6 +647,18 @@ class DeviceFullSyncService
 
         if ($isZktecoFace) {
             // ZKTeco: Store face templates in user_fingerprints table (finger_id 50-54)
+            // Bulk-fetch existing face templates to avoid per-photo queries
+            $userPks = array_unique(array_filter([
+                ...array_values($matchedByExtId),
+                ...array_values($matchedByUid),
+            ]));
+            $existingFaceTemplates = UserFingerprint::query()
+                ->where('device_id', $device->id)
+                ->whereIn('user_id', $userPks)
+                ->whereNull('deleted_at')
+                ->get()
+                ->keyBy(fn ($fp) => $fp->user_id.'_'.$fp->finger_id);
+
             foreach ($photos as $photo) {
                 $employeeNo = (string) ($photo['employee_no'] ?? '');
                 $templateData = $photo['photo_base64'] ?? '';
@@ -620,17 +668,13 @@ class DeviceFullSyncService
                     continue;
                 }
 
-                $userPk = $matchedByExtId[$employeeNo] ?? null;
+                $userPk = $matchedByUid[(int) $employeeNo] ?? $matchedByExtId[$employeeNo] ?? null;
                 if (! $userPk) {
                     continue;
                 }
 
                 try {
-                    $existing = UserFingerprint::query()
-                        ->where('device_id', $device->id)
-                        ->where('user_id', $userPk)
-                        ->where('finger_id', $faceId)
-                        ->first();
+                    $existing = $existingFaceTemplates->get($userPk.'_'.$faceId);
 
                     $payload = [
                         'user_id' => $userPk,
@@ -773,30 +817,50 @@ class DeviceFullSyncService
             }
         }
 
-        DB::transaction(function () use ($logs, $device, $matchedByUserId, $matchedByUid, &$saved, &$sessions) {
-            foreach ($logs as $log) {
-                $externalId = trim((string) ($log['user_id'] ?? ''));
-                $uid = (int) ($log['uid'] ?? 0);
-                $stamp = $this->parseTimestamp($log['timestamp'] ?? null);
-                if (! $stamp) {
-                    continue;
-                }
-                if ($externalId === '' && $uid === 0) {
-                    continue;
-                }
+        // Pre-build a set of parsed timestamps to avoid re-parsing in duplicate check
+        $parsedLogs = [];
+        foreach ($logs as $log) {
+            $externalId = trim((string) ($log['user_id'] ?? ''));
+            $uid = (int) ($log['uid'] ?? 0);
+            $stamp = $this->parseTimestamp($log['timestamp'] ?? null);
+            if (! $stamp || ($externalId === '' && $uid === 0)) {
+                continue;
+            }
+            $parsedLogs[] = ['log' => $log, 'external_id' => $externalId, 'stamp' => $stamp];
+        }
 
-                $userPk = $matchedByUserId[$externalId] ?? $matchedByUid[$uid] ?? null;
-                $punchType = $this->resolvePunchType($log);
-
-                // Avoid duplicates: if the same punch already exists for this
-                // device + user + timestamp, skip the insert.
+        // Bulk-fetch existing raw logs for this device to avoid per-log duplicate queries
+        $existingKeys = [];
+        if (! empty($parsedLogs)) {
+            $deviceUserIdToLogs = [];
+            foreach ($parsedLogs as $pl) {
+                $deviceUserIdToLogs[$pl['external_id']][] = $pl['stamp']->format('Y-m-d H:i:s');
+            }
+            // Query in batches of 100 to avoid massive IN clauses
+            foreach (array_chunk(array_keys($deviceUserIdToLogs), 100) as $chunk) {
                 $existing = RawAttendanceLog::query()
                     ->where('device_id', $device->id)
-                    ->where('device_user_id', $externalId)
-                    ->where('punch_time', $stamp->format('Y-m-d H:i:s'))
-                    ->first();
+                    ->whereIn('device_user_id', $chunk)
+                    ->select('device_user_id', 'punch_time')
+                    ->get();
+                foreach ($existing as $row) {
+                    $existingKeys[$row->device_user_id.'_'.$row->punch_time] = true;
+                }
+            }
+        }
 
-                if ($existing) {
+        DB::transaction(function () use ($parsedLogs, $device, $matchedByUserId, $matchedByUid, &$saved, &$sessions, &$existingKeys) {
+            foreach ($parsedLogs as $pl) {
+                $log = $pl['log'];
+                $externalId = $pl['external_id'];
+                $stamp = $pl['stamp'];
+
+                $userPk = $matchedByUserId[$externalId] ?? $matchedByUid[(int) ($log['uid'] ?? 0)] ?? null;
+                $punchType = $this->resolvePunchType($log);
+
+                // Check pre-fetched duplicate set
+                $key = $externalId.'_'.$stamp->format('Y-m-d H:i:s');
+                if (isset($existingKeys[$key])) {
                     continue;
                 }
 
@@ -814,6 +878,7 @@ class DeviceFullSyncService
                     'raw_data' => $log,
                 ]);
 
+                $existingKeys[$key] = true;
                 $saved++;
 
                 if ($userPk && $session = $this->rawLogService->processLog($raw)) {

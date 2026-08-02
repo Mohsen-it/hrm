@@ -220,17 +220,45 @@ class ZKTecoAdapter implements DeviceAdapterInterface
     {
         try {
             $payload = $this->buildPayload($ip, $port, $commKey, $timeout);
+
+            // 1. Get users first to build UID -> UserID (Employee Code) map
+            $deviceUsers = $this->getUsers($ip, $port, $commKey, $timeout);
+            $uidMap = [];
+            foreach ($deviceUsers as $du) {
+                if (isset($du['uid']) && isset($du['user_id'])) {
+                    $uidMap[(int) $du['uid']] = (string) $du['user_id'];
+                }
+            }
+
+            // 2. Try dedicated face templates endpoint
             $response = Http::timeout($this->bridgeTimeout)
                 ->post("{$this->bridgeUrl}/device/get-all-face-templates", $payload);
 
-            if (! $response->successful()) {
+            $templates = [];
+            if ($response->successful()) {
+                $templates = $response->json('templates') ?? [];
+            }
+
+            // 3. If empty, try getting from general templates
+            if (empty($templates)) {
+                $respAll = Http::timeout($this->bridgeTimeout)
+                    ->post("{$this->bridgeUrl}/device/get-all-templates", $payload);
+
+                if ($respAll->successful()) {
+                    $all = $respAll->json('templates') ?? [];
+                    foreach ($all as $tpl) {
+                        if (! empty($tpl['is_face'])) {
+                            $templates[] = $tpl;
+                        }
+                    }
+                }
+            }
+
+            if (empty($templates)) {
                 return [];
             }
 
-            $templates = $response->json('templates') ?? [];
-
-            // Convert face templates to the format expected by DeviceFullSyncService
-            // Group by uid, each face template becomes an entry
+            // 4. Convert templates and map to actual Employee Code
             $result = [];
             foreach ($templates as $tpl) {
                 $uid = (int) ($tpl['uid'] ?? 0);
@@ -241,8 +269,11 @@ class ZKTecoAdapter implements DeviceAdapterInterface
                     continue;
                 }
 
+                // Map UID to actual Employee Code from the map we built
+                $employeeCode = $uidMap[$uid] ?? (string) $uid;
+
                 $result[] = [
-                    'employee_no' => (string) $uid,
+                    'employee_no' => $employeeCode,
                     'photo_base64' => $templateData,
                     'face_url' => '',
                     'face_id' => $faceId,

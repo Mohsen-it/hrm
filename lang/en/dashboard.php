@@ -44,6 +44,12 @@ return [
     'live_attendance_feed' => 'Live Attendance Feed',
     'top_late_employees' => 'Top Late Employees',
 
+    'grade_distribution' => 'Grade Distribution',
+    'category_distribution' => 'Shift Category Distribution',
+    'rotation_distribution' => 'Rotation Distribution',
+    'grade_level' => 'Level',
+    'unassigned' => 'Unassigned',
+
     // Chart labels
     'present' => 'Present',
     'absent' => 'Absent',

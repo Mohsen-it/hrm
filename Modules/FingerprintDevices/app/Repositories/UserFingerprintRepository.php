@@ -39,6 +39,17 @@ class UserFingerprintRepository
             ->get();
     }
 
+    /** Get realtime ADMS face templates for the employee profile. */
+    public function getFaceTemplatesForUser(int $userId): Collection
+    {
+        return $this->query()
+            ->forUser($userId)
+            ->where('template_type', 'face')
+            ->with('device:id,name,serial_number')
+            ->latest('updated_at')
+            ->get();
+    }
+
     public function getMasterForUser(int $userId): ?UserFingerprint
     {
         return $this->query()
@@ -58,6 +69,63 @@ class UserFingerprintRepository
     public function create(array $data): UserFingerprint
     {
         return UserFingerprint::create($data);
+    }
+
+    /** Find an ADMS template by its device, user and content hash. */
+    public function findByTemplateHash(int $userId, string $deviceSerial, string $hash): ?UserFingerprint
+    {
+        return $this->query()
+            ->where('user_id', $userId)
+            ->where('device_serial', $deviceSerial)
+            ->where('template_hash', $hash)
+            ->first();
+    }
+
+    /**
+     * Get saved ADMS face templates that may be distributed to another device.
+     *
+     * @param  array<int, int>  $userIds
+     * @return Collection<int, UserFingerprint>
+     */
+    public function getFaceTemplatesForDistribution(array $userIds, string $targetSerial): Collection
+    {
+        return $this->query()
+            ->whereIn('user_id', $userIds)
+            ->where('template_type', 'face')
+            ->where('template_format', 'zkteco-face-push')
+            ->whereNotNull('template_data')
+            ->where('template_data', '!=', '')
+            ->where(function (Builder $query) use ($targetSerial): void {
+                $query->whereNull('device_serial')
+                    ->orWhere('device_serial', '!=', $targetSerial);
+            })
+            ->with('user:id,employee_code,name,full_name_ar')
+            ->orderBy('user_id')
+            ->orderBy('finger_id')
+            ->get();
+    }
+
+    /**
+     * Get one complete source-device enrollment set for distribution.
+     *
+     * @return Collection<int, UserFingerprint>
+     */
+    public function getFaceTemplateSetForDistribution(
+        int $userId,
+        string $sourceSerial,
+        string $setId,
+    ): Collection {
+        return $this->query()
+            ->where('user_id', $userId)
+            ->where('device_serial', $sourceSerial)
+            ->where('face_template_set_id', $setId)
+            ->where('template_type', 'face')
+            ->where('template_format', 'zkteco-face-push')
+            ->whereNotNull('template_data')
+            ->where('template_data', '!=', '')
+            ->with('user:id,employee_code,name,full_name_ar')
+            ->orderBy('template_index')
+            ->get();
     }
 
     public function update(UserFingerprint $fingerprint, array $data): UserFingerprint

@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Inertia\Middleware;
 use Nwidart\Modules\Facades\Module;
 use Tighten\Ziggy\Ziggy;
@@ -72,32 +73,36 @@ class HandleInertiaRequests extends Middleware
      */
     protected function loadTranslations(string $locale): array
     {
-        $paths = [
-            lang_path("{$locale}/common.php"),
-            lang_path("{$locale}/menu.php"),
-            lang_path("{$locale}/dashboard.php"),
-            lang_path("{$locale}/components.php"),
-            lang_path("{$locale}/permissions.php"),
-            lang_path("{$locale}/roles.php"),
-            lang_path("{$locale}/actions.php"),
-            lang_path("{$locale}/general.php"),
-            lang_path("{$locale}/validation.php"),
-        ];
+        $cacheKey = "inertia:translations:{$locale}";
 
-        $translations = [];
+        return Cache::remember($cacheKey, 3600, function () use ($locale) {
+            $paths = [
+                lang_path("{$locale}/common.php"),
+                lang_path("{$locale}/menu.php"),
+                lang_path("{$locale}/dashboard.php"),
+                lang_path("{$locale}/components.php"),
+                lang_path("{$locale}/permissions.php"),
+                lang_path("{$locale}/roles.php"),
+                lang_path("{$locale}/actions.php"),
+                lang_path("{$locale}/general.php"),
+                lang_path("{$locale}/validation.php"),
+            ];
 
-        foreach ($paths as $path) {
-            if (is_file($path)) {
-                $key = basename($path, '.php');
-                $translations[$key] = require $path;
+            $translations = [];
+
+            foreach ($paths as $path) {
+                if (is_file($path)) {
+                    $key = basename($path, '.php');
+                    $translations[$key] = require $path;
+                }
             }
-        }
 
-        foreach ($this->getModuleLangFiles($locale) as $module => $messages) {
-            $translations[$module] = $messages;
-        }
+            foreach ($this->getModuleLangFiles($locale) as $module => $messages) {
+                $translations[$module] = $messages;
+            }
 
-        return $translations;
+            return $translations;
+        });
     }
 
     /**

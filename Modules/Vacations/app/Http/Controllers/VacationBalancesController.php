@@ -3,9 +3,9 @@
 namespace Modules\Vacations\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use Illuminate\Http\RedirectResponse;
 use Modules\Vacations\Http\Requests\AdjustVacationBalanceRequest;
 use Modules\Vacations\Services\VacationBalanceService;
-use Illuminate\Http\RedirectResponse;
 
 class VacationBalancesController extends Controller
 {

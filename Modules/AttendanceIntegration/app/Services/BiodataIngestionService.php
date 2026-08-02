@@ -4,16 +4,22 @@ namespace Modules\AttendanceIntegration\Services;
 
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
-use Modules\AttendanceIntegration\Contracts\DeviceRepositoryInterface;
 use Modules\AttendanceIntegration\Parsers\BiodataParser;
+use Modules\FingerprintDevices\Jobs\DistributeFaceTemplateSetJob;
 use Modules\FingerprintDevices\Models\FingerprintDevice;
 use Modules\FingerprintDevices\Models\UserFingerprint;
+use Modules\FingerprintDevices\Repositories\UserFingerprintRepository;
 use Modules\Users\Models\User;
+use Modules\Users\Repositories\UserRepository;
 
 class BiodataIngestionService
 {
+    /** A ZKTeco face enrollment is only distributable when all components arrive. */
+    private const EXPECTED_FACE_TEMPLATE_INDICES = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14];
+
     public function __construct(
-        private DeviceRepositoryInterface $deviceRepository,
+        private UserFingerprintRepository $fingerprintRepository,
+        private UserRepository $userRepository,
     ) {}
 
     /**
@@ -34,14 +40,19 @@ class BiodataIngestionService
             'errors' => [],
         ];
 
+        $faceRecords = array_filter($records, fn (array $r) => (int) ($r['type'] ?? 0) === BiodataParser::TYPE_FACE && (string) ($r['tmp'] ?? '') !== '');
+        $uniquePins = array_unique(array_map(fn (array $r) => (string) $r['pin'], $faceRecords));
+
+        $userMap = $this->resolveUsersBatch($uniquePins);
+        $existingHashMap = $this->findExistingTemplatesBatch($userMap, $device, $faceRecords);
+        $existingFaceIdsMap = $this->getExistingFaceIdsBatch($userMap, $device);
+
         foreach ($records as $record) {
             try {
-                $result = $this->ingestSingle($device, $record, $correlationId);
-
+                $result = $this->ingestSingle($device, $record, $correlationId, $userMap, $existingHashMap, $existingFaceIdsMap);
                 $stats[$result]++;
             } catch (\Throwable $e) {
                 $stats['errors'][] = "Pin {$record['pin']}: {$e->getMessage()}";
-
                 Log::channel('biodata')->error('BIODATA_INGEST_SINGLE_FAILED', [
                     'correlation_id' => $correlationId,
                     'device_serial' => $device?->serial_number,
@@ -52,18 +63,121 @@ class BiodataIngestionService
             }
         }
 
+        $this->queueCompleteFaceTemplateSets($device, $records, $correlationId, $stats, $userMap);
+
         return $stats;
+    }
+
+    /**
+     * Resolve multiple PINs to users in a single query.
+     *
+     * @return array<string, User>
+     */
+    private function resolveUsersBatch(array $pins): array
+    {
+        if (empty($pins)) {
+            return [];
+        }
+
+        $numericPins = array_filter($pins, fn (string $pin) => is_numeric($pin));
+
+        $users = User::query()
+            ->where(function ($q) use ($pins, $numericPins) {
+                $q->whereIn('employee_code', $pins);
+                if (! empty($numericPins)) {
+                    $q->orWhereIn('id', array_map('intval', $numericPins));
+                }
+            })
+            ->get()
+            ->keyBy(fn (User $u) => $u->employee_code);
+
+        $result = [];
+        foreach ($pins as $pin) {
+            $result[$pin] = $users->get($pin) ?? $users->get((int) $pin);
+        }
+
+        return array_filter($result);
+    }
+
+    /**
+     * Find existing templates for all users+records in batch.
+     *
+     * @param  array<string, User>  $userMap
+     * @param  array<int, array<string, mixed>>  $faceRecords
+     * @return array<string, UserFingerprint> key = "userId:hash"
+     */
+    private function findExistingTemplatesBatch(array $userMap, ?FingerprintDevice $device, array $faceRecords): array
+    {
+        if (empty($userMap) || empty($faceRecords)) {
+            return [];
+        }
+
+        $userIds = array_map(fn (User $u) => $u->id, $userMap);
+        $hashes = array_map(fn (array $r) => hash('sha256', $r['tmp']), $faceRecords);
+        $deviceSerial = $device?->serial_number ?? 'unknown';
+
+        $existing = UserFingerprint::query()
+            ->whereIn('user_id', $userIds)
+            ->where('device_serial', $deviceSerial)
+            ->whereIn('template_hash', $hashes)
+            ->get()
+            ->keyBy(fn (UserFingerprint $f) => "{$f->user_id}:{$f->template_hash}");
+
+        return $existing->toArray();
+    }
+
+    /**
+     * Get existing face IDs for all users in batch.
+     *
+     * @param  array<string, User>  $userMap
+     * @return array<int, array<int, int>> key = userId, value = sorted face_ids
+     */
+    private function getExistingFaceIdsBatch(array $userMap, ?FingerprintDevice $device): array
+    {
+        if (empty($userMap)) {
+            return [];
+        }
+
+        $userIds = array_map(fn (User $u) => $u->id, $userMap);
+
+        $query = UserFingerprint::query()
+            ->whereIn('user_id', $userIds)
+            ->where('template_format', 'like', '%face%')
+            ->whereBetween('finger_id', [50, 59]);
+
+        if ($device) {
+            $query->where('device_id', $device->id);
+        }
+
+        $rows = $query->select('user_id', 'finger_id')->get();
+
+        $map = [];
+        foreach ($rows as $row) {
+            $map[$row->user_id][] = $row->finger_id;
+        }
+
+        foreach ($map as $uid => $ids) {
+            sort($map[$uid]);
+        }
+
+        return $map;
     }
 
     /**
      * Process a single BIODATA record.
      *
+     * @param  array<string, User>  $userMap
+     * @param  array<string, UserFingerprint>  $existingHashMap
+     * @param  array<int, array<int, int>>  $existingFaceIdsMap
      * @return 'saved'|'duplicates'|'skipped'
      */
     private function ingestSingle(
         ?FingerprintDevice $device,
         array $record,
         string $correlationId,
+        array $userMap,
+        array $existingHashMap,
+        array $existingFaceIdsMap,
     ): string {
         $pin = $record['pin'];
         $type = $record['type'];
@@ -81,149 +195,55 @@ class BiodataIngestionService
         ]);
 
         if ($tmpData === '') {
-            Log::channel('biodata')->warning('BIODATA_EMPTY_TEMPLATE', [
-                'correlation_id' => $correlationId,
-                'device_serial' => $device?->serial_number,
-                'pin' => $pin,
-            ]);
-
             return 'skipped';
         }
 
         if ($type !== BiodataParser::TYPE_FACE) {
-            Log::channel('biodata')->info('BIODATA_NON_FACE_SKIPPED', [
-                'correlation_id' => $correlationId,
-                'device_serial' => $device?->serial_number,
-                'pin' => $pin,
-                'type' => $type,
-                'type_label' => BiodataParser::typeLabel($type),
-            ]);
-
             return 'skipped';
         }
 
-        Log::channel('biodata')->info('FACE_TEMPLATE_DETECTED', [
-            'correlation_id' => $correlationId,
-            'device_serial' => $device?->serial_number,
-            'pin' => $pin,
-            'template_length' => strlen($tmpData),
-            'version' => "{$record['major_ver']}.{$record['minor_ver']}",
-        ]);
-
-        $user = $this->resolveUser($pin);
+        $user = $userMap[$pin] ?? null;
 
         if (! $user) {
             Log::channel('biodata')->warning('BIODATA_EMPLOYEE_NOT_FOUND', [
                 'correlation_id' => $correlationId,
                 'device_serial' => $device?->serial_number,
                 'pin' => $pin,
-                'message' => "No employee found with employee_code or id matching PIN {$pin}",
             ]);
 
             return 'skipped';
         }
 
-        Log::channel('biodata')->info('BIODATA_EMPLOYEE_RESOLVED', [
-            'correlation_id' => $correlationId,
-            'device_serial' => $device?->serial_number,
-            'pin' => $pin,
-            'user_id' => $user->id,
-            'user_name' => $user->full_name_ar ?? $user->name,
-        ]);
+        $hash = hash('sha256', $tmpData);
+        $existingKey = "{$user->id}:{$hash}";
 
-        $existingTemplate = $this->findExistingTemplate($user->id, $device?->id, $tmpData);
-
-        if ($existingTemplate) {
+        if (isset($existingHashMap[$existingKey])) {
             Log::channel('biodata')->info('DUPLICATE_TEMPLATE_IGNORED', [
                 'correlation_id' => $correlationId,
                 'device_serial' => $device?->serial_number,
                 'pin' => $pin,
                 'user_id' => $user->id,
-                'existing_template_id' => $existingTemplate->id,
-                'template_length' => strlen($tmpData),
             ]);
 
             return 'duplicates';
         }
 
-        $this->saveTemplate($user, $device, $record, $correlationId);
+        $templateIndex = $this->faceTemplateIndex($record);
+        $existingIds = $existingFaceIdsMap[$user->id] ?? [];
 
-        Log::channel('biodata')->info('TEMPLATE_SAVED_SUCCESSFULLY', [
-            'correlation_id' => $correlationId,
-            'device_serial' => $device?->serial_number,
-            'pin' => $pin,
-            'user_id' => $user->id,
-            'user_name' => $user->full_name_ar ?? $user->name,
-            'template_length' => strlen($tmpData),
-            'version' => "{$record['major_ver']}.{$record['minor_ver']}",
-            'format' => $record['format'],
-        ]);
-
-        return 'saved';
-    }
-
-    /**
-     * Resolve a device PIN to a system user.
-     *
-     * Strategy:
-     *  1. Match against `users.employee_code` (case-insensitive)
-     *  2. Match against `users.id` if PIN is numeric
-     */
-    private function resolveUser(string $pin): ?User
-    {
-        if ($pin === '') {
-            return null;
-        }
-
-        $user = User::query()
-            ->whereRaw('LOWER(employee_code) = LOWER(?)', [$pin])
-            ->first();
-
-        if ($user) {
-            return $user;
-        }
-
-        if (is_numeric($pin)) {
-            $user = User::query()->where('id', (int) $pin)->first();
-
-            if ($user) {
-                return $user;
+        if ($templateIndex === null) {
+            $nextFaceId = 50;
+            for ($id = 50; $id <= 59; $id++) {
+                if (! in_array($id, $existingIds)) {
+                    $nextFaceId = $id;
+                    break;
+                }
             }
+        } else {
+            $nextFaceId = 50 + $templateIndex;
         }
 
-        return null;
-    }
-
-    /**
-     * Find an existing template that matches the same user, device, and data.
-     */
-    private function findExistingTemplate(int $userId, ?int $deviceId, string $tmpData): ?UserFingerprint
-    {
-        $query = UserFingerprint::query()
-            ->where('user_id', $userId)
-            ->where('template_format', 'zkteco-face-push')
-            ->where('template_data', $tmpData);
-
-        if ($deviceId) {
-            $query->where('device_id', $deviceId);
-        }
-
-        return $query->first();
-    }
-
-    /**
-     * Persist a face template to the user_fingerprints table.
-     */
-    private function saveTemplate(
-        User $user,
-        ?FingerprintDevice $device,
-        array $record,
-        string $correlationId,
-    ): UserFingerprint {
         $templateVersion = (int) "{$record['major_ver']}{$record['minor_ver']}";
-        $versionLabel = "{$record['major_ver']}.{$record['minor_ver']}";
-
-        $nextFaceId = $this->getNextFaceId($user->id, $device?->id);
 
         $payload = [
             'user_id' => $user->id,
@@ -231,44 +251,113 @@ class BiodataIngestionService
             'finger_id' => $nextFaceId,
             'template_data' => $record['tmp'],
             'template_format' => 'zkteco-face-push',
+            'template_type' => 'face',
+            'template_index' => $templateIndex,
+            'face_template_set_id' => $correlationId !== '' ? $correlationId : null,
+            'device_serial' => $device?->serial_number ?? 'unknown',
+            'template_hash' => $hash,
+            'template_metadata' => array_merge($record['extra_fields'] ?? [], [
+                'Pin' => $record['pin'],
+                'Type' => $record['type'],
+                'MajorVer' => $record['major_ver'],
+                'MinorVer' => $record['minor_ver'],
+                'Format' => $record['format'],
+            ]),
             'template_version' => $templateVersion,
             'quality' => 0,
-            'is_master' => $nextFaceId === 50,
+            'is_master' => $templateIndex === null ? $nextFaceId === 50 : $templateIndex === 0,
             'captured_at' => now(),
             'synced_at' => now(),
         ];
 
-        $template = UserFingerprint::create($payload);
+        $template = $this->fingerprintRepository->create($payload);
 
         $this->saveDebugSnapshot($user, $device, $record, $template, $correlationId);
 
-        return $template;
+        Log::channel('biodata')->info('TEMPLATE_SAVED_SUCCESSFULLY', [
+            'correlation_id' => $correlationId,
+            'device_serial' => $device?->serial_number,
+            'pin' => $pin,
+            'user_id' => $user->id,
+            'template_length' => strlen($tmpData),
+        ]);
+
+        return 'saved';
     }
 
     /**
-     * Get the next available face_id for this user+device combination.
-     * Face templates use finger_id range 50-59.
+     * Queue automatic delivery only when the source sent the full 15-part enrollment.
      */
-    private function getNextFaceId(int $userId, ?int $deviceId): int
-    {
-        $query = UserFingerprint::query()
-            ->where('user_id', $userId)
-            ->where('template_format', 'like', '%face%')
-            ->whereBetween('finger_id', [50, 59]);
-
-        if ($deviceId) {
-            $query->where('device_id', $deviceId);
+    private function queueCompleteFaceTemplateSets(
+        ?FingerprintDevice $device,
+        array $records,
+        string $correlationId,
+        array $stats,
+        array $userMap,
+    ): void {
+        if (! $device || $correlationId === '' || ! empty($stats['errors'])) {
+            return;
         }
 
-        $existingIds = $query->pluck('finger_id')->sort()->values()->all();
+        $pins = collect($records)
+            ->filter(fn (array $record) => (int) ($record['type'] ?? 0) === BiodataParser::TYPE_FACE)
+            ->pluck('pin')
+            ->filter()
+            ->unique();
 
-        for ($id = 50; $id <= 59; $id++) {
-            if (! in_array($id, $existingIds)) {
-                return $id;
+        foreach ($pins as $pin) {
+            $user = $userMap[$pin] ?? null;
+            if (! $user || ! $this->hasCompleteFaceTemplateSet($user->id, $device->id, $correlationId)) {
+                continue;
+            }
+
+            DistributeFaceTemplateSetJob::dispatch(
+                $user->id,
+                $device->id,
+                (string) $device->serial_number,
+                $correlationId,
+            );
+
+            Log::channel('biodata')->info('FACE_TEMPLATE_SET_READY_FOR_AUTO_DISTRIBUTION', [
+                'correlation_id' => $correlationId,
+                'device_serial' => $device->serial_number,
+                'user_id' => $user->id,
+                'component_count' => count(self::EXPECTED_FACE_TEMPLATE_INDICES),
+            ]);
+        }
+    }
+
+    /** Determine whether a persisted source set contains every ZKTeco component exactly once. */
+    private function hasCompleteFaceTemplateSet(int $userId, int $deviceId, string $setId): bool
+    {
+        $indices = UserFingerprint::query()
+            ->where('user_id', $userId)
+            ->where('device_id', $deviceId)
+            ->where('face_template_set_id', $setId)
+            ->where('template_type', 'face')
+            ->pluck('template_index')
+            ->filter(fn ($index) => $index !== null)
+            ->map(fn ($index) => (int) $index)
+            ->unique()
+            ->sort()
+            ->values()
+            ->all();
+
+        return $indices === self::EXPECTED_FACE_TEMPLATE_INDICES;
+    }
+
+    /** Read the original ADMS BIODATA Index field without relying on its casing. */
+    private function faceTemplateIndex(array $record): ?int
+    {
+        foreach ((array) ($record['extra_fields'] ?? []) as $key => $value) {
+            if (strtolower((string) $key) === 'index' && is_numeric($value)) {
+                $index = (int) $value;
+
+                return $index >= 0 && $index <= 77 ? $index : null;
             }
         }
 
-        return 50;
+        return null;
     }
 
     /**
@@ -281,6 +370,10 @@ class BiodataIngestionService
         UserFingerprint $template,
         string $correlationId,
     ): void {
+        if (! config('attendanceintegration.push.debug_snapshots', false)) {
+            return;
+        }
+
         try {
             $debugDir = storage_path('app/debug/biodata');
 

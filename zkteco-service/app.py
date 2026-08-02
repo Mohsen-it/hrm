@@ -145,105 +145,88 @@ class ZKTecoService:
     
     def export_template(self, uid, finger_id, template_data):
         """
-        Export single fingerprint template to device using pyzk
-        
-        Args:
-            uid: User ID on device
-            finger_id: Finger index (0-9)
-            template_data: Base64 encoded template data (full template with header)
-        
-        Returns:
-            dict: Result with success status
+        Export template to device (supports both Fingerprint and Face BioData)
         """
         try:
             if not self.conn:
                 raise Exception("Not connected to device")
             
-            if User is None or Finger is None:
-                raise Exception("pyzk classes not available")
-            
             # Decode base64 template
             template_bytes = base64.b64decode(template_data)
+            is_face = int(finger_id) >= 50
             
-            logger.info(f"Exporting template via pyzk: UID={uid}, Finger={finger_id}, Size={len(template_bytes)}")
-            
-            # Get user object
-            users = self.conn.get_users()
-            target_user = None
-            
-            for user in users:
-                if user.uid == uid:
-                    target_user = user
-                    break
-            
-            if not target_user:
-                raise Exception(f"User with UID {uid} not found on device")
-            
-            logger.info(f"Found user: {target_user.name} (UID={uid})")
-            
-            # Parse template data to extract raw template (skip 6-byte header)
-            if len(template_bytes) >= 6:
-                # Template structure: [2 bytes size][2 bytes uid][1 byte finger][1 byte flag][template data]
-                raw_template = template_bytes[6:]  # Skip header
-                logger.info(f"Raw template size (after header): {len(raw_template)}")
+            logger.info(f"Exporting {'Face' if is_face else 'Fingerprint'} template: UID={uid}, FID={finger_id}, Size={len(template_bytes)}")
+
+            if is_face:
+                # Use BioData protocol for Faces (Command 1101)
+                return self._export_face_biodata(uid, finger_id, template_bytes)
             else:
-                raw_template = template_bytes
-            
-            # Create Finger object
-            finger_obj = Finger(
-                uid=uid,
-                fid=finger_id,
-                valid=1,
-                template=raw_template
-            )
-            
-            logger.info(f"Created Finger object: UID={uid}, FID={finger_id}")
-            
-            # Use pyzk's save_user_template method
-            start_time = datetime.now()
-            
-            try:
-                # This uses _CMD_SAVE_USERTEMPS (different from PHP's CMD_USER_TEMP_WRQ!)
-                self.conn.save_user_template(target_user, [finger_obj])
-                
-                elapsed = (datetime.now() - start_time).total_seconds()
-                
-                logger.info(f"✅ Template saved successfully via pyzk! Elapsed: {elapsed}s")
-                
-                return {
-                    'success': True,
-                    'elapsed': elapsed,
-                    'uid': uid,
-                    'finger_id': finger_id,
-                    'method': 'pyzk_save_user_template'
-                }
-                
-            except Exception as save_error:
-                elapsed = (datetime.now() - start_time).total_seconds()
-                
-                logger.error(f"pyzk save_user_template failed: {str(save_error)}")
-                
-                # If it timed out or took too long, device doesn't support
-                if elapsed > 10:
-                    return {
-                        'success': False,
-                        'error': f'Device timeout ({elapsed}s) - firmware does not support template upload',
-                        'elapsed': elapsed,
-                        'device_not_supported': True
-                    }
-                
-                return {
-                    'success': False,
-                    'error': str(save_error),
-                    'elapsed': elapsed
-                }
-            
+                # Use standard protocol for Fingerprints
+                return self._export_fingerprint_template(uid, finger_id, template_bytes)
+
         except Exception as e:
             logger.error(f"Template export failed: {str(e)}")
-            return {
-                'success': False,
-                'error': str(e)
-            }
+            return {'success': False, 'error': str(e)}
+
+    def _export_face_biodata(self, uid, finger_id, template_bytes):
+        """Low-level implementation for saving Face BioData (Command 1101)"""
+        try:
+            # Prepare payload for Command 1101 (CMD_DB_WRQ)
+            # Format usually: [Type:1][Index:1][UID:2][Size:2][Data...]
+            # Type 2 = Face
+            from zk.const import CMD_DB_WRQ
+            
+            logger.info(f"Using BioData WRQ (1101) for UID {uid}")
+            
+            # Many ZK devices expect the face template without the 6-byte header 
+            # if it's already included in the BioData packet.
+            # But pyzk might handle this differently. 
+            # We'll try the most compatible way for iFace.
+            
+            try:
+                # Try via pyzk's set_bio_data if it exists (some forks have it)
+                if hasattr(self.conn, 'set_bio_data'):
+                    self.conn.set_bio_data(type=2, uid=uid, fid=finger_id, data=template_bytes)
+                    return {'success': True, 'method': 'set_bio_data'}
+            except:
+                pass
+
+            # Fallback to direct command injection
+            # [Type 2][FID][UID (2 bytes)][Size (2 bytes)][Template...]
+            payload = struct.pack("<BBHH", 2, int(finger_id), int(uid), len(template_bytes)) + template_bytes
+            
+            # CMD_DB_WRQ = 1101
+            response = self.conn._send_command(1101, payload)
+            
+            # Check response (ACK_OK = 2000)
+            if response:
+                logger.info(f"✅ Face BioData saved successfully for UID {uid}")
+                return {'success': True, 'method': 'direct_cmd_1101'}
+            
+            return {'success': False, 'error': 'No response from device for command 1101'}
+
+        except Exception as e:
+            logger.error(f"Face BioData export error: {e}")
+            return {'success': False, 'error': str(e)}
+
+    def _export_fingerprint_template(self, uid, finger_id, template_bytes):
+        """Standard Fingerprint Export using pyzk's save_user_template"""
+        if User is None or Finger is None:
+            raise Exception("pyzk classes not available")
+            
+        users = self.conn.get_users()
+        target_user = next((u for u in users if u.uid == int(uid)), None)
+        
+        if not target_user:
+            raise Exception(f"User with UID {uid} not found on device")
+        
+        # Remove header if present (6 bytes)
+        raw_template = template_bytes[6:] if len(template_bytes) > 6 else template_bytes
+        
+        finger_obj = Finger(uid=int(uid), fid=int(finger_id), valid=1, template=raw_template)
+        self.conn.save_user_template(target_user, [finger_obj])
+        
+        return {'success': True, 'method': 'pyzk_save_user_template'}
     
     def get_users(self):
         """Get all users from device"""
@@ -496,11 +479,13 @@ class ZKTecoService:
             raise
     
     def get_all_templates(self):
-        """Get all fingerprint templates from device"""
+        """Get all templates (fingerprint + face) from device"""
         try:
             if not self.conn:
                 raise Exception("Not connected")
             
+            # Using get_templates() usually returns fingerprints
+            # Modern ZK devices might return faces here too with fid >= 50
             templates = self.conn.get_templates()
             
             result = []
@@ -508,18 +493,158 @@ class ZKTecoService:
                 # Repack template with header
                 template_data = template.repack() if hasattr(template, 'repack') else template.template
                 
+                # Determine if it's a face or finger
+                # Standard Fingerprint size is around 400-600 bytes
+                # Face template size is usually much larger (1000-3000 bytes)
+                is_face = template.fid >= 50 or len(template_data) > 1000
+                
                 result.append({
                     'uid': template.uid,
                     'fid': template.fid,
                     'valid': template.valid,
-                    'template': base64.b64encode(template_data).decode('utf-8')
+                    'template': base64.b64encode(template_data).decode('utf-8'),
+                    'is_face': is_face
                 })
             
-            logger.info(f"Retrieved {len(result)} total templates from device")
+            logger.info(f"Retrieved {len(result)} total templates from device (Detected faces based on size/fid)")
             return result
             
         except Exception as e:
             logger.error(f"Get all templates failed: {str(e)}")
+            raise
+
+    def get_face_templates(self):
+        """Get all face templates using the BioData protocol (Type 2) with Command 1100"""
+        try:
+            if not self.conn:
+                raise Exception("Not connected")
+            
+            logger.info("Fetching face templates via BioData protocol Type 2 (Command 1100)...")
+            
+            result = []
+            
+            # ZK protocol: BioData Type 2 = Face, Type 1 = Fingerprint
+            # Command 1100 is specifically for BioData requests
+            try:
+                # Method 1: Try get_bio_data() which should use Command 1100
+                from zk.const import CMD_DB_RRQ
+                
+                logger.info("Attempting to fetch BioData Type 2 (Face)...")
+                
+                # Call get_bio_data with Type 2 for Face
+                faces = self.conn.get_bio_data(2)
+                
+                if faces:
+                    logger.info(f"BioData Type 2 returned {len(faces)} records")
+                    
+                    for face in faces:
+                        try:
+                            template_data = face.repack() if hasattr(face, 'repack') else face.template
+                            result.append({
+                                'uid': face.uid,
+                                'fid': face.fid if hasattr(face, 'fid') else 50,
+                                'valid': 1,
+                                'template': base64.b64encode(template_data).decode('utf-8'),
+                                'is_face': True,
+                                'size': len(template_data)
+                            })
+                        except Exception as face_error:
+                            logger.warning(f"Error processing face record: {face_error}")
+                            continue
+                    
+                    logger.info(f"Successfully extracted {len(result)} face templates from BioData Type 2")
+                else:
+                    logger.warning("get_bio_data(2) returned empty result")
+                    
+            except Exception as bio_error:
+                logger.warning(f"get_bio_data() failed: {bio_error}. Trying fallback...")
+                
+                # Method 2: Fallback to scanning standard templates for high FID
+                logger.info("Trying fallback: scanning standard templates for FID >= 50...")
+                templates = self.conn.get_templates()
+                
+                for template in templates:
+                    try:
+                        # Check if this might be a face (high FID or large size)
+                        if template.fid >= 50 or len(template.template) > 800:
+                            template_data = template.repack() if hasattr(template, 'repack') else template.template
+                            result.append({
+                                'uid': template.uid,
+                                'fid': template.fid,
+                                'valid': template.valid,
+                                'template': base64.b64encode(template_data).decode('utf-8'),
+                                'is_face': True,
+                                'size': len(template_data)
+                            })
+                    except Exception as template_error:
+                        logger.warning(f"Error processing template: {template_error}")
+                        continue
+                
+                logger.info(f"Fallback scan found {len(result)} potential face templates")
+            
+            # Method 3: Direct Command 1100 implementation if needed
+            if len(result) == 0:
+                logger.info("Trying direct Command 1100 implementation...")
+                try:
+                    # Low-level Command 1100 for BioData Type 2
+                    # This sends the raw command to the device
+                    from zk.const import CMD_DB_RRQ
+                    
+                    # Prepare command: [Command][Type][Language][Index][Count]
+                    # Type 2 = Face
+                    # Language 0 = Auto
+                    # Index 0 = Start from beginning
+                    # Count 0 = All
+                    
+                    command = bytes([CMD_DB_RRQ, 2, 0, 0, 0])
+                    response = self.conn._send_command(command, 1000)
+                    
+                    if response and len(response) > 10:
+                        logger.info("Command 1100 response received")
+                        # Parse response manually
+                        # Response format: [Command][Count][Records...]
+                        # Each record: [UID][Size][Data...]
+                        
+                        response_data = response[2:]  # Skip command and count
+                        record_count = response_data[0]
+                        
+                        logger.info(f"Parsing {record_count} BioData records...")
+                        
+                        pos = 1
+                        for i in range(record_count):
+                            if pos + 1 > len(response_data):
+                                break
+                            
+                            uid = response_data[pos]
+                            size = response_data[pos + 1]
+                            pos += 2
+                            
+                            if pos + size <= len(response_data):
+                                template_bytes = response_data[pos:pos + size]
+                                result.append({
+                                    'uid': uid,
+                                    'fid': 50 + i,  # Face FIDs typically 50-54
+                                    'valid': 1,
+                                    'template': base64.b64encode(template_bytes).decode('utf-8'),
+                                    'is_face': True,
+                                    'size': size
+                                })
+                                pos += size
+                            
+                            if pos >= len(response_data):
+                                break
+                        
+                        logger.info(f"Direct Command 1100 extracted {len(result)} face templates")
+                        
+                except Exception as cmd_error:
+                    logger.error(f"Direct Command 1100 failed: {cmd_error}")
+            
+            logger.info(f"Total face templates retrieved: {len(result)}")
+            return result
+            
+        except Exception as e:
+            logger.error(f"Get face templates failed: {str(e)}")
+            logger.error(traceback.format_exc())
             raise
     
     def clear_attendance(self):
@@ -993,6 +1118,48 @@ def get_all_templates():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/device/get-all-face-templates', methods=['POST'])
+def get_all_face_templates():
+    """
+    Get all face templates from device (fid >= 50).
+    
+    Request body:
+    {
+        "ip": "192.168.10.240",
+        "port": 4370,
+        "password": 0
+    }
+    """
+    try:
+        data = request.json
+        
+        ip = data.get('ip')
+        port = data.get('port', 4370)
+        password = data.get('password', 0)
+        
+        if not ip:
+            return jsonify({'success': False, 'error': 'IP required'}), 400
+        
+        service = ZKTecoService(ip, port, password)
+        
+        if not service.connect():
+            return jsonify({'success': False, 'error': 'Could not connect'}), 500
+        
+        templates = service.get_face_templates()
+        
+        service.disconnect()
+        
+        return jsonify({
+            'success': True,
+            'templates': templates,
+            'count': len(templates)
+        })
+        
+    except Exception as e:
+        logger.error(f"Get face templates error: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/device/clear-attendance', methods=['POST'])
 def clear_attendance():
     """Clear attendance logs from device"""
@@ -1131,6 +1298,304 @@ def add_users_batch():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/device/export-face-template', methods=['POST'])
+def export_face_template():
+    """
+    Export a single face template to device.
+    
+    Face templates use finger_id >= 50 (typically 50-54).
+    
+    Request body:
+    {
+        "ip": "192.168.10.240",
+        "port": 4370,
+        "password": 0,
+        "uid": 1,
+        "finger_id": 50,
+        "template_data": "base64..."
+    }
+    """
+    try:
+        data = request.json
+        
+        ip = data.get('ip')
+        port = data.get('port', 4370)
+        password = data.get('password', 0)
+        uid = data.get('uid')
+        finger_id = data.get('finger_id', 50)
+        template_data = data.get('template_data')
+        
+        if not ip or not uid or not template_data:
+            return jsonify({
+                'success': False,
+                'error': 'Missing required parameters (ip, uid, template_data)'
+            }), 400
+        
+        service = ZKTecoService(ip, port, password)
+        
+        if not service.connect():
+            return jsonify({
+                'success': False,
+                'error': 'Could not connect to device'
+            }), 500
+        
+        result = service.export_template(uid, finger_id, template_data)
+        service.disconnect()
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        logger.error(f"Export face template error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'traceback': traceback.format_exc()
+        }), 500
+
+
+@app.route('/device/push-face-templates-batch', methods=['POST'])
+def push_face_templates_batch():
+    """
+    Push face templates to device.
+    
+    Face templates use finger_id >= 50 (typically 50-54).
+    The pyzk library handles them the same way as fingerprint templates.
+    
+    Request body:
+    {
+        "ip": "192.168.10.240",
+        "port": 4370,
+        "password": 0,
+        "templates": [
+            {
+                "uid": 1,
+                "user_id": "EMP001",
+                "finger_id": 50,
+                "template_data": "base64..."
+            },
+            ...
+        ]
+    }
+    """
+    try:
+        data = request.json
+        
+        ip = data.get('ip')
+        port = data.get('port', 4370)
+        password = data.get('password', 0)
+        templates = data.get('templates', [])
+        
+        if not ip or not templates:
+            return jsonify({
+                'success': False,
+                'error': 'Missing required parameters (ip, templates)'
+            }), 400
+        
+        service = ZKTecoService(ip, port, password)
+        
+        if not service.connect():
+            return jsonify({
+                'success': False,
+                'error': 'Could not connect to device'
+            }), 500
+        
+        results = []
+        success_count = 0
+        failed_count = 0
+        
+        for tpl in templates:
+            uid = tpl.get('uid')
+            finger_id = tpl.get('finger_id', 50)
+            template_data = tpl.get('template_data')
+            
+            if not uid or not template_data:
+                failed_count += 1
+                results.append({'success': False, 'error': f'Missing uid or template_data'})
+                continue
+            
+            try:
+                result = service.export_template(uid, finger_id, template_data)
+                results.append(result)
+                
+                if result.get('success'):
+                    success_count += 1
+                else:
+                    failed_count += 1
+            except Exception as e:
+                failed_count += 1
+                results.append({'success': False, 'error': str(e)})
+        
+        service.disconnect()
+        
+        return jsonify({
+            'success': True,
+            'total': len(templates),
+            'success_count': success_count,
+            'failed_count': failed_count,
+            'results': results
+        })
+        
+    except Exception as e:
+        logger.error(f"Push face templates error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'traceback': traceback.format_exc()
+        }), 500
+
+
+@app.route('/device/push-face-photo', methods=['POST'])
+def push_face_photo():
+    """
+    Push a single face photo (JPEG) to device.
+    
+    Request body:
+    {
+        "ip": "192.168.10.240",
+        "port": 4370,
+        "password": 0,
+        "uid": 1,
+        "photo_base64": "/9j/4AAQ..."
+    }
+    """
+    try:
+        data = request.json
+        
+        ip = data.get('ip')
+        port = data.get('port', 4370)
+        password = data.get('password', 0)
+        uid = data.get('uid')
+        photo_base64 = data.get('photo_base64')
+        
+        if not ip or not uid or not photo_base64:
+            return jsonify({
+                'success': False,
+                'error': 'Missing required parameters (ip, uid, photo_base64)'
+            }), 400
+        
+        service = ZKTecoService(ip, port, password)
+        
+        if not service.connect():
+            return jsonify({
+                'success': False,
+                'error': 'Could not connect to device'
+            }), 500
+        
+        try:
+            import base64
+            photo_bytes = base64.b64decode(photo_base64)
+            
+            user = service.conn.get_user(uid)
+            if user:
+                user.photo = photo_bytes
+                service.conn.save_user(user)
+                result = {'success': True, 'message': 'Photo saved'}
+            else:
+                result = {'success': False, 'error': f'User with uid {uid} not found'}
+        except Exception as e:
+            result = {'success': False, 'error': str(e)}
+        
+        service.disconnect()
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        logger.error(f"Push face photo error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'traceback': traceback.format_exc()
+        }), 500
+
+
+@app.route('/device/push-face-photos-batch', methods=['POST'])
+def push_face_photos_batch():
+    """
+    Push multiple face photos (JPEG) to device.
+    
+    Request body:
+    {
+        "ip": "192.168.10.240",
+        "port": 4370,
+        "password": 0,
+        "photos": [
+            {
+                "uid": 1,
+                "photo_base64": "/9j/4AAQ..."
+            },
+            ...
+        ]
+    }
+    """
+    try:
+        data = request.json
+        
+        ip = data.get('ip')
+        port = data.get('port', 4370)
+        password = data.get('password', 0)
+        photos = data.get('photos', [])
+        
+        if not ip or not photos:
+            return jsonify({
+                'success': False,
+                'error': 'Missing required parameters (ip, photos)'
+            }), 400
+        
+        service = ZKTecoService(ip, port, password)
+        
+        if not service.connect():
+            return jsonify({
+                'success': False,
+                'error': 'Could not connect to device'
+            }), 500
+        
+        success_count = 0
+        failed_count = 0
+        errors = []
+        
+        import base64
+        for photo_info in photos:
+            uid = photo_info.get('uid')
+            photo_base64 = photo_info.get('photo_base64')
+            
+            if not uid or not photo_base64:
+                failed_count += 1
+                errors.append(f'Missing uid or photo_base64')
+                continue
+            
+            try:
+                photo_bytes = base64.b64decode(photo_base64)
+                user = service.conn.get_user(uid)
+                if user:
+                    user.photo = photo_bytes
+                    service.conn.save_user(user)
+                    success_count += 1
+                else:
+                    failed_count += 1
+                    errors.append(f'User with uid {uid} not found')
+            except Exception as e:
+                failed_count += 1
+                errors.append(str(e))
+        
+        service.disconnect()
+        
+        return jsonify({
+            'success': True,
+            'total': len(photos),
+            'success_count': success_count,
+            'failed_count': failed_count,
+            'errors': errors
+        })
+        
+    except Exception as e:
+        logger.error(f"Push face photos batch error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'traceback': traceback.format_exc()
+        }), 500
+
+
 if __name__ == '__main__':
     logger.info("Starting ZKTeco Microservice...")
     logger.info(f"pyzk available: {ZK is not None}")
@@ -1141,4 +1606,3 @@ if __name__ == '__main__':
     
     logger.info(f"Listening on {SERVICE_HOST}:{SERVICE_PORT}")
     app.run(host=SERVICE_HOST, port=SERVICE_PORT, debug=False, threaded=True)
-

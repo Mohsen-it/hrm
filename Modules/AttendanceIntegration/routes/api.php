@@ -8,6 +8,11 @@ use Modules\AttendanceIntegration\Http\Controllers\UserpicController;
 use Modules\AttendanceIntegration\Http\Middleware\LogDeviceRequest;
 use Modules\FingerprintDevices\Http\Controllers\AdmsCommandController;
 
+/*
+|--------------------------------------------------------------------------
+| Device Push API
+|--------------------------------------------------------------------------
+*/
 Route::prefix('api/attendance-integration')->group(function () {
     Route::post('push', [DevicePushController::class, 'handle'])
         ->middleware([LogDeviceRequest::class, 'throttle:attendance_push'])
@@ -35,6 +40,9 @@ Route::prefix('api/attendance-integration')->group(function () {
 |--------------------------------------------------------------------------
 | Endpoints consumed by the Python ADMS server for two-way sync.
 | No authentication required — the Python server runs on localhost.
+|
+| These routes skip web middleware (session, CSRF, Inertia) to avoid
+| unnecessary database session reads on every device poll.
 */
 Route::prefix('api/adms')->group(function () {
     Route::get('commands', [AdmsCommandController::class, 'fetchCommands'])

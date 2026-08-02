@@ -80,6 +80,19 @@ class BiodataPushIntegrationTest extends TestCase
         ]);
     }
 
+    public function test_local_adms_bridge_is_not_rate_limited(): void
+    {
+        config()->set('attendanceintegration.push.rate_limit', 1);
+        config()->set('attendanceintegration.push.unlimited_ips', ['127.0.0.1', '::1']);
+
+        for ($requestNumber = 0; $requestNumber < 3; $requestNumber++) {
+            $this->postJson(route('attendance-integration.push.biodata'), [
+                'SN' => 'ZK_FACE_001',
+                'Body' => '',
+            ])->assertOk();
+        }
+    }
+
     public function test_biodata_via_adms_push_detected_automatically(): void
     {
         $response = $this->postJson(route('attendance-integration.push.adms'), [
@@ -103,7 +116,7 @@ class BiodataPushIntegrationTest extends TestCase
 
     public function test_biodata_via_adms_push_with_table_query_param(): void
     {
-        $response = $this->postJson(route('attendance-integration.push.adms') . '?table=BIODATA&SN=ZK_FACE_001', [
+        $response = $this->postJson(route('attendance-integration.push.adms').'?table=BIODATA&SN=ZK_FACE_001', [
             'Body' => "BIODATA\nPin=20079\nType=2\nMajorVer=12\nMinorVer=0\nFormat=0\nTmp=QUERY_PARAM_TEMPLATE\n",
         ]);
 
@@ -251,6 +264,26 @@ class BiodataPushIntegrationTest extends TestCase
                 'success' => true,
                 'received' => 0,
             ]);
+    }
+
+    public function test_corrupted_biodata_is_saved_to_the_debug_directory(): void
+    {
+        $debugDirectory = storage_path('app/debug/biodata');
+        $before = glob($debugDirectory.DIRECTORY_SEPARATOR.'*.txt') ?: [];
+
+        $response = $this->postJson(route('attendance-integration.push.biodata'), [
+            'SN' => 'ZK_FACE_001',
+            'Body' => "BIODATA\nType=2\nTmp=CORRUPTED_WITHOUT_PIN\n",
+        ]);
+
+        $response->assertOk()->assertJson([
+            'success' => true,
+            'received' => 0,
+            'saved' => 0,
+        ]);
+
+        $after = glob($debugDirectory.DIRECTORY_SEPARATOR.'*.txt') ?: [];
+        $this->assertGreaterThan(count($before), count($after));
     }
 
     public function test_biodata_unknown_device_still_accepted(): void

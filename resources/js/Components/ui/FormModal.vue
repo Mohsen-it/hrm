@@ -1,7 +1,6 @@
 <script setup>
-import { computed, watch, onMounted, onUnmounted } from 'vue';
+import { computed, nextTick, onUnmounted, ref, watch } from 'vue';
 import Card from './Card.vue';
-import Button from './Button.vue';
 
 const props = defineProps({
     modelValue: { type: Boolean, default: false },
@@ -14,15 +13,17 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue', 'close']);
 
 const isOpen = computed(() => props.modelValue);
+const panelRef = ref(null);
+let previouslyFocusedElement = null;
 
 const sizeClass = computed(() => {
     return {
-        sm: 'max-w-sm',
-        md: 'max-w-lg',
-        lg: 'max-w-2xl',
-        xl: 'max-w-4xl',
-        full: 'max-w-6xl',
-    }[props.size] || 'max-w-lg';
+        sm: 'max-w-md',
+        md: 'max-w-2xl',
+        lg: 'max-w-4xl',
+        xl: 'max-w-6xl',
+        full: 'max-w-[calc(100vw-2rem)]',
+    }[props.size] || 'max-w-2xl';
 });
 
 function close() {
@@ -38,13 +39,18 @@ function onEsc(e) {
     if (e.key === 'Escape' && isOpen.value) close();
 }
 
-watch(isOpen, (val) => {
+watch(isOpen, async (val) => {
     if (val) {
+        previouslyFocusedElement = document.activeElement;
         document.body.style.overflow = 'hidden';
         document.addEventListener('keydown', onEsc);
+        await nextTick();
+        panelRef.value?.$el?.focus();
     } else {
         document.body.style.overflow = '';
         document.removeEventListener('keydown', onEsc);
+        previouslyFocusedElement?.focus?.();
+        previouslyFocusedElement = null;
     }
 });
 
@@ -76,11 +82,17 @@ onUnmounted(() => {
                 >
                     <Card
                         v-if="isOpen"
+                        ref="panelRef"
                         variant="base"
                         padding="none"
-                        :class="['relative w-full shadow-level-4 z-10 max-sm:rounded-none max-sm:max-w-full max-sm:max-h-full max-sm:overflow-y-auto', sizeClass]"
+                        :dir="dir"
+                        role="dialog"
+                        aria-modal="true"
+                        :aria-label="title || 'Dialog'"
+                        tabindex="-1"
+                        :class="['relative z-10 flex w-full max-h-[calc(100dvh-2rem)] flex-col overflow-hidden rounded-2xl shadow-level-4 max-sm:max-h-[100dvh] max-sm:max-w-full max-sm:rounded-none', sizeClass]"
                     >
-                        <div v-if="title || $slots.header" class="flex items-center justify-between px-6 py-4 border-b border-mistral-hairline-soft">
+                        <div v-if="title || $slots.header" class="flex shrink-0 items-center justify-between border-b border-mistral-hairline-soft px-6 py-5 max-sm:px-5">
                             <h3 class="text-[16px] font-semibold text-mistral-ink">
                                 <slot name="header">{{ title }}</slot>
                             </h3>
@@ -93,10 +105,10 @@ onUnmounted(() => {
                                 <i class="fas fa-xmark text-[14px]" aria-hidden="true"></i>
                             </button>
                         </div>
-                        <div class="p-6">
+                        <div class="min-h-0 flex-1 overflow-y-auto p-6 max-sm:p-5">
                             <slot />
                         </div>
-                        <div v-if="$slots.footer" class="px-6 py-4 border-t border-mistral-hairline-soft flex items-center justify-end gap-2 bg-mistral-surface/30 rounded-b-xl">
+                        <div v-if="$slots.footer" class="flex shrink-0 items-center justify-end gap-2 border-t border-mistral-hairline-soft bg-mistral-surface/30 px-6 py-4 max-sm:px-5">
                             <slot name="footer" />
                         </div>
                     </Card>

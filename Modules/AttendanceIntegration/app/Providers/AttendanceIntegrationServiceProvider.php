@@ -103,6 +103,11 @@ class AttendanceIntegrationServiceProvider extends ServiceProvider
     {
         RateLimiter::for('attendance_push', function (Request $request) {
             $key = 'attendance_push:'.($request->input('SN') ?? $request->ip());
+            $unlimitedIps = config('attendanceintegration.push.unlimited_ips', ['127.0.0.1', '::1']);
+
+            if (in_array($request->ip(), $unlimitedIps, true)) {
+                return Limit::none();
+            }
 
             return Limit::perMinute(
                 (int) config('attendanceintegration.push.rate_limit', 60)

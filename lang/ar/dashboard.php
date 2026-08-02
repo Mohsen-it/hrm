@@ -44,6 +44,12 @@ return [
     'live_attendance_feed' => 'البث المباشر للحضور',
     'top_late_employees' => 'أكثر الموظفين تأخراً',
 
+    'grade_distribution' => 'توزيع الدرجات',
+    'category_distribution' => 'توزيع فئات المناوبات',
+    'rotation_distribution' => 'توزيع الدوريات',
+    'grade_level' => 'المستوى',
+    'unassigned' => 'غير معيّن',
+
     // Chart labels
     'present' => 'حاضرون',
     'absent' => 'غائبون',

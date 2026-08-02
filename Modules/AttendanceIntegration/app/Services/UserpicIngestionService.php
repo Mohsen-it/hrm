@@ -26,14 +26,15 @@ class UserpicIngestionService
             'errors' => [],
         ];
 
+        $uniquePins = array_unique(array_map(fn (array $r) => (string) $r['pin'], $records));
+        $userMap = $this->resolveUsersBatch($uniquePins);
+
         foreach ($records as $record) {
             try {
-                $result = $this->ingestSingle($device, $record, $correlationId);
-
+                $result = $this->ingestSingle($device, $record, $correlationId, $userMap);
                 $stats[$result]++;
             } catch (\Throwable $e) {
                 $stats['errors'][] = "Pin {$record['pin']}: {$e->getMessage()}";
-
                 Log::channel('biodata')->error('USERPIC_INGEST_FAILED', [
                     'correlation_id' => $correlationId,
                     'device_serial' => $device?->serial_number,
@@ -47,47 +48,60 @@ class UserpicIngestionService
     }
 
     /**
+     * Resolve multiple PINs to users in a single query.
+     *
+     * @return array<string, User>
+     */
+    private function resolveUsersBatch(array $pins): array
+    {
+        if (empty($pins)) {
+            return [];
+        }
+
+        $numericPins = array_filter($pins, fn (string $pin) => is_numeric($pin));
+
+        $users = User::query()
+            ->where(function ($q) use ($pins, $numericPins) {
+                $q->whereIn('employee_code', $pins);
+                if (! empty($numericPins)) {
+                    $q->orWhereIn('id', array_map('intval', $numericPins));
+                }
+            })
+            ->get()
+            ->keyBy(fn (User $u) => $u->employee_code);
+
+        $result = [];
+        foreach ($pins as $pin) {
+            $result[$pin] = $users->get($pin) ?? $users->get((int) $pin);
+        }
+
+        return array_filter($result);
+    }
+
+    /**
+     * @param  array<string, User>  $userMap
      * @return 'saved'|'skipped'
      */
     private function ingestSingle(
         ?FingerprintDevice $device,
         array $record,
         string $correlationId,
+        array $userMap,
     ): string {
         $pin = $record['pin'];
         $contentBase64 = $record['content_base64'];
 
-        Log::channel('biodata')->info('USERPIC_RECEIVED', [
-            'correlation_id' => $correlationId,
-            'device_serial' => $device?->serial_number,
-            'pin' => $pin,
-            'filename' => $record['filename'],
-            'declared_size' => $record['size'],
-            'base64_length' => strlen($contentBase64),
-        ]);
-
         if ($contentBase64 === '') {
-            Log::channel('biodata')->warning('USERPIC_EMPTY_CONTENT', [
-                'correlation_id' => $correlationId,
-                'pin' => $pin,
-            ]);
-
             return 'skipped';
         }
 
         $imageData = base64_decode($contentBase64, true);
 
         if ($imageData === false || strlen($imageData) < 100) {
-            Log::channel('biodata')->warning('USERPIC_INVALID_IMAGE', [
-                'correlation_id' => $correlationId,
-                'pin' => $pin,
-                'decoded_length' => $imageData ? strlen($imageData) : 0,
-            ]);
-
             return 'skipped';
         }
 
-        $user = $this->resolveUser($pin);
+        $user = $userMap[$pin] ?? null;
 
         if (! $user) {
             Log::channel('biodata')->warning('USERPIC_EMPLOYEE_NOT_FOUND', [
@@ -109,33 +123,10 @@ class UserpicIngestionService
             'device_serial' => $device?->serial_number,
             'pin' => $pin,
             'user_id' => $user->id,
-            'user_name' => $user->full_name_ar ?? $user->name,
             'filename' => $filename,
-            'image_size' => strlen($imageData),
         ]);
 
         return 'saved';
-    }
-
-    private function resolveUser(string $pin): ?User
-    {
-        if ($pin === '') {
-            return null;
-        }
-
-        $user = User::query()
-            ->whereRaw('LOWER(employee_code) = LOWER(?)', [$pin])
-            ->first();
-
-        if ($user) {
-            return $user;
-        }
-
-        if (is_numeric($pin)) {
-            $user = User::query()->where('id', (int) $pin)->first();
-        }
-
-        return $user;
     }
 
     private function savePhoto(

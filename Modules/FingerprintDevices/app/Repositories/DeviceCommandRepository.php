@@ -22,6 +22,26 @@ class DeviceCommandRepository
         return $this->model->find($id);
     }
 
+    public function findByIdForDevice(int $id, int $deviceId): ?DeviceCommand
+    {
+        return $this->model
+            ->whereKey($id)
+            ->where('device_id', $deviceId)
+            ->first();
+    }
+
+    public function findActiveByCorrelation(int $deviceId, string $correlationId): ?DeviceCommand
+    {
+        return $this->model
+            ->where('device_id', $deviceId)
+            ->where('correlation_id', $correlationId)
+            ->whereIn('status', [
+                DeviceCommand::STATUS_PENDING,
+                DeviceCommand::STATUS_SENDING,
+            ])
+            ->first();
+    }
+
     /**
      * Fetch the next batch of pending commands for a device (ordered by priority ASC, created ASC).
      *
@@ -60,20 +80,68 @@ class DeviceCommandRepository
     }
 
     /**
-     * Mark commands as sending (claim for processing).
+     * Atomically claim pending commands for a device using a single query.
+     *
+     * Uses SELECT ... FOR UPDATE SKIP LOCKED to avoid race conditions
+     * between concurrent device polls.
      */
     public function claimPending(int $deviceId, int $limit = 1): Collection
     {
-        $commands = $this->fetchPendingForDevice($deviceId, $limit);
+        $this->releaseStaleSending($deviceId);
 
-        foreach ($commands as $cmd) {
-            $cmd->update([
-                'status' => DeviceCommand::STATUS_SENDING,
-                'sent_at' => now(),
-            ]);
+        $now = now();
+        $sendAt = $now->toDateTimeString();
+
+        // Atomic claim: SELECT eligible rows, lock them, mark as sending
+        $claimedIds = DB::select(
+            'SELECT id FROM device_commands
+             WHERE device_id = ?
+               AND status = ?
+               AND (expires_at IS NULL OR expires_at > ?)
+             ORDER BY priority, created_at
+             LIMIT ?
+             FOR UPDATE SKIP LOCKED',
+            [$deviceId, DeviceCommand::STATUS_PENDING, $now, $limit]
+        );
+
+        if (empty($claimedIds)) {
+            return new Collection;
         }
 
-        return $commands;
+        $ids = array_column($claimedIds, 'id');
+        $idPlaceholders = implode(',', array_fill(0, count($ids), '?'));
+
+        DB::update(
+            "UPDATE device_commands SET status = ?, sent_at = ? WHERE id IN ($idPlaceholders)",
+            array_merge([DeviceCommand::STATUS_SENDING, $sendAt], $ids)
+        );
+
+        return $this->model->whereIn('id', $ids)->get();
+    }
+
+    /**
+     * Return unacknowledged commands to the queue after a delivery timeout.
+     */
+    public function releaseStaleSending(int $deviceId, int $timeoutMinutes = 10): int
+    {
+        $stale = $this->model
+            ->where('device_id', $deviceId)
+            ->where('status', DeviceCommand::STATUS_SENDING)
+            ->where('sent_at', '<', now()->subMinutes($timeoutMinutes));
+
+        (clone $stale)
+            ->whereColumn('retry_count', '>=', 'max_retries')
+            ->update([
+                'status' => DeviceCommand::STATUS_FAILED,
+                'error_message' => 'Device did not acknowledge the command before the retry limit.',
+            ]);
+
+        return (clone $stale)
+            ->whereColumn('retry_count', '<', 'max_retries')
+            ->increment('retry_count', 1, [
+                'status' => DeviceCommand::STATUS_PENDING,
+                'sent_at' => null,
+            ]);
     }
 
     /**
@@ -109,7 +177,13 @@ class DeviceCommandRepository
     {
         return $this->model
             ->where('status', DeviceCommand::STATUS_PENDING)
-            ->where('created_at', '<', now()->subMinutes($maxAgeMinutes))
+            ->where(function ($query) use ($maxAgeMinutes): void {
+                $query->where('expires_at', '<=', now())
+                    ->orWhere(function ($fallback) use ($maxAgeMinutes): void {
+                        $fallback->whereNull('expires_at')
+                            ->where('created_at', '<', now()->subMinutes($maxAgeMinutes));
+                    });
+            })
             ->update(['status' => DeviceCommand::STATUS_EXPIRED]);
     }
 

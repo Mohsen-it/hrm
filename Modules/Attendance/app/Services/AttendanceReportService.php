@@ -187,6 +187,9 @@ class AttendanceReportService
 
         return $this->cache->remember($cacheKey, function () use ($date): array {
             $byStatus = DailyAttendanceSummary::onDate($date)
+                ->whereHas('user', fn ($query) => $query
+                    ->withoutSuperAdmin()
+                    ->active())
                 ->groupBy('status')
                 ->selectRaw('status, COUNT(*) as c')
                 ->pluck('c', 'status')

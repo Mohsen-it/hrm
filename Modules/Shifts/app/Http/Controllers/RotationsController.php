@@ -39,18 +39,39 @@ class RotationsController extends Controller
     ) {}
 
     /**
+     * Scoped request filters.
+     *
+     * Non-super-admin users are locked to their own company so they can never
+     * read or export another company's rotations by tampering with company_id.
+     *
+     * @return array<string, mixed>
+     */
+    private function scopedFilters(Request $request): array
+    {
+        $filters = $request->only(['search', 'company_id']);
+
+        $user = auth()->user();
+
+        if ($user && ! $user->isSuperAdmin() && ! empty($user->company_id)) {
+            $filters['company_id'] = (int) $user->company_id;
+        }
+
+        return $filters;
+    }
+
+    /**
      * Display a listing of rotations.
      */
     public function index(Request $request): Response
     {
         $this->authorize('view-rotations');
 
+        $filters = $this->scopedFilters($request);
+
         return Inertia::render('Shifts/Rotations/Index', [
-            'filters' => fn () => $request->only(['search', 'company_id']),
+            'filters' => fn () => $filters,
             'rotations' => fn () => RotationResource::collection(
-                $this->rotationService->getAll(
-                    $request->only(['search', 'company_id'])
-                )
+                $this->rotationService->getAll($filters)
             ),
         ]);
     }
@@ -214,7 +235,9 @@ class RotationsController extends Controller
         $this->authorize('assign-employees-to-rotation');
 
         return Inertia::render('Shifts/Rotations/Assign', [
-            'rotations' => fn () => RotationResource::collection($this->rotationService->getAllList()),
+            'rotations' => fn () => RotationResource::collection($this->rotationService->getAllList(
+                $this->companyScopeForList()
+            )),
             'departments' => fn () => Department::orderBy('department_name')->get(['id', 'department_name']),
             'preselected_rotation_id' => $request->input('rotation') ? (int) $request->input('rotation') : null,
             'preselected_group_id' => $request->input('group') ? (int) $request->input('group') : null,
@@ -579,7 +602,9 @@ class RotationsController extends Controller
         $this->authorize('assign-employees-to-rotation');
 
         return Inertia::render('Shifts/Rotations/ManageAssignments', [
-            'rotations' => fn () => RotationResource::collection($this->rotationService->getAllList()),
+            'rotations' => fn () => RotationResource::collection($this->rotationService->getAllList(
+                $this->companyScopeForList()
+            )),
             'departments' => fn () => Department::orderBy('department_name')->get(['id', 'department_name']),
             'preselected_rotation_id' => $request->input('rotation') ? (int) $request->input('rotation') : null,
             'preselected_group_id' => $request->input('group') ? (int) $request->input('group') : null,
@@ -703,12 +728,26 @@ class RotationsController extends Controller
         $this->authorize('view-rotations');
 
         $rotations = $this->rotationService->getAll(
-            $request->only(['search', 'company_id'])
+            $this->scopedFilters($request)
         );
 
         $export = new RotationsExport($rotations->getCollection());
 
         return $this->downloadExcel($export->build(), 'rotations');
+    }
+
+    /**
+     * Resolve the company scope for the current user (or null for super-admin).
+     */
+    private function companyScopeForList(): ?int
+    {
+        $user = auth()->user();
+
+        if ($user && ! $user->isSuperAdmin() && ! empty($user->company_id)) {
+            return (int) $user->company_id;
+        }
+
+        return null;
     }
 
     /**

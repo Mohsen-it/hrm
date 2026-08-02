@@ -54,7 +54,7 @@ class OptionsParser
             }
 
             if (str_contains($trimmed, '=')) {
-                [$key, , $value] = explode('=', $trimmed, 2);
+                [$key, $value] = explode('=', $trimmed, 2);
                 $key = trim($key);
                 $value = trim($value);
 

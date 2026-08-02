@@ -48,6 +48,7 @@ class PermissionSeeder extends Seeder
     protected array $extraPermissions = [
         'view-dashboard',
         'approve-vacation-requests',
+        'edit-vacation-balance',
         'view-shift-categories',
         'create-shift-categories',
         'edit-shift-categories',

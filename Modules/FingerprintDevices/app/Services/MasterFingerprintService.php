@@ -25,6 +25,12 @@ class MasterFingerprintService
         return $this->repository->getForUser($userId);
     }
 
+    /** Get face templates received through ADMS for display on an employee profile. */
+    public function getUserFaceTemplates(int $userId): Collection
+    {
+        return $this->repository->getFaceTemplatesForUser($userId);
+    }
+
     public function storeFingerprint(array $data): UserFingerprint
     {
         $fingerprint = $this->repository->create($data);

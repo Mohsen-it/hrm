@@ -13,6 +13,7 @@ use Modules\Shifts\Repositories\RotationAssignmentRepository;
 use Modules\Shifts\Repositories\RotationGroupRepository;
 use Modules\Shifts\Repositories\RotationRepository;
 use Modules\Shifts\Services\Traits\ResolvesCompanyId;
+use Modules\Users\Models\User;
 
 class RotationService
 {
@@ -26,6 +27,18 @@ class RotationService
     ) {}
 
     /**
+     * The maximum number of non-overlapping groups a pattern can tile.
+     */
+    private function maxGroupsForPattern(int $cycleLength, int $workDaysCount): int
+    {
+        if ($workDaysCount < 1) {
+            return 1;
+        }
+
+        return max(1, intdiv($cycleLength, $workDaysCount));
+    }
+
+    /**
      * Get all rotations with filters and pagination.
      */
     public function getAll(array $filters = [], int $perPage = 20): LengthAwarePaginator
@@ -34,11 +47,11 @@ class RotationService
     }
 
     /**
-     * Get a simple list of all rotations.
+     * Get a simple list of all rotations, optionally scoped to a company.
      */
-    public function getAllList()
+    public function getAllList(?int $companyId = null)
     {
-        return $this->rotationRepository->getAllList();
+        return $this->rotationRepository->getAllList($companyId);
     }
 
     /**
@@ -64,9 +77,23 @@ class RotationService
             $data['work_days_count'] = array_sum($pattern);
             $data['rest_days_count'] = $data['cycle_length'] - $data['work_days_count'];
 
-            $rotation = $this->rotationRepository->create($data);
+            if ($data['work_days_count'] < 1) {
+                throw ValidationException::withMessages([
+                    'pattern' => [__('shifts.rotation_pattern_requires_work_day')],
+                ]);
+            }
 
             $numberOfGroups = $data['number_of_groups'] ?? 1;
+            $maxGroups = $this->maxGroupsForPattern($data['cycle_length'], $data['work_days_count']);
+
+            if ($numberOfGroups > $maxGroups) {
+                throw ValidationException::withMessages([
+                    'number_of_groups' => [__('shifts.rotation_too_many_groups', ['max' => $maxGroups])],
+                ]);
+            }
+
+            $rotation = $this->rotationRepository->create($data);
+
             $this->createGroups($rotation, $numberOfGroups, $data['groups'] ?? []);
 
             return $rotation->fresh(['groups']);
@@ -91,6 +118,27 @@ class RotationService
             $data['cycle_length'] = count($pattern);
             $data['work_days_count'] = array_sum($pattern);
             $data['rest_days_count'] = $data['cycle_length'] - $data['work_days_count'];
+
+            if ($data['work_days_count'] < 1) {
+                throw ValidationException::withMessages([
+                    'pattern' => [__('shifts.rotation_pattern_requires_work_day')],
+                ]);
+            }
+
+            // Rebalance group indices sequentially so the engine's
+            // `group_index * work_days_count` offset stays correct after a
+            // pattern change (previously indices kept stale values).
+            // Only runs when the pattern actually changes so a plain name/
+            // settings edit never alters existing schedules.
+            $patternChanged = $pattern !== ($rotation->pattern ?? []);
+
+            if ($patternChanged) {
+                $rotation->groups()->orderBy('group_index')->get()
+                    ->values()
+                    ->each(function (RotationGroup $group, int $i): void {
+                        $group->update(['group_index' => $i]);
+                    });
+            }
         }
 
         $rotation = $this->rotationRepository->update($rotation, $data);
@@ -130,6 +178,14 @@ class RotationService
         if (! $rotation) {
             throw ValidationException::withMessages([
                 'rotation_id' => [__('shifts.rotation_not_found')],
+            ]);
+        }
+
+        $maxGroups = $this->maxGroupsForPattern($rotation->cycle_length, $rotation->work_days_count);
+
+        if ($rotation->groups()->count() + 1 > $maxGroups) {
+            throw ValidationException::withMessages([
+                'name' => [__('shifts.rotation_too_many_groups', ['max' => $maxGroups])],
             ]);
         }
 
@@ -193,11 +249,17 @@ class RotationService
      */
     public function assignEmployee(int $employeeId, int $rotationId, int $groupId, string $startDate, ?string $endDate = null): RotationAssignment
     {
-        $this->closePreviousAssignment($employeeId, $startDate);
+        return DB::transaction(function () use ($employeeId, $rotationId, $groupId, $startDate, $endDate) {
+            // Serialize concurrent assignments for the same employee so two
+            // parallel requests cannot both create an active assignment.
+            User::query()->whereKey($employeeId)->lockForUpdate()->first();
 
-        $this->validateAssignment($employeeId, $rotationId, $startDate, $endDate);
+            $this->closePreviousAssignment($employeeId, $startDate);
 
-        return $this->createAssignment($employeeId, $rotationId, $groupId, $startDate, $endDate);
+            $this->validateAssignment($employeeId, $rotationId, $startDate, $endDate);
+
+            return $this->createAssignment($employeeId, $rotationId, $groupId, $startDate, $endDate);
+        });
     }
 
     /**
@@ -205,11 +267,16 @@ class RotationService
      */
     public function transferEmployee(int $employeeId, int $newRotationId, int $newGroupId, string $effectiveDate): RotationAssignment
     {
-        $previousDay = Carbon::parse($effectiveDate)->subDay()->toDateString();
+        return DB::transaction(function () use ($employeeId, $newRotationId, $newGroupId, $effectiveDate) {
+            $previousDay = Carbon::parse($effectiveDate)->subDay()->toDateString();
 
-        $this->closeCurrentAssignment($employeeId, $previousDay);
+            // Serialize concurrent transfers for the same employee.
+            User::query()->whereKey($employeeId)->lockForUpdate()->first();
 
-        return $this->createAssignment($employeeId, $newRotationId, $newGroupId, $effectiveDate);
+            $this->closeCurrentAssignment($employeeId, $previousDay);
+
+            return $this->createAssignment($employeeId, $newRotationId, $newGroupId, $effectiveDate);
+        });
     }
 
     /**
@@ -283,16 +350,16 @@ class RotationService
 
     private function createGroups(Rotation $rotation, int $numberOfGroups, array $customGroups): void
     {
-        $cycleLength = $rotation->cycle_length;
-        $offsetStep = intdiv($cycleLength, max($numberOfGroups, 1));
-
+        // `group_index` is a sequential 0-based group number. RotationEngine
+        // turns it into a real day offset via `group_index * work_days_count`,
+        // which tiles the cycle without overlap when groups × work ≤ cycle.
         for ($i = 0; $i < $numberOfGroups; $i++) {
             $customData = $customGroups[$i] ?? [];
 
             $this->groupRepository->create([
                 'rotation_id' => $rotation->id,
                 'name' => $customData['name'] ?? chr(65 + $i),
-                'group_index' => $i * $offsetStep,
+                'group_index' => $i,
             ]);
         }
     }
@@ -317,10 +384,30 @@ class RotationService
             ]);
         }
 
+        if ((int) $group->rotation_id !== (int) $rotation->id) {
+            throw ValidationException::withMessages([
+                'rotation_group_id' => [__('shifts.rotation_group_mismatch')],
+            ]);
+        }
+
+        $timeSchedule = $rotation->timeSchedule;
         $snapshotData = [
             'rotation' => $rotation->only(['id', 'name', 'description', 'anchor_start_date', 'pattern', 'cycle_length', 'work_days_count', 'rest_days_count', 'number_of_groups', 'time_schedule_id', 'overtime_enabled', 'work_on_holidays', 'grace_minutes', 'in_ahead_margin', 'in_above_margin', 'out_ahead_margin', 'out_above_margin', 'color']),
             'group' => $group->only(['id', 'name', 'group_index']),
-            'time_schedule' => $rotation->timeSchedule?->only(['id', 'name', 'in_time', 'out_time', 'is_multi_day', 'late_margin', 'early_margin']),
+            'time_schedule' => $timeSchedule ? [
+                'id' => $timeSchedule->id,
+                'name' => $timeSchedule->name,
+                'in_time' => $timeSchedule->in_time,
+                'out_time' => $timeSchedule->out_time,
+                'is_multi_day' => $timeSchedule->is_multi_day,
+                'late_margin' => $timeSchedule->late_margin,
+                'early_margin' => $timeSchedule->early_margin,
+                'breaks' => $timeSchedule->breaks->map(fn ($b) => [
+                    'break_start' => $b->break_start,
+                    'break_end' => $b->break_end,
+                    'duration' => $b->duration,
+                ])->values()->all(),
+            ] : null,
         ];
 
         return $this->assignmentRepository->create([

@@ -11,6 +11,7 @@ use Modules\AttendanceIntegration\Contracts\DeviceRepositoryInterface;
 use Modules\AttendanceIntegration\Http\Requests\StoreDevicePunchRequest;
 use Modules\AttendanceIntegration\Jobs\AttendanceIngestionJob;
 use Modules\AttendanceIntegration\Jobs\BiodataIngestionJob;
+use Modules\AttendanceIntegration\Jobs\UserpicIngestionJob;
 use Modules\AttendanceIntegration\Models\DeviceAdapter;
 use Modules\AttendanceIntegration\Parsers\BiodataParser;
 use Modules\AttendanceIntegration\Parsers\OperlogParser;
@@ -18,8 +19,8 @@ use Modules\AttendanceIntegration\Parsers\OptionsParser;
 use Modules\AttendanceIntegration\Parsers\UserinfoParser;
 use Modules\AttendanceIntegration\Parsers\UserpicParser;
 use Modules\AttendanceIntegration\Services\AuditLogger;
+use Modules\AttendanceIntegration\Services\BiodataDebugPayloadService;
 use Modules\AttendanceIntegration\Services\DeviceAdapterResolver;
-use Modules\AttendanceIntegration\Services\UserpicIngestionService;
 use Modules\FingerprintDevices\Models\FingerprintDevice;
 
 class DevicePushController extends Controller
@@ -28,6 +29,7 @@ class DevicePushController extends Controller
         private DeviceRepositoryInterface $deviceRepository,
         private DeviceAdapterResolver $adapterResolver,
         private AuditLogger $auditLogger,
+        private BiodataDebugPayloadService $debugPayloadService,
     ) {}
 
     public function handle(StoreDevicePunchRequest $request): JsonResponse
@@ -41,7 +43,7 @@ class DevicePushController extends Controller
 
         $device = null;
         if ($serialNumber) {
-            $device = $this->deviceRepository->findBySerial((string) $serialNumber);
+            $device = $this->findDeviceBySerialCached((string) $serialNumber);
         }
 
         $body = $request->input('Body', '');
@@ -160,17 +162,14 @@ class DevicePushController extends Controller
             ]);
         }
 
-        $records = BiodataParser::parse($body);
+        try {
+            $records = BiodataParser::parse($body);
+        } catch (\Throwable $exception) {
+            return $this->biodataParsingFailure($body, (string) ($serialNumber ?? 'unknown'), $correlationId, $exception->getMessage());
+        }
 
         if (empty($records)) {
-            return response()->json([
-                'success' => true,
-                'message' => 'No valid BIODATA records found in payload',
-                'received' => 0,
-                'saved' => 0,
-                'duplicates' => 0,
-                'skipped' => 0,
-            ]);
+            return $this->biodataParsingFailure($body, (string) ($serialNumber ?? 'unknown'), $correlationId, 'No record contained a valid Pin field.');
         }
 
         Log::channel('biodata')->info('BIODATA_BATCH_RECEIVED_VIA_PUSH', [
@@ -188,8 +187,10 @@ class DevicePushController extends Controller
             $fingerprintDevice = FingerprintDevice::where('serial_number', $serialNumber)->first();
         }
 
+        $deviceId = $fingerprintDevice?->id;
+
         BiodataIngestionJob::dispatch(
-            $fingerprintDevice?->id,
+            $deviceId,
             (string) ($serialNumber ?? 'unknown'),
             $records,
             $correlationId,
@@ -200,10 +201,30 @@ class DevicePushController extends Controller
             'message' => 'BIODATA received',
             'correlation_id' => $correlationId,
             'received' => count($records),
+            'queued' => true,
+        ]);
+    }
+
+    /** Save malformed payloads for diagnosis without leaking them to logs. */
+    private function biodataParsingFailure(string $body, string $serialNumber, string $correlationId, string $reason): JsonResponse
+    {
+        $debugPath = $this->debugPayloadService->save($body, $serialNumber, $correlationId, $reason);
+
+        Log::channel('biodata')->error('BIODATA_PARSING_FAILED', [
+            'correlation_id' => $correlationId,
+            'device_serial' => $serialNumber,
+            'reason' => $reason,
+            'debug_file' => $debugPath,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'BIODATA could not be parsed; payload retained for diagnosis',
+            'correlation_id' => $correlationId,
+            'received' => 0,
             'saved' => 0,
             'duplicates' => 0,
             'skipped' => 0,
-            'queued' => true,
         ]);
     }
 
@@ -213,8 +234,6 @@ class DevicePushController extends Controller
         ?string $serialNumber,
         string $correlationId,
     ): JsonResponse {
-        $startTime = microtime(true);
-
         $body = $request->input('Body', '');
 
         if (! is_string($body) || $body === '') {
@@ -254,28 +273,21 @@ class DevicePushController extends Controller
             $fingerprintDevice = FingerprintDevice::where('serial_number', $serialNumber)->first();
         }
 
-        $ingestionService = app(UserpicIngestionService::class);
-        $stats = $ingestionService->ingest($fingerprintDevice, $records, $correlationId);
+        $deviceId = $fingerprintDevice?->id;
 
-        $durationMs = round((microtime(true) - $startTime) * 1000, 2);
-
-        Log::channel('biodata')->info('USERPIC_BATCH_COMPLETED_VIA_PUSH', [
-            'correlation_id' => $correlationId,
-            'device_serial' => $serialNumber ?? 'unknown',
-            'saved' => $stats['saved'],
-            'skipped' => $stats['skipped'],
-            'duration_ms' => $durationMs,
-        ]);
+        UserpicIngestionJob::dispatch(
+            $deviceId,
+            (string) ($serialNumber ?? 'unknown'),
+            $records,
+            $correlationId,
+        );
 
         return response()->json([
             'success' => true,
             'message' => 'USERPIC received',
             'correlation_id' => $correlationId,
             'received' => count($records),
-            'saved' => $stats['saved'],
-            'skipped' => $stats['skipped'],
-            'errors' => $stats['errors'],
-            'duration_ms' => $durationMs,
+            'queued' => true,
         ]);
     }
 
@@ -447,9 +459,14 @@ class DevicePushController extends Controller
             return $device;
         }
         if ($serialNumber) {
-            return FingerprintDevice::where('serial_number', $serialNumber)->first();
+            return $this->findDeviceBySerialCached($serialNumber);
         }
 
         return null;
+    }
+
+    private function findDeviceBySerialCached(string $serial): ?AttendanceDeviceInterface
+    {
+        return $this->deviceRepository->findBySerial($serial);
     }
 }

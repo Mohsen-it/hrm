@@ -29,9 +29,10 @@ class RotationRepository
             ->paginate($perPage);
     }
 
-    public function getAllList(): Collection
+    public function getAllList(?int $companyId = null): Collection
     {
         return $this->query()
+            ->when($companyId, fn (Builder $q) => $q->where('company_id', $companyId))
             ->with($this->defaultWith)
             ->orderBy('name')
             ->get();

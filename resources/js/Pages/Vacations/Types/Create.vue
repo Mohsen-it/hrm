@@ -12,12 +12,11 @@ const form = reactive({
     name_ar: '',
     name_en: '',
     default_days_per_year: 21,
-    max_days_per_request: 30,
+    max_days_per_request: 21,
+    max_carry_days: 0,
     advance_notice_days: 7,
     is_paid: true,
     requires_approval: true,
-    carry_over: false,
-    max_carry_over_days: 0,
     color: '#2563eb',
     description: '',
     is_active: true,
@@ -75,8 +74,7 @@ function submit() {
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormSelect v-model="form.is_paid" :label="t('vacations.is_paid')" name="is_paid" :options="yesNoOptions" :error="errorFor('is_paid')" />
                     <FormSelect v-model="form.requires_approval" :label="t('vacations.requires_approval')" name="requires_approval" :options="yesNoOptions" :error="errorFor('requires_approval')" />
-                    <FormSelect v-model="form.carry_over" :label="t('vacations.carry_over')" name="carry_over" :options="yesNoOptions" :error="errorFor('carry_over')" />
-                    <FormInput v-model="form.max_carry_over_days" :label="t('vacations.max_carry_over_days')" name="max_carry_over_days" type="number" :error="errorFor('max_carry_over_days')" />
+                    <FormInput v-model="form.max_carry_days" :label="t('vacations.max_carry_days')" name="max_carry_days" type="number" :error="errorFor('max_carry_days')" />
                     <FormInput v-model="form.color" :label="t('vacations.color')" name="color" type="color" :error="errorFor('color')" />
                     <FormSelect v-model="form.is_active" :label="t('common.status')" name="is_active" :options="yesNoOptions" :error="errorFor('is_active')" />
                 </div>

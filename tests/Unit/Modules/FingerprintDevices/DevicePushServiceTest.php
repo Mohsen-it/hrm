@@ -2,14 +2,17 @@
 
 namespace Tests\Unit\Modules\FingerprintDevices;
 
+use App\Services\ZKTecoPythonBridgeService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Modules\AttendanceIntegration\Services\DeviceAdapterResolver;
 use Modules\FingerprintDevices\Models\FingerprintDevice;
 use Modules\FingerprintDevices\Models\FingerprintDeviceType;
+use Modules\FingerprintDevices\Models\UserFingerprint;
 use Modules\FingerprintDevices\Repositories\DevicePushResultRepository;
 use Modules\FingerprintDevices\Repositories\DeviceSyncLogRepository;
 use Modules\FingerprintDevices\Repositories\FingerprintDeviceRepository;
 use Modules\FingerprintDevices\Services\DevicePushService;
+use Modules\FingerprintDevices\Services\FaceTemplateDistributionService;
 use Modules\Users\Models\User;
 use Tests\TestCase;
 
@@ -24,6 +27,8 @@ class DevicePushServiceTest extends TestCase
             app(DeviceSyncLogRepository::class),
             app(DevicePushResultRepository::class),
             app(DeviceAdapterResolver::class),
+            app(FaceTemplateDistributionService::class),
+            app(ZKTecoPythonBridgeService::class),
         );
     }
 
@@ -145,5 +150,57 @@ class DevicePushServiceTest extends TestCase
         $this->assertTrue($hik->can_push_users);
         $this->assertTrue($hik->can_push_fingerprints);
         $this->assertTrue($hik->can_push_face_photos);
+    }
+
+    public function test_face_only_fingerprint_push_queues_adms_command_without_tcp_delivery(): void
+    {
+        $service = $this->makeService();
+        $source = $this->makeZktDevice();
+        $target = $this->makeZktDevice();
+        $user = User::create([
+            'employee_code' => 'FACE-001',
+            'name' => 'Face Employee',
+            'full_name_ar' => 'Face Employee',
+            'email' => 'face-employee@test.local',
+            'password' => bcrypt('password'),
+            'status' => 1,
+            'is_active_employee' => true,
+        ]);
+        $templateData = 'historical-face-template';
+
+        UserFingerprint::create([
+            'user_id' => $user->id,
+            'device_id' => $source->id,
+            'device_serial' => $source->serial_number,
+            'finger_id' => 50,
+            'template_data' => $templateData,
+            'template_hash' => hash('sha256', $templateData),
+            'template_format' => 'zkteco-face-push',
+            'template_type' => 'face',
+            'template_version' => 120,
+            'template_metadata' => [
+                'MajorVer' => 12,
+                'MinorVer' => 0,
+                'Format' => 0,
+            ],
+        ]);
+
+        $result = $service->push(
+            deviceId: $target->id,
+            options: [
+                'push_users' => false,
+                'push_fingerprints' => true,
+                'user_ids' => [$user->id],
+            ],
+        );
+
+        $this->assertTrue($result['success']);
+        $this->assertSame(1, $result['summary']['queued_face_templates']);
+        $this->assertSame(0, $result['summary']['pushed_face_templates']);
+        $this->assertDatabaseHas('device_commands', [
+            'device_id' => $target->id,
+            'command_type' => 'face_template',
+            'status' => 'pending',
+        ]);
     }
 }

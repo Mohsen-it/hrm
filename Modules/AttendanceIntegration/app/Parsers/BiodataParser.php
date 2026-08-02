@@ -23,6 +23,14 @@ namespace Modules\AttendanceIntegration\Parsers;
  */
 class BiodataParser
 {
+    /**
+     * iFace880 Plus mapping confirmed by the ADMS capture path.
+     *
+     * Type 2 is the only type admitted to the realtime face-template store.
+     * Type 0 is retained here as the legacy fingerprint designation, but is
+     * deliberately skipped by the face pipeline. Every other type is kept as
+     * `unknown_type_{value}` in logs and is skipped rather than guessed.
+     */
     public const TYPE_FINGERPRINT = 0;
 
     public const TYPE_FACE = 2;
@@ -37,6 +45,7 @@ class BiodataParser
      *     minor_ver: int,
      *     format: int,
      *     tmp: string,
+     *     extra_fields: array<string, string>,
      *     raw: string,
      * }>
      */
@@ -74,6 +83,7 @@ class BiodataParser
                     'minor_ver' => 0,
                     'format' => 0,
                     'tmp' => '',
+                    'extra_fields' => [],
                     '_raw_lines' => [],
                 ];
 
@@ -111,7 +121,8 @@ class BiodataParser
 
         if (preg_match_all('/(\w+)=(\S+)/i', $text, $matches, PREG_SET_ORDER)) {
             foreach ($matches as $match) {
-                $key = strtolower($match[1]);
+                $originalKey = $match[1];
+                $key = strtolower($originalKey);
                 $value = $match[2];
                 match ($key) {
                     'pin' => $current['pin'] = $value,
@@ -120,7 +131,7 @@ class BiodataParser
                     'minorver' => $current['minor_ver'] = (int) $value,
                     'format' => $current['format'] = (int) $value,
                     'tmp' => $current['tmp'] = $value,
-                    default => null,
+                    default => $current['extra_fields'][$originalKey] = $value,
                 };
             }
         }

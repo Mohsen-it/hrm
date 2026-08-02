@@ -59,6 +59,25 @@ class RotationAssignmentRepository
             ->get();
     }
 
+    /**
+     * Get every assignment whose date window overlaps the given inclusive range.
+     *
+     * Unlike getAssignmentsForDate (which only returns assignments active on a
+     * single day), this captures assignments that start or end mid-range so
+     * monthly schedule generation covers them correctly.
+     */
+    public function getAssignmentsOverlapping(string $from, string $to): Collection
+    {
+        return $this->query()
+            ->with($this->defaultWith)
+            ->where('start_date', '<=', $to)
+            ->where(function (Builder $q) use ($from): void {
+                $q->whereNull('end_date')
+                    ->orWhere('end_date', '>=', $from);
+            })
+            ->get();
+    }
+
     public function getAssignmentForDate(int $employeeId, string $date): ?RotationAssignment
     {
         return $this->query()

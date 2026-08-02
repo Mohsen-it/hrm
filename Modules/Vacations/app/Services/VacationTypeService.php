@@ -5,7 +5,7 @@ namespace Modules\Vacations\Services;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Str;
-use InvalidArgumentException;
+use Illuminate\Validation\ValidationException;
 use Modules\Vacations\Models\VacationType;
 use Modules\Vacations\Repositories\VacationTypeRepository;
 
@@ -74,7 +74,7 @@ class VacationTypeService
      *
      * @param  array<string, mixed>  $data
      *
-     * @throws InvalidArgumentException When the payload is invalid.
+     * @throws ValidationException When the payload is invalid.
      */
     public function createType(array $data): VacationType
     {
@@ -104,9 +104,9 @@ class VacationTypeService
         $protected = (string) config('vacations.annual_code', 'annual');
 
         if ($type->code === $protected) {
-            throw new InvalidArgumentException(
-                __('vacations.cannot_delete_protected_type', ['code' => $protected])
-            );
+            throw ValidationException::withMessages([
+                'vacation_type' => __('vacations.cannot_delete_protected_type', ['code' => $protected]),
+            ]);
         }
 
         return $this->repository->delete($type);
@@ -122,28 +122,28 @@ class VacationTypeService
      * @param  array<string, mixed>  $data
      * @return array<string, mixed>
      *
-     * @throws InvalidArgumentException When the payload is invalid.
+     * @throws ValidationException When the payload is invalid.
      */
     protected function validatePayload(array $data, ?VacationType $ignore): array
     {
         if (empty($data['code']) && empty($data['name_ar'])) {
-            throw new InvalidArgumentException(
-                __('vacations.code_or_name_required')
-            );
+            throw ValidationException::withMessages([
+                'name_ar' => __('vacations.code_or_name_required'),
+            ]);
         }
 
         $code = trim((string) ($data['code'] ?? Str::slug((string) ($data['name_ar'] ?? ''), '_')));
         if ($code === '') {
-            throw new InvalidArgumentException(
-                __('vacations.code_required')
-            );
+            throw ValidationException::withMessages([
+                'code' => __('vacations.code_required'),
+            ]);
         }
 
         $existing = $this->repository->findByCode($code);
         if ($existing && (! $ignore || $existing->id !== $ignore->id)) {
-            throw new InvalidArgumentException(
-                __('vacations.code_already_exists', ['code' => $code])
-            );
+            throw ValidationException::withMessages([
+                'code' => __('vacations.code_already_exists', ['code' => $code]),
+            ]);
         }
 
         $maxPerRequest = (int) ($data['max_days_per_request'] ?? 0);
@@ -151,15 +151,15 @@ class VacationTypeService
         $defaultDays = (int) ($data['default_days_per_year'] ?? 0);
 
         if ($maxPerRequest < 0 || $maxCarry < 0 || $defaultDays < 0) {
-            throw new InvalidArgumentException(
-                __('vacations.negative_days_not_allowed')
-            );
+            throw ValidationException::withMessages([
+                'max_days_per_request' => __('vacations.negative_days_not_allowed'),
+            ]);
         }
 
         if ($maxPerRequest > 0 && $maxPerRequest > $defaultDays + $maxCarry) {
-            throw new InvalidArgumentException(
-                __('vacations.max_per_request_exceeds_entitlement')
-            );
+            throw ValidationException::withMessages([
+                'max_days_per_request' => __('vacations.max_per_request_exceeds_entitlement'),
+            ]);
         }
 
         return [

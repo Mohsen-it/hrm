@@ -119,11 +119,13 @@ class AttendanceMonitoringService
      *     generated_at: string
      * }
      */
-    public function getHealthSnapshot(string $date): array
+    public function getHealthSnapshot(string $date, ?Collection $preFetchedLiveSessions = null): array
     {
+        $liveSessions = $preFetchedLiveSessions ?? $this->getLiveSessions($date);
+
         return [
             'date' => $date,
-            'live_sessions' => (int) $this->getLiveSessions($date)->count(),
+            'live_sessions' => (int) $liveSessions->count(),
             'missing_checkouts' => (int) $this->getMissingCheckouts($date)->count(),
             'unprocessed_raw_logs' => (int) RawAttendanceLog::unprocessed()
                 ->whereDate('punch_time', $date)

@@ -50,8 +50,10 @@ class ScheduleGenerationService
                 ]);
             }
 
-            // Get all active rotation assignments for the period
-            $assignments = $this->rotationAssignmentRepository->getAssignmentsForDate($periodStart->toDateString());
+            // Get every assignment overlapping the month so mid-month
+            // assignments (start/end inside the period) are covered too.
+            $assignments = $this->rotationAssignmentRepository
+                ->getAssignmentsOverlapping($periodStart->toDateString(), $periodEnd->toDateString());
 
             $entries = [];
 
@@ -62,8 +64,26 @@ class ScheduleGenerationService
                 $dutyCategoryId = $rotation->timeSchedule?->category?->id
                     ?? $rotation->timeSchedule?->categoryTimeSchedule?->shift_category_id;
 
+                $assignmentStart = Carbon::parse($assignment->start_date)->startOfDay();
+                $assignmentEnd = $assignment->end_date
+                    ? Carbon::parse($assignment->end_date)->startOfDay()
+                    : null;
+
                 $current = $periodStart->copy();
                 while ($current->lte($periodEnd)) {
+                    // Skip days outside this assignment's own validity window.
+                    if ($current->lt($assignmentStart)) {
+                        $current->addDay();
+
+                        continue;
+                    }
+
+                    if ($assignmentEnd && $current->gt($assignmentEnd)) {
+                        $current->addDay();
+
+                        continue;
+                    }
+
                     $isWork = $this->rotationEngine->isWorkDay($rotation, $group, $current);
 
                     $entries[] = [

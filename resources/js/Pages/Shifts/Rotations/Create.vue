@@ -37,9 +37,9 @@ const errorFor = (key) => errors.value[key] || '';
 const presets = [
     { label: 'Sunday-Thursday (Admin)', pattern: [1, 1, 1, 1, 1, 0, 0], groups: 1 },
     { label: '3 On / 9 Off', pattern: [1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0], groups: 4 },
-    { label: '24 On / 24 Off', pattern: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], groups: 4 },
+    { label: '24 On / 24 Off', pattern: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], groups: 2 },
     { label: '2 On / 2 Off', pattern: [1, 1, 0, 0], groups: 2 },
-    { label: '5 On / 2 Off', pattern: [1, 1, 1, 1, 1, 0, 0], groups: 3 },
+    { label: '5 On / 2 Off', pattern: [1, 1, 1, 1, 1, 0, 0], groups: 1 },
     { label: '1 On / 1 Off', pattern: [1, 0], groups: 2 },
     { label: '7 On / 7 Off', pattern: [1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0], groups: 2 },
 ];

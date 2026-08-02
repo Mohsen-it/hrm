@@ -5,6 +5,7 @@ namespace Modules\Vacations\Services;
 use DateTimeImmutable;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
 use Modules\Users\Models\User;
 use Modules\Vacations\Events\VacationApproved;
@@ -148,12 +149,12 @@ class VacationRequestService
         if ($type->deducts_from_balance) {
             $remaining = $balance->daysRemaining();
             if ($workingDays > $remaining) {
-                throw new InvalidArgumentException(
-                    __('vacations.insufficient_balance', [
+                throw ValidationException::withMessages([
+                    'vacation_type_id' => __('vacations.insufficient_balance', [
                         'remaining' => $remaining,
                         'requested' => $workingDays,
-                    ])
-                );
+                    ]),
+                ]);
             }
         }
 
@@ -247,12 +248,12 @@ class VacationRequestService
         if ($type->deducts_from_balance) {
             $remaining = $balance->daysRemaining();
             if ($newDays > $remaining) {
-                throw new InvalidArgumentException(
-                    __('vacations.insufficient_balance', [
+                throw ValidationException::withMessages([
+                    'vacation_type_id' => __('vacations.insufficient_balance', [
                         'remaining' => $remaining,
                         'requested' => $newDays,
-                    ])
-                );
+                    ]),
+                ]);
             }
             $balance = $this->balanceService->reserveDays(
                 (int) $request->user_id,

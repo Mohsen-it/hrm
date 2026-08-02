@@ -1,5 +1,5 @@
 <script setup>
-import { computed, watch } from 'vue';
+import { computed, onUnmounted, watch } from 'vue';
 import Card from './Card.vue';
 import Button from './Button.vue';
 import { useTranslations } from '@/composables/useTranslations';
@@ -35,12 +35,25 @@ function cancel() {
     close();
 }
 
+function onEsc(event) {
+    if (event.key === 'Escape' && isOpen.value) {
+        cancel();
+    }
+}
+
 watch(isOpen, (val) => {
     if (val) {
         document.body.style.overflow = 'hidden';
+        document.addEventListener('keydown', onEsc);
     } else {
         document.body.style.overflow = '';
+        document.removeEventListener('keydown', onEsc);
     }
+});
+
+onUnmounted(() => {
+    document.body.style.overflow = '';
+    document.removeEventListener('keydown', onEsc);
 });
 </script>
 
@@ -54,7 +67,7 @@ watch(isOpen, (val) => {
             leave-from-class="opacity-100"
             leave-to-class="opacity-0"
         >
-            <div v-if="isOpen" class="fixed inset-0 z-50 flex items-center justify-center p-4" :dir="dir">
+            <div v-if="isOpen" class="fixed inset-0 z-50 flex items-center justify-center p-4 max-sm:p-0" :dir="dir">
                 <div class="absolute inset-0 bg-mistral-ink/40 backdrop-blur-sm" @click="cancel"></div>
                 <Transition
                     enter-active-class="duration-200 ease-out"
@@ -68,7 +81,11 @@ watch(isOpen, (val) => {
                         v-if="isOpen"
                         variant="base"
                         padding="none"
-                        class="relative max-w-md w-full shadow-level-4 z-10"
+                        role="alertdialog"
+                        aria-modal="true"
+                        :aria-label="title"
+                        :dir="dir"
+                        class="relative z-10 w-full max-w-md overflow-hidden rounded-2xl shadow-level-4 max-sm:max-h-[100dvh] max-sm:max-w-full max-sm:rounded-none"
                     >
                         <div class="p-6 text-center">
                             <div

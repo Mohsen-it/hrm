@@ -22,6 +22,7 @@ use Modules\FingerprintDevices\Models\FingerprintDevice;
 use Modules\FingerprintDevices\Models\UserFingerprint;
 use Modules\FingerprintDevices\Services\FingerprintDeviceService;
 use Modules\Shifts\Models\Shift;
+use Modules\Shifts\Models\ShiftException;
 use Modules\Users\Models\User;
 use Modules\Vacations\Models\UserVacationRequest;
 
@@ -48,7 +49,7 @@ class DashboardController extends Controller
      */
     public function index(Request $request): Response
     {
-        $today = CarbonImmutable::now()->toDateString();
+        $today = $this->resolveDashboardDate($request);
 
         return Inertia::render('Dashboard', [
             'title' => __('menu.dashboard'),
@@ -60,9 +61,9 @@ class DashboardController extends Controller
     /**
      * Lightweight JSON endpoint for dashboard polling.
      */
-    public function snapshot(): JsonResponse
+    public function snapshot(Request $request): JsonResponse
     {
-        $today = CarbonImmutable::now()->toDateString();
+        $today = $this->resolveDashboardDate($request);
 
         return response()->json([
             'dashboard' => $this->getDashboardData($today),
@@ -136,24 +137,35 @@ class DashboardController extends Controller
      */
     private function getDashboardData(string $today): array
     {
-        return Cache::remember('dashboard:full_data', self::STATS_CACHE_TTL, function () use ($today): array {
+        return Cache::remember('dashboard:full_data:'.$today, self::STATS_CACHE_TTL, function () use ($today): array {
+            // Use a single query for active user IDs (needed for fingerprint check)
             $activeUserIds = User::query()
                 ->where('id', '!=', User::SUPER_ADMIN_ID)
                 ->where('status', 1)
                 ->where('is_active_employee', true)
-                ->pluck('id');
+                ->pluck('id')
+                ->all();
 
-            $employees = $activeUserIds->count();
+            $employees = count($activeUserIds);
 
             // Today's attendance KPIs
             $dailyKpis = $this->reportService->getDailyKpis($today);
 
-            // Live sessions (currently inside)
+            // Live sessions (currently inside) — fetch once, reuse for health
             $liveSessions = $this->monitoringService->getLiveSessions($today);
             $currentlyInside = $liveSessions->count();
 
-            // Currently outside = present - currently inside
-            $currentlyOutside = max(0, $dailyKpis['present'] - $currentlyInside);
+            // "Outside" is only meaningful for today. It is the verified set
+            // of people who checked in and subsequently checked out, not a
+            // subtraction that can be distorted by late/early-leave summaries.
+            $currentlyOutside = $today === CarbonImmutable::now()->toDateString()
+                ? (int) AttendanceSession::onDate($today)
+                    ->whereIn('user_id', $activeUserIds)
+                    ->whereNotNull('check_in_at')
+                    ->whereNotNull('check_out_at')
+                    ->distinct('user_id')
+                    ->count('user_id')
+                : 0;
 
             // On leave (approved vacation requests active today)
             $onLeave = (int) UserVacationRequest::approved()
@@ -164,25 +176,33 @@ class DashboardController extends Controller
             // Pending requests
             $pendingRequests = (int) UserVacationRequest::pending()->count();
 
+            // Approved mission exceptions are the official source for an
+            // employee's mission status; do not report an invented zero.
+            $onMission = (int) ShiftException::query()
+                ->active()
+                ->overlapping($today)
+                ->where('exception_type', 'mission')
+                ->whereIn('employee_id', $activeUserIds)
+                ->distinct('employee_id')
+                ->count('employee_id');
+
             // Late employees today
             $lateToday = $dailyKpis['late'] ?? 0;
 
             // Absent today
             $absentToday = $dailyKpis['absent'] ?? 0;
 
-            // Missing fingerprints (active users without any fingerprint template)
-            $usersWithFingerprints = UserFingerprint::whereIn('user_id', $activeUserIds)
-                ->distinct('user_id')
-                ->pluck('user_id')
-                ->all();
-            $missingFingerprints = $employees - count($usersWithFingerprints);
+            // Missing fingerprints — use COUNT subquery instead of loading all IDs
+            $missingFingerprints = $employees > 0
+                ? $employees - (int) UserFingerprint::whereIn('user_id', $activeUserIds)->distinct('user_id')->count('user_id')
+                : 0;
 
             // Active devices
             $activeDevices = (int) FingerprintDevice::where('status', 'online')->count();
             $totalDevices = (int) FingerprintDevice::where('status', '!=', 'deactivated')->count();
 
-            // System health
-            $health = $this->monitoringService->getHealthSnapshot($today);
+            // System health — pass pre-fetched liveSessions to avoid duplicate query
+            $health = $this->monitoringService->getHealthSnapshot($today, $liveSessions);
 
             // Weekly trend (last 7 days)
             $weekFrom = CarbonImmutable::parse($today)->subDays(6)->toDateString();
@@ -206,6 +226,7 @@ class DashboardController extends Controller
 
             // Shift overview
             $shiftOverview = $this->getShiftOverview($today);
+            $workforceBreakdown = $this->getWorkforceBreakdown($today);
 
             // Recent approvals (last 10 processed vacation requests)
             $recentApprovals = UserVacationRequest::with(['user', 'vacationType', 'manager'])
@@ -268,7 +289,7 @@ class DashboardController extends Controller
                 'inside' => $currentlyInside,
                 'outside' => $currentlyOutside,
                 'on_leave' => $onLeave,
-                'on_mission' => 0,
+                'on_mission' => $onMission,
                 'pending_requests' => $pendingRequests,
                 'active_devices' => $activeDevices,
                 'missing_fingerprints' => $missingFingerprints,
@@ -284,6 +305,7 @@ class DashboardController extends Controller
                 'monthlyKpis' => $monthlyKpis,
                 'topLate' => $topLate,
                 'shiftOverview' => $shiftOverview,
+                'workforceBreakdown' => $workforceBreakdown,
                 'recentApprovals' => $recentApprovals,
                 'recentSyncs' => $recentSyncs,
                 'anomalies' => $anomalies,
@@ -295,6 +317,91 @@ class DashboardController extends Controller
                 'totalDevices' => $totalDevices,
             ];
         });
+    }
+
+    /**
+     * Resolve the requested reporting date without accepting malformed input.
+     */
+    private function resolveDashboardDate(Request $request): string
+    {
+        $date = $request->query('date');
+
+        if (! is_string($date) || ! preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+            return CarbonImmutable::now()->toDateString();
+        }
+
+        try {
+            return CarbonImmutable::createFromFormat('!Y-m-d', $date)->toDateString();
+        } catch (\Throwable) {
+            return CarbonImmutable::now()->toDateString();
+        }
+    }
+
+    /**
+     * Provide a current, de-duplicated view of the workforce configuration.
+     *
+     * These counts intentionally use employee assignments that are valid on
+     * the selected date, so an expired rotation/category is never presented
+     * as an active operational assignment.
+     *
+     * @return array<string, array<int, array<string, int|string|null>>>
+     */
+    private function getWorkforceBreakdown(string $date): array
+    {
+        $activeEmployees = fn ($query) => $query
+            ->where('users.id', '!=', User::SUPER_ADMIN_ID)
+            ->where('users.status', 1)
+            ->where('users.is_active_employee', true);
+
+        $grades = $activeEmployees(DB::table('users'))
+            ->leftJoin('grades', 'grades.id', '=', 'users.grade_id')
+            ->groupBy('users.grade_id', 'grades.grade_name', 'grades.level')
+            ->orderBy('grades.level')
+            ->selectRaw('users.grade_id as id, grades.grade_name as name, grades.level, COUNT(*) as employees')
+            ->get()
+            ->map(fn ($row) => [
+                'id' => $row->id ? (int) $row->id : 0,
+                'name' => $row->name,
+                'level' => $row->level !== null ? (int) $row->level : null,
+                'employees' => (int) $row->employees,
+            ])->all();
+
+        $categories = $activeEmployees(DB::table('users'))
+            ->join('att_employee_shift_categories as assignments', function ($join) use ($date) {
+                $join->on('assignments.employee_id', '=', 'users.id')
+                    ->where('assignments.start_date', '<=', $date)
+                    ->where(fn ($query) => $query->whereNull('assignments.end_date')->orWhere('assignments.end_date', '>=', $date));
+            })
+            ->join('att_shift_categories as categories', 'categories.id', '=', 'assignments.shift_category_id')
+            ->groupBy('categories.id', 'categories.name', 'categories.type')
+            ->orderBy('categories.name')
+            ->selectRaw('categories.id, categories.name, categories.type, COUNT(DISTINCT users.id) as employees')
+            ->get()
+            ->map(fn ($row) => [
+                'id' => (int) $row->id,
+                'name' => $row->name,
+                'type' => $row->type,
+                'employees' => (int) $row->employees,
+            ])->all();
+
+        $rotations = $activeEmployees(DB::table('users'))
+            ->join('att_rotation_assignments as assignments', function ($join) use ($date) {
+                $join->on('assignments.employee_id', '=', 'users.id')
+                    ->where('assignments.start_date', '<=', $date)
+                    ->where(fn ($query) => $query->whereNull('assignments.end_date')->orWhere('assignments.end_date', '>=', $date));
+            })
+            ->join('att_rotations as rotations', 'rotations.id', '=', 'assignments.rotation_id')
+            ->groupBy('rotations.id', 'rotations.name')
+            ->orderBy('rotations.name')
+            ->selectRaw('rotations.id, rotations.name, COUNT(DISTINCT users.id) as employees')
+            ->get()
+            ->map(fn ($row) => [
+                'id' => (int) $row->id,
+                'name' => $row->name,
+                'employees' => (int) $row->employees,
+            ])->all();
+
+        return compact('grades', 'categories', 'rotations');
     }
 
     /**

@@ -3,7 +3,6 @@
 namespace Modules\Attendance\Console\Commands;
 
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\DB;
 use Modules\Attendance\Models\RawAttendanceLog;
 use Modules\Users\Models\User;
 
@@ -45,6 +44,7 @@ class ResolveRawLogUsersCommand extends Command
 
         if ($logs->isEmpty()) {
             $this->info('No raw logs with NULL user_id found.');
+
             return self::SUCCESS;
         }
 
@@ -60,6 +60,7 @@ class ResolveRawLogUsersCommand extends Command
 
                 if ($deviceUserId === '') {
                     $unresolved++;
+
                     continue;
                 }
 
@@ -70,6 +71,7 @@ class ResolveRawLogUsersCommand extends Command
                 if (! $user) {
                     $unresolved++;
                     $this->line("  ⚠ No user found for device_user_id: {$deviceUserId}");
+
                     continue;
                 }
 

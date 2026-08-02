@@ -28,7 +28,7 @@ class LogDeviceRequest
             'ip' => $request->ip(),
             'user_agent' => $request->userAgent(),
             'method' => $request->method(),
-            'payload_size' => strlen((string) json_encode($request->all())),
+            'payload_size' => $request->getContent() !== false ? strlen($request->getContent()) : 0,
             'timestamp' => now()->toIso8601String(),
         ]);
 

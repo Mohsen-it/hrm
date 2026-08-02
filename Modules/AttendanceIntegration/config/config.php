@@ -25,8 +25,13 @@ return [
     'push' => [
         'rate_limit' => (int) env('ATTENDANCE_PUSH_RATE_LIMIT', 60),
         'rate_decay' => (int) env('ATTENDANCE_PUSH_RATE_DECAY', 1),
+        'unlimited_ips' => array_values(array_filter(array_map(
+            'trim',
+            explode(',', (string) env('ATTENDANCE_PUSH_UNLIMITED_IPS', '127.0.0.1,::1'))
+        ))),
         'duplicate_window_seconds' => (int) env('ATTENDANCE_DUPLICATE_WINDOW_SECONDS', 30),
         'max_retry_attempts' => (int) env('ATTENDANCE_PUSH_MAX_RETRIES', 3),
+        'debug_snapshots' => (bool) env('ATTENDANCE_BIODATA_DEBUG_SNAPSHOTS', false),
     ],
 
     'live_feed' => [

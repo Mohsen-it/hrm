@@ -22,7 +22,8 @@ class UserFingerprint extends Model
     protected $fillable = [
         'user_id', 'device_id', 'finger_id', 'template_data',
         'template_format', 'template_version', 'quality',
-        'is_master', 'captured_at', 'synced_at',
+        'is_master', 'captured_at', 'synced_at', 'device_serial',
+        'template_type', 'template_index', 'face_template_set_id', 'template_hash', 'template_metadata',
     ];
 
     protected function casts(): array
@@ -31,11 +32,13 @@ class UserFingerprint extends Model
             'user_id' => 'integer',
             'device_id' => 'integer',
             'finger_id' => 'integer',
+            'template_index' => 'integer',
             'template_version' => 'integer',
             'quality' => 'integer',
             'is_master' => 'boolean',
             'captured_at' => 'datetime',
             'synced_at' => 'datetime',
+            'template_metadata' => 'array',
             'created_at' => 'datetime',
             'updated_at' => 'datetime',
             'deleted_at' => 'datetime',

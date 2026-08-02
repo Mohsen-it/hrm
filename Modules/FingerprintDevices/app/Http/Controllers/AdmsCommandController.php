@@ -5,7 +5,9 @@ namespace Modules\FingerprintDevices\Http\Controllers;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Rule;
 use Modules\FingerprintDevices\Models\FingerprintDevice;
 use Modules\FingerprintDevices\Repositories\DeviceCommandRepository;
 use Modules\FingerprintDevices\Services\DeviceCommandService;
@@ -30,7 +32,7 @@ class AdmsCommandController extends Controller
             return response()->json(['success' => false, 'error' => 'SN required'], 400);
         }
 
-        $device = FingerprintDevice::where('serial_number', $serial)->first();
+        $device = $this->findDeviceBySerial($serial);
         if (! $device) {
             Log::warning('ADMS_COMMANDS_UNKNOWN_DEVICE', ['SN' => $serial]);
 
@@ -56,7 +58,7 @@ class AdmsCommandController extends Controller
         $request->validate([
             'SN' => 'required|string',
             'command_id' => 'required|integer',
-            'status' => 'required|string',
+            'status' => ['required', 'string', Rule::in(['completed', 'success', 'failed'])],
             'result' => 'nullable|array',
             'error_message' => 'nullable|string',
         ]);
@@ -66,7 +68,21 @@ class AdmsCommandController extends Controller
         $status = $request->input('status');
         $errorMessage = $request->input('error_message');
 
-        $this->commandService->reportResult($commandId, $status, $errorMessage);
+        $device = $this->findDeviceBySerial($serial);
+        if (! $device) {
+            return response()->json(['success' => false, 'error' => 'Device not found'], 404);
+        }
+
+        $reported = $this->commandService->reportResult(
+            $commandId,
+            $device->id,
+            $status,
+            $errorMessage,
+        );
+
+        if (! $reported) {
+            return response()->json(['success' => false, 'error' => 'Command not found for device'], 404);
+        }
 
         Log::info('ADMS_COMMAND_RESULT', [
             'SN' => $serial,
@@ -92,7 +108,7 @@ class AdmsCommandController extends Controller
             return response()->json(['success' => false, 'error' => 'SN required'], 400);
         }
 
-        $device = FingerprintDevice::where('serial_number', $serial)->first();
+        $device = $this->findDeviceBySerial($serial);
         if (! $device) {
             Log::info('ADMS_HEARTBEAT_UNKNOWN_DEVICE', ['SN' => $serial, 'ip' => $ip]);
 
@@ -146,5 +162,35 @@ class AdmsCommandController extends Controller
             'success' => true,
             'cancelled' => $cancelled,
         ]);
+    }
+
+    /** Find a device by serial number. */
+    private function findDeviceBySerial(string $serial): ?FingerprintDevice
+    {
+        // The database cache store adds an extra query (and can contend with
+        // device polls), so production polling resolves through the indexed
+        // device query. Other stores may safely retain only the scalar ID.
+        if (config('cache.default') !== 'database') {
+            $cacheKey = 'adms:device:serial:'.$serial;
+            $cachedDeviceId = Cache::get($cacheKey);
+
+            if (is_int($cachedDeviceId)) {
+                return FingerprintDevice::find($cachedDeviceId);
+            }
+
+            $device = FingerprintDevice::query()
+                ->where('serial_number', $serial)
+                ->first();
+
+            if ($device) {
+                Cache::put($cacheKey, $device->id, now()->addMinutes(10));
+            }
+
+            return $device;
+        }
+
+        return FingerprintDevice::query()
+            ->where('serial_number', $serial)
+            ->first();
     }
 }

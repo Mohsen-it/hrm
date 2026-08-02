@@ -2,10 +2,10 @@
 
 use Illuminate\Support\Facades\Route;
 use Modules\Holidays\Http\Controllers\HolidaysController;
-use Modules\Vacations\Http\Controllers\VacationTypesController;
 use Modules\Vacations\Http\Controllers\MyVacationsController;
-use Modules\Vacations\Http\Controllers\VacationRequestsController;
 use Modules\Vacations\Http\Controllers\VacationBalancesController;
+use Modules\Vacations\Http\Controllers\VacationRequestsController;
+use Modules\Vacations\Http\Controllers\VacationTypesController;
 
 /*
 | Routes for the Vacations + Holidays modules.

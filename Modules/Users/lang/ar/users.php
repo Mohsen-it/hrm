@@ -10,6 +10,7 @@ return [
     'full_name_ar' => 'الاسم بالعربية',
     'full_name_en' => 'الاسم بالإنجليزية',
     'email' => 'البريد الإلكتروني',
+    'email_generated_from_employee_code' => 'يُنشأ تلقائياً من الرقم الوظيفي بصيغة @hrm.local',
     'password' => 'كلمة المرور',
     'password_confirmation' => 'تأكيد كلمة المرور',
     'national_id' => 'رقم الهوية',

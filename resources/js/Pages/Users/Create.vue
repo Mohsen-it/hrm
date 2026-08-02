@@ -116,6 +116,14 @@ watch(
     () => { form.department_id = ''; },
 );
 
+watch(
+    () => form.employee_code,
+    (employeeCode) => {
+        const normalizedCode = String(employeeCode ?? '').trim().toLowerCase();
+        form.email = normalizedCode ? `${normalizedCode}@hrm.local` : '';
+    },
+);
+
 function submit() {
     form.post(route('users.store'), {
         preserveScroll: true,
@@ -166,6 +174,8 @@ function submit() {
                         name="email"
                         type="email"
                         required
+                        readonly
+                        :hint="t('users.email_generated_from_employee_code')"
                         :error="form.errors.email"
                     />
                     <FormInput

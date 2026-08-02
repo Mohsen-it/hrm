@@ -10,6 +10,7 @@ return [
     'full_name_ar' => 'Full Name (AR)',
     'full_name_en' => 'Full Name (EN)',
     'email' => 'Email',
+    'email_generated_from_employee_code' => 'Generated automatically from the employee code using @hrm.local',
     'password' => 'Password',
     'password_confirmation' => 'Confirm Password',
     'national_id' => 'National ID',

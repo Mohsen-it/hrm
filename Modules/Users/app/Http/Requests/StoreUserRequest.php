@@ -129,6 +129,21 @@ class StoreUserRequest extends FormRequest
         ];
     }
 
+    /**
+     * Generate the internal email address from the employee code before validation.
+     */
+    protected function prepareForValidation(): void
+    {
+        $employeeCode = trim((string) $this->input('employee_code', ''));
+
+        if ($employeeCode !== '') {
+            $this->merge([
+                'employee_code' => $employeeCode,
+                'email' => strtolower($employeeCode).'@hrm.local',
+            ]);
+        }
+    }
+
     public function messages(): array
     {
         return [

@@ -134,6 +134,12 @@ class UserService
      */
     public function createUser(array $data): User
     {
+        $employeeCode = trim((string) ($data['employee_code'] ?? ''));
+        if ($employeeCode !== '') {
+            $data['employee_code'] = $employeeCode;
+            $data['email'] = strtolower($employeeCode).'@hrm.local';
+        }
+
         $validated = $this->validateUserData($data);
 
         if (isset($validated['avatar']) && $validated['avatar'] instanceof UploadedFile) {

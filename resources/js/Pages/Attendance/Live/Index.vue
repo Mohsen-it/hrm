@@ -1,10 +1,9 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import { PageHeader, Button, Card, StatCard, Badge, FormInput, Alert, DataTable } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
-import { useRealtimeAttendance } from '@/composables/useRealtimeAttendance';
 
 const { t } = useTranslations();
 const page = usePage();
@@ -24,26 +23,29 @@ const anomaliesData = ref([...(props.anomalies || [])]);
 const healthData = ref({ ...(props.health || {}) });
 const punchFeed = ref([]);
 
-const { isConnected, lastPunch, punchCount } = useRealtimeAttendance({
-    channel: 'attendance.live',
-    event: 'punch.received',
-    autoRefresh: false,
-    onPunch: (data) => {
-        const entry = {
-            id: 'punch_' + Date.now() + '_' + punchCount.value,
-            punch_time: data.punched_at,
-            punch_type: data.punch_type,
-            source: data.device?.name || 'device',
-            processed: true,
-            user: data.user,
-            device_user_id: data.user?.employee_code,
-        };
-        punchFeed.value.unshift(entry);
-        if (punchFeed.value.length > 100) {
-            punchFeed.value = punchFeed.value.slice(0, 100);
-        }
-    },
-});
+const isConnected = ref(false);
+const punchCount = ref(0);
+
+function syncRealtimeConnectionState() {
+    isConnected.value = window.Echo?.connector?.pusher?.connection?.state === 'connected';
+}
+
+function addLivePunch(data) {
+    punchCount.value++;
+    punchFeed.value.unshift({
+        id: `punch_${Date.now()}_${punchCount.value}`,
+        punch_time: data.punched_at,
+        punch_type: data.punch_type,
+        source: data.device?.name || 'device',
+        processed: true,
+        user: data.user,
+        device_user_id: data.user?.employee_code,
+    });
+
+    if (punchFeed.value.length > 100) {
+        punchFeed.value = punchFeed.value.slice(0, 100);
+    }
+}
 
 const flashSuccess = computed(() => page.props.flash?.success);
 
@@ -112,6 +114,14 @@ onMounted(() => {
     missingData.value = props.missing || [];
     anomaliesData.value = props.anomalies || [];
     healthData.value = props.health || {};
+    window.EventBus?.on('attendance:punch-received', addLivePunch);
+    syncRealtimeConnectionState();
+    window.Echo?.connector?.pusher?.connection?.bind('state_change', syncRealtimeConnectionState);
+});
+
+onUnmounted(() => {
+    window.EventBus?.off('attendance:punch-received', addLivePunch);
+    window.Echo?.connector?.pusher?.connection?.unbind('state_change', syncRealtimeConnectionState);
 });
 </script>
 

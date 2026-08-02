@@ -8,6 +8,7 @@ import Navbar from '@/Components/layout/Navbar.vue';
 import CommandPalette from '@/Components/navigation/CommandPalette.vue';
 import SunsetStripeBand from '@/Components/layout/SunsetStripeBand.vue';
 import LanguageSwitcher from '@/Components/LanguageSwitcher.vue';
+import { useRealtimeAttendance } from '@/composables/useRealtimeAttendance';
 
 defineProps({
     title: { type: String, default: '' },
@@ -33,6 +34,23 @@ const isMobile = ref(false);
 const isSidebarOpen = ref(false);
 const isSidebarCollapsed = ref(false);
 const isCommandPaletteOpen = ref(false);
+const livePunchNotification = ref(null);
+let livePunchNotificationTimer = null;
+
+const { isConnected: isRealtimeConnected } = useRealtimeAttendance({
+    onPunch: (punch) => {
+        livePunchNotification.value = punch;
+        window.EventBus?.emit('attendance:punch-received', punch);
+
+        if (livePunchNotificationTimer) {
+            window.clearTimeout(livePunchNotificationTimer);
+        }
+
+        livePunchNotificationTimer = window.setTimeout(() => {
+            livePunchNotification.value = null;
+        }, 6000);
+    },
+});
 
 function updateIsMobile() {
     isMobile.value = window.innerWidth < 768;
@@ -45,6 +63,9 @@ onMounted(() => {
 
 onUnmounted(() => {
     window.removeEventListener('resize', updateIsMobile);
+    if (livePunchNotificationTimer) {
+        window.clearTimeout(livePunchNotificationTimer);
+    }
 });
 
 const flashSuccess = computed(() => page.props.flash?.success);
@@ -155,5 +176,35 @@ watch(() => page.url, () => {
 
         <!-- Brand signature: sunset stripe band -->
         <SunsetStripeBand :dir="direction" />
+
+        <Transition
+            enter-active-class="transition duration-300 ease-out"
+            enter-from-class="translate-y-3 opacity-0"
+            enter-to-class="translate-y-0 opacity-100"
+            leave-active-class="transition duration-200 ease-in"
+            leave-from-class="translate-y-0 opacity-100"
+            leave-to-class="translate-y-3 opacity-0"
+        >
+            <button
+                v-if="livePunchNotification"
+                type="button"
+                class="fixed bottom-8 start-4 z-50 flex max-w-sm items-center gap-3 rounded-xl border border-mistral-primary/25 bg-white px-4 py-3 text-start shadow-lg"
+                @click="livePunchNotification = null"
+            >
+                <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-mistral-primary/10 text-mistral-primary">
+                    <i class="fas fa-fingerprint" aria-hidden="true"></i>
+                </span>
+                <span class="min-w-0">
+                    <span class="block text-sm font-semibold text-mistral-ink">
+                        {{ livePunchNotification.user?.name || livePunchNotification.user?.employee_code || 'موظف' }}
+                    </span>
+                    <span class="block text-xs text-mistral-steel">
+                        {{ livePunchNotification.punch_type === 'check_out' ? 'تم تسجيل انصراف' : 'تم تسجيل حضور' }}
+                        <span v-if="livePunchNotification.device?.name"> · {{ livePunchNotification.device.name }}</span>
+                    </span>
+                </span>
+                <span class="h-2 w-2 shrink-0 rounded-full bg-mistral-success" :class="isRealtimeConnected ? 'animate-pulse' : ''"></span>
+            </button>
+        </Transition>
     </div>
 </template>

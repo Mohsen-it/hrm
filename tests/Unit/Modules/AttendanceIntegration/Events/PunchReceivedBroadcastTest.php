@@ -2,6 +2,7 @@
 
 namespace Tests\Unit\Modules\AttendanceIntegration\Events;
 
+use Illuminate\Contracts\Events\ShouldDispatchAfterCommit;
 use Modules\Attendance\Models\AttendanceSession;
 use Modules\AttendanceIntegration\Contracts\AttendanceDeviceInterface;
 use Modules\AttendanceIntegration\DTOs\NormalizedPunch;
@@ -21,6 +22,14 @@ class PunchReceivedBroadcastTest extends TestCase
                 class_implements(PunchReceived::class),
                 true
             )
+        );
+    }
+
+    public function test_punch_received_is_dispatched_after_the_transaction_commits(): void
+    {
+        $this->assertContains(
+            ShouldDispatchAfterCommit::class,
+            class_implements(PunchReceived::class),
         );
     }
 

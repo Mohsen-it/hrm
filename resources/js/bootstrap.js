@@ -28,10 +28,19 @@ if (token) {
 
 /* ============================================================================
  * Laravel Echo — Realtime broadcasting via Reverb
- * (Disabled — run "php artisan reverb:start" to enable)
  * ========================================================================== */
-// import Echo from 'laravel-echo';
-// import Pusher from 'pusher-js';
-//
-// window.Pusher = Pusher;
-// window.Echo = new Echo({ ... });
+import Echo from 'laravel-echo';
+import Pusher from 'pusher-js';
+
+const reverbScheme = import.meta.env.VITE_REVERB_SCHEME ?? 'http';
+
+window.Pusher = Pusher;
+window.Echo = new Echo({
+    broadcaster: 'reverb',
+    key: import.meta.env.VITE_REVERB_APP_KEY,
+    wsHost: import.meta.env.VITE_REVERB_HOST ?? window.location.hostname,
+    wsPort: Number(import.meta.env.VITE_REVERB_PORT ?? 8080),
+    wssPort: Number(import.meta.env.VITE_REVERB_PORT ?? 8080),
+    forceTLS: reverbScheme === 'https',
+    enabledTransports: ['ws', 'wss'],
+});

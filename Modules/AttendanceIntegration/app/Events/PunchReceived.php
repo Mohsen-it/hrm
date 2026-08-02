@@ -5,6 +5,7 @@ namespace Modules\AttendanceIntegration\Events;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
+use Illuminate\Contracts\Events\ShouldDispatchAfterCommit;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 use Modules\Attendance\Models\AttendanceSession;
@@ -12,7 +13,7 @@ use Modules\AttendanceIntegration\Contracts\AttendanceDeviceInterface;
 use Modules\AttendanceIntegration\DTOs\NormalizedPunch;
 use Modules\Users\Models\User;
 
-class PunchReceived implements ShouldBroadcast
+class PunchReceived implements ShouldBroadcast, ShouldDispatchAfterCommit
 {
     use Dispatchable;
     use InteractsWithSockets;

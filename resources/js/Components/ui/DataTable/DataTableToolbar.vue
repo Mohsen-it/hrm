@@ -71,6 +71,8 @@ const filterableColumns = computed(() => {
     return props.columns.filter((c) => c.filterable);
 });
 
+const visibleColumnKeys = computed(() => new Set(props.visibleColumns.map((column) => column.key)));
+
 const hasSelection = computed(() => props.selectedIds.length > 0);
 
 function onFilterChange(key, value) {
@@ -233,7 +235,7 @@ function exportCSV() {
                                 >
                                     <input
                                         type="checkbox"
-                                        :checked="columnVisibility[col.key] !== false"
+                                        :checked="visibleColumnKeys.has(col.key)"
                                         class="w-3.5 h-3.5 rounded border-mistral-hairline-strong text-mistral-primary focus:ring-mistral-primary/20 cursor-pointer"
                                         @change="emit('toggle-column', col.key)"
                                     />

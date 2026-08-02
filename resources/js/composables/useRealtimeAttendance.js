@@ -5,7 +5,7 @@ export function useRealtimeAttendance(options = {}) {
     const {
         channel = 'attendance.live',
         event = 'punch.received',
-        autoRefresh = true,
+        autoRefresh = false,
         onPunch = null,
     } = options
 

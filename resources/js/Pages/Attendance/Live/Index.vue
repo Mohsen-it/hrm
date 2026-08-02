@@ -27,7 +27,7 @@ const punchFeed = ref([]);
 const { isConnected, lastPunch, punchCount } = useRealtimeAttendance({
     channel: 'attendance.live',
     event: 'punch.received',
-    autoRefresh: true,
+    autoRefresh: false,
     onPunch: (data) => {
         const entry = {
             id: 'punch_' + Date.now() + '_' + punchCount.value,

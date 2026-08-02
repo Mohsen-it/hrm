@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
+import { ref, computed } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import PageHeader from '@/Components/ui/PageHeader.vue';
@@ -22,7 +22,6 @@ const props = defineProps({
 
 const showDelete = ref(false);
 const selectedLog = ref(null);
-let pollHandle = null;
 
 const punchTypeOptions = [
     { value: 'check_in', label: t('attendance.punch_type.check_in') },
@@ -106,22 +105,6 @@ function markProcessed(id) {
         preserveScroll: true,
     });
 }
-
-function poll() {
-    router.reload({
-        only: ['logs'],
-        preserveScroll: true,
-        preserveState: true,
-    });
-}
-
-onMounted(() => {
-    pollHandle = setInterval(poll, 10000);
-});
-
-onBeforeUnmount(() => {
-    if (pollHandle) clearInterval(pollHandle);
-});
 
 const flashSuccess = computed(() => page.props.flash?.success);
 </script>

@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use Inertia\Middleware;
 use Nwidart\Modules\Facades\Module;
 use Tighten\Ziggy\Ziggy;
@@ -69,40 +70,65 @@ class HandleInertiaRequests extends Middleware
     /**
      * Load translation messages for the given locale.
      *
+     * A corrupted cache blob (e.g. an interrupted write to the database cache)
+     * must never take the whole application down: if the cached value cannot be
+     * unserialized, the bad key is dropped and the translations are rebuilt.
+     *
      * @return array<string, mixed>
      */
     protected function loadTranslations(string $locale): array
     {
         $cacheKey = "inertia:translations:{$locale}";
 
-        return Cache::remember($cacheKey, 3600, function () use ($locale) {
-            $paths = [
-                lang_path("{$locale}/common.php"),
-                lang_path("{$locale}/menu.php"),
-                lang_path("{$locale}/dashboard.php"),
-                lang_path("{$locale}/components.php"),
-                lang_path("{$locale}/permissions.php"),
-                lang_path("{$locale}/roles.php"),
-                lang_path("{$locale}/actions.php"),
-                lang_path("{$locale}/general.php"),
-                lang_path("{$locale}/validation.php"),
-            ];
+        try {
+            return Cache::remember($cacheKey, 3600, function () use ($locale) {
+                return $this->buildTranslations($locale);
+            });
+        } catch (\Throwable $exception) {
+            Log::warning('Translations cache failure; rebuilding fresh', [
+                'locale' => $locale,
+                'error' => $exception->getMessage(),
+            ]);
 
-            $translations = [];
+            Cache::forget($cacheKey);
 
-            foreach ($paths as $path) {
-                if (is_file($path)) {
-                    $key = basename($path, '.php');
-                    $translations[$key] = require $path;
-                }
+            return $this->buildTranslations($locale);
+        }
+    }
+
+    /**
+     * Build the translation payload for the given locale.
+     *
+     * @return array<string, mixed>
+     */
+    protected function buildTranslations(string $locale): array
+    {
+        $paths = [
+            lang_path("{$locale}/common.php"),
+            lang_path("{$locale}/menu.php"),
+            lang_path("{$locale}/dashboard.php"),
+            lang_path("{$locale}/components.php"),
+            lang_path("{$locale}/permissions.php"),
+            lang_path("{$locale}/roles.php"),
+            lang_path("{$locale}/actions.php"),
+            lang_path("{$locale}/general.php"),
+            lang_path("{$locale}/validation.php"),
+        ];
+
+        $translations = [];
+
+        foreach ($paths as $path) {
+            if (is_file($path)) {
+                $key = basename($path, '.php');
+                $translations[$key] = require $path;
             }
+        }
 
-            foreach ($this->getModuleLangFiles($locale) as $module => $messages) {
-                $translations[$module] = $messages;
-            }
+        foreach ($this->getModuleLangFiles($locale) as $module => $messages) {
+            $translations[$module] = $messages;
+        }
 
-            return $translations;
-        });
+        return $translations;
     }
 
     /**

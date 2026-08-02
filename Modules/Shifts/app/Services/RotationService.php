@@ -105,45 +105,48 @@ class RotationService
      */
     public function update(int $id, array $data): Rotation
     {
-        $rotation = $this->rotationRepository->findById($id);
+        return DB::transaction(function () use ($id, $data) {
+            $rotation = $this->rotationRepository->findById($id);
 
-        if (! $rotation) {
-            throw ValidationException::withMessages([
-                'id' => [__('shifts.rotation_not_found')],
-            ]);
-        }
-
-        if (isset($data['pattern'])) {
-            $pattern = $data['pattern'];
-            $data['cycle_length'] = count($pattern);
-            $data['work_days_count'] = array_sum($pattern);
-            $data['rest_days_count'] = $data['cycle_length'] - $data['work_days_count'];
-
-            if ($data['work_days_count'] < 1) {
+            if (! $rotation) {
                 throw ValidationException::withMessages([
-                    'pattern' => [__('shifts.rotation_pattern_requires_work_day')],
+                    'id' => [__('shifts.rotation_not_found')],
                 ]);
             }
 
-            // Rebalance group indices sequentially so the engine's
-            // `group_index * work_days_count` offset stays correct after a
-            // pattern change (previously indices kept stale values).
-            // Only runs when the pattern actually changes so a plain name/
-            // settings edit never alters existing schedules.
-            $patternChanged = $pattern !== ($rotation->pattern ?? []);
+            if (isset($data['pattern'])) {
+                $pattern = $data['pattern'];
+                $data['cycle_length'] = count($pattern);
+                $data['work_days_count'] = array_sum($pattern);
+                $data['rest_days_count'] = $data['cycle_length'] - $data['work_days_count'];
 
-            if ($patternChanged) {
-                $rotation->groups()->orderBy('group_index')->get()
-                    ->values()
-                    ->each(function (RotationGroup $group, int $i): void {
-                        $group->update(['group_index' => $i]);
-                    });
+                if ($data['work_days_count'] < 1) {
+                    throw ValidationException::withMessages([
+                        'pattern' => [__('shifts.rotation_pattern_requires_work_day')],
+                    ]);
+                }
+
+                // Rebalance group indices sequentially so the engine's
+                // `group_index * work_days_count` offset stays correct after a
+                // pattern change (previously indices kept stale values).
+                // Only runs when the pattern actually changes so a plain name/
+                // settings edit never alters existing schedules. Wrapped in a
+                // transaction so the rotation update and the rebalance are atomic.
+                $patternChanged = $pattern !== ($rotation->pattern ?? []);
+
+                if ($patternChanged) {
+                    $rotation->groups()->orderBy('group_index')->get()
+                        ->values()
+                        ->each(function (RotationGroup $group, int $i): void {
+                            $group->update(['group_index' => $i]);
+                        });
+                }
             }
-        }
 
-        $rotation = $this->rotationRepository->update($rotation, $data);
+            $rotation = $this->rotationRepository->update($rotation, $data);
 
-        return $rotation;
+            return $rotation;
+        });
     }
 
     /**

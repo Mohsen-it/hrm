@@ -12,7 +12,6 @@ use Inertia\Response;
 use Modules\Attendance\Exports\LiveAttendanceExport;
 use Modules\Attendance\Http\Resources\AttendanceSessionResource;
 use Modules\Attendance\Http\Resources\RawAttendanceLogResource;
-use Modules\Attendance\Models\RawAttendanceLog;
 use Modules\Attendance\Services\AttendanceMonitoringService;
 use Modules\Attendance\Services\AttendanceNotificationService;
 
@@ -144,14 +143,7 @@ class LiveAttendanceController extends Controller
         $limit = min((int) $request->input('limit', 100), 500);
         $date = $request->input('date');
 
-        $query = RawAttendanceLog::with(['user', 'device'])
-            ->orderByDesc('punch_time');
-
-        if ($date) {
-            $query->whereDate('punch_time', $date);
-        }
-
-        $logs = $query->limit($limit)->get();
+        $logs = $this->monitoring->getRecentPunches($limit, $date ? (string) $date : null);
 
         return response()->json([
             'punches' => RawAttendanceLogResource::collection($logs)->resolve(),

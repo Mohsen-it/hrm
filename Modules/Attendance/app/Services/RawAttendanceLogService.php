@@ -32,6 +32,7 @@ class RawAttendanceLogService
     public function __construct(
         private RawAttendanceLogRepository $repository,
         private AttendanceSessionService $sessionService,
+        private AttendanceCacheService $cache,
     ) {}
 
     // ------------------------------------------------------------------
@@ -111,7 +112,10 @@ class RawAttendanceLogService
     {
         $validated = $this->validateLogData($data);
 
-        return $this->repository->create($this->applyTimestamps($validated));
+        $log = $this->repository->create($this->applyTimestamps($validated));
+        $this->cache->flush();
+
+        return $log;
     }
 
     /**
@@ -175,6 +179,7 @@ class RawAttendanceLogService
 
         if (! empty($batch)) {
             $inserted = $this->repository->bulkInsert($batch);
+            $this->cache->flush();
         }
 
         return [
@@ -262,7 +267,13 @@ class RawAttendanceLogService
      */
     public function markProcessed(array $ids, ?\DateTimeInterface $at = null): int
     {
-        return $this->repository->markProcessed($ids, $at);
+        $updated = $this->repository->markProcessed($ids, $at);
+
+        if ($updated > 0) {
+            $this->cache->flush();
+        }
+
+        return $updated;
     }
 
     /**
@@ -270,7 +281,13 @@ class RawAttendanceLogService
      */
     public function deleteLog(RawAttendanceLog $log): bool
     {
-        return $this->repository->delete($log);
+        $deleted = $this->repository->delete($log);
+
+        if ($deleted) {
+            $this->cache->flush();
+        }
+
+        return $deleted;
     }
 
     // ------------------------------------------------------------------

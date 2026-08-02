@@ -5,6 +5,7 @@ namespace Modules\Companies\Services;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
@@ -13,6 +14,13 @@ use Modules\Companies\Repositories\CompanyRepository;
 
 class CompanyService
 {
+    /**
+     * Versioned to bypass legacy cache entries that serialized Eloquent models.
+     */
+    private const ACTIVE_COMPANIES_CACHE_KEY = 'lookup:companies:active:v2';
+
+    private const LOOKUP_CACHE_TTL = 3600;
+
     public function __construct(
         private CompanyRepository $repository
     ) {}
@@ -34,7 +42,16 @@ class CompanyService
      */
     public function getActiveCompanies(): Collection
     {
-        return $this->repository->getActive();
+        /** @var array<int, array<string, mixed>> $companies */
+        $companies = Cache::remember(
+            self::ACTIVE_COMPANIES_CACHE_KEY,
+            self::LOOKUP_CACHE_TTL,
+            fn (): array => $this->repository->getActive()
+                ->map(fn (Company $company): array => $company->getAttributes())
+                ->all(),
+        );
+
+        return Company::hydrate($companies);
     }
 
     /**
@@ -66,6 +83,8 @@ class CompanyService
             $this->ensureOnlyOneDefault($company);
         }
 
+        $this->forgetActiveCompaniesCache();
+
         return $company;
     }
 
@@ -90,6 +109,8 @@ class CompanyService
             $this->ensureOnlyOneDefault($company);
         }
 
+        $this->forgetActiveCompaniesCache();
+
         return $company;
     }
 
@@ -98,7 +119,13 @@ class CompanyService
      */
     public function deleteCompany(Company $company): bool
     {
-        return $this->repository->delete($company);
+        $deleted = $this->repository->delete($company);
+
+        if ($deleted) {
+            $this->forgetActiveCompaniesCache();
+        }
+
+        return $deleted;
     }
 
     /**
@@ -158,5 +185,14 @@ class CompanyService
             ->where('id', '!=', $company->id)
             ->where('is_default', true)
             ->update(['is_default' => false]);
+    }
+
+    /**
+     * Invalidate the read-mostly company lookup after a write.
+     */
+    private function forgetActiveCompaniesCache(): void
+    {
+        Cache::forget(self::ACTIVE_COMPANIES_CACHE_KEY);
+        Cache::forget('lookup:companies:active');
     }
 }

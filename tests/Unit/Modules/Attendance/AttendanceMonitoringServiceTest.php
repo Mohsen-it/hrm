@@ -3,7 +3,10 @@
 namespace Tests\Unit\Modules\Attendance;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Modules\Attendance\Models\AttendanceSession;
+use Modules\Attendance\Services\AttendanceCacheService;
 use Modules\Attendance\Services\AttendanceMonitoringService;
+use Modules\Users\Models\User;
 use Tests\TestCase;
 
 /**
@@ -88,5 +91,38 @@ class AttendanceMonitoringServiceTest extends TestCase
         $this->assertArrayHasKey('absent_count', $result);
         $this->assertArrayHasKey('total', $result);
         $this->assertArrayHasKey('ratio', $result);
+    }
+
+    /**
+     * Smart-absence counting is performed in the database and excludes
+     * active employees who already have a session on the requested date.
+     */
+    public function test_employees_without_session_excludes_employees_with_a_session(): void
+    {
+        $date = '2026-08-02';
+        $cache = app(AttendanceCacheService::class);
+        $cache->forget($cache->key('without_session', [$date]));
+        $withoutSession = User::factory()->create([
+            'status' => 1,
+            'is_active_employee' => true,
+        ]);
+        $withSession = User::factory()->create([
+            'status' => 1,
+            'is_active_employee' => true,
+        ]);
+
+        AttendanceSession::create([
+            'user_id' => $withSession->id,
+            'attendance_date' => $date,
+            'check_in_at' => $date.' 08:00:00',
+        ]);
+
+        $this->assertSame(1, $withSession->attendanceSessions()->count());
+        $this->assertSame(1, User::query()
+            ->active()
+            ->whereDoesntHave('attendanceSessions', fn ($query) => $query->onDate($date))
+            ->count());
+        $this->assertSame(1, $this->service->getEmployeesWithoutSession($date));
+        $this->assertNotSame($withSession->id, $withoutSession->id);
     }
 }

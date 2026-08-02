@@ -4,11 +4,13 @@ namespace Modules\Attendance\Services;
 
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Collection;
-use Illuminate\Support\Facades\DB;
 use Modules\Attendance\Models\AttendanceSession;
 use Modules\Attendance\Models\DailyAttendanceSummary;
 use Modules\Attendance\Models\RawAttendanceLog;
-use Modules\Users\Models\User;
+use Modules\Attendance\Repositories\AttendanceSessionRepository;
+use Modules\Attendance\Repositories\DailyAttendanceSummaryRepository;
+use Modules\Attendance\Repositories\RawAttendanceLogRepository;
+use Modules\Users\Repositories\UserRepository;
 
 /**
  * AttendanceMonitoringService — real-time and near-real-time views.
@@ -35,6 +37,10 @@ class AttendanceMonitoringService
      */
     public function __construct(
         private AttendanceCacheService $cache,
+        private AttendanceSessionRepository $sessionRepository,
+        private DailyAttendanceSummaryRepository $summaryRepository,
+        private RawAttendanceLogRepository $rawLogRepository,
+        private UserRepository $userRepository,
     ) {}
 
     // ------------------------------------------------------------------
@@ -52,7 +58,8 @@ class AttendanceMonitoringService
         $cacheKey = $this->cache->key('live_sessions', [$date, $limit]);
 
         return $this->cache->remember($cacheKey, function () use ($date, $limit): Collection {
-            return AttendanceSession::onDate($date)
+            return $this->sessionRepository->query()
+                ->onDate($date)
                 ->open()
                 ->with(['user', 'shift'])
                 ->orderBy('check_in_at')
@@ -74,7 +81,8 @@ class AttendanceMonitoringService
         return $this->cache->remember($cacheKey, function () use ($date, $thresholdMinutes): Collection {
             $threshold = CarbonImmutable::now()->subMinutes($thresholdMinutes);
 
-            return AttendanceSession::onDate($date)
+            return $this->sessionRepository->query()
+                ->onDate($date)
                 ->whereNotNull('check_in_at')
                 ->whereNull('check_out_at')
                 ->where('check_in_at', '<=', $threshold)
@@ -94,7 +102,8 @@ class AttendanceMonitoringService
         $cacheKey = $this->cache->key('anomalies', [$date, $limit]);
 
         return $this->cache->remember($cacheKey, function () use ($date, $limit): Collection {
-            return DailyAttendanceSummary::onDate($date)
+            return $this->summaryRepository->query()
+                ->onDate($date)
                 ->whereIn('status', ['missing_punch', 'absent'])
                 ->with(['user', 'shift'])
                 ->orderBy('late_minutes', 'desc')
@@ -127,9 +136,7 @@ class AttendanceMonitoringService
             'date' => $date,
             'live_sessions' => (int) $liveSessions->count(),
             'missing_checkouts' => (int) $this->getMissingCheckouts($date)->count(),
-            'unprocessed_raw_logs' => (int) RawAttendanceLog::unprocessed()
-                ->whereDate('punch_time', $date)
-                ->count(),
+            'unprocessed_raw_logs' => $this->getUnprocessedRawLogCount($date),
             'anomalies' => (int) $this->getAnomalies($date)->count(),
             'generated_at' => CarbonImmutable::now()->toDateTimeString(),
         ];
@@ -146,13 +153,13 @@ class AttendanceMonitoringService
         $cacheKey = $this->cache->key('mass_lateness', [$date, $ratio]);
 
         return $this->cache->remember($cacheKey, function () use ($date, $ratio): array {
-            $total = (int) DB::table('daily_attendance_summaries')
-                ->where('summary_date', $date)
+            $total = (int) $this->summaryRepository->query()
+                ->onDate($date)
                 ->whereIn('status', ['present', 'late', 'early_leave', 'missing_punch', 'absent'])
                 ->count();
 
-            $late = (int) DB::table('daily_attendance_summaries')
-                ->where('summary_date', $date)
+            $late = (int) $this->summaryRepository->query()
+                ->onDate($date)
                 ->where('status', 'late')
                 ->count();
 
@@ -180,13 +187,13 @@ class AttendanceMonitoringService
         $cacheKey = $this->cache->key('mass_absence', [$date, $ratio]);
 
         return $this->cache->remember($cacheKey, function () use ($date, $ratio): array {
-            $total = (int) DB::table('daily_attendance_summaries')
-                ->where('summary_date', $date)
+            $total = (int) $this->summaryRepository->query()
+                ->onDate($date)
                 ->whereIn('status', ['present', 'late', 'early_leave', 'missing_punch', 'absent'])
                 ->count();
 
-            $absent = (int) DB::table('daily_attendance_summaries')
-                ->where('summary_date', $date)
+            $absent = (int) $this->summaryRepository->query()
+                ->onDate($date)
                 ->where('status', 'absent')
                 ->count();
 
@@ -218,14 +225,8 @@ class AttendanceMonitoringService
         $cacheKey = $this->cache->key('unprocessed_raw_summary', [$date]);
 
         return $this->cache->remember($cacheKey, function () use ($date): array {
-            $rows = RawAttendanceLog::unprocessed()
-                ->whereDate('punch_time', $date)
-                ->groupBy('source')
-                ->selectRaw('source, COUNT(*) as c')
-                ->pluck('c', 'source')
-                ->all();
-
-            $bySource = array_map('intval', $rows);
+            [$from, $to] = $this->dayRange($date);
+            $bySource = $this->rawLogRepository->countUnprocessedBySourceBetween($from, $to);
 
             return [
                 'date' => $date,
@@ -243,23 +244,53 @@ class AttendanceMonitoringService
         $cacheKey = $this->cache->key('without_session', [$date]);
 
         return $this->cache->remember($cacheKey, function () use ($date): int {
-            $activeIds = User::where('id', '!=', User::SUPER_ADMIN_ID)
-                ->where('status', 1)
-                ->where('is_active_employee', true)
-                ->pluck('id')
-                ->all();
-
-            if (empty($activeIds)) {
-                return 0;
-            }
-
-            $presentIds = AttendanceSession::onDate($date)
-                ->whereIn('user_id', $activeIds)
-                ->pluck('user_id')
-                ->unique()
-                ->all();
-
-            return count(array_diff($activeIds, $presentIds));
+            return $this->userRepository->query()
+                ->withoutSuperAdmin()
+                ->active()
+                ->whereDoesntHave('attendanceSessions', fn ($query) => $query->onDate($date))
+                ->count();
         });
+    }
+
+    /**
+     * Return recent device punches for the live feed.
+     *
+     * @return Collection<int, RawAttendanceLog>
+     */
+    public function getRecentPunches(int $limit = 100, ?string $date = null): Collection
+    {
+        $dateRange = $date ? $this->dayRange($date) : null;
+
+        return $this->rawLogRepository->getRecent(
+            $limit,
+            $dateRange[0] ?? null,
+            $dateRange[1] ?? null,
+        );
+    }
+
+    /**
+     * Count unprocessed logs for a date using the composite processing index.
+     */
+    protected function getUnprocessedRawLogCount(string $date): int
+    {
+        $cacheKey = $this->cache->key('unprocessed_raw_count', [$date]);
+
+        return $this->cache->remember($cacheKey, function () use ($date): int {
+            [$from, $to] = $this->dayRange($date);
+
+            return $this->rawLogRepository->countUnprocessedBetween($from, $to);
+        });
+    }
+
+    /**
+     * Build an inclusive, index-friendly timestamp range for a calendar day.
+     *
+     * @return array{0: string, 1: string}
+     */
+    protected function dayRange(string $date): array
+    {
+        $day = CarbonImmutable::parse($date)->startOfDay();
+
+        return [$day->toDateTimeString(), $day->endOfDay()->toDateTimeString()];
     }
 }

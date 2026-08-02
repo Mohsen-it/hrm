@@ -100,7 +100,10 @@ class DailyAttendanceSummary extends Model
      */
     public function scopeOnDate(Builder $query, string $date): Builder
     {
-        return $query->where('summary_date', $date);
+        return $query->whereBetween('summary_date', [
+            $date.' 00:00:00',
+            $date.' 23:59:59',
+        ]);
     }
 
     /**

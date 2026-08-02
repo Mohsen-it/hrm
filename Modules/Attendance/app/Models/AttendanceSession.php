@@ -130,7 +130,10 @@ class AttendanceSession extends Model
      */
     public function scopeOnDate(Builder $query, string $date): Builder
     {
-        return $query->where('attendance_date', $date);
+        return $query->whereBetween('attendance_date', [
+            $date.' 00:00:00',
+            $date.' 23:59:59',
+        ]);
     }
 
     /**

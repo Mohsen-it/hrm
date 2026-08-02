@@ -117,6 +117,50 @@ class RawAttendanceLogRepository
     }
 
     /**
+     * Count unprocessed logs inside one calendar day without wrapping the
+     * indexed `punch_time` column in a database function.
+     */
+    public function countUnprocessedBetween(string $from, string $to): int
+    {
+        return $this->query()
+            ->unprocessed()
+            ->whereBetween('punch_time', [$from, $to])
+            ->count();
+    }
+
+    /**
+     * Get the most recent logs, optionally restricted to an indexed time range.
+     *
+     * @return Collection<int, RawAttendanceLog>
+     */
+    public function getRecent(int $limit, ?string $from = null, ?string $to = null): Collection
+    {
+        return $this->query()
+            ->with($this->defaultWith)
+            ->when($from && $to, fn (Builder $query) => $query->whereBetween('punch_time', [$from, $to]))
+            ->latest('punch_time')
+            ->limit($limit)
+            ->get();
+    }
+
+    /**
+     * Group unprocessed logs by source inside an indexed time range.
+     *
+     * @return array<string, int>
+     */
+    public function countUnprocessedBySourceBetween(string $from, string $to): array
+    {
+        return $this->query()
+            ->unprocessed()
+            ->whereBetween('punch_time', [$from, $to])
+            ->groupBy('source')
+            ->selectRaw('source, COUNT(*) as count')
+            ->pluck('count', 'source')
+            ->map(fn ($count) => (int) $count)
+            ->all();
+    }
+
+    /**
      * Persist a single raw log row.
      *
      * @param  array<string, mixed>  $data

@@ -38,7 +38,7 @@ class CompanyRepository
     {
         return $this->query()
             ->active()
-            ->with('branches')
+            ->orderBy('company_name')
             ->get();
     }
 

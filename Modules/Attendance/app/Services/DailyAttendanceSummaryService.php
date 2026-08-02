@@ -30,6 +30,7 @@ class DailyAttendanceSummaryService
     public function __construct(
         private DailyAttendanceSummaryRepository $repository,
         private ScheduleResolverService $scheduleResolver,
+        private AttendanceCacheService $cache,
     ) {}
 
     // ------------------------------------------------------------------
@@ -87,7 +88,10 @@ class DailyAttendanceSummaryService
             return $summary;
         }
 
-        return $this->repository->update($summary, $patch);
+        $updated = $this->repository->update($summary, $patch);
+        $this->cache->flush();
+
+        return $updated;
     }
 
     // ------------------------------------------------------------------
@@ -137,6 +141,8 @@ class DailyAttendanceSummaryService
             ['user_id' => $userId, 'summary_date' => $date],
             $payload,
         );
+
+        $this->cache->flush();
 
         return DailyAttendanceSummary::forUser($userId)
             ->onDate($date)

@@ -4,6 +4,7 @@ namespace Modules\Branches\Services;
 
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 use Modules\Branches\Models\Branch;
@@ -11,6 +12,15 @@ use Modules\Branches\Repositories\BranchRepository;
 
 class BranchService
 {
+    /**
+     * Versioned to bypass legacy cache entries that serialized Eloquent models.
+     */
+    private const ACTIVE_BRANCHES_CACHE_KEY = 'lookup:branches:active:v2';
+
+    private const COMPANY_BRANCHES_CACHE_PREFIX = 'lookup:branches:company:v2:';
+
+    private const LOOKUP_CACHE_TTL = 3600;
+
     public function __construct(
         private BranchRepository $repository
     ) {}
@@ -32,7 +42,16 @@ class BranchService
      */
     public function getActiveBranches(): Collection
     {
-        return $this->repository->getActive();
+        /** @var array<int, array<string, mixed>> $branches */
+        $branches = Cache::remember(
+            self::ACTIVE_BRANCHES_CACHE_KEY,
+            self::LOOKUP_CACHE_TTL,
+            fn (): array => $this->repository->getActive()
+                ->map(fn (Branch $branch): array => $branch->getAttributes())
+                ->all(),
+        );
+
+        return Branch::hydrate($branches);
     }
 
     /**
@@ -42,7 +61,16 @@ class BranchService
      */
     public function getBranchesByCompany(int $companyId): Collection
     {
-        return $this->repository->getByCompany($companyId);
+        /** @var array<int, array<string, mixed>> $branches */
+        $branches = Cache::remember(
+            self::companyBranchesCacheKey($companyId),
+            self::LOOKUP_CACHE_TTL,
+            fn (): array => $this->repository->getByCompany($companyId)
+                ->map(fn (Branch $branch): array => $branch->getAttributes())
+                ->all(),
+        );
+
+        return Branch::hydrate($branches);
     }
 
     /**
@@ -70,6 +98,8 @@ class BranchService
             $this->ensureOnlyOneMain($branch);
         }
 
+        $this->forgetBranchLookupCaches($branch->company_id);
+
         return $branch;
     }
 
@@ -82,6 +112,7 @@ class BranchService
      */
     public function updateBranch(Branch $branch, array $data): Branch
     {
+        $previousCompanyId = $branch->company_id;
         $validated = $this->validateBranchData($data, $branch->id);
 
         $branch = $this->repository->update($branch, $validated);
@@ -89,6 +120,8 @@ class BranchService
         if ($branch->is_main) {
             $this->ensureOnlyOneMain($branch);
         }
+
+        $this->forgetBranchLookupCaches($previousCompanyId, $branch->company_id);
 
         return $branch;
     }
@@ -98,7 +131,13 @@ class BranchService
      */
     public function deleteBranch(Branch $branch): bool
     {
-        return $this->repository->delete($branch);
+        $deleted = $this->repository->delete($branch);
+
+        if ($deleted) {
+            $this->forgetBranchLookupCaches($branch->company_id);
+        }
+
+        return $deleted;
     }
 
     /**
@@ -147,5 +186,27 @@ class BranchService
             ->where('company_id', $branch->company_id)
             ->where('is_main', true)
             ->update(['is_main' => false]);
+    }
+
+    /**
+     * Invalidate branch lookup caches affected by a write.
+     */
+    private function forgetBranchLookupCaches(int ...$companyIds): void
+    {
+        Cache::forget(self::ACTIVE_BRANCHES_CACHE_KEY);
+        Cache::forget('lookup:branches:active');
+
+        foreach (array_unique($companyIds) as $companyId) {
+            Cache::forget(self::companyBranchesCacheKey($companyId));
+            Cache::forget('lookup:branches:company:'.$companyId);
+        }
+    }
+
+    /**
+     * Build the cache key for a company's branches.
+     */
+    private static function companyBranchesCacheKey(int $companyId): string
+    {
+        return self::COMPANY_BRANCHES_CACHE_PREFIX.$companyId;
     }
 }

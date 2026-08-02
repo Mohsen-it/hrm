@@ -38,7 +38,7 @@ class BranchRepository
     {
         return $this->query()
             ->active()
-            ->with('company')
+            ->orderBy('branch_name')
             ->get();
     }
 
@@ -51,7 +51,7 @@ class BranchRepository
     {
         return $this->query()
             ->where('company_id', $companyId)
-            ->with('departments')
+            ->orderBy('branch_name')
             ->get();
     }
 

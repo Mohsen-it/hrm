@@ -43,6 +43,7 @@ return [
     'no_branches' => 'لم يتم تعيين أي فروع',
     'confirm_remove_branch' => 'هل تريد فصل هذا الفرع عن المنطقة؟',
     'remove_branch' => 'فصل الفرع',
+    'remove_branch_confirm_title' => 'تأكيد فصل الفرع',
     'only_one_primary_branch' => 'يجب أن يكون هناك فرع رئيسي واحد فقط (تم تحديد :count)',
     'created_successfully' => 'تم إنشاء المنطقة بنجاح',
     'updated_successfully' => 'تم تحديث المنطقة بنجاح',

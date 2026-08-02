@@ -2,7 +2,7 @@
 import { reactive, ref, computed } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
-import { PageHeader, Button, Card, FormSelect, FormInput, Badge, Alert, DataTable, IconButton } from '@/Components/ui';
+import { PageHeader, Button, Card, FormSelect, FormInput, Badge, Alert, DataTable, IconButton, ConfirmDialog } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t, locale } = useTranslations();
@@ -19,6 +19,8 @@ const flashError = computed(() => page.props.flash?.error);
 const displayName = computed(() => (locale.value === 'en' && props.zone.name_en ? props.zone.name_en : props.zone.name_ar));
 
 const showAddForm = ref(false);
+const showDetachConfirm = ref(false);
+const branchToDetach = ref(null);
 const adding = reactive({
     branch_id: '',
     is_primary: false,
@@ -45,8 +47,15 @@ function submitAttach() {
     });
 }
 
-function detachBranch(branchId) {
-    if (!confirm(t('zones.confirm_remove_branch'))) return;
+function confirmDetachBranch(branchId) {
+    branchToDetach.value = branchId;
+    showDetachConfirm.value = true;
+}
+
+function performDetachBranch() {
+    if (!branchToDetach.value) return;
+    const branchId = branchToDetach.value;
+    branchToDetach.value = null;
     router.delete(route('zones.branches.detach', [props.zone.id, branchId]), { preserveScroll: true });
 }
 
@@ -122,11 +131,22 @@ const columns = computed(() => [
                     </template>
                     <template #cell-actions="{ row }">
                         <div class="flex items-center justify-center">
-                            <IconButton icon="fas fa-unlink" :aria-label="t('zones.remove_branch')" variant="danger" @click="detachBranch(row.id)" />
+                            <IconButton icon="fas fa-unlink" :aria-label="t('zones.remove_branch')" variant="danger" @click="confirmDetachBranch(row.id)" />
                         </div>
                     </template>
                 </DataTable>
             </div>
         </Card>
+
+        <ConfirmDialog
+            v-model="showDetachConfirm"
+            :title="t('zones.remove_branch_confirm_title')"
+            :message="t('zones.confirm_remove_branch')"
+            :confirm-text="t('common.delete')"
+            :cancel-text="t('common.cancel')"
+            confirm-variant="danger"
+            icon="fas fa-unlink"
+            @confirm="performDetachBranch"
+        />
     </AppLayout>
 </template>

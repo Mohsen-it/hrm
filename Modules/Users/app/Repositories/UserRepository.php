@@ -40,11 +40,13 @@ class UserRepository
     {
         return $this->applyFilters(
             $this->query()
-                ->select(['id', 'employee_code', 'first_name', 'last_name', 'avatar', 'email', 'company_id', 'branch_id', 'department_id', 'subordination_id', 'shift_id', 'status', 'created_at'])
+                ->select(['id', 'employee_code', 'name', 'first_name', 'last_name', 'full_name_ar', 'full_name_en', 'avatar', 'email', 'phone', 'company_id', 'branch_id', 'department_id', 'position_id', 'grade_id', 'subordination_id', 'shift_id', 'hire_date', 'status', 'created_at'])
                 ->with([
                     'company:id,company_name',
                     'branch:id,branch_name',
                     'department:id,department_name',
+                    'position:id,position_name',
+                    'grade:id,grade_name',
                     'subordination:id,code,name_ar,name_en',
                     'shift:id,shift_name',
                 ]),
@@ -322,6 +324,10 @@ class UserRepository
             $q->whereHas('roles', function (Builder $sub) use ($role): void {
                 $sub->where('name', $role);
             });
+        });
+
+        $query->when(! empty($filters['ids']), function (Builder $q) use ($filters): void {
+            $q->whereIn('id', array_map('intval', (array) $filters['ids']));
         });
 
         return $query;

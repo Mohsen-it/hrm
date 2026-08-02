@@ -14,6 +14,8 @@ const props = defineProps({
 });
 
 const showDelete = ref(false);
+const showDeleteBranch = ref(false);
+const branchToDelete = ref(null);
 
 const flashSuccess = computed(() => page.props.flash?.success);
 
@@ -23,8 +25,15 @@ function performDelete() {
     router.delete(route('zones.destroy', props.zone.id), { preserveScroll: true });
 }
 
-function performDeleteBranch(branchId) {
-    if (!confirm(t('zones.confirm_remove_branch'))) return;
+function confirmDeleteBranch(branchId) {
+    branchToDelete.value = branchId;
+    showDeleteBranch.value = true;
+}
+
+function performDeleteBranch() {
+    if (!branchToDelete.value) return;
+    const branchId = branchToDelete.value;
+    branchToDelete.value = null;
     router.delete(route('zones.branches.detach', [props.zone.id, branchId]), { preserveScroll: true });
 }
 
@@ -169,7 +178,7 @@ const branchColumns = computed(() => [
                     </template>
                     <template #cell-actions="{ row }">
                         <div class="flex items-center justify-center">
-                            <IconButton icon="fas fa-unlink" :aria-label="t('zones.remove_branch')" variant="danger" @click="performDeleteBranch(row.id)" />
+                            <IconButton icon="fas fa-unlink" :aria-label="t('zones.remove_branch')" variant="danger" @click="confirmDeleteBranch(row.id)" />
                         </div>
                     </template>
                 </DataTable>
@@ -184,6 +193,17 @@ const branchColumns = computed(() => [
             :cancel-text="t('common.cancel')"
             confirm-variant="danger"
             @confirm="performDelete"
+        />
+
+        <ConfirmDialog
+            v-model="showDeleteBranch"
+            :title="t('zones.remove_branch_confirm_title')"
+            :message="t('zones.confirm_remove_branch')"
+            :confirm-text="t('common.delete')"
+            :cancel-text="t('common.cancel')"
+            confirm-variant="danger"
+            icon="fas fa-unlink"
+            @confirm="performDeleteBranch"
         />
     </AppLayout>
 </template>

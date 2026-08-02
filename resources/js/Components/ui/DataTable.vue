@@ -25,6 +25,8 @@ const props = defineProps({
     enableDensity: { type: Boolean, default: true },
     enableColumnVisibility: { type: Boolean, default: true },
     enableExport: { type: Boolean, default: true },
+    enableBulkDelete: { type: Boolean, default: false },
+    enableBulkExport: { type: Boolean, default: false },
     enablePagination: { type: Boolean, default: true },
     selectableFilter: { type: Function, default: null },
     dir: { type: String, default: 'rtl' },
@@ -50,6 +52,8 @@ const emit = defineEmits([
     'search',
     'filter-change',
     'export',
+    'bulk-delete',
+    'bulk-export',
 ]);
 
 const table = useDataTable({
@@ -102,6 +106,14 @@ const someSelected = computed(() => table.selectedIds.value.length > 0 && !allSe
 
 const showSkeleton = computed(() => props.loading || (table.isNavigating.value && items.value.length > 0));
 const showPageTransition = computed(() => table.isPageChanging.value || table.isPerPageChanging.value);
+
+// When the underlying data changes (e.g. after a bulk delete), drop
+// selection ids that no longer exist on the current page so the toolbar
+// count and bulk actions never reference deleted rows.
+watch(() => props.data, () => {
+    const valid = new Set(items.value.map((r) => r.id));
+    table.selectedIds.value = table.selectedIds.value.filter((id) => valid.has(id));
+}, { deep: true });
 
 watch(() => table.selectedIds.value, (ids) => {
     emit('selection-change', ids);
@@ -213,6 +225,8 @@ const lastVisibleColIndex = computed(() => {
                 :enable-density="enableDensity"
                 :enable-column-visibility="enableColumnVisibility"
                 :enable-export="enableExport"
+                :enable-bulk-delete="enableBulkDelete"
+                :enable-bulk-export="enableBulkExport"
                 :dir="dir"
                 @search="onSearch"
                 @filter-change="onFilterChange"
@@ -224,8 +238,8 @@ const lastVisibleColIndex = computed(() => {
                 @save-filter="onSaveFilter"
                 @load-filter="onLoadFilter"
                 @delete-filter="onDeleteFilter"
-                @bulk-delete="$emit('export', { format: 'bulk-delete', ids: table.selectedIds.value })"
-                @bulk-export="$emit('export', { format: 'bulk-export', ids: table.selectedIds.value })"
+                @bulk-delete="emit('bulk-delete', [...table.selectedIds.value])"
+                @bulk-export="emit('bulk-export', [...table.selectedIds.value])"
             />
 
             <div class="relative">

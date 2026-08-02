@@ -67,58 +67,58 @@ onUnmounted(() => {
             leave-from-class="opacity-100"
             leave-to-class="opacity-0"
         >
-            <div v-if="isOpen" class="fixed inset-0 z-50 flex items-center justify-center p-4 max-sm:p-0" :dir="dir">
+            <div v-if="isOpen" class="fixed inset-0 z-50 flex items-center justify-center p-4 max-sm:items-end max-sm:p-0" :dir="dir">
                 <div class="absolute inset-0 bg-mistral-ink/40 backdrop-blur-sm" @click="cancel"></div>
                 <Transition
-                    enter-active-class="duration-200 ease-out"
-                    enter-from-class="opacity-0 scale-95"
-                    enter-to-class="opacity-100 scale-100"
-                    leave-active-class="duration-150 ease-in"
-                    leave-from-class="opacity-100 scale-100"
-                    leave-to-class="opacity-0 scale-95"
-                >
-                    <Card
-                        v-if="isOpen"
-                        variant="base"
-                        padding="none"
-                        role="alertdialog"
-                        aria-modal="true"
-                        :aria-label="title"
-                        :dir="dir"
-                        class="relative z-10 w-full max-w-md overflow-hidden rounded-2xl shadow-level-4 max-sm:max-h-[100dvh] max-sm:max-w-full max-sm:rounded-none"
+                        enter-active-class="duration-200 ease-out"
+                        enter-from-class="opacity-0 scale-95"
+                        enter-to-class="opacity-100 scale-100"
+                        leave-active-class="duration-150 ease-in"
+                        leave-from-class="opacity-100 scale-100"
+                        leave-to-class="opacity-0 scale-95"
                     >
-                        <div class="p-6 text-center">
-                            <div
-                                :class="[
-                                    'w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4',
-                                    confirmVariant === 'danger' ? 'bg-mistral-danger/10' : confirmVariant === 'success' ? 'bg-mistral-success/10' : 'bg-mistral-warning/10',
-                                ]"
-                            >
-                                <i
+                        <Card
+                            v-if="isOpen"
+                            variant="base"
+                            padding="none"
+                            role="alertdialog"
+                            aria-modal="true"
+                            :aria-label="title"
+                            :dir="dir"
+                            class="relative z-10 flex w-full max-w-[28rem] max-h-[calc(100dvh-2rem)] flex-col overflow-hidden rounded-2xl shadow-level-4 max-sm:max-h-[85dvh] max-sm:max-w-full max-sm:rounded-b-none max-sm:rounded-t-3xl"
+                        >
+                            <div class="p-6 text-center max-sm:p-5">
+                                <div
                                     :class="[
-                                        icon,
-                                        'text-[20px]',
-                                        confirmVariant === 'danger' ? 'text-mistral-danger' : confirmVariant === 'success' ? 'text-mistral-success' : 'text-mistral-warning',
+                                        'w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4',
+                                        confirmVariant === 'danger' ? 'bg-mistral-danger/10' : confirmVariant === 'success' ? 'bg-mistral-success/10' : 'bg-mistral-warning/10',
                                     ]"
-                                    aria-hidden="true"
-                                ></i>
+                                >
+                                    <i
+                                        :class="[
+                                            icon,
+                                            'text-[20px]',
+                                            confirmVariant === 'danger' ? 'text-mistral-danger' : confirmVariant === 'success' ? 'text-mistral-success' : 'text-mistral-warning',
+                                        ]"
+                                        aria-hidden="true"
+                                    ></i>
+                                </div>
+                                <h3 class="text-[16px] font-semibold text-mistral-ink mb-2">
+                                    {{ title }}
+                                </h3>
+                                <p class="text-[13px] text-mistral-steel leading-relaxed">
+                                    {{ message }}
+                                </p>
                             </div>
-                            <h3 class="text-[16px] font-semibold text-mistral-ink mb-2">
-                                {{ title }}
-                            </h3>
-                            <p class="text-[13px] text-mistral-steel leading-relaxed">
-                                {{ message }}
-                            </p>
-                        </div>
-                        <div class="px-6 py-4 border-t border-mistral-hairline-soft flex items-center justify-center gap-3 bg-mistral-surface/30 rounded-b-xl">
-                            <Button variant="secondary" class="flex-1" @click="cancel">
-                                {{ cancelText || t('common.cancel') }}
-                            </Button>
-                            <Button :variant="confirmVariant" class="flex-1" @click="confirm">
-                                {{ confirmText || t('common.confirm') }}
-                            </Button>
-                        </div>
-                    </Card>
+                            <div class="shrink-0 px-6 py-4 border-t border-mistral-hairline-soft flex items-center justify-center gap-3 bg-mistral-surface/30 max-sm:px-5 max-sm:pb-[calc(1rem+env(safe-area-inset-bottom))]">
+                                <Button variant="secondary" class="flex-1" @click="cancel">
+                                    {{ cancelText || t('common.cancel') }}
+                                </Button>
+                                <Button :variant="confirmVariant" class="flex-1" @click="confirm">
+                                    {{ confirmText || t('common.confirm') }}
+                                </Button>
+                            </div>
+                        </Card>
                 </Transition>
             </div>
         </Transition>

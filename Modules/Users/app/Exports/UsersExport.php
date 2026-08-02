@@ -65,7 +65,7 @@ class UsersExport
 
         $columns = [
             'index' => ['key' => 'id', 'type' => 'integer', 'width' => 8],
-            'name' => ['key' => 'name', 'type' => 'string', 'width' => 25],
+            'name' => ['key' => 'full_name', 'type' => 'string', 'width' => 25],
             'code' => ['key' => 'employee_code', 'type' => 'string', 'width' => 15],
             'email' => ['key' => 'email', 'type' => 'string', 'width' => 25],
             'phone' => ['key' => 'phone', 'type' => 'string', 'width' => 15],

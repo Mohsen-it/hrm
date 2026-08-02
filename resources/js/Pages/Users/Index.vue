@@ -1,9 +1,9 @@
 <script setup>
-import { ref, computed, watch } from 'vue';
+import { ref, computed } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
-import { PageHeader, DataTable, SearchInput, ConfirmDialog, Badge, Button, Card, IconButton, FormSelect, FormCheckbox, Alert, Avatar, FormModal } from '@/Components/ui';
+import { PageHeader, DataTable, SearchInput, ConfirmDialog, Badge, Button, Card, IconButton, FormSelect, Alert, Avatar, FormModal } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
@@ -36,7 +36,6 @@ const fingerprintPage = ref(1);
 const fingerprintPagination = ref({ total: 0, per_page: 50, current_page: 1, last_page: 1 });
 
 const columns = computed(() => [
-    { key: 'select', label: '', cellClass: 'text-center w-[40px]' },
     { key: 'employee_code', label: t('users.employee_code'), sortable: true },
     { key: 'name', label: t('users.name'), sortable: true },
     { key: 'email', label: t('users.email') },
@@ -77,11 +76,6 @@ const employmentTypeOptions = [
     { value: 'intern', label: t('users.employment_intern') },
 ];
 
-const allSelected = computed(() => {
-    const items = props.users?.data || [];
-    return items.length > 0 && selectedIds.value.length === items.length;
-});
-
 function onSearch(value) {
     router.get(
         route('users.index'),
@@ -109,6 +103,11 @@ function onExport() {
     window.location.href = route('users.export', props.filters);
 }
 
+function onExportSelected() {
+    if (selectedIds.value.length === 0) return;
+    window.location.href = route('users.export', { ...props.filters, ids: selectedIds.value });
+}
+
 function confirmDelete(user) {
     selectedUser.value = user;
     showDelete.value = true;
@@ -121,25 +120,10 @@ function performDelete() {
     });
 }
 
-function toggleSelect(id) {
-    const idx = selectedIds.value.indexOf(id);
-    if (idx === -1) {
-        selectedIds.value.push(id);
-    } else {
-        selectedIds.value.splice(idx, 1);
+function confirmBulkDelete(ids) {
+    if (Array.isArray(ids) && ids.length > 0) {
+        selectedIds.value = ids;
     }
-}
-
-function toggleSelectAll() {
-    const items = props.users?.data || [];
-    if (selectedIds.value.length === items.length) {
-        selectedIds.value = [];
-    } else {
-        selectedIds.value = items.map((u) => u.id);
-    }
-}
-
-function confirmBulkDelete() {
     if (selectedIds.value.length === 0) return;
     showBulkDelete.value = true;
 }
@@ -177,16 +161,6 @@ async function fetchFingerprintLogs(page = 1) {
         fingerprintLoading.value = false;
     }
 }
-
-watch(
-    () => props.users,
-    () => {
-        const items = props.users?.data || [];
-        selectedIds.value = selectedIds.value.filter((id) =>
-            items.some((u) => u.id === id),
-        );
-    },
-);
 
 const flashSuccess = computed(() => page.props.flash?.success);
 const flashError = computed(() => page.props.flash?.error);
@@ -273,19 +247,20 @@ const flashError = computed(() => page.props.flash?.error);
             </div>
         </Card>
 
-        <DataTable :columns="columns" :data="users" :filters="filters" :route-name="'users.index'" @search="onSearch" @export="onExport">
+        <DataTable
+            :columns="columns"
+            :data="users"
+            :filters="filters"
+            :route-name="'users.index'"
             :only="['users']"
-            <template #cell-select="{ row }">
-                <div class="flex justify-center" @click.stop>
-                    <FormCheckbox
-                        :model-value="selectedIds.includes(row.id)"
-                        :value="row.id"
-                        :array-value="selectedIds"
-                        @update:model-value="toggleSelect(row.id)"
-                    />
-                </div>
-            </template>
-
+            enable-bulk-delete
+            enable-bulk-export
+            @search="onSearch"
+            @export="onExport"
+            @selection-change="(ids) => (selectedIds = ids)"
+            @bulk-delete="(ids) => confirmBulkDelete(ids)"
+            @bulk-export="onExportSelected"
+        >
             <template #cell-name="{ row }">
                 <div class="flex items-center gap-2">
                     <Avatar :name="row.name" :src="row.avatar_url" size="sm" />

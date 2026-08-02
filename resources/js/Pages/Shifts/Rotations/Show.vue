@@ -2,7 +2,7 @@
 import { ref, computed } from 'vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
-import { PageHeader, Button, Card, Badge, DataTable, LoadingSpinner, FormInput, FormModal } from '@/Components/ui';
+import { PageHeader, Button, Card, Badge, DataTable, LoadingSpinner, FormInput, FormModal, ConfirmDialog } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
@@ -146,6 +146,8 @@ const editingGroup = ref(null);
 const groupForm = ref({ name: '', start_date: '' });
 const groupErrors = ref({});
 const processingGroup = ref(false);
+const showDeleteGroupConfirm = ref(false);
+const groupToDelete = ref(null);
 
 function openAddGroup() {
     editingGroup.value = null;
@@ -189,12 +191,18 @@ function submitGroup() {
     }
 }
 
-function deleteGroup(group) {
-    if (confirm(t('shifts.confirm_delete_group') + ' ' + group.name + '?')) {
-        router.delete(route('rotations.groups.delete', group.id), {
-            preserveScroll: true,
-        });
-    }
+function confirmDeleteGroup(group) {
+    groupToDelete.value = group;
+    showDeleteGroupConfirm.value = true;
+}
+
+function performDeleteGroup() {
+    if (!groupToDelete.value) return;
+    const group = groupToDelete.value;
+    groupToDelete.value = null;
+    router.delete(route('rotations.groups.delete', group.id), {
+        preserveScroll: true,
+    });
 }
 </script>
 
@@ -334,11 +342,21 @@ function deleteGroup(group) {
                             :title="t('shifts.view_employees')"
                         />
                         <Button variant="ghost" size="sm" @click="openEditGroup(row)" icon="fas fa-edit" :title="t('common.edit')" />
-                        <Button variant="ghost" size="sm" @click="deleteGroup(row)" icon="fas fa-trash" class="text-mistral-danger" :title="t('common.delete')" />
+                        <Button variant="ghost" size="sm" @click="confirmDeleteGroup(row)" icon="fas fa-trash" class="text-mistral-danger" :title="t('common.delete')" />
                     </div>
                 </template>
             </DataTable>
         </Card>
+
+        <ConfirmDialog
+            v-model="showDeleteGroupConfirm"
+            :title="t('shifts.delete_confirm_title')"
+            :message="t('shifts.confirm_delete_group') + ' ' + (groupToDelete?.name || '') + '?'"
+            :confirm-text="t('common.delete')"
+            :cancel-text="t('common.cancel')"
+            confirm-variant="danger"
+            @confirm="performDeleteGroup"
+        />
 
         <FormModal
             v-model="showGroupModal"

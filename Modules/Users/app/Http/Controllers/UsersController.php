@@ -479,14 +479,25 @@ class UsersController extends Controller
     {
         $this->authorize('view-users');
 
-        $users = $this->userService->getAllUsers(
-            $request->only([
-                'search', 'company_id', 'branch_id', 'department_id',
-                'position_id', 'grade_id', 'subordination_id', 'shift_id', 'status',
-                'employment_type', 'role', 'is_active_employee',
-            ]),
-            10000
-        );
+        $filters = $request->only([
+            'search', 'company_id', 'branch_id', 'department_id',
+            'position_id', 'grade_id', 'subordination_id', 'shift_id', 'status',
+            'employment_type', 'role', 'is_active_employee',
+        ]);
+
+        // When bulk-exporting selected rows, limit to those ids only.
+        // Ziggy may send the array as `ids=1,2,3` or `ids[]=1&ids[]=2`.
+        if ($request->filled('ids')) {
+            $ids = $request->input('ids');
+            if (is_string($ids)) {
+                $ids = array_values(array_filter(array_map('trim', explode(',', $ids))));
+            }
+            if (! empty($ids)) {
+                $filters['ids'] = $ids;
+            }
+        }
+
+        $users = $this->userService->getAllUsers($filters, 10000);
 
         $export = new UsersExport($users->getCollection());
 

@@ -43,6 +43,7 @@ return [
     'no_branches' => 'No branches have been assigned yet',
     'confirm_remove_branch' => 'Detach this branch from the zone?',
     'remove_branch' => 'Detach Branch',
+    'remove_branch_confirm_title' => 'Confirm Branch Detach',
     'only_one_primary_branch' => 'Only one branch can be primary (found :count)',
     'created_successfully' => 'Zone created successfully',
     'updated_successfully' => 'Zone updated successfully',

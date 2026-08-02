@@ -18,6 +18,8 @@ const props = defineProps({
     enableDensity: { type: Boolean, default: true },
     enableColumnVisibility: { type: Boolean, default: true },
     enableExport: { type: Boolean, default: true },
+    enableBulkDelete: { type: Boolean, default: false },
+    enableBulkExport: { type: Boolean, default: false },
     dir: { type: String, default: 'rtl' },
 });
 
@@ -159,6 +161,7 @@ function exportCSV() {
                         {{ selectedIds.length }} {{ dir === 'rtl' ? 'محدد' : 'selected' }}
                     </span>
                     <button
+                        v-if="enableBulkDelete"
                         type="button"
                         class="h-8 px-3 text-[12px] font-medium rounded-lg bg-mistral-danger/10 text-mistral-danger hover:bg-mistral-danger/20 transition-colors"
                         @click="emit('bulk-delete')"
@@ -167,6 +170,7 @@ function exportCSV() {
                         {{ dir === 'rtl' ? 'حذف' : 'Delete' }}
                     </button>
                     <button
+                        v-if="enableBulkExport"
                         type="button"
                         class="h-8 px-3 text-[12px] font-medium rounded-lg bg-mistral-info/10 text-mistral-info hover:bg-mistral-info/20 transition-colors"
                         @click="emit('bulk-export')"

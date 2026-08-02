@@ -6,6 +6,8 @@ use DateTimeImmutable;
 use DateTimeInterface;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use InvalidArgumentException;
+use Modules\Attendance\Events\SessionCreated;
+use Modules\Attendance\Events\SessionUpdated;
 use Modules\Attendance\Models\AttendanceSession;
 use Modules\Attendance\Models\RawAttendanceLog;
 use Modules\Attendance\Repositories\AttendanceSessionRepository;
@@ -100,7 +102,10 @@ class AttendanceSessionService
             $session->forceFill(['late_minutes' => $lateMinutes])->save();
         }
 
-        return $session->fresh(['user']);
+        $session = $session->fresh(['user']);
+        event(new SessionUpdated($session));
+
+        return $session;
     }
 
     /**
@@ -177,7 +182,10 @@ class AttendanceSessionService
             'created_by' => $context['created_by'] ?? null,
         ])->save();
 
-        return $session->fresh(['user']);
+        $session = $session->fresh(['user']);
+        event(new SessionCreated($session));
+
+        return $session;
     }
 
     /**
@@ -223,7 +231,10 @@ class AttendanceSessionService
                 'created_by' => $context['created_by'] ?? null,
             ])->save();
 
-            return $session->fresh(['user']);
+            $session = $session->fresh(['user']);
+            event(new SessionCreated($session));
+
+            return $session;
         }
 
         return $this->closeSession($session, $at, $context);
@@ -293,7 +304,10 @@ class AttendanceSessionService
 
         $this->mergeRawContext($session, $context);
 
-        return $session->fresh(['user']);
+        $session = $session->fresh(['user']);
+        event(new SessionUpdated($session));
+
+        return $session;
     }
 
     // ------------------------------------------------------------------

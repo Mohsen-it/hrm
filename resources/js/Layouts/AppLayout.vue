@@ -8,6 +8,7 @@ import Navbar from '@/Components/layout/Navbar.vue';
 import CommandPalette from '@/Components/navigation/CommandPalette.vue';
 import SunsetStripeBand from '@/Components/layout/SunsetStripeBand.vue';
 import LanguageSwitcher from '@/Components/LanguageSwitcher.vue';
+import IconButton from '@/Components/ui/IconButton.vue';
 import { useRealtimeAttendance } from '@/composables/useRealtimeAttendance';
 
 defineProps({
@@ -37,7 +38,7 @@ const isCommandPaletteOpen = ref(false);
 const livePunchNotification = ref(null);
 let livePunchNotificationTimer = null;
 
-const { isConnected: isRealtimeConnected } = useRealtimeAttendance({
+useRealtimeAttendance({
     onPunch: (punch) => {
         livePunchNotification.value = punch;
         window.EventBus?.emit('attendance:punch-received', punch);
@@ -48,7 +49,7 @@ const { isConnected: isRealtimeConnected } = useRealtimeAttendance({
 
         livePunchNotificationTimer = window.setTimeout(() => {
             livePunchNotification.value = null;
-        }, 6000);
+        }, 4000);
     },
 });
 
@@ -80,6 +81,9 @@ const mainPadding = computed(() => {
     }
     return isSidebarCollapsed.value ? 'md:ml-[68px]' : 'md:ml-[268px]';
 });
+
+// Keep the notification away from the fixed sidebar on both RTL and LTR layouts.
+const livePunchNotificationPosition = computed(() => (isRtl.value ? 'start-4' : 'end-4'));
 
 function closeMobileSidebar() {
     isSidebarOpen.value = false;
@@ -179,32 +183,40 @@ watch(() => page.url, () => {
 
         <Transition
             enter-active-class="transition duration-300 ease-out"
-            enter-from-class="translate-y-3 opacity-0"
+            enter-from-class="-translate-y-2 opacity-0"
             enter-to-class="translate-y-0 opacity-100"
             leave-active-class="transition duration-200 ease-in"
             leave-from-class="translate-y-0 opacity-100"
-            leave-to-class="translate-y-3 opacity-0"
+            leave-to-class="-translate-y-2 opacity-0"
         >
-            <button
+            <div
                 v-if="livePunchNotification"
-                type="button"
-                class="fixed bottom-8 start-4 z-50 flex max-w-sm items-center gap-3 rounded-xl border border-mistral-primary/25 bg-white px-4 py-3 text-start shadow-lg"
-                @click="livePunchNotification = null"
+                class="fixed top-[4.5rem] sm:top-20 z-50 flex w-[calc(100vw-2rem)] max-w-[320px] items-center gap-3 rounded-xl border border-mistral-primary/25 bg-mistral-canvas/95 px-3.5 py-3 text-start shadow-[0_8px_24px_rgba(0,0,0,0.10)] backdrop-blur-sm"
+                :class="livePunchNotificationPosition"
+                role="status"
+                aria-live="polite"
+                aria-atomic="true"
             >
-                <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-mistral-primary/10 text-mistral-primary">
+                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-mistral-primary/10 text-mistral-primary" aria-hidden="true">
                     <i class="fas fa-fingerprint" aria-hidden="true"></i>
                 </span>
-                <span class="min-w-0">
-                    <span class="block text-sm font-semibold text-mistral-ink">
+                <span class="min-w-0 flex-1">
+                    <span class="block truncate text-[13px] font-semibold text-mistral-ink">
                         {{ livePunchNotification.user?.name || livePunchNotification.user?.employee_code || 'موظف' }}
                     </span>
-                    <span class="block text-xs text-mistral-steel">
+                    <span class="block text-[11px] text-mistral-steel">
                         {{ livePunchNotification.punch_type === 'check_out' ? 'تم تسجيل انصراف' : 'تم تسجيل حضور' }}
-                        <span v-if="livePunchNotification.device?.name"> · {{ livePunchNotification.device.name }}</span>
+                        <span v-if="livePunchNotification.device?.name" class="text-mistral-stone"> · {{ livePunchNotification.device.name }}</span>
                     </span>
                 </span>
-                <span class="h-2 w-2 shrink-0 rounded-full bg-mistral-success" :class="isRealtimeConnected ? 'animate-pulse' : ''"></span>
-            </button>
+                <IconButton
+                    icon="fas fa-xmark"
+                    aria-label="إخفاء إشعار تسجيل البصمة"
+                    variant="ghost"
+                    size="sm"
+                    @click="livePunchNotification = null"
+                />
+            </div>
         </Transition>
     </div>
 </template>

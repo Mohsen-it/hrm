@@ -22,7 +22,7 @@ use Modules\FingerprintDevices\Models\FingerprintDevice;
 use Modules\FingerprintDevices\Models\UserFingerprint;
 use Modules\FingerprintDevices\Services\FingerprintDeviceService;
 use Modules\Shifts\Models\Shift;
-use Modules\Shifts\Models\ShiftException;
+use Modules\Shifts\Services\AbsenceCalculationService;
 use Modules\Users\Models\User;
 use Modules\Vacations\Models\UserVacationRequest;
 
@@ -42,6 +42,7 @@ class DashboardController extends Controller
         private AttendanceMonitoringService $monitoringService,
         private AttendanceReportService $reportService,
         private MonthlyReportService $monthlyReportService,
+        private AbsenceCalculationService $absenceCalculationService,
     ) {}
 
     /**
@@ -148,8 +149,23 @@ class DashboardController extends Controller
 
             $employees = count($activeUserIds);
 
-            // Today's attendance KPIs
-            $dailyKpis = $this->reportService->getDailyKpis($today);
+            // Today's headline figures must be calculated from the live
+            // rotation roster, approved exceptions, and real punches. Daily
+            // summaries are asynchronous and are retained for history only.
+            $operationalSnapshot = $this->absenceCalculationService
+                ->getOperationalSnapshot(CarbonImmutable::parse($today));
+            $dailyKpis = [
+                'date' => $today,
+                'present' => $operationalSnapshot['present'],
+                'absent' => $operationalSnapshot['absent'],
+                'late' => $operationalSnapshot['late'],
+                'early_leave' => $operationalSnapshot['early_leave'],
+                'missing_punch' => $operationalSnapshot['missing_punch'],
+                'total' => $operationalSnapshot['required'],
+                'scheduled' => $operationalSnapshot['scheduled'],
+                'awaiting_arrival' => $operationalSnapshot['awaiting_arrival'],
+                'by_status' => $operationalSnapshot['by_status'],
+            ];
 
             // Live sessions (currently inside) — fetch once, reuse for health
             $liveSessions = $this->monitoringService->getLiveSessions($today);
@@ -167,24 +183,15 @@ class DashboardController extends Controller
                     ->count('user_id')
                 : 0;
 
-            // On leave (approved vacation requests active today)
-            $onLeave = (int) UserVacationRequest::approved()
-                ->whereDate('start_date', '<=', $today)
-                ->whereDate('end_date', '>=', $today)
-                ->count();
+            // These values come from the same daily roster as presence and
+            // absence, preventing overlaps (e.g. vacation + mirrored leave)
+            // from being counted twice.
+            $onLeave = $operationalSnapshot['on_leave'];
 
             // Pending requests
             $pendingRequests = (int) UserVacationRequest::pending()->count();
 
-            // Approved mission exceptions are the official source for an
-            // employee's mission status; do not report an invented zero.
-            $onMission = (int) ShiftException::query()
-                ->active()
-                ->overlapping($today)
-                ->where('exception_type', 'mission')
-                ->whereIn('employee_id', $activeUserIds)
-                ->distinct('employee_id')
-                ->count('employee_id');
+            $onMission = $operationalSnapshot['on_mission'];
 
             // Late employees today
             $lateToday = $dailyKpis['late'] ?? 0;
@@ -272,8 +279,20 @@ class DashboardController extends Controller
                 ]);
 
             // Mass detection
-            $massLateness = $this->monitoringService->detectMassLateness($today);
-            $massAbsence = $this->monitoringService->detectMassAbsence($today);
+            $massLateness = $this->buildOperationalAlert(
+                $today,
+                $operationalSnapshot['late'],
+                $operationalSnapshot['required'],
+                0.30,
+                'late_count',
+            );
+            $massAbsence = $this->buildOperationalAlert(
+                $today,
+                $operationalSnapshot['absent'],
+                $operationalSnapshot['required'],
+                0.25,
+                'absent_count',
+            );
 
             // Attendance heatmap (last 30 days)
             $heatmapData = $this->getHeatmapData($monthFrom, $today);
@@ -281,8 +300,10 @@ class DashboardController extends Controller
             // Live counters for animation
             $liveCounters = [
                 'employees' => $employees,
+                'required' => $operationalSnapshot['required'],
                 'present' => $dailyKpis['present'] ?? 0,
                 'absent' => $absentToday,
+                'awaiting_arrival' => $operationalSnapshot['awaiting_arrival'],
                 'late' => $lateToday,
                 'early_leave' => $dailyKpis['early_leave'] ?? 0,
                 'missing_punch' => $dailyKpis['missing_punch'] ?? 0,
@@ -299,6 +320,7 @@ class DashboardController extends Controller
                 'today' => $today,
                 'liveCounters' => $liveCounters,
                 'dailyKpis' => $dailyKpis,
+                'operationalSnapshot' => $operationalSnapshot,
                 'weeklyTrend' => $weeklyTrend,
                 'monthlyTrend' => $monthlyTrend,
                 'departmentStats' => $departmentStats,
@@ -335,6 +357,30 @@ class DashboardController extends Controller
         } catch (\Throwable) {
             return CarbonImmutable::now()->toDateString();
         }
+    }
+
+    /**
+     * Build a dashboard alert from the operational roster denominator.
+     *
+     * @return array{date: string, is_alert: bool, late_count?: int, absent_count?: int, total: int, ratio: float, threshold: float}
+     */
+    private function buildOperationalAlert(
+        string $date,
+        int $count,
+        int $total,
+        float $threshold,
+        string $countKey,
+    ): array {
+        $ratio = $total > 0 ? round($count / $total, 4) : 0.0;
+
+        return [
+            'date' => $date,
+            $countKey => $count,
+            'total' => $total,
+            'ratio' => $ratio,
+            'threshold' => $threshold,
+            'is_alert' => $total > 0 && $ratio >= $threshold,
+        ];
     }
 
     /**

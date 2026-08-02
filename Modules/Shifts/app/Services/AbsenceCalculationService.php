@@ -3,12 +3,14 @@
 namespace Modules\Shifts\Services;
 
 use Carbon\Carbon;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Modules\Attendance\Models\AttendanceSession;
 use Modules\Holidays\Models\Holiday;
 use Modules\Shifts\Models\ShiftException;
 use Modules\Shifts\Repositories\RotationAssignmentRepository;
+use Modules\Users\Models\User;
 use Modules\Vacations\Models\UserVacationRequest;
 
 class AbsenceCalculationService
@@ -93,6 +95,196 @@ class AbsenceCalculationService
         }
 
         return $query->pluck('id');
+    }
+
+    /**
+     * Build the live operational attendance picture for a single day.
+     *
+     * Unlike a report based solely on persisted daily summaries, this method
+     * evaluates the rotation assigned on the target day and reads the current
+     * biometric sessions.  A worker is required only when their rotation says
+     * work and they are not covered by an approved leave, mission, training,
+     * swap, or applicable official holiday.
+     *
+     * An employee without a punch becomes absent only after their expected
+     * check-in (including grace) has passed.  Before then they are awaiting
+     * arrival, rather than prematurely reported as absent.
+     *
+     * @return array{
+     *     date: string, employees: int, scheduled: int, required: int,
+     *     present: int, absent: int, awaiting_arrival: int, late: int,
+     *     early_leave: int, missing_punch: int, on_leave: int, on_mission: int,
+     *     on_training: int, on_swap: int, on_holiday: int, on_rest: int,
+     *     unassigned: int, by_status: array<string, int>
+     * }
+     */
+    public function getOperationalSnapshot(Carbon|CarbonImmutable $date): array
+    {
+        $date = $date->copy()->startOfDay();
+        $dateStr = $date->toDateString();
+        $now = Carbon::now($date->getTimezone());
+
+        $employees = DB::table('users')
+            ->select(['id', 'branch_id', 'department_id'])
+            ->where('id', '!=', User::SUPER_ADMIN_ID)
+            ->where('status', 1)
+            ->where('is_active_employee', true)
+            ->where(fn ($query) => $query->whereNull('termination_date')->orWhere('termination_date', '>=', $dateStr))
+            ->get()
+            ->keyBy('id');
+
+        $employeeIds = $employees->keys()->map(fn ($id) => (int) $id)->all();
+        $base = [
+            'date' => $dateStr, 'employees' => count($employeeIds), 'scheduled' => 0, 'required' => 0,
+            'present' => 0, 'absent' => 0, 'awaiting_arrival' => 0, 'late' => 0,
+            'early_leave' => 0, 'missing_punch' => 0, 'on_leave' => 0, 'on_mission' => 0,
+            'on_training' => 0, 'on_swap' => 0, 'on_holiday' => 0, 'on_rest' => 0,
+            'unassigned' => 0,
+        ];
+
+        if ($employeeIds === []) {
+            return $base + ['by_status' => []];
+        }
+
+        $assignments = $this->rotationAssignmentRepository->getAssignmentsForDate($dateStr)
+            ->whereIn('employee_id', $employeeIds)
+            ->sortBy(fn ($assignment) => $assignment->start_date?->getTimestamp() ?? 0)
+            ->keyBy('employee_id');
+
+        $vacationIds = UserVacationRequest::query()
+            ->where('status', UserVacationRequest::STATUS_APPROVED)
+            ->whereIn('user_id', $employeeIds)
+            ->where('start_date', '<=', $dateStr)
+            ->where('end_date', '>=', $dateStr)
+            ->pluck('user_id')
+            ->flip();
+
+        $exceptions = ShiftException::active()
+            ->whereIn('employee_id', $employeeIds)
+            ->whereIn('exception_type', ['leave', 'mission', 'swap', 'training'])
+            ->overlapping($dateStr)
+            ->get(['employee_id', 'exception_type'])
+            ->groupBy('employee_id');
+
+        $punches = AttendanceSession::onDate($dateStr)
+            ->whereIn('user_id', $employeeIds)
+            ->whereNotNull('check_in_at')
+            ->selectRaw('user_id, MAX(late_minutes) as late_minutes, MAX(early_leave_minutes) as early_leave_minutes, SUM(CASE WHEN check_in_at IS NOT NULL AND check_out_at IS NULL THEN 1 ELSE 0 END) as open_sessions')
+            ->groupBy('user_id')
+            ->get()
+            ->keyBy('user_id');
+
+        $holidays = Holiday::active()->get();
+
+        foreach ($employeeIds as $employeeId) {
+            $employee = $employees->get($employeeId);
+            $assignment = $assignments->get($employeeId);
+            $exceptionTypes = $exceptions->get($employeeId, collect())->pluck('exception_type')->flip();
+
+            // Coverage is tracked for every employee, even on a rest day, so
+            // dashboard leave/mission counters remain a truthful daily roster.
+            if ($vacationIds->has($employeeId) || $exceptionTypes->has('leave')) {
+                $base['on_leave']++;
+            } elseif ($exceptionTypes->has('mission')) {
+                $base['on_mission']++;
+            } elseif ($exceptionTypes->has('training')) {
+                $base['on_training']++;
+            } elseif ($exceptionTypes->has('swap')) {
+                $base['on_swap']++;
+            }
+
+            if (! $assignment) {
+                $base['unassigned']++;
+
+                continue;
+            }
+
+            $rotation = $assignment->rotation;
+            $group = $assignment->rotationGroup;
+            if (! $this->rotationEngine->isWorkDay($rotation, $group, $date)) {
+                $base['on_rest']++;
+
+                continue;
+            }
+
+            $base['scheduled']++;
+
+            $isHoliday = ! (bool) $rotation->work_on_holidays
+                && $this->hasApplicableHoliday($holidays, $dateStr, $employee);
+            if ($isHoliday) {
+                $base['on_holiday']++;
+
+                continue;
+            }
+
+            if ($vacationIds->has($employeeId) || $exceptionTypes->isNotEmpty()) {
+                continue;
+            }
+
+            $base['required']++;
+            $punch = $punches->get($employeeId);
+            if ($punch) {
+                $base['present']++;
+                $base['late'] += (int) $punch->late_minutes > 0 ? 1 : 0;
+                $base['early_leave'] += (int) $punch->early_leave_minutes > 0 ? 1 : 0;
+                $base['missing_punch'] += (int) $punch->open_sessions > 0 ? 1 : 0;
+
+                continue;
+            }
+
+            $times = $this->rotationEngine->resolveTimes($assignment);
+            $grace = (int) ($rotation->grace_minutes ?: $times['late_margin'] ?: 0);
+            $deadline = $times['check_in']
+                ? $date->copy()->setTimeFromTimeString($times['check_in'])->addMinutes($grace)
+                : $date->copy()->endOfDay();
+
+            if ($now->greaterThan($deadline)) {
+                $base['absent']++;
+            } else {
+                $base['awaiting_arrival']++;
+            }
+        }
+
+        return $base + [
+            'by_status' => [
+                'present' => $base['present'], 'absent' => $base['absent'], 'late' => $base['late'],
+                'early_leave' => $base['early_leave'], 'missing_punch' => $base['missing_punch'],
+                'awaiting_arrival' => $base['awaiting_arrival'], 'vacation' => $base['on_leave'],
+                'mission' => $base['on_mission'], 'training' => $base['on_training'], 'swap' => $base['on_swap'],
+                'holiday' => $base['on_holiday'], 'rest' => $base['on_rest'], 'unassigned' => $base['unassigned'],
+            ],
+        ];
+    }
+
+    /**
+     * Determine whether an active holiday covers this employee on this date.
+     *
+     * @param  Collection<int, Holiday>  $holidays
+     */
+    private function hasApplicableHoliday(Collection $holidays, string $date, object $employee): bool
+    {
+        foreach ($holidays as $holiday) {
+            $duration = max(1, (int) $holiday->duration_days);
+            $anchor = $holiday->is_recurring
+                ? Carbon::createFromDate(
+                    Carbon::parse($date)->year,
+                    (int) $holiday->recurring_month,
+                    (int) $holiday->recurring_day,
+                )
+                : $holiday->date?->copy()->startOfDay();
+
+            if (! $anchor || ! Carbon::parse($date)->betweenIncluded($anchor, $anchor->copy()->addDays($duration - 1))) {
+                continue;
+            }
+
+            if ($holiday->applies_to_all
+                || in_array((int) $employee->branch_id, $holiday->applies_to_branches ?? [], true)
+                || in_array((int) $employee->department_id, $holiday->applies_to_departments ?? [], true)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

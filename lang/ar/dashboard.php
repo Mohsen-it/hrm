@@ -12,8 +12,10 @@ return [
 
     // Live counters
     'total_employees' => 'إجمالي الموظفين',
+    'required_today' => 'المطلوب حضورهم اليوم',
     'present_today' => 'حاضرون اليوم',
     'absent_today' => 'غائبون اليوم',
+    'awaiting_arrival' => 'بانتظار وقت الحضور',
     'late_today' => 'متأخرون اليوم',
     'early_leave' => 'انصراف مبكر',
     'missing_punch' => 'بصمة ناقصة',

@@ -2,10 +2,13 @@
 
 namespace Modules\Attendance\Listeners;
 
+use Illuminate\Support\Facades\Cache;
 use Modules\Attendance\Events\SessionCreated;
 use Modules\Attendance\Events\SessionDeleted;
 use Modules\Attendance\Events\SessionUpdated;
+use Modules\Attendance\Models\AttendanceSession;
 use Modules\Attendance\Services\AttendanceCacheService;
+use Modules\Attendance\Services\DailyAttendanceSummaryService;
 
 /**
  * InvalidateAttendanceCache — wipe the attendance cache on session changes.
@@ -26,6 +29,7 @@ class InvalidateAttendanceCache
      */
     public function __construct(
         private AttendanceCacheService $cache,
+        private DailyAttendanceSummaryService $dailySummaryService,
     ) {}
 
     /**
@@ -33,7 +37,7 @@ class InvalidateAttendanceCache
      */
     public function handleCreated(SessionCreated $event): void
     {
-        $this->cache->flush();
+        $this->refreshAttendanceState($event->session);
     }
 
     /**
@@ -41,7 +45,7 @@ class InvalidateAttendanceCache
      */
     public function handleUpdated(SessionUpdated $event): void
     {
-        $this->cache->flush();
+        $this->refreshAttendanceState($event->session);
     }
 
     /**
@@ -49,7 +53,7 @@ class InvalidateAttendanceCache
      */
     public function handleDeleted(SessionDeleted $event): void
     {
-        $this->cache->flush();
+        $this->refreshAttendanceState($event->session);
     }
 
     /**
@@ -65,5 +69,20 @@ class InvalidateAttendanceCache
             SessionUpdated::class => 'handleUpdated',
             SessionDeleted::class => 'handleDeleted',
         ];
+    }
+
+    /**
+     * Rebuild the one affected daily roll-up and invalidate the operational
+     * dashboard immediately after a session changes.
+     */
+    private function refreshAttendanceState(AttendanceSession $session): void
+    {
+        $this->dailySummaryService->recalculateForUserAndDate(
+            $session->user_id,
+            $session->attendance_date->toDateString(),
+        );
+
+        $this->cache->flush();
+        Cache::forget('dashboard:full_data:'.$session->attendance_date->toDateString());
     }
 }

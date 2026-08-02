@@ -61,8 +61,10 @@ let isComponentMounted = true;
 // Stat cards configuration
 const statCards = computed(() => [
     { label: t('dashboard.total_employees'), key: 'employees', icon: 'fas fa-users', color: 'primary' },
+    { label: t('dashboard.required_today'), key: 'required', icon: 'fas fa-user-clock', color: 'info' },
     { label: t('dashboard.present_today'), key: 'present', icon: 'fas fa-user-check', color: 'success' },
     { label: t('dashboard.absent_today'), key: 'absent', icon: 'fas fa-user-xmark', color: 'danger' },
+    { label: t('dashboard.awaiting_arrival'), key: 'awaiting_arrival', icon: 'fas fa-person-walking-arrow-right', color: 'warning' },
     { label: t('dashboard.currently_inside'), key: 'inside', icon: 'fas fa-door-open', color: 'info' },
     { label: t('dashboard.currently_outside'), key: 'outside', icon: 'fas fa-door-closed', color: 'warning' },
     { label: t('dashboard.late_today'), key: 'late', icon: 'fas fa-clock', color: 'purple' },
@@ -248,7 +250,7 @@ async function poll() {
     isPolling = true;
     try {
         const [pullJson, snapshotJson] = await Promise.all([
-            fetchJson(route('dashboard.pullEvents')),
+            fetchJson(route('dashboard.pullEvents', { sync: 1 })),
             fetchJson(route('dashboard.snapshot', { date: selectedDate.value })),
         ]);
         if (pullJson?.events) recentData.value = pullJson.events;

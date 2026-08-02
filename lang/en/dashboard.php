@@ -12,8 +12,10 @@ return [
 
     // Live counters
     'total_employees' => 'Total Employees',
+    'required_today' => 'Required Today',
     'present_today' => 'Present Today',
     'absent_today' => 'Absent Today',
+    'awaiting_arrival' => 'Awaiting Arrival',
     'late_today' => 'Late Today',
     'early_leave' => 'Early Leave',
     'missing_punch' => 'Missing Punch',

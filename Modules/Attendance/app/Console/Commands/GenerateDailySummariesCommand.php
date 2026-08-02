@@ -15,7 +15,8 @@ class GenerateDailySummariesCommand extends Command
      */
     protected $signature = 'attendance:generate-daily-summaries
                             {--from= : Start date (YYYY-MM-DD). Defaults to 1 day ago.}
-                            {--to= : End date (YYYY-MM-DD). Defaults to today.}';
+                            {--to= : End date (YYYY-MM-DD). Defaults to today.}
+                            {--today : Generate only the current operational day.}';
 
     /**
      * The console command description.
@@ -27,8 +28,9 @@ class GenerateDailySummariesCommand extends Command
      */
     public function handle(DailyAttendanceAutoCalculationService $service): int
     {
-        $from = (string) ($this->option('from') ?? now()->subDay()->toDateString());
-        $to = (string) ($this->option('to') ?? now()->toDateString());
+        $todayOnly = $this->option('today');
+        $from = (string) ($todayOnly ? now()->toDateString() : ($this->option('from') ?? now()->subDay()->toDateString()));
+        $to = (string) ($todayOnly ? now()->toDateString() : ($this->option('to') ?? now()->toDateString()));
 
         $this->info("Generating missing summaries from {$from} to {$to}...");
 

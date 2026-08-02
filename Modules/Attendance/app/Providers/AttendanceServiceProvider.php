@@ -94,6 +94,11 @@ class AttendanceServiceProvider extends ServiceProvider
             // Process unprocessed raw logs into sessions every 2 minutes
             Schedule::command('attendance:process-raw-logs')->everyTwoMinutes()->withoutOverlapping();
 
+            // Create summaries for every active employee throughout the day.
+            // This makes the dashboard reflect scheduled work, rest days,
+            // vacations, and missing attendance before the end-of-day sweep.
+            Schedule::command('attendance:generate-daily-summaries --today')->everyFiveMinutes()->withoutOverlapping();
+
             // Mark absent employees at 10:00 AM daily
             Schedule::command('attendance:mark-absent')->dailyAt('10:00')->withoutOverlapping();
 

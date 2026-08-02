@@ -105,9 +105,22 @@ Route::middleware(['auth'])->group(function () {
     // ----------------------------------------------------------------
     // Vacation Balances (Admin / HR)
     // ----------------------------------------------------------------
+    Route::middleware('permission:view-vacation-balances')->prefix('vacations/balances')->name('vacations.balances.')->group(function () {
+        Route::get('/export/excel', [VacationBalancesController::class, 'export'])->name('export');
+        Route::get('/', [VacationBalancesController::class, 'index'])->name('index');
+    });
+
     Route::post('vacations/balances/adjust', [VacationBalancesController::class, 'adjust'])
         ->middleware('permission:edit-vacation-balance')
         ->name('vacations.balances.adjust');
+
+    Route::post('vacations/balances/set', [VacationBalancesController::class, 'set'])
+        ->middleware('permission:edit-vacation-balance')
+        ->name('vacations.balances.set');
+
+    Route::post('vacations/balances/grant-all', [VacationBalancesController::class, 'grantAll'])
+        ->middleware('permission:edit-vacation-balance')
+        ->name('vacations.balances.grant-all');
     // ----------------------------------------------------------------
     // Holidays
     // ----------------------------------------------------------------

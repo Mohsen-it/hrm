@@ -17,6 +17,7 @@ return [
     'my_vacations' => 'إجازاتي',
     'vacation_types' => 'أنواع الإجازات',
     'vacation_requests' => 'طلبات الإجازات',
+    'vacation_balances' => 'أرصدة الإجازات',
     'attendance' => 'الحضور',
     'attendance_live' => 'الحضور المباشر',
     'attendance_sessions' => 'جلسات الحضور',

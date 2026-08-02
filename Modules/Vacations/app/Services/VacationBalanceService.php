@@ -5,6 +5,7 @@ namespace Modules\Vacations\Services;
 use Carbon\CarbonPeriod;
 use DateTimeImmutable;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
 use Modules\Users\Models\User;
 use Modules\Vacations\Models\UserVacationBalance;
@@ -70,6 +71,68 @@ class VacationBalanceService
         }
 
         return $this->grant($userId, $type, $year);
+    }
+
+    /**
+     * Build the HR balances matrix: active employees × active vacation
+     * types × supplied year, with the existing ledger rows keyed by
+     * (user_id, vacation_type_id).
+     *
+     * @return array{
+     *     types: Collection<int, VacationType>,
+     *     employees: Collection<int, array<string, mixed>>
+     * }
+     */
+    public function getBalancesMatrix(int $year, ?int $departmentId = null, ?string $search = null): array
+    {
+        $types = $this->typeService->getActiveTypes();
+
+        $users = User::query()
+            ->withoutSuperAdmin()
+            ->where('status', 1)
+            ->where('is_active_employee', true)
+            ->when($departmentId !== null, fn ($q) => $q->where('department_id', $departmentId))
+            ->when($search !== null && $search !== '', function ($q) use ($search): void {
+                $q->where(function ($sub) use ($search): void {
+                    $sub->where('name', 'like', "%{$search}%")
+                        ->orWhere('full_name_ar', 'like', "%{$search}%")
+                        ->orWhere('employee_code', 'like', "%{$search}%");
+                });
+            })
+            ->with('department:id,department_name')
+            ->orderBy('name')
+            ->get(['id', 'name', 'employee_code', 'department_id', 'hire_date']);
+
+        $balances = $this->balanceRepository->getForYearWithDetails($year);
+
+        $byUserType = [];
+        foreach ($balances as $balance) {
+            $byUserType[$balance->user_id][$balance->vacation_type_id] = [
+                'id' => (int) $balance->id,
+                'days_entitled' => (int) $balance->days_entitled,
+                'days_used' => (int) $balance->days_used,
+                'days_pending' => (int) $balance->days_pending,
+                'days_carried_over' => (int) $balance->days_carried_over,
+                'days_adjustment' => (int) $balance->days_adjustment,
+                'remaining' => $balance->daysRemaining(),
+            ];
+        }
+
+        $employees = $users->map(function ($user) use ($byUserType): array {
+            return [
+                'id' => (int) $user->id,
+                'name' => $user->name,
+                'employee_code' => $user->employee_code,
+                'department_name' => $user->department?->department_name,
+                'hire_date' => $user->hire_date?->toDateString(),
+                'balances' => $byUserType[$user->id] ?? [],
+            ];
+        })->values();
+
+        return [
+            'types' => $types,
+            'employees' => $employees,
+        ];
     }
 
     /**
@@ -319,6 +382,68 @@ class VacationBalanceService
             createdBy: $createdBy,
             logTransaction: true,
             reference: null,
+        );
+    }
+
+    /**
+     * Set the absolute entitled days for a (user, type, year) balance.
+     *
+     * The delta is computed against the current `days_entitled` (creating the
+     * row on first use) and every change is written to the immutable audit
+     * trail, so the operator-facing "set" is just an absolute variant of the
+     * relative adjustment.
+     */
+    public function setDays(int $userId, int $typeId, int $year, int $days, ?int $createdBy = null, ?string $notes = null): UserVacationBalance
+    {
+        if ($days < 0) {
+            throw new InvalidArgumentException(
+                __('vacations.negative_grant_not_allowed')
+            );
+        }
+
+        $existing = $this->balanceRepository->findForUserTypeYear($userId, $typeId, $year);
+
+        $type = $this->typeService->findType($typeId);
+        if (! $type) {
+            throw new InvalidArgumentException(
+                __('vacations.type_not_found', ['id' => $typeId])
+            );
+        }
+
+        if (! $existing) {
+            return $this->grant(
+                $userId,
+                $type,
+                $year,
+                $days,
+                $createdBy,
+                true,
+                ['reference_type' => 'balance_set', 'reference_id' => null],
+            );
+        }
+
+        $consumed = (int) $existing->days_used + (int) $existing->days_pending;
+        if ($days < $consumed) {
+            throw ValidationException::withMessages([
+                'days' => __('vacations.balance_below_consumed', [
+                    'days' => $days,
+                    'consumed' => $consumed,
+                ]),
+            ]);
+        }
+
+        $delta = $days - (int) $existing->days_entitled;
+
+        return $this->upsertWithDelta(
+            $userId,
+            $typeId,
+            $year,
+            daysEntitledDelta: $delta,
+            type: 'manual_adjustment',
+            notes: $notes ?? __('vacations.set_balance_note', ['days' => $days]),
+            createdBy: $createdBy,
+            logTransaction: true,
+            reference: ['reference_type' => 'balance_set', 'reference_id' => null],
         );
     }
 

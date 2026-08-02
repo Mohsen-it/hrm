@@ -207,6 +207,13 @@ export const navigationGroups = [
         permissions: ['view-vacation-types'],
       },
       {
+        id: 'leave.balances',
+        label: 'menu.vacation_balances',
+        route: 'vacations.balances.index',
+        icon: 'fa-solid fa-scale-balanced',
+        permissions: ['view-vacation-balances'],
+      },
+      {
         id: 'leave.holidays',
         label: 'menu.holidays',
         route: 'holidays.index',
@@ -374,7 +381,7 @@ export const navigationModules = [
     color: 'bg-mistral-warning/10 text-mistral-warning',
     groupKeys: ['leave'],
     route: 'vacations.requests.index',
-    permissions: ['view-vacation-requests', 'view-vacations'],
+    permissions: ['view-vacation-requests', 'view-vacations', 'view-vacation-balances'],
   },
   {
     id: 'devices',

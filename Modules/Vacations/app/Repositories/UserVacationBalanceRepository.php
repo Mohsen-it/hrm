@@ -87,6 +87,20 @@ class UserVacationBalanceRepository
     }
 
     /**
+     * Return every balance row for a year with the owning user and type
+     * preloaded (used by the HR balances matrix).
+     *
+     * @return Collection<int, UserVacationBalance>
+     */
+    public function getForYearWithDetails(int $year): Collection
+    {
+        return $this->query()
+            ->with(['user', 'vacationType'])
+            ->forYear($year)
+            ->get();
+    }
+
+    /**
      * Persist a new balance row.
      *
      * @param  array<string, mixed>  $data

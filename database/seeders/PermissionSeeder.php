@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use Illuminate\Database\Seeder;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
+use Spatie\Permission\PermissionRegistrar;
 
 /**
  * Seeds all module permissions and grants them to the super-admin role.
@@ -48,6 +49,7 @@ class PermissionSeeder extends Seeder
     protected array $extraPermissions = [
         'view-dashboard',
         'approve-vacation-requests',
+        'view-vacation-balances',
         'edit-vacation-balance',
         'view-shift-categories',
         'create-shift-categories',
@@ -71,6 +73,12 @@ class PermissionSeeder extends Seeder
      */
     public function run(): void
     {
+        // Flush the Spatie permission cache first: `syncPermissions` below
+        // resolves every name through the registrar's cached collection, so a
+        // stale cache would throw PermissionDoesNotExist for permissions that
+        // exist in the database but were created after the cache was filled.
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
+
         $permissions = $this->createPermissions();
 
         $this->assignPermissionsToSuperAdmin($permissions);

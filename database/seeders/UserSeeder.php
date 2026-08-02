@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Hash;
 use Modules\Users\Models\User;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
+use Spatie\Permission\PermissionRegistrar;
 
 /**
  * Seeds the HRM system super-admin user.
@@ -110,6 +111,10 @@ class UserSeeder extends Seeder
      */
     protected function syncAllPermissionsTo(Role $role): void
     {
+        // Ensure `syncPermissions` resolves names against a fresh collection
+        // rather than a stale Spatie cache (see PermissionSeeder note).
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
+
         $permissionNames = Permission::where('guard_name', 'web')->pluck('name')->all();
 
         if (! empty($permissionNames)) {

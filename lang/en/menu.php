@@ -17,6 +17,7 @@ return [
     'my_vacations' => 'My Vacations',
     'vacation_types' => 'Vacation Types',
     'vacation_requests' => 'Vacation Requests',
+    'vacation_balances' => 'Vacation Balances',
     'attendance' => 'Attendance',
     'attendance_live' => 'Live Attendance',
     'attendance_sessions' => 'Attendance Sessions',

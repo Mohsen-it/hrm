@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 use Modules\Shifts\Exports\SmartAbsenceDailyExport;
+use Modules\Shifts\Exports\SmartAbsenceMonthlyExport;
 use Modules\Shifts\Repositories\RotationAssignmentRepository;
 use Modules\Shifts\Repositories\RotationRepository;
 use Modules\Shifts\Services\AbsenceCalculationService;
@@ -39,21 +40,8 @@ class SmartAbsenceController extends Controller
 
         $report = $this->buildDailyReport($date, $dateStr, $departmentId, $rotationIds, $rotationGroupIds);
 
-        $rotations = $this->rotationRepository->getAllList()->map(fn ($rotation) => [
-            'id' => $rotation->id,
-            'name' => $rotation->name,
-            'groups' => $rotation->groups->map(fn ($group) => [
-                'id' => $group->id,
-                'name' => $group->name,
-            ])->toArray(),
-        ])->toArray();
-
-        $departments = DB::table('departments')
-            ->where('status', 1)
-            ->orderBy('department_name')
-            ->get(['id', 'department_name'])
-            ->map(fn ($dept) => ['id' => (int) $dept->id, 'name' => $dept->department_name])
-            ->all();
+        $rotations = $this->buildRotationOptions();
+        $departments = $this->buildDepartmentOptions();
 
         $totalExpected = $report['expected']->count();
         $totalAbsent = $report['absent']->count();
@@ -83,6 +71,7 @@ class SmartAbsenceController extends Controller
             'rotations' => $rotations,
             'departments' => $departments,
             'monthlyData' => [],
+            'monthlyReportData' => [],
             'filters' => [
                 'department_id' => $departmentId,
                 'rotation_ids' => $rotationIds,
@@ -90,6 +79,222 @@ class SmartAbsenceController extends Controller
                 'date' => $dateStr,
             ],
         ]);
+    }
+
+    /**
+     * Monthly / date-range smart absence report, aggregated like the daily one.
+     *
+     * Every employee expected to work at least one day inside the selected
+     * range appears with their expected / present / absent day counts, using
+     * the exact same rotation + attendance calculation as the daily report.
+     */
+    public function monthlyReport(Request $request): Response
+    {
+        $this->authorize('view-attendance-by-schedule');
+
+        [$from, $to] = $this->parseRangeDates($request);
+
+        $departmentId = $request->input('department_id') ? (int) $request->input('department_id') : null;
+        $rotationIds = $this->parseIdList($request->input('rotation_ids', $request->input('rotation_id')));
+        $rotationGroupIds = $this->parseIdList($request->input('rotation_group_ids', $request->input('rotation_group_id')));
+
+        $report = $this->absenceService->getMonthlyAbsenceReport($from, $to, $departmentId, $rotationIds, $rotationGroupIds);
+
+        $absentDetails = $this->buildMonthlyAbsentDetails($report);
+
+        $totalExpectedDays = $report['total_expected_days'];
+        $totalAbsentDays = $report['total_absent_days'];
+        $totalPresentDays = max($totalExpectedDays - $totalAbsentDays, 0);
+        $attendanceRate = $totalExpectedDays > 0
+            ? (int) round((($totalExpectedDays - $totalAbsentDays) / $totalExpectedDays) * 100)
+            : 100;
+
+        $page = $request->integer('page', 1);
+        $perPage = $request->integer('per_page', 20);
+        $paginator = new LengthAwarePaginator(
+            $absentDetails->forPage($page, $perPage),
+            $absentDetails->count(),
+            $perPage,
+            $page,
+            ['path' => route('smart-absence.monthly.report')]
+        );
+
+        return Inertia::render('Shifts/Absence/SmartAbsenceReport', [
+            'dailyData' => [],
+            'monthlyData' => [],
+            'monthlyReportData' => [
+                'employees' => $paginator->toArray(),
+                'total_expected_days' => $totalExpectedDays,
+                'total_absent_days' => $totalAbsentDays,
+                'total_present_days' => $totalPresentDays,
+                'attendance_rate' => $attendanceRate,
+                'from_date' => $from->toDateString(),
+                'to_date' => $to->toDateString(),
+            ],
+            'rotations' => $this->buildRotationOptions(),
+            'departments' => $this->buildDepartmentOptions(),
+            'filters' => [
+                'from_date' => $from->toDateString(),
+                'to_date' => $to->toDateString(),
+                'department_id' => $departmentId,
+                'rotation_ids' => $rotationIds,
+                'rotation_group_ids' => $rotationGroupIds,
+                'month' => (int) $from->month,
+                'year' => (int) $from->year,
+            ],
+        ]);
+    }
+
+    /**
+     * Export the monthly smart-absence report as a fully-formatted .xlsx file
+     * with Arabic / RTL support.
+     */
+    public function exportMonthly(Request $request): HttpResponse
+    {
+        $this->authorize('view-attendance-by-schedule');
+
+        [$from, $to] = $this->parseRangeDates($request);
+
+        $departmentId = $request->input('department_id') ? (int) $request->input('department_id') : null;
+        $rotationIds = $this->parseIdList($request->input('rotation_ids', $request->input('rotation_id')));
+        $rotationGroupIds = $this->parseIdList($request->input('rotation_group_ids', $request->input('rotation_group_id')));
+
+        $report = $this->absenceService->getMonthlyAbsenceReport($from, $to, $departmentId, $rotationIds, $rotationGroupIds);
+
+        $export = new SmartAbsenceMonthlyExport(
+            fromDate: $from->toDateString(),
+            toDate: $to->toDateString(),
+            totalExpectedDays: $report['total_expected_days'],
+            totalAbsentDays: $report['total_absent_days'],
+            employees: $this->buildMonthlyAbsentDetails($report),
+            statusLabel: __('shifts.absent_short', [], null) ?: 'غياب',
+        );
+
+        $fileName = "smart-absence-{$from->toDateString()}_{$to->toDateString()}.xlsx";
+        $content = $export->toBinary();
+
+        return response($content, 200, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Content-Disposition' => "attachment; filename=\"{$fileName}\"; filename*=UTF-8''".rawurlencode($fileName),
+            'Content-Length' => (string) strlen($content),
+            'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
+        ]);
+    }
+
+    /**
+     * Parse the inclusive from/to date range (defaults to the current month).
+     *
+     * @return array{Carbon, Carbon}
+     */
+    private function parseRangeDates(Request $request): array
+    {
+        $from = $request->filled('from_date')
+            ? Carbon::parse($request->input('from_date'))->startOfDay()
+            : now()->startOfMonth();
+        $to = $request->filled('to_date')
+            ? Carbon::parse($request->input('to_date'))->startOfDay()
+            : now()->endOfMonth();
+
+        if ($to->lt($from)) {
+            [$from, $to] = [$to, $from];
+        }
+
+        return [$from, $to];
+    }
+
+    /**
+     * Enrich the monthly stats with employee details and keep only the
+     * employees absent at least one day inside the range (the same scenario
+     * as the daily report), most absent first.
+     *
+     * @param  array{employees: Collection, total_expected_days: int, total_absent_days: int}  $report
+     */
+    private function buildMonthlyAbsentDetails(array $report): Collection
+    {
+        $statsById = $report['employees']->keyBy('employee_id');
+
+        if ($statsById->isEmpty()) {
+            return collect();
+        }
+
+        $details = DB::table('users')
+            ->whereIn('users.id', $statsById->keys()->toArray())
+            ->leftJoin('departments', 'users.department_id', '=', 'departments.id')
+            ->leftJoin('branches', 'users.branch_id', '=', 'branches.id')
+            ->leftJoin('positions', 'users.position_id', '=', 'positions.id')
+            ->leftJoin('grades', 'users.grade_id', '=', 'grades.id')
+            ->get([
+                'users.id',
+                'users.name',
+                'users.employee_code',
+                'users.phone',
+                'users.job_title',
+                'users.department_id',
+                'users.branch_id',
+                'users.position_id',
+                'users.grade_id',
+                'departments.department_name',
+                'branches.branch_name',
+                'positions.position_name',
+                'grades.grade_name',
+            ]);
+
+        return $details
+            ->map(function ($row) use ($statsById) {
+                $stat = $statsById->get($row->id, []);
+                $expected = (int) ($stat['expected'] ?? 0);
+                $absentDates = $stat['absent_dates'] ?? [];
+                $absent = count($absentDates);
+
+                $row->expected_days = $expected;
+                $row->present_days = max($expected - $absent, 0);
+                $row->absent_days = $absent;
+                $row->absent_dates = $absentDates;
+                $row->attendance_rate = $expected > 0 ? (int) round((($expected - $absent) / $expected) * 100) : 100;
+                $row->rotation_name = $stat['rotation_name'] ?? null;
+                $row->rotation_group_name = $stat['rotation_group_name'] ?? null;
+                $row->expected_in = $stat['expected_in'] ?? null;
+                $row->expected_out = $stat['expected_out'] ?? null;
+                $row->status = 'absent';
+
+                return $row;
+            })
+            ->filter(fn ($row) => $row->absent_days > 0)
+            ->sortBy('name')
+            ->sortByDesc('absent_days')
+            ->values();
+    }
+
+    /**
+     * Rotation + group options used by the report filter bars.
+     *
+     * @return array<int, array{id: int, name: string, groups: array<int, array{id: int, name: string}>}>
+     */
+    private function buildRotationOptions(): array
+    {
+        return $this->rotationRepository->getAllList()->map(fn ($rotation) => [
+            'id' => $rotation->id,
+            'name' => $rotation->name,
+            'groups' => $rotation->groups->map(fn ($group) => [
+                'id' => $group->id,
+                'name' => $group->name,
+            ])->toArray(),
+        ])->toArray();
+    }
+
+    /**
+     * Active department options used by the report filter bars.
+     *
+     * @return array<int, array{id: int, name: string}>
+     */
+    private function buildDepartmentOptions(): array
+    {
+        return DB::table('departments')
+            ->where('status', 1)
+            ->orderBy('department_name')
+            ->get(['id', 'department_name'])
+            ->map(fn ($dept) => ['id' => (int) $dept->id, 'name' => $dept->department_name])
+            ->all();
     }
 
     /**
@@ -227,6 +432,9 @@ class SmartAbsenceController extends Controller
         return Inertia::render('Shifts/Absence/SmartAbsenceReport', [
             'dailyData' => [],
             'monthlyData' => $monthlyData,
+            'monthlyReportData' => [],
+            'rotations' => $this->buildRotationOptions(),
+            'departments' => $this->buildDepartmentOptions(),
             'filters' => [
                 'employee_id' => $employeeId,
                 'employee_name' => $employee?->name,

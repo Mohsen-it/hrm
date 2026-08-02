@@ -4,9 +4,8 @@ import { router } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import {
     PageHeader, Card, Button, DataTable, FormInput, FormSelect, FormMultiSelect,
-    StatCard, Badge, EmptyState, LoadingSpinner,
+    StatCard, Badge, EmptyState,
 } from '@/Components/ui'
-import CalendarLegend from '@/Pages/Shifts/Partials/CalendarLegend.vue'
 import { useTranslations } from '@/composables/useTranslations'
 
 const { t } = useTranslations()
@@ -14,6 +13,7 @@ const { t } = useTranslations()
 const props = defineProps({
     dailyData: { type: Object, default: () => ({ expected: [], absent: { data: [] }, total_expected: 0, total_absent: 0, attendance_rate: 100, date: '' }) },
     monthlyData: { type: Array, default: () => [] },
+    monthlyReportData: { type: Object, default: () => ({ employees: { data: [], links: [] }, total_expected_days: 0, total_absent_days: 0, total_present_days: 0, attendance_rate: 100, from_date: '', to_date: '' }) },
     rotations: { type: Array, default: () => [] },
     departments: { type: Array, default: () => [] },
     filters: { type: Object, default: () => ({}) },
@@ -25,15 +25,21 @@ const selectedDate = ref(props.filters?.date || new Date().toISOString().split('
 const selectedDepartmentId = ref(props.filters?.department_id || null)
 const selectedRotationIds = ref(Array.isArray(props.filters?.rotation_ids) ? props.filters.rotation_ids : (props.filters?.rotation_id ? [props.filters.rotation_id] : []))
 const selectedRotationGroupIds = ref(Array.isArray(props.filters?.rotation_group_ids) ? props.filters.rotation_group_ids : (props.filters?.rotation_group_id ? [props.filters.rotation_group_id] : []))
-const selectedMonth = ref(props.filters?.month || new Date().getMonth() + 1)
-const selectedYear = ref(props.filters?.year || new Date().getFullYear())
 
-const selectedEmployeeId = ref(props.filters?.employee_id || null)
-const employeeSearch = ref(props.filters?.employee_name || '')
-const employeeResults = ref([])
-const searchingEmployees = ref(false)
-const showEmployeeDropdown = ref(false)
-const selectedEmployeeName = ref(props.filters?.employee_name || '')
+const today = new Date()
+const selectedMonth = ref(Number(props.filters?.month) || today.getMonth() + 1)
+const selectedYear = ref(Number(props.filters?.year) || today.getFullYear())
+const fromDate = ref(props.filters?.from_date || firstOfMonth(selectedMonth.value, selectedYear.value))
+const toDate = ref(props.filters?.to_date || lastOfMonth(selectedMonth.value, selectedYear.value))
+
+function firstOfMonth(month, year) {
+    return `${year}-${String(month).padStart(2, '0')}-01`
+}
+
+function lastOfMonth(month, year) {
+    const lastDay = new Date(year, month, 0).getDate()
+    return `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+}
 
 // All groups (across selected rotations) for multi-select
 const allGroupOptions = computed(() => {
@@ -84,6 +90,14 @@ const filterParams = computed(() => ({
     rotation_group_ids: selectedRotationGroupIds.value,
 }))
 
+const monthlyFilterParams = computed(() => ({
+    from_date: fromDate.value,
+    to_date: toDate.value,
+    department_id: selectedDepartmentId.value || null,
+    rotation_ids: selectedRotationIds.value,
+    rotation_group_ids: selectedRotationGroupIds.value,
+}))
+
 const hasActiveFilters = computed(() =>
     selectedDepartmentId.value
     || selectedRotationIds.value.length > 0
@@ -99,6 +113,28 @@ const summary = computed(() => {
     return { totalExpected, totalAbsent, rate }
 })
 
+const monthlySummary = computed(() => {
+    const expected = Number(props.monthlyReportData?.total_expected_days) || 0
+    const absent = Number(props.monthlyReportData?.total_absent_days) || 0
+    const present = Math.max(Number(props.monthlyReportData?.total_present_days) || (expected - absent), 0)
+    const rate = expected > 0 ? Math.round((present / expected) * 100) : 100
+    return { expected, absent, present, rate }
+})
+
+let reloadTimer = null
+function reloadActiveTab() {
+    clearTimeout(reloadTimer)
+    reloadTimer = setTimeout(() => {
+        if (activeTab.value === 'monthly') loadMonthly()
+        else loadDaily()
+    }, 200)
+}
+
+watch(activeTab, (tab) => {
+    if (tab === 'monthly') loadMonthly()
+    else loadDaily()
+})
+
 watch(selectedRotationIds, () => {
     if (selectedRotationIds.value.length === 0) {
         selectedRotationGroupIds.value = []
@@ -106,15 +142,24 @@ watch(selectedRotationIds, () => {
         const validGroupIds = new Set(multiGroupOptions.value.map((g) => g.value))
         selectedRotationGroupIds.value = selectedRotationGroupIds.value.filter((id) => validGroupIds.has(id))
     }
-    loadDaily()
+    reloadActiveTab()
 })
 
 watch(selectedRotationGroupIds, () => {
-    loadDaily()
+    reloadActiveTab()
 })
 
 watch(selectedDepartmentId, () => {
-    loadDaily()
+    reloadActiveTab()
+})
+
+watch([selectedMonth, selectedYear], () => {
+    fromDate.value = firstOfMonth(selectedMonth.value, selectedYear.value)
+    toDate.value = lastOfMonth(selectedMonth.value, selectedYear.value)
+})
+
+watch([fromDate, toDate], () => {
+    reloadActiveTab()
 })
 
 function loadDaily() {
@@ -126,60 +171,20 @@ function loadDaily() {
     }, { preserveState: true, preserveScroll: true, replace: true })
 }
 
+function loadMonthly() {
+    router.get(route('smart-absence.monthly.report'), {
+        from_date: fromDate.value,
+        to_date: toDate.value,
+        department_id: selectedDepartmentId.value || null,
+        rotation_ids: selectedRotationIds.value,
+        rotation_group_ids: selectedRotationGroupIds.value,
+    }, { preserveState: true, preserveScroll: true, replace: true })
+}
+
 function clearFilters() {
     selectedDepartmentId.value = null
     selectedRotationIds.value = []
     selectedRotationGroupIds.value = []
-    loadDaily()
-}
-
-let searchTimeout = null
-async function searchEmployees(query) {
-    if (!query || query.length < 2) {
-        employeeResults.value = []
-        return
-    }
-    searchingEmployees.value = true
-    try {
-        const response = await fetch(route('rotations.search-employees') + `?search=${encodeURIComponent(query)}`)
-        const data = await response.json()
-        employeeResults.value = data.employees || []
-    } catch (e) {
-        employeeResults.value = []
-    } finally {
-        searchingEmployees.value = false
-    }
-}
-
-function onEmployeeSearchInput(value) {
-    employeeSearch.value = value
-    showEmployeeDropdown.value = true
-    if (!value) selectedEmployeeId.value = null
-    clearTimeout(searchTimeout)
-    searchTimeout = setTimeout(() => searchEmployees(value), 300)
-}
-
-function selectEmployee(emp) {
-    selectedEmployeeId.value = emp.id
-    selectedEmployeeName.value = emp.name || emp.full_name
-    employeeSearch.value = emp.name || emp.full_name
-    showEmployeeDropdown.value = false
-    employeeResults.value = []
-}
-
-function clearEmployeeSelection() {
-    selectedEmployeeId.value = null
-    selectedEmployeeName.value = ''
-    employeeSearch.value = ''
-    showEmployeeDropdown.value = false
-}
-
-function loadMonthly() {
-    if (!selectedEmployeeId.value) return
-    router.get(route('smart-absence.monthly', { employee: selectedEmployeeId.value }), {
-        month: selectedMonth.value,
-        year: selectedYear.value,
-    }, { preserveState: true, preserveScroll: true, replace: true })
 }
 
 function buildExportParams() {
@@ -198,13 +203,21 @@ function handleExport(payload) {
     window.location.href = url
 }
 
-function statusColor(status) {
-    const map = {
-        absent: 'bg-mistral-danger text-white',
-        present: 'bg-mistral-success text-white',
-        on_leave: 'bg-mistral-info text-white',
-    }
-    return map[status] || 'bg-mistral-surface text-mistral-steel'
+function buildMonthlyExportParams() {
+    const params = new URLSearchParams()
+    params.set('from_date', fromDate.value)
+    params.set('to_date', toDate.value)
+    if (selectedDepartmentId.value) params.set('department_id', String(selectedDepartmentId.value))
+    selectedRotationIds.value.forEach((id) => params.append('rotation_ids[]', String(id)))
+    selectedRotationGroupIds.value.forEach((id) => params.append('rotation_group_ids[]', String(id)))
+    return params
+}
+
+function handleMonthlyExport(payload) {
+    const format = payload?.format === 'csv' ? 'csv' : 'excel'
+    if (format !== 'excel') return
+    const url = route('smart-absence.monthly.export') + '?' + buildMonthlyExportParams().toString()
+    window.location.href = url
 }
 
 const monthOptions = computed(() =>
@@ -234,6 +247,27 @@ const columns = computed(() => [
     },
 ])
 
+const monthlyColumns = computed(() => [
+    {
+        key: 'name', label: t('shifts.employee_name'), sortable: true, filterable: true,
+        cellClass: 'min-w-[180px]',
+    },
+    { key: 'employee_code', label: t('shifts.employee_code'), sortable: true, filterable: true, cellClass: 'min-w-[110px]' },
+    { key: 'department_name', label: t('shifts.department'), sortable: true, filterable: true },
+    {
+        key: 'rotation_name', label: t('shifts.rotation'), sortable: true, filterable: true,
+        filterType: 'select', filterOptions: rotationOptions.value,
+    },
+    {
+        key: 'rotation_group_name', label: t('shifts.rotation_group'), sortable: true, filterable: true,
+        filterType: 'select', filterOptions: allGroupOptions.value,
+    },
+    { key: 'expected_days', label: t('shifts.expected_days'), sortable: true, cellClass: 'text-center min-w-[90px]' },
+    { key: 'present_days', label: t('shifts.present_days'), sortable: true, cellClass: 'text-center min-w-[80px]' },
+    { key: 'absent_days', label: t('shifts.absent_days'), sortable: true, cellClass: 'text-center min-w-[80px]' },
+    { key: 'absent_dates', label: t('shifts.absent_dates'), sortable: false, cellClass: 'min-w-[220px]' },
+])
+
 function formatTime(value) {
     if (!value) return '—'
     const s = String(value)
@@ -244,14 +278,14 @@ const filterPills = computed(() => {
     const pills = []
     if (selectedDepartmentId.value) {
         const dept = props.departments.find((d) => d.id === selectedDepartmentId.value)
-        if (dept) pills.push({ key: 'department', label: dept.name, clear: () => { selectedDepartmentId.value = null; loadDaily() } })
+        if (dept) pills.push({ key: 'department', label: dept.name, clear: () => { selectedDepartmentId.value = null } })
     }
     selectedRotationIds.value.forEach((id) => {
         const r = props.rotations.find((rot) => rot.id === id)
         if (r) pills.push({
             key: `rot-${id}`,
             label: t('shifts.rotation') + ': ' + r.name,
-            clear: () => { selectedRotationIds.value = selectedRotationIds.value.filter((x) => x !== id); loadDaily() },
+            clear: () => { selectedRotationIds.value = selectedRotationIds.value.filter((x) => x !== id) },
         })
     })
     selectedRotationGroupIds.value.forEach((id) => {
@@ -259,7 +293,7 @@ const filterPills = computed(() => {
         if (g) pills.push({
             key: `grp-${id}`,
             label: t('shifts.rotation_group') + ': ' + g.label,
-            clear: () => { selectedRotationGroupIds.value = selectedRotationGroupIds.value.filter((x) => x !== id); loadDaily() },
+            clear: () => { selectedRotationGroupIds.value = selectedRotationGroupIds.value.filter((x) => x !== id) },
         })
     })
     return pills
@@ -274,7 +308,7 @@ const filterPills = computed(() => {
         >
             <template #actions>
                 <Button
-                    v-if="activeTab === 'daily' && hasActiveFilters"
+                    v-if="hasActiveFilters"
                     variant="secondary"
                     size="sm"
                     icon="fas fa-filter-circle-xmark"
@@ -349,7 +383,7 @@ const filterPills = computed(() => {
                             type="date"
                             :label="t('shifts.date')"
                             name="selected_date"
-                            @change="loadDaily"
+                            @change="reloadActiveTab"
                         />
                         <FormSelect
                             v-model="selectedDepartmentId"
@@ -371,7 +405,7 @@ const filterPills = computed(() => {
                             :label="t('shifts.rotation_group')"
                             name="rotation_group_ids"
                             :options="multiGroupOptions"
-                            :placeholder="selectedRotationIds.length === 0 ? t('shifts.all_groups') : t('shifts.all_groups')"
+                            :placeholder="t('shifts.all_groups')"
                             :search-placeholder="t('shifts.employee_search_placeholder')"
                             :max-visible-tags="2"
                             :disabled="multiGroupOptions.length === 0"
@@ -427,7 +461,7 @@ const filterPills = computed(() => {
                     :empty-title="t('shifts.no_absent_employees')"
                     :empty-description="t('shifts.no_absent_employees_description')"
                     storage-key="smart-absence-report-daily"
-                    @search="(q) => loadDaily()"
+                    @search="(q) => reloadActiveTab()"
                     @export="handleExport"
                 >
                     <template #cell-name="{ row }">
@@ -518,57 +552,38 @@ const filterPills = computed(() => {
 
         <!-- Monthly tab -->
         <div v-if="activeTab === 'monthly'">
-            <Card variant="base" padding="none" class="mb-5">
+            <!-- Hero stat cards -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+                <StatCard
+                    :label="t('shifts.expected_days')"
+                    :value="monthlySummary.expected"
+                    icon="fas fa-calendar-check"
+                    color="info"
+                />
+                <StatCard
+                    :label="t('shifts.absent_days')"
+                    :value="monthlySummary.absent"
+                    icon="fas fa-user-xmark"
+                    color="danger"
+                />
+                <StatCard
+                    :label="t('shifts.present_days')"
+                    :value="monthlySummary.present"
+                    icon="fas fa-user-check"
+                    color="success"
+                />
+                <StatCard
+                    :label="t('shifts.attendance_rate')"
+                    :value="monthlySummary.rate + '%'"
+                    icon="fas fa-chart-pie"
+                    :color="monthlySummary.rate >= 90 ? 'success' : monthlySummary.rate >= 70 ? 'warning' : 'danger'"
+                />
+            </div>
+
+            <!-- Filter bar -->
+            <Card variant="base" padding="none" class="mb-4">
                 <div class="p-5">
                     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
-                        <div class="relative">
-                            <label class="block text-[12px] font-semibold text-mistral-slate uppercase tracking-wider mb-1.5">
-                                {{ t('shifts.employee') }}
-                            </label>
-                            <div class="flex items-center gap-2">
-                                <div class="relative flex-1">
-                                    <i class="fas fa-search absolute top-1/2 -translate-y-1/2 text-mistral-muted text-[12px]"
-                                       style="inset-inline-start: 0.75rem;"></i>
-                                    <input
-                                        type="text"
-                                        :value="employeeSearch"
-                                        @input="onEmployeeSearchInput($event.target.value)"
-                                        @focus="showEmployeeDropdown = true"
-                                        :placeholder="t('shifts.employee_search_placeholder')"
-                                        class="w-full h-11 text-[14px] bg-white border border-mistral-hairline-strong rounded-lg focus:outline-none focus:ring-2 focus:ring-mistral-primary/20 focus:border-mistral-primary"
-                                        style="padding-inline-start: 2.25rem; padding-inline-end: 0.75rem;"
-                                    />
-                                </div>
-                                <LoadingSpinner v-if="searchingEmployees" size="sm" />
-                                <button
-                                    v-if="selectedEmployeeId"
-                                    @click="clearEmployeeSelection"
-                                    class="text-mistral-steel hover:text-mistral-danger w-9 h-9 flex items-center justify-center rounded-lg hover:bg-mistral-surface"
-                                >
-                                    <i class="fas fa-times"></i>
-                                </button>
-                            </div>
-                            <div
-                                v-if="showEmployeeDropdown && employeeResults.length > 0"
-                                class="absolute z-50 mt-1 w-full bg-white border border-mistral-hairline-strong rounded-lg shadow-lg max-h-60 overflow-auto"
-                            >
-                                <button
-                                    v-for="emp in employeeResults"
-                                    :key="emp.id"
-                                    @click="selectEmployee(emp)"
-                                    class="w-full text-start px-3 py-2 hover:bg-mistral-surface text-[13px] border-b border-mistral-hairline-soft last:border-0"
-                                >
-                                    <div class="font-medium text-mistral-ink">{{ emp.name }}</div>
-                                    <div class="text-[11px] text-mistral-steel" dir="ltr">{{ emp.employee_code }}</div>
-                                </button>
-                            </div>
-                            <div
-                                v-if="showEmployeeDropdown && employeeSearch.length >= 2 && employeeResults.length === 0 && !searchingEmployees"
-                                class="absolute z-50 mt-1 w-full bg-white border border-mistral-hairline-strong rounded-lg shadow-lg p-3 text-[13px] text-mistral-steel"
-                            >
-                                {{ t('common.no_results') }}
-                            </div>
-                        </div>
                         <FormSelect
                             v-model="selectedMonth"
                             :label="t('shifts.month')"
@@ -581,42 +596,195 @@ const filterPills = computed(() => {
                             :label="t('shifts.year')"
                             name="selected_year"
                         />
-                        <Button variant="primary" icon="fas fa-search" @click="loadMonthly" :disabled="!selectedEmployeeId">
-                            {{ t('common.view') }}
-                        </Button>
+                        <FormInput
+                            v-model="fromDate"
+                            type="date"
+                            :label="t('shifts.from_date')"
+                            name="from_date"
+                        />
+                        <FormInput
+                            v-model="toDate"
+                            type="date"
+                            :label="t('shifts.to_date')"
+                            name="to_date"
+                        />
+                        <FormSelect
+                            v-model="selectedDepartmentId"
+                            :label="t('shifts.department')"
+                            name="department_id"
+                            :options="departmentOptions"
+                        />
+                        <FormMultiSelect
+                            v-model="selectedRotationIds"
+                            :label="t('shifts.rotation')"
+                            name="rotation_ids"
+                            :options="multiRotationOptions"
+                            :placeholder="t('shifts.all_rotations')"
+                            :search-placeholder="t('shifts.employee_search_placeholder')"
+                            :max-visible-tags="2"
+                        />
+                        <FormMultiSelect
+                            v-model="selectedRotationGroupIds"
+                            :label="t('shifts.rotation_group')"
+                            name="rotation_group_ids"
+                            :options="multiGroupOptions"
+                            :placeholder="t('shifts.all_groups')"
+                            :search-placeholder="t('shifts.employee_search_placeholder')"
+                            :max-visible-tags="2"
+                            :disabled="multiGroupOptions.length === 0"
+                        />
+                    </div>
+
+                    <!-- Active filter pills -->
+                    <div v-if="filterPills.length" class="mt-4 flex items-center gap-2 flex-wrap pt-4 border-t border-mistral-hairline-soft">
+                        <span class="text-[12px] text-mistral-steel font-medium">
+                            <i class="fas fa-filter text-[10px] ms-1"></i>
+                            {{ t('shifts.selected_rotations') }}:
+                        </span>
+                        <button
+                            v-for="pill in filterPills"
+                            :key="pill.key"
+                            type="button"
+                            @click="pill.clear"
+                            class="inline-flex items-center gap-1.5 bg-mistral-primary/10 text-mistral-primary hover:bg-mistral-primary/15 rounded-md px-2.5 py-1 text-[12px] font-medium transition-colors"
+                        >
+                            {{ pill.label }}
+                            <i class="fas fa-times text-[10px]"></i>
+                        </button>
                     </div>
                 </div>
             </Card>
 
-            <CalendarLegend showRest class="mb-4" />
-
-            <Card variant="base" padding="none">
-                <div v-if="monthlyData.length" class="p-5">
-                    <div class="grid grid-cols-7 gap-1 text-center">
-                        <div class="text-[11px] font-bold text-mistral-slate py-2">{{ t('shifts.sat_short') }}</div>
-                        <div class="text-[11px] font-bold text-mistral-slate py-2">{{ t('shifts.sun_short') }}</div>
-                        <div class="text-[11px] font-bold text-mistral-slate py-2">{{ t('shifts.mon_short') }}</div>
-                        <div class="text-[11px] font-bold text-mistral-slate py-2">{{ t('shifts.tue_short') }}</div>
-                        <div class="text-[11px] font-bold text-mistral-slate py-2">{{ t('shifts.wed_short') }}</div>
-                        <div class="text-[11px] font-bold text-mistral-slate py-2">{{ t('shifts.thu_short') }}</div>
-                        <div class="text-[11px] font-bold text-mistral-slate py-2">{{ t('shifts.fri_short') }}</div>
-
-                        <div
-                            v-for="(cell, i) in monthlyData"
-                            :key="cell.date"
-                            :class="[statusColor(cell.status), 'rounded-lg p-2 min-h-[52px] flex flex-col items-center justify-center']"
-                            :title="cell.date + ': ' + cell.status"
-                        >
-                            <span class="text-[12px] font-semibold">{{ new Date(cell.date).getDate() }}</span>
-                        </div>
+            <!-- Absent list table -->
+            <Card variant="base" padding="none" class="overflow-hidden">
+                <div class="px-5 py-4 border-b border-mistral-hairline-soft flex items-center justify-between gap-3 flex-wrap">
+                    <div>
+                        <h3 class="text-[15px] font-bold text-mistral-ink flex items-center gap-2">
+                            <i class="fas fa-user-xmark text-mistral-danger text-[14px]"></i>
+                            {{ t('shifts.absent_list_range_title') }}
+                        </h3>
+                        <p class="text-[12px] text-mistral-steel mt-0.5">
+                            {{ t('shifts.absent_list_range_subtitle') }}
+                        </p>
                     </div>
-                </div>
-                <div v-else class="p-8">
-                    <EmptyState
-                        icon="fas fa-calendar"
-                        :title="t('shifts.select_month_or_employee')"
+                    <Badge
+                        :text="monthlySummary.absent + ' / ' + monthlySummary.expected"
+                        :variant="monthlySummary.absent > 0 ? 'absent' : 'active'"
+                        dot
+                        size="lg"
                     />
                 </div>
+
+                <DataTable
+                    :columns="monthlyColumns"
+                    :data="monthlyReportData.employees || { data: [] }"
+                    :filters="monthlyFilterParams"
+                    route-name="smart-absence.monthly.report"
+                    :only="['monthlyReportData']"
+                    :empty-title="t('shifts.no_absence_in_range')"
+                    :empty-description="t('shifts.no_absence_in_range_description')"
+                    storage-key="smart-absence-report-monthly"
+                    @search="(q) => reloadActiveTab()"
+                    @export="handleMonthlyExport"
+                >
+                    <template #cell-name="{ row }">
+                        <div class="flex items-center gap-2.5 min-w-0">
+                            <div class="w-8 h-8 rounded-full bg-mistral-primary/10 text-mistral-primary flex items-center justify-center text-[12px] font-bold shrink-0">
+                                {{ (row.name || '?').charAt(0) }}
+                            </div>
+                            <div class="min-w-0">
+                                <div class="text-[14px] font-semibold text-mistral-ink truncate">
+                                    {{ row.name }}
+                                </div>
+                                <div v-if="row.job_title" class="text-[11px] text-mistral-steel truncate">
+                                    {{ row.job_title }}
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+
+                    <template #cell-employee_code="{ row }">
+                        <span dir="ltr" class="font-mono text-[13px] text-mistral-ink bg-mistral-surface px-2 py-0.5 rounded">
+                            {{ row.employee_code || '—' }}
+                        </span>
+                    </template>
+
+                    <template #cell-department_name="{ row }">
+                        <span class="text-mistral-ink text-[13px]">
+                            {{ row.department_name || '—' }}
+                        </span>
+                    </template>
+
+                    <template #cell-rotation_name="{ row }">
+                        <span v-if="row.rotation_name" class="inline-flex items-center gap-1.5 text-mistral-ink text-[13px]">
+                            <i class="fas fa-circle-notch text-[10px] text-mistral-primary"></i>
+                            {{ row.rotation_name }}
+                        </span>
+                        <span v-else class="text-mistral-muted text-[13px]">—</span>
+                    </template>
+
+                    <template #cell-rotation_group_name="{ row }">
+                        <div v-if="row.rotation_group_name" class="flex flex-col">
+                            <span class="text-mistral-ink text-[13px]">{{ row.rotation_group_name }}</span>
+                            <span v-if="row.expected_in" class="text-[11px] text-mistral-steel" dir="ltr">
+                                <i class="fas fa-clock text-[9px] ms-1"></i>
+                                {{ formatTime(row.expected_in) }}
+                            </span>
+                        </div>
+                        <span v-else class="text-mistral-muted text-[13px]">—</span>
+                    </template>
+
+                    <template #cell-expected_days="{ row }">
+                        <span class="inline-flex items-center justify-center min-w-[2rem] px-2 py-0.5 rounded-md bg-mistral-info/10 text-mistral-info text-[13px] font-semibold">
+                            {{ row.expected_days }}
+                        </span>
+                    </template>
+
+                    <template #cell-present_days="{ row }">
+                        <span class="inline-flex items-center justify-center min-w-[2rem] px-2 py-0.5 rounded-md bg-mistral-success/10 text-mistral-success text-[13px] font-semibold">
+                            {{ row.present_days }}
+                        </span>
+                    </template>
+
+                    <template #cell-absent_days="{ row }">
+                        <Badge
+                            :text="row.absent_days"
+                            variant="absent"
+                            dot
+                            size="lg"
+                        />
+                    </template>
+
+                    <template #cell-absent_dates="{ row }">
+                        <div v-if="row.absent_dates?.length" class="flex flex-wrap gap-1">
+                            <span
+                                v-for="d in (row.absent_dates.length > 5 ? row.absent_dates.slice(0, 5) : row.absent_dates)"
+                                :key="d"
+                                dir="ltr"
+                                :title="d"
+                                class="text-[11px] font-mono text-mistral-danger bg-mistral-danger/10 rounded px-1.5 py-0.5"
+                            >
+                                {{ d.substring(5) }}
+                            </span>
+                            <span
+                                v-if="row.absent_dates.length > 5"
+                                class="text-[11px] text-mistral-steel"
+                                :title="row.absent_dates.join('، ')"
+                            >
+                                +{{ row.absent_dates.length - 5 }}
+                            </span>
+                        </div>
+                        <span v-else class="text-mistral-muted text-[13px]">—</span>
+                    </template>
+
+                    <template #empty>
+                        <EmptyState
+                            icon="fas fa-user-check"
+                            :title="t('shifts.no_absence_in_range')"
+                            :description="t('shifts.no_absence_in_range_description')"
+                        />
+                    </template>
+                </DataTable>
             </Card>
         </div>
     </AppLayout>

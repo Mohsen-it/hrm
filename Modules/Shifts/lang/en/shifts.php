@@ -395,6 +395,18 @@ return [
     'all_rotations' => 'All Rotations',
     'all_groups' => 'All Groups',
     'select_month_or_employee' => 'Select a month or employee',
+    'from_date' => 'From Date',
+    'to_date' => 'To Date',
+    'month' => 'Month',
+    'year' => 'Year',
+    'expected_days' => 'Expected Days',
+    'present_days' => 'Present Days',
+    'absent_days' => 'Absent Days',
+    'absent_dates' => 'Absent Dates',
+    'absent_list_range_title' => 'Absence List for the Period',
+    'absent_list_range_subtitle' => 'Employees absent during the selected period with their absent day counts',
+    'no_absence_in_range' => 'No absence in the selected period',
+    'no_absence_in_range_description' => 'All expected employees recorded attendance during the selected period',
 
     // Rotation Timeline
     'rotation_timeline' => 'Rotation Timeline',

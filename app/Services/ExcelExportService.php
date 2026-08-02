@@ -5,6 +5,7 @@ namespace App\Services;
 use Carbon\Carbon;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\Cell\DataType;
+use PhpOffice\PhpSpreadsheet\RichText\RichText;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
@@ -282,7 +283,11 @@ class ExcelExportService
                 $dataType = $config['type'] ?? 'auto';
                 $formattedValue = $this->formatValue($value, $dataType, $config);
 
-                if ($dataType === 'string') {
+                if ($formattedValue instanceof RichText) {
+                    // Rich text keeps per-run font colors (e.g. colored
+                    // vacation days inside a day-details cell).
+                    $sheet->setCellValue($coord, $formattedValue);
+                } elseif ($dataType === 'string') {
                     $sheet->setCellValueExplicit($coord, (string) $formattedValue, DataType::TYPE_STRING);
                 } else {
                     $sheet->setCellValue($coord, $formattedValue);

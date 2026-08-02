@@ -238,6 +238,8 @@ class AbsenceCalculationService
      *     employees: Collection<int, array{
      *         employee_id: int,
      *         expected: int,
+     *         present: int,
+     *         day_details: array<int, array{date: string, status: string, label: string}>,
      *         absent_dates: array<int, string>,
      *         rotation_id: ?int,
      *         rotation_group_id: ?int,
@@ -248,6 +250,7 @@ class AbsenceCalculationService
      *     }>,
      *     total_expected_days: int,
      *     total_absent_days: int,
+     *     total_present_days: int,
      * }
      */
     public function getMonthlyAbsenceReport(
@@ -302,7 +305,7 @@ class AbsenceCalculationService
                 ->whereIn('exception_type', ['leave', 'mission', 'swap', 'training'])
                 ->where('from_date', '<=', $toStr)
                 ->where('to_date', '>=', $fromStr)
-                ->get(['employee_id', 'from_date', 'to_date'])
+                ->get(['employee_id', 'from_date', 'to_date', 'exception_type'])
         );
 
         // Official holidays inside the range cancel absence for those days.
@@ -312,7 +315,7 @@ class AbsenceCalculationService
             ->map(fn ($date) => $this->dateKey($date))
             ->flip();
 
-        $stats = []; // employee_id => ['expected' => int, 'absent_dates' => array<int, string>]
+        $stats = []; // employee_id => ['expected' => int, 'present' => int, 'day_details' => array<int, array{date: string, status: string, label: string}>, 'absent_dates' => array<int, string>]
         $meta = [];  // employee_id => RotationAssignment (most recent in range)
 
         $current = $from->copy();
@@ -358,21 +361,49 @@ class AbsenceCalculationService
                 }
 
                 if (! isset($stats[$employeeId])) {
-                    $stats[$employeeId] = ['expected' => 0, 'absent_dates' => []];
+                    $stats[$employeeId] = [
+                        'expected' => 0,
+                        'present' => 0,
+                        'day_details' => [],
+                        'absent_dates' => [],
+                    ];
                 }
                 $stats[$employeeId]['expected']++;
 
                 // Official holidays cancel absence but not the expectation,
                 // matching the daily report behaviour exactly.
                 if ($isHoliday) {
+                    $stats[$employeeId]['day_details'][] = [
+                        'date' => $dateStr,
+                        'status' => 'holiday',
+                        'label' => __('shifts::shifts.official_holiday'),
+                    ];
+                    $meta[$employeeId] = $assignment;
+
                     continue;
                 }
 
                 $hasPunch = $punchedThatDay->has($employeeId);
-                $covered = $this->isCovered($employeeId, $dateStr, $vacations, $exceptions);
 
-                if (! $hasPunch && ! $covered) {
-                    $stats[$employeeId]['absent_dates'][] = $dateStr;
+                if ($hasPunch) {
+                    $stats[$employeeId]['present']++;
+                } else {
+                    $coverage = $this->getCoverage($employeeId, $dateStr, $vacations, $exceptions);
+
+                    if ($coverage !== null) {
+                        $stats[$employeeId]['day_details'][] = [
+                            'date' => $dateStr,
+                            'status' => $coverage['type'],
+                            'label' => $coverage['label'],
+                        ];
+                    } else {
+                        $stats[$employeeId]['day_details'][] = [
+                            'date' => $dateStr,
+                            'status' => 'absent',
+                            'label' => __('shifts::shifts.absent_short'),
+                        ];
+                        $stats[$employeeId]['absent_dates'][] = $dateStr;
+                    }
                 }
 
                 // Keep the most recent assignment as display metadata
@@ -390,6 +421,8 @@ class AbsenceCalculationService
             return [
                 'employee_id' => $employeeId,
                 'expected' => $stat['expected'],
+                'present' => $stat['present'],
+                'day_details' => $stat['day_details'],
                 'absent_dates' => $stat['absent_dates'],
                 'rotation_id' => $assignment?->rotation_id,
                 'rotation_group_id' => $assignment?->rotation_group_id,
@@ -404,6 +437,7 @@ class AbsenceCalculationService
             'employees' => $employees,
             'total_expected_days' => $employees->sum('expected'),
             'total_absent_days' => $employees->sum(fn (array $employee) => count($employee['absent_dates'])),
+            'total_present_days' => $employees->sum('present'),
         ];
     }
 
@@ -422,33 +456,54 @@ class AbsenceCalculationService
             $key = $row->user_id ?? $row->employee_id;
             $from = $this->dateKey($row->start_date ?? $row->from_date);
             $to = $this->dateKey($row->end_date ?? $row->to_date);
-            $index[(int) $key][] = ['from' => $from, 'to' => $to];
+            $index[(int) $key][] = [
+                'from' => $from,
+                'to' => $to,
+                // Vacation rows carry no exception_type; exceptions do.
+                'type' => $row->exception_type ?? 'vacation',
+            ];
         }
 
         return $index;
     }
 
     /**
-     * Determine whether an employee is covered (vacation / exception) on a date.
+     * Determine whether an employee is covered (vacation / exception) on a date
+     * and, if so, return the coverage type + translated label.
      *
-     * @param  array<int, array<int, array{from: string, to: string}>>  $vacations
-     * @param  array<int, array<int, array{from: string, to: string}>>  $exceptions
+     * @param  array<int, array<int, array{from: string, to: string, type: ?string}>>  $vacations
+     * @param  array<int, array<int, array{from: string, to: string, type: ?string}>>  $exceptions
+     * @return array{type: string, label: string}|null
      */
-    private function isCovered(int $employeeId, string $dateStr, array $vacations, array $exceptions): bool
+    private function getCoverage(int $employeeId, string $dateStr, array $vacations, array $exceptions): ?array
     {
         foreach (($vacations[$employeeId] ?? []) as $range) {
             if ($range['from'] <= $dateStr && $range['to'] >= $dateStr) {
-                return true;
+                return ['type' => 'vacation', 'label' => __('shifts::shifts.on_vacation')];
             }
         }
 
         foreach (($exceptions[$employeeId] ?? []) as $range) {
             if ($range['from'] <= $dateStr && $range['to'] >= $dateStr) {
-                return true;
+                return ['type' => 'exception', 'label' => $this->exceptionLabel($range['type'] ?? null)];
             }
         }
 
-        return false;
+        return null;
+    }
+
+    /**
+     * Human-readable label for an intercepting shift exception type.
+     */
+    private function exceptionLabel(?string $type): string
+    {
+        return match ($type) {
+            'leave' => __('shifts::shifts.leave'),
+            'mission' => __('shifts::shifts.mission'),
+            'swap' => __('shifts::shifts.swap'),
+            'training' => __('shifts::shifts.training'),
+            default => __('shifts::shifts.on_exception'),
+        };
     }
 
     /**

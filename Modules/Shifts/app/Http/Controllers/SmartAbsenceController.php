@@ -104,9 +104,9 @@ class SmartAbsenceController extends Controller
 
         $totalExpectedDays = $report['total_expected_days'];
         $totalAbsentDays = $report['total_absent_days'];
-        $totalPresentDays = max($totalExpectedDays - $totalAbsentDays, 0);
+        $totalPresentDays = $report['total_present_days'];
         $attendanceRate = $totalExpectedDays > 0
-            ? (int) round((($totalExpectedDays - $totalAbsentDays) / $totalExpectedDays) * 100)
+            ? (int) round(($totalPresentDays / $totalExpectedDays) * 100)
             : 100;
 
         $page = $request->integer('page', 1);
@@ -204,10 +204,12 @@ class SmartAbsenceController extends Controller
 
     /**
      * Enrich the monthly stats with employee details and keep only the
-     * employees absent at least one day inside the range (the same scenario
-     * as the daily report), most absent first.
+     * employees with at least one non-attended expected day inside the range
+     * (absent, on vacation or on a shift exception - the same scenario as the
+     * daily report, plus covered days the user wants to see), most impactful
+     * first.
      *
-     * @param  array{employees: Collection, total_expected_days: int, total_absent_days: int}  $report
+     * @param  array{employees: Collection, total_expected_days: int, total_absent_days: int, total_present_days: int}  $report
      */
     private function buildMonthlyAbsentDetails(array $report): Collection
     {
@@ -243,14 +245,20 @@ class SmartAbsenceController extends Controller
             ->map(function ($row) use ($statsById) {
                 $stat = $statsById->get($row->id, []);
                 $expected = (int) ($stat['expected'] ?? 0);
+                $present = (int) ($stat['present'] ?? 0);
                 $absentDates = $stat['absent_dates'] ?? [];
                 $absent = count($absentDates);
+                $dayDetails = $stat['day_details'] ?? [];
 
                 $row->expected_days = $expected;
-                $row->present_days = max($expected - $absent, 0);
+                $row->present_days = $present;
+                $row->vacation_days = collect($dayDetails)->where('status', 'vacation')->count();
+                $row->exception_days = collect($dayDetails)->where('status', 'exception')->count();
+                $row->holiday_days = collect($dayDetails)->where('status', 'holiday')->count();
                 $row->absent_days = $absent;
+                $row->day_details = array_values($dayDetails);
                 $row->absent_dates = $absentDates;
-                $row->attendance_rate = $expected > 0 ? (int) round((($expected - $absent) / $expected) * 100) : 100;
+                $row->attendance_rate = $expected > 0 ? (int) round(($present / $expected) * 100) : 100;
                 $row->rotation_name = $stat['rotation_name'] ?? null;
                 $row->rotation_group_name = $stat['rotation_group_name'] ?? null;
                 $row->expected_in = $stat['expected_in'] ?? null;
@@ -259,9 +267,9 @@ class SmartAbsenceController extends Controller
 
                 return $row;
             })
-            ->filter(fn ($row) => $row->absent_days > 0)
+            ->filter(fn ($row) => $row->absent_days > 0 || $row->vacation_days > 0 || $row->exception_days > 0)
             ->sortBy('name')
-            ->sortByDesc('absent_days')
+            ->sortByDesc(fn ($row) => $row->absent_days + $row->vacation_days + $row->exception_days)
             ->values();
     }
 

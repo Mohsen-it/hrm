@@ -116,7 +116,8 @@ const summary = computed(() => {
 const monthlySummary = computed(() => {
     const expected = Number(props.monthlyReportData?.total_expected_days) || 0
     const absent = Number(props.monthlyReportData?.total_absent_days) || 0
-    const present = Math.max(Number(props.monthlyReportData?.total_present_days) || (expected - absent), 0)
+    const rawPresent = Number(props.monthlyReportData?.total_present_days)
+    const present = Math.max(Number.isFinite(rawPresent) ? rawPresent : (expected - absent), 0)
     const rate = expected > 0 ? Math.round((present / expected) * 100) : 100
     return { expected, absent, present, rate }
 })
@@ -265,8 +266,41 @@ const monthlyColumns = computed(() => [
     { key: 'expected_days', label: t('shifts.expected_days'), sortable: true, cellClass: 'text-center min-w-[90px]' },
     { key: 'present_days', label: t('shifts.present_days'), sortable: true, cellClass: 'text-center min-w-[80px]' },
     { key: 'absent_days', label: t('shifts.absent_days'), sortable: true, cellClass: 'text-center min-w-[80px]' },
-    { key: 'absent_dates', label: t('shifts.absent_dates'), sortable: false, cellClass: 'min-w-[220px]' },
+    { key: 'absent_dates', label: t('shifts.absent_dates'), sortable: false, cellClass: 'min-w-[180px]' },
+    { key: 'day_details', label: t('shifts.day_details'), sortable: false, cellClass: 'min-w-[300px]' },
 ])
+
+const MAX_VISIBLE_DETAILS = 6
+
+function shortDateStr(date) {
+    return String(date ?? '').length >= 10 ? String(date).substring(5) : String(date ?? '')
+}
+
+function dayDetailChip(detail) {
+    return {
+        ...detail,
+        shortDate: shortDateStr(detail.date),
+        fullLabel: `${detail.date} — ${detail.label || ''}`,
+    }
+}
+
+function visibleDayDetails(row) {
+    return (row.day_details || []).slice(0, MAX_VISIBLE_DETAILS).map(dayDetailChip)
+}
+
+function allDayDetailsLabel(row) {
+    return (row.day_details || []).map((d) => `${d.date} — ${d.label || ''}`).join('، ')
+}
+
+function dayDetailStatusClass(status) {
+    return {
+        present: 'bg-mistral-success/10 text-mistral-success border-mistral-success/30',
+        vacation: 'bg-mistral-info/10 text-mistral-info border-mistral-info/30',
+        exception: 'bg-mistral-primary/10 text-mistral-primary border-mistral-primary/30',
+        holiday: 'bg-mistral-cream-deeper text-mistral-ink border-mistral-hairline',
+        absent: 'bg-mistral-danger/10 text-mistral-danger border-mistral-danger/30',
+    }[status] || 'bg-mistral-surface text-mistral-steel border-mistral-hairline'
+}
 
 function formatTime(value) {
     if (!value) return '—'
@@ -773,6 +807,45 @@ const filterPills = computed(() => {
                             >
                                 +{{ row.absent_dates.length - 5 }}
                             </span>
+                        </div>
+                        <span v-else class="text-mistral-muted text-[13px]">—</span>
+                    </template>
+
+                    <template #cell-day_details="{ row }">
+                        <div v-if="row.day_details?.length" class="flex flex-col gap-1.5">
+                            <div class="flex flex-wrap gap-1">
+                                <span
+                                    v-for="chip in visibleDayDetails(row)"
+                                    :key="chip.date + chip.status"
+                                    :title="chip.fullLabel"
+                                    class="inline-flex items-center gap-1 text-[11px] rounded-md border px-1.5 py-0.5 font-medium cursor-help"
+                                    :class="dayDetailStatusClass(chip.status)"
+                                >
+                                    <span dir="ltr" class="font-mono">{{ chip.shortDate }}</span>
+                                    <span class="opacity-80">{{ chip.label }}</span>
+                                </span>
+                                <span
+                                    v-if="row.day_details.length > MAX_VISIBLE_DETAILS"
+                                    class="text-[11px] text-mistral-steel self-center"
+                                    :title="allDayDetailsLabel(row)"
+                                >
+                                    +{{ row.day_details.length - MAX_VISIBLE_DETAILS }}
+                                </span>
+                            </div>
+                            <div class="flex items-center gap-2 text-[10px] text-mistral-muted">
+                                <span v-if="row.vacation_days" class="inline-flex items-center gap-1">
+                                    <i class="fas fa-umbrella-beach text-mistral-info"></i>
+                                    {{ t('shifts.on_vacation') }} {{ row.vacation_days }}
+                                </span>
+                                <span v-if="row.exception_days" class="inline-flex items-center gap-1">
+                                    <i class="fas fa-briefcase text-mistral-primary"></i>
+                                    {{ t('shifts.on_exception') }} {{ row.exception_days }}
+                                </span>
+                                <span v-if="row.holiday_days" class="inline-flex items-center gap-1">
+                                    <i class="fas fa-flag text-mistral-ink"></i>
+                                    {{ t('shifts.official_holiday') }} {{ row.holiday_days }}
+                                </span>
+                            </div>
                         </div>
                         <span v-else class="text-mistral-muted text-[13px]">—</span>
                     </template>

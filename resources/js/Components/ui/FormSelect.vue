@@ -19,27 +19,10 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue']);
 
 const inputId = computed(() => props.id || props.name || `select-${Math.random().toString(36).slice(2, 9)}`);
-const isFocused = ref(false);
 const selectRef = ref(null);
-
-const hasValue = computed(() => {
-    const v = props.modelValue;
-    if (v === null || v === undefined || v === '') return false;
-    return true;
-});
-
-const isFloating = computed(() => isFocused.value || hasValue.value);
 
 function onChange(e) {
     emit('update:modelValue', e.target.value);
-}
-
-function onFocus() {
-    isFocused.value = true;
-}
-
-function onBlur() {
-    isFocused.value = false;
 }
 
 function focus() {
@@ -51,6 +34,14 @@ defineExpose({ focus });
 
 <template>
     <div class="w-full text-start" :dir="dir">
+        <label
+            v-if="label"
+            :for="inputId"
+            class="mb-1.5 flex items-center gap-1 text-[13px] font-medium leading-5 text-mistral-ink"
+        >
+            {{ label }}
+            <span v-if="required" class="text-mistral-danger" aria-hidden="true">*</span>
+        </label>
         <div class="relative" @click="focus">
             <select
                 :id="inputId"
@@ -63,7 +54,7 @@ defineExpose({ focus });
                 :aria-invalid="!!error"
                 :aria-describedby="error ? `${inputId}-error` : undefined"
                 :class="[
-                    'peer w-full h-11 pt-3 pb-1 px-3 text-[14px] text-mistral-ink bg-white border rounded-lg transition-all duration-200 appearance-none cursor-pointer select-with-arrow',
+                    'w-full h-11 px-3 text-[14px] text-mistral-ink bg-white border rounded-lg transition-all duration-200 appearance-none cursor-pointer select-with-arrow',
                     'focus:outline-none focus:ring-2 focus:ring-mistral-primary/20 focus:border-mistral-primary',
                     'disabled:bg-mistral-surface disabled:text-mistral-muted disabled:cursor-not-allowed',
                     error
@@ -71,31 +62,12 @@ defineExpose({ focus });
                         : 'border-mistral-hairline-strong hover:border-mistral-stone',
                 ]"
                 @change="onChange"
-                @focus="onFocus"
-                @blur="onBlur"
             >
                 <option value="" disabled hidden>{{ placeholder }}</option>
                 <option v-for="opt in options" :key="opt.value" :value="opt.value">
                     {{ opt.label }}
                 </option>
             </select>
-            <label
-                v-if="label"
-                :for="inputId"
-                :class="[
-                    'absolute text-[13px] font-medium pointer-events-none transition-all duration-200 origin-top-start z-10',
-                    isFloating
-                        ? (dir === 'rtl' ? 'top-1.5 right-3 text-[11px]' : 'top-1.5 left-3 text-[11px]')
-                        : (dir === 'rtl' ? 'top-2.5 right-3 text-[14px]' : 'top-2.5 left-3 text-[14px]'),
-                    isFloating && 'text-mistral-steel',
-                    !isFloating && 'text-mistral-muted',
-                    isFocused && !error && 'text-mistral-primary',
-                    error && 'text-mistral-danger',
-                ]"
-            >
-                {{ label }}
-                <span v-if="required" class="text-mistral-danger ms-0.5" aria-hidden="true">*</span>
-            </label>
         </div>
         <p v-if="hint && !error" class="text-[12px] text-mistral-stone mt-1">
             {{ hint }}

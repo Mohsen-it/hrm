@@ -98,12 +98,12 @@ const employmentOptions = [
 
 const filteredBranches = computed(() => {
     if (!form.company_id) return props.branches;
-    return props.branches.filter((b) => b.company_id === form.company_id);
+    return props.branches.filter((branch) => String(branch.company_id) === String(form.company_id));
 });
 
 const filteredDepartments = computed(() => {
     if (!form.branch_id) return props.departments;
-    return props.departments.filter((d) => d.branch_id === form.branch_id);
+    return props.departments.filter((department) => String(department.branch_id) === String(form.branch_id));
 });
 
 watch(

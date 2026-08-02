@@ -1,8 +1,8 @@
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
-import { PageHeader, Button, Card, DataTable, FormModal, FormInput, FormSelect, FormCheckbox, Badge, Alert, EmptyState } from '@/Components/ui';
+import { PageHeader, Button, Card, DataTable, FormModal, FormInput, FormSelect, FormCheckbox, Badge, Alert, EmptyState, StatCard } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
@@ -11,6 +11,7 @@ const page = usePage();
 const props = defineProps({
     summaries: { type: Object, default: () => ({ data: [], links: [] }) },
     filters: { type: Object, default: () => ({}) },
+    stats: { type: Object, default: () => ({}) },
     users: { type: Array, default: () => [] },
 });
 
@@ -43,6 +44,7 @@ const statusVariant = (status) => {
         absent: 'inactive',
         rest: 'info',
         unassigned: 'warning',
+        vacation: 'vacation',
     }[status] || 'inactive';
 };
 
@@ -60,7 +62,10 @@ const columns = computed(() => [
     { key: 'summary_date', label: t('attendance.fields.summary_date'), sortable: true },
     { key: 'first_check_in_at', label: t('attendance.fields.first_check_in_at') },
     { key: 'last_check_out_at', label: t('attendance.fields.last_check_out_at') },
+    { key: 'expected_check_in', label: t('attendance.fields.expected_check_in') },
+    { key: 'expected_check_out', label: t('attendance.fields.expected_check_out') },
     { key: 'work_human', label: t('attendance.fields.work_human'), cellClass: 'text-center' },
+    { key: 'break_human', label: t('attendance.fields.break_human'), cellClass: 'text-center' },
     { key: 'overtime_human', label: t('attendance.fields.overtime_human'), cellClass: 'text-center' },
     { key: 'late_human', label: t('attendance.fields.late_human'), cellClass: 'text-center' },
     { key: 'status', label: t('attendance.fields.status'), cellClass: 'text-center', filterable: true, filterType: 'select', filterOptions: statusOptions, filterKey: 'status' },
@@ -69,14 +74,36 @@ const columns = computed(() => [
 ]);
 
 // ------------------------------------------------------------------
+// KPI summary strip
+// ------------------------------------------------------------------
+
+const kpiCards = computed(() => [
+    { label: t('attendance.kpis.total'), value: props.stats.total || 0, color: 'info', icon: 'fas fa-users' },
+    { label: t('attendance.kpis.present'), value: props.stats.present || 0, color: 'success', icon: 'fas fa-user-check' },
+    { label: t('attendance.kpis.late'), value: props.stats.late || 0, color: 'warning', icon: 'fas fa-clock' },
+    { label: t('attendance.kpis.missing_punch'), value: props.stats.missing_punch || 0, color: 'danger', icon: 'fas fa-exclamation-triangle' },
+    { label: t('attendance.kpis.absent'), value: props.stats.absent || 0, color: 'danger', icon: 'fas fa-user-times' },
+    { label: t('attendance.kpis.work_hours'), value: formatHours(props.stats.work_minutes || 0), color: 'primary', icon: 'fas fa-business-time' },
+    { label: t('attendance.kpis.overtime_hours'), value: formatHours(props.stats.overtime_minutes || 0), color: 'warning', icon: 'fas fa-hourglass-half' },
+]);
+
+function formatHours(minutes) {
+    const h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    if (h === 0) return `${m}${t('attendance.units.minutes_short')}`;
+    if (m === 0) return `${h}${t('attendance.units.hours_short')}`;
+    return `${h}${t('attendance.units.hours_short')} ${m}${t('attendance.units.minutes_short')}`;
+}
+
+// ------------------------------------------------------------------
 // Violation sections
 // ------------------------------------------------------------------
 
 const today = new Date().toISOString().slice(0, 10);
 const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
 
-// Section 1: Late check-ins
-const lateCheckInForm = ref({ from: thirtyDaysAgo, to: today, cutoff_time: '08:00', user_id: '' });
+// Section 1: Late check-ins (defaults to today, on-duty rotation employees only)
+const lateCheckInForm = ref({ from: today, to: today, cutoff_time: '08:00', user_id: '' });
 const lateCheckInData = ref([]);
 const lateCheckInLoading = ref(false);
 
@@ -159,11 +186,17 @@ function exportLateForVacation() {
     window.location.href = route('attendance.daily-summaries.export-late-for-vacation') + '?' + params.toString();
 }
 
+onMounted(() => {
+    fetchLateCheckIns();
+    fetchMissingCheckOuts();
+    fetchLateForVacation();
+});
+
 function onSearch(value) {
     router.get(
         route('attendance.daily-summaries.index'),
         { ...props.filters, search: value },
-        { preserveState: true, preserveScroll: true, replace: true, only: ['summaries'] },
+        { preserveState: true, preserveScroll: true, replace: true, only: ['summaries', 'stats'] },
     );
 }
 
@@ -180,7 +213,7 @@ function onFilterChange(filters) {
         preserveState: true,
         preserveScroll: true,
         replace: true,
-        only: ['summaries'],
+        only: ['summaries', 'stats'],
     });
 }
 
@@ -223,13 +256,25 @@ const flashSuccess = computed(() => page.props.flash?.success);
 
         <Alert v-if="flashSuccess" type="success" :message="flashSuccess" class="mb-4" />
 
+        <!-- KPI summary strip -->
+        <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-6">
+            <StatCard
+                v-for="card in kpiCards"
+                :key="card.label"
+                :label="card.label"
+                :value="card.value"
+                :color="card.color"
+                :icon="card.icon"
+            />
+        </div>
+
         <!-- Main summaries table -->
         <DataTable
             :columns="columns"
             :data="summaries"
             :filters="filters"
             :route-name="'attendance.daily-summaries.index'"
-            :only="['summaries']"
+            :only="['summaries', 'stats']"
             :empty-title="t('attendance.messages.empty_summaries')"
             storage-key="attendance-summaries"
             @search="onSearch"
@@ -243,13 +288,28 @@ const flashSuccess = computed(() => page.props.flash?.success);
                     <div class="text-[11px] text-mistral-stone">
                         {{ row.user?.employee_code || '' }}
                     </div>
+                    <div v-if="row.user?.department_name" class="text-[11px] text-mistral-stone">
+                        {{ row.user.department_name }}
+                    </div>
                 </div>
+            </template>
+            <template #cell-summary_date="{ row }">
+                <span dir="ltr" class="text-[12px]">{{ row.summary_date }}</span>
             </template>
             <template #cell-first_check_in_at="{ row }">
                 <span dir="ltr" class="text-[12px]">{{ row.first_check_in_at || '—' }}</span>
             </template>
             <template #cell-last_check_out_at="{ row }">
                 <span dir="ltr" class="text-[12px]">{{ row.last_check_out_at || '—' }}</span>
+            </template>
+            <template #cell-expected_check_in="{ row }">
+                <span dir="ltr" class="text-[12px] text-mistral-steel">{{ row.expected_check_in || '—' }}</span>
+            </template>
+            <template #cell-expected_check_out="{ row }">
+                <span dir="ltr" class="text-[12px] text-mistral-steel">{{ row.expected_check_out || '—' }}</span>
+            </template>
+            <template #cell-break_human="{ row }">
+                <span class="text-[12px] text-mistral-steel">{{ row.break_human || '—' }}</span>
             </template>
             <template #cell-status="{ row }">
                 <Badge
@@ -271,6 +331,9 @@ const flashSuccess = computed(() => page.props.flash?.success);
                         </h3>
                         <p class="text-sm text-mistral-stone mt-1">
                             {{ t('attendance.violations.late_check_ins_description') }}
+                        </p>
+                        <p class="text-xs text-mistral-primary mt-1">
+                            {{ t('attendance.violations.late_check_ins_on_duty_note') }}
                         </p>
                     </div>
                     <Button
@@ -313,7 +376,7 @@ const flashSuccess = computed(() => page.props.flash?.success);
                         <tr class="border-b border-mistral-border bg-mistral-cream/30">
                             <th class="px-4 py-3 text-start font-semibold text-mistral-ink">#</th>
                             <th class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.employee_name') }}</th>
-                            <th class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.employee_code') }}</th>
+                            <th class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.fields.department') }}</th>
                             <th class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.date') }}</th>
                             <th class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.check_in_time') }}</th>
                             <th class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.cutoff') }}</th>
@@ -324,7 +387,7 @@ const flashSuccess = computed(() => page.props.flash?.success);
                         <tr v-for="(row, idx) in lateCheckInData" :key="row.id" class="border-b border-mistral-border hover:bg-mistral-cream/20">
                             <td class="px-4 py-3 text-mistral-stone">{{ idx + 1 }}</td>
                             <td class="px-4 py-3 font-medium text-mistral-ink">{{ row.user_name }}</td>
-                            <td class="px-4 py-3 text-mistral-stone">{{ row.employee_code }}</td>
+                            <td class="px-4 py-3 text-mistral-stone">{{ row.department_name || '—' }}</td>
                             <td class="px-4 py-3 text-mistral-stone" dir="ltr">{{ row.summary_date }}</td>
                             <td class="px-4 py-3 text-mistral-stone" dir="ltr">{{ row.first_check_in_at }}</td>
                             <td class="px-4 py-3 text-mistral-stone" dir="ltr">{{ row.cutoff_time }}</td>
@@ -396,10 +459,10 @@ const flashSuccess = computed(() => page.props.flash?.success);
                         <tr class="border-b border-mistral-border bg-mistral-cream/30">
                             <th class="px-4 py-3 text-start font-semibold text-mistral-ink">#</th>
                             <th class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.employee_name') }}</th>
-                            <th class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.employee_code') }}</th>
+                            <th class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.fields.department') }}</th>
                             <th class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.date') }}</th>
                             <th class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.check_in_time') }}</th>
-                            <th class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.cutoff') }}</th>
+                            <th class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.expected_check_out') }}</th>
                             <th class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.missing_checkout_duration') }}</th>
                         </tr>
                     </thead>
@@ -407,12 +470,12 @@ const flashSuccess = computed(() => page.props.flash?.success);
                         <tr v-for="(row, idx) in missingCheckOutData" :key="row.id" class="border-b border-mistral-border hover:bg-mistral-cream/20">
                             <td class="px-4 py-3 text-mistral-stone">{{ idx + 1 }}</td>
                             <td class="px-4 py-3 font-medium text-mistral-ink">{{ row.user_name }}</td>
-                            <td class="px-4 py-3 text-mistral-stone">{{ row.employee_code }}</td>
+                            <td class="px-4 py-3 text-mistral-stone">{{ row.department_name || '—' }}</td>
                             <td class="px-4 py-3 text-mistral-stone" dir="ltr">{{ row.summary_date }}</td>
                             <td class="px-4 py-3 text-mistral-stone" dir="ltr">{{ row.first_check_in_at }}</td>
-                            <td class="px-4 py-3 text-mistral-stone" dir="ltr">{{ row.cutoff_time }}</td>
+                            <td class="px-4 py-3 text-mistral-stone" dir="ltr">{{ row.expected_check_out || '—' }}</td>
                             <td class="px-4 py-3">
-                                <Badge :text="`${row.late_minutes} ${t('attendance.units.minutes_short')}`" variant="absent" />
+                                <Badge :text="`${row.open_minutes} ${t('attendance.units.minutes_short')}`" variant="absent" />
                             </td>
                         </tr>
                     </tbody>
@@ -479,7 +542,7 @@ const flashSuccess = computed(() => page.props.flash?.success);
                         <tr class="border-b border-mistral-border bg-mistral-cream/30">
                             <th class="px-4 py-3 text-start font-semibold text-mistral-ink">#</th>
                             <th class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.employee_name') }}</th>
-                            <th class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.employee_code') }}</th>
+                            <th class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.fields.department') }}</th>
                             <th class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.date') }}</th>
                             <th class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.check_in_time') }}</th>
                             <th class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.cutoff') }}</th>
@@ -490,7 +553,7 @@ const flashSuccess = computed(() => page.props.flash?.success);
                         <tr v-for="(row, idx) in lateForVacationData" :key="row.id" class="border-b border-mistral-border hover:bg-mistral-cream/20">
                             <td class="px-4 py-3 text-mistral-stone">{{ idx + 1 }}</td>
                             <td class="px-4 py-3 font-medium text-mistral-ink">{{ row.user_name }}</td>
-                            <td class="px-4 py-3 text-mistral-stone">{{ row.employee_code }}</td>
+                            <td class="px-4 py-3 text-mistral-stone">{{ row.department_name || '—' }}</td>
                             <td class="px-4 py-3 text-mistral-stone" dir="ltr">{{ row.summary_date }}</td>
                             <td class="px-4 py-3 text-mistral-stone" dir="ltr">{{ row.first_check_in_at }}</td>
                             <td class="px-4 py-3 text-mistral-stone" dir="ltr">{{ row.cutoff_time }}</td>

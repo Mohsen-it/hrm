@@ -2,6 +2,7 @@
 
 namespace Modules\Attendance\Services;
 
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -64,9 +65,31 @@ class DailyAttendanceSummaryService
             ->query()
             ->betweenDates($from, $to)
             ->when($userId, fn ($q, $id) => $q->forUser($id))
-            ->with(['user'])
+            ->with(['user.department'])
             ->orderBy('summary_date')
             ->get();
+    }
+
+    /**
+     * Get a paginated list of summaries filtered by the supplied filter bag.
+     *
+     * @param  array<string, mixed>  $filters
+     * @return LengthAwarePaginator
+     */
+    public function getPaginated(array $filters = [], int $perPage = 20)
+    {
+        return $this->repository->getAll($filters, $perPage);
+    }
+
+    /**
+     * Compute status breakdown + timing totals for the supplied filter bag.
+     *
+     * @param  array<string, mixed>  $filters
+     * @return array<string, mixed>
+     */
+    public function getStats(array $filters = []): array
+    {
+        return $this->repository->getStats($filters);
     }
 
     /**

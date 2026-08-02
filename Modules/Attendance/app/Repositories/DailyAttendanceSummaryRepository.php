@@ -21,7 +21,7 @@ class DailyAttendanceSummaryRepository
      * @var array<int, string>
      */
     protected array $defaultWith = [
-        'user',
+        'user.department',
         'shift',
     ];
 
@@ -44,8 +44,55 @@ class DailyAttendanceSummaryRepository
             $this->query()->with($this->defaultWith),
             $filters
         )
-            ->latest('summary_date')
+            ->orderBy('summary_date', 'desc')
+            ->orderBy('user_id')
             ->paginate($perPage);
+    }
+
+    /**
+     * Compute status breakdown + timing totals for the supplied filter bag.
+     *
+     * @param  array<string, mixed>  $filters
+     * @return array<string, mixed>
+     */
+    public function getStats(array $filters = []): array
+    {
+        $rows = $this->applyFilters($this->query(), $filters)
+            ->selectRaw('status, COUNT(*) as count, SUM(total_work_minutes) as work_minutes, SUM(total_overtime_minutes) as overtime_minutes, SUM(late_minutes) as late_minutes, SUM(early_leave_minutes) as early_leave_minutes, SUM(total_break_minutes) as break_minutes')
+            ->groupBy('status')
+            ->get();
+
+        $stats = [
+            'total' => 0,
+            'present' => 0,
+            'late' => 0,
+            'absent' => 0,
+            'early_leave' => 0,
+            'missing_punch' => 0,
+            'holiday' => 0,
+            'vacation' => 0,
+            'weekend' => 0,
+            'rest' => 0,
+            'unassigned' => 0,
+            'work_minutes' => 0,
+            'overtime_minutes' => 0,
+            'late_minutes' => 0,
+            'early_leave_minutes' => 0,
+            'break_minutes' => 0,
+        ];
+
+        foreach ($rows as $row) {
+            $status = $row->status ?: 'unassigned';
+            $stats['total'] += (int) $row->count;
+            $stats[$status] = (int) $row->count;
+            $stats['work_minutes'] += (int) $row->work_minutes;
+            $stats['overtime_minutes'] += (int) $row->overtime_minutes;
+            $stats['late_minutes'] += (int) $row->late_minutes;
+            $stats['early_leave_minutes'] += (int) $row->early_leave_minutes;
+            $stats['break_minutes'] += (int) $row->break_minutes;
+        }
+
+        return $stats;
     }
 
     /**
@@ -132,7 +179,13 @@ class DailyAttendanceSummaryRepository
         });
 
         $query->when($filters['search'] ?? null, function (Builder $q, $search): void {
-            $q->where('notes', 'like', "%{$search}%");
+            $q->where(function (Builder $sub) use ($search): void {
+                $sub->where('notes', 'like', "%{$search}%")
+                    ->orWhereHas('user', function (Builder $u) use ($search): void {
+                        $u->where('name', 'like', "%{$search}%")
+                            ->orWhere('employee_code', 'like', "%{$search}%");
+                    });
+            });
         });
 
         return $query;

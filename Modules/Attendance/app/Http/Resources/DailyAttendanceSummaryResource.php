@@ -38,8 +38,10 @@ class DailyAttendanceSummaryResource extends JsonResource
             'late_minutes' => (int) $this->late_minutes,
             'early_leave_minutes' => (int) $this->early_leave_minutes,
             'work_human' => TimeFormatter::minutesToHuman((int) $this->total_work_minutes),
+            'break_human' => TimeFormatter::minutesToHuman((int) $this->total_break_minutes),
             'overtime_human' => TimeFormatter::minutesToHuman((int) $this->total_overtime_minutes),
             'late_human' => TimeFormatter::minutesToHuman((int) $this->late_minutes),
+            'early_leave_human' => TimeFormatter::minutesToHuman((int) $this->early_leave_minutes),
             'notes' => $this->notes,
             'calculated_at' => TimeFormatter::dateTimeOf($this->calculated_at),
             'user' => $this->whenLoaded('user', function () {
@@ -47,6 +49,7 @@ class DailyAttendanceSummaryResource extends JsonResource
                     'id' => $this->user->id,
                     'name' => $this->user->name,
                     'employee_code' => $this->user->employee_code,
+                    'department_name' => $this->user->department?->department_name,
                 ] : null;
             }),
             'shift' => $this->whenLoaded('shift', function () {

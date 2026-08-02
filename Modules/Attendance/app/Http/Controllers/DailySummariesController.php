@@ -52,15 +52,19 @@ class DailySummariesController extends Controller
             'search', 'user_id', 'status', 'session_type', 'date', 'from', 'to', 'is_complete', 'per_page',
         ]));
 
+        if (! isset($filters['from']) && ! isset($filters['to'])) {
+            $filters['from'] = now()->subDays(30)->toDateString();
+            $filters['to'] = now()->toDateString();
+        }
+
+        $perPage = (int) ($filters['per_page'] ?? 20);
+
         return Inertia::render('Attendance/DailySummaries/Index', [
             'filters' => fn () => $filters,
             'summaries' => fn () => DailyAttendanceSummaryResource::collection(
-                $this->summaryService->getForDateRange(
-                    $filters['from'] ?? now()->subDays(30)->toDateString(),
-                    $filters['to'] ?? now()->toDateString(),
-                    $filters['user_id'] ?? null,
-                )
+                $this->summaryService->getPaginated($filters, $perPage)
             ),
+            'stats' => fn () => $this->summaryService->getStats($filters),
             'users' => fn () => $this->userService->getActiveUsers()
                 ->map(fn ($u) => ['id' => $u->id, 'name' => $u->name, 'employee_code' => $u->employee_code]),
         ]);
@@ -197,8 +201,10 @@ class DailySummariesController extends Controller
                 'user_id' => $s->user_id,
                 'user_name' => $s->user?->name ?? '—',
                 'employee_code' => $s->user?->employee_code ?? '',
+                'department_name' => $s->user?->department?->department_name ?? '',
                 'summary_date' => $s->attendance_date?->format('Y-m-d') ?? '',
                 'first_check_in_at' => $s->check_in_at?->format('Y-m-d H:i') ?? '',
+                'expected_check_in' => $s->expected_check_in,
                 'cutoff_time' => $data['cutoff_time'],
                 'late_minutes' => $this->calculateLateMinutes($s->check_in_at, $data['cutoff_time']),
             ]),
@@ -260,11 +266,14 @@ class DailySummariesController extends Controller
                 'user_id' => $s->user_id,
                 'user_name' => $s->user?->name ?? '—',
                 'employee_code' => $s->user?->employee_code ?? '',
+                'department_name' => $s->user?->department?->department_name ?? '',
                 'summary_date' => $s->attendance_date?->format('Y-m-d') ?? '',
                 'first_check_in_at' => $s->check_in_at?->format('Y-m-d H:i') ?? '',
-                'last_check_out_at' => null,
+                'expected_check_in' => $s->expected_check_in,
+                'expected_check_out' => $s->expected_check_out,
+                'last_check_out_at' => $s->check_out_at?->format('Y-m-d H:i') ?? null,
                 'cutoff_time' => $cutoffTime,
-                'late_minutes' => $this->calculateWorkMinutesSince($s->check_in_at),
+                'open_minutes' => $this->calculateOpenMinutes($s->check_in_at),
             ]),
         ]);
     }
@@ -324,8 +333,10 @@ class DailySummariesController extends Controller
                 'user_id' => $s->user_id,
                 'user_name' => $s->user?->name ?? '—',
                 'employee_code' => $s->user?->employee_code ?? '',
+                'department_name' => $s->user?->department?->department_name ?? '',
                 'summary_date' => $s->attendance_date?->format('Y-m-d') ?? '',
                 'first_check_in_at' => $s->check_in_at?->format('Y-m-d H:i') ?? '',
+                'expected_check_in' => $s->expected_check_in,
                 'cutoff_time' => $data['cutoff_time'],
                 'late_minutes' => $this->calculateLateMinutes($s->check_in_at, $data['cutoff_time']),
             ]),
@@ -378,17 +389,23 @@ class DailySummariesController extends Controller
     }
 
     /**
-     * Calculate total work minutes from check-in until now.
+     * Calculate how long a session has been open (no check-out yet), capped
+     * at the end of its attendance date to avoid huge historical numbers.
      */
-    private function calculateWorkMinutesSince(?string $checkInAt): int
+    private function calculateOpenMinutes(?string $checkInAt): int
     {
         if (! $checkInAt) {
             return 0;
         }
 
         $checkIn = Carbon::parse($checkInAt);
+        $dayEnd = Carbon::parse($checkIn->format('Y-m-d').' 23:59');
 
-        return (int) $checkIn->diffInMinutes(Carbon::now());
+        if ($checkIn->gte($dayEnd)) {
+            return 0;
+        }
+
+        return (int) $checkIn->diffInMinutes($dayEnd);
     }
 
     /**

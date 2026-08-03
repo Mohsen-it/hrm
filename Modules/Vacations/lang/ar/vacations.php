@@ -101,4 +101,5 @@ return [
     'balances_report_description' => 'السنة: :year — لكل موظف ولكل نوع إجازة',
     'employees_count' => 'عدد الموظفين',
     'types_count' => 'عدد أنواع الإجازات',
+    'overlapping_request' => 'لدى هذا الموظف طلب إجازة قيد الانتظار أو معتمد يتداخل مع التواريخ المحددة.',
 ];

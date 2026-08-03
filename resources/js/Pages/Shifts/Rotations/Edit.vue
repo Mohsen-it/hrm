@@ -23,10 +23,10 @@ const form = reactive({
     work_on_holidays: props.rotation.work_on_holidays || false,
     grace_minutes: props.rotation.grace_minutes || 0,
     color: props.rotation.color || 'var(--color-mistral-primary)',
-    in_ahead_margin: props.rotation.in_ahead_margin ?? 0,
-    in_above_margin: props.rotation.in_above_margin ?? 0,
-    out_ahead_margin: props.rotation.out_ahead_margin ?? 0,
-    out_above_margin: props.rotation.out_above_margin ?? 0,
+    in_ahead_margin: props.rotation.in_ahead_margin ?? '',
+    in_above_margin: props.rotation.in_above_margin ?? '',
+    out_ahead_margin: props.rotation.out_ahead_margin ?? '',
+    out_above_margin: props.rotation.out_above_margin ?? '',
 });
 
 const errors = ref({});

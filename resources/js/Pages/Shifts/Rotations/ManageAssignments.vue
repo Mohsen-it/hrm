@@ -2,7 +2,7 @@
 import { ref, reactive, computed, watch } from 'vue';
 import { router, Head } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
-import { PageHeader, Button, Card, FormInput, FormSelect, Badge, DataTable, EmptyState } from '@/Components/ui';
+import { PageHeader, Button, Card, FormInput, FormSelect, Badge, DataTable, EmptyState, ErrorSummary } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
@@ -16,6 +16,9 @@ const props = defineProps({
 
 const selectedRotationId = ref(props.preselected_rotation_id || '');
 const selectedGroupId = ref(props.preselected_group_id || '');
+const targetRotationId = ref('');
+const targetGroupId = ref('');
+const effectiveDate = ref(new Date().toISOString().split('T')[0]);
 const departmentFilter = ref('');
 const searchQuery = ref('');
 const employees = ref([]);
@@ -40,6 +43,22 @@ const groupOptions = computed(() => {
     return selectedRotation.value.groups.map(g => ({
         value: g.id,
         label: `${g.name} (${t('shifts.offset')}: ${g.group_index})`,
+    }));
+});
+
+const targetRotation = computed(() => {
+    const items = Array.isArray(props.rotations) ? props.rotations : (props.rotations?.data || []);
+    const rotationId = Number(targetRotationId.value);
+
+    return items.find((rotation) => Number(rotation.id) === rotationId);
+});
+
+const targetGroupOptions = computed(() => {
+    if (!targetRotation.value?.groups) return [];
+
+    return targetRotation.value.groups.map((group) => ({
+        value: group.id,
+        label: `${group.name} (${t('shifts.offset')}: ${group.group_index})`,
     }));
 });
 
@@ -113,7 +132,12 @@ const employeesData = computed(() => ({
 }));
 
 function onSelectionChange(ids) {
-    selectedEmployees.value = ids;
+    const visibleEmployeeIds = new Set(filteredEmployees.value.map((employee) => employee.id));
+    const retainedEmployeeIds = selectedEmployees.value.filter(
+        (employeeId) => !visibleEmployeeIds.has(employeeId),
+    );
+
+    selectedEmployees.value = [...retainedEmployeeIds, ...ids];
 }
 
 const groupColorClass = (groupName) => {
@@ -166,12 +190,16 @@ watch(selectedGroupId, () => {
     fetchEmployees();
 });
 
+watch(targetRotationId, () => {
+    targetGroupId.value = '';
+});
+
 watch(departmentFilter, () => {
     fetchEmployees();
 });
 
-const assignToGroup = async () => {
-    if (selectedEmployees.value.length === 0 || !selectedGroupId.value) return;
+const transferSelected = async () => {
+    if (selectedEmployees.value.length === 0 || !targetGroupId.value || !effectiveDate.value) return;
 
     saving.value = true;
     errors.value = {};
@@ -179,7 +207,7 @@ const assignToGroup = async () => {
     try {
         const assignments = selectedEmployees.value.map(empId => ({
             employee_id: empId,
-            rotation_group_id: Number(selectedGroupId.value),
+            rotation_group_id: Number(targetGroupId.value),
         }));
 
         const response = await fetch(route('rotations.assign.bulk-transfer'), {
@@ -191,8 +219,7 @@ const assignToGroup = async () => {
             },
             body: JSON.stringify({
                 assignments,
-                rotation_id: Number(selectedRotationId.value),
-                effective_date: new Date().toISOString().split('T')[0],
+                effective_date: effectiveDate.value,
             }),
         });
 
@@ -205,6 +232,8 @@ const assignToGroup = async () => {
         }
 
         selectedEmployees.value = [];
+        targetRotationId.value = '';
+        targetGroupId.value = '';
         await fetchEmployees();
     } catch (e) {
         console.error(e);
@@ -266,6 +295,8 @@ if (props.preselected_rotation_id) {
                 </Button>
             </template>
         </PageHeader>
+
+        <ErrorSummary :errors="errors" class="mb-6" />
 
         <Card variant="base" padding="md" class="mb-6">
             <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -357,22 +388,38 @@ if (props.preselected_rotation_id) {
                         <div v-if="selectedCount > 0" class="flex items-center gap-2">
                             <Badge :text="`${selectedCount} ${t('shifts.selected')}`" variant="active" />
                             <FormSelect
-                                v-model="selectedGroupId"
+                                v-model="targetRotationId"
                                 :label="''"
-                                name="target_group"
-                                :options="groupOptions"
+                                name="target_rotation_id"
+                                :options="rotationOptions"
+                                :placeholder="t('shifts.select_rotation')"
+                                class="!mb-0 !w-auto min-w-40"
+                            />
+                            <FormSelect
+                                v-model="targetGroupId"
+                                :label="''"
+                                name="target_group_id"
+                                :options="targetGroupOptions"
                                 :placeholder="t('shifts.select_target_group')"
+                                :disabled="!targetRotationId"
+                                class="!mb-0 !w-auto min-w-40"
+                            />
+                            <FormInput
+                                v-model="effectiveDate"
+                                :label="''"
+                                name="effective_date"
+                                type="date"
                                 class="!mb-0 !w-auto"
                             />
                             <Button
                                 variant="primary"
                                 size="sm"
-                                icon="fas fa-check"
+                                icon="fas fa-right-left"
                                 :loading="saving"
-                                :disabled="!selectedGroupId"
-                                @click="assignToGroup"
+                                :disabled="!targetGroupId || !effectiveDate"
+                                @click="transferSelected"
                             >
-                                {{ t('shifts.assign_to_group') }}
+                                {{ t('shifts.transfer') }}
                             </Button>
                             <Button
                                 variant="danger"
@@ -420,6 +467,7 @@ if (props.preselected_rotation_id) {
                 :enable-density="false"
                 :enable-column-visibility="false"
                 storage-key="rotation-manage-assignments"
+                :selected-ids="selectedEmployees"
                 @selection-change="onSelectionChange"
             >
                 <template #cell-rotation_group_name="{ row }">

@@ -455,4 +455,5 @@ return [
     'employee' => 'الموظف',
     'date_range' => 'النطاق الزمني',
     'rotation_schedule' => 'جدول الدورية',
+    'employee_rotation_assignment_conflict' => 'هذا الموظف مسند مسبقًا إلى الدورية :rotation والمجموعة :group ضمن التواريخ المحددة.',
 ];

@@ -20,6 +20,7 @@ const props = defineProps({
     emptyDescription: { type: String, default: '' },
     rowClickable: { type: Boolean, default: false },
     selectable: { type: Boolean, default: true },
+    selectedIds: { type: Array, default: null },
     enableSearch: { type: Boolean, default: true },
     enableFilters: { type: Boolean, default: true },
     enableDensity: { type: Boolean, default: true },
@@ -110,10 +111,17 @@ const showPageTransition = computed(() => table.isPageChanging.value || table.is
 // When the underlying data changes (e.g. after a bulk delete), drop
 // selection ids that no longer exist on the current page so the toolbar
 // count and bulk actions never reference deleted rows.
-watch(() => props.data, () => {
+function syncSelectedIds() {
     const valid = new Set(items.value.map((r) => r.id));
-    table.selectedIds.value = table.selectedIds.value.filter((id) => valid.has(id));
-}, { deep: true });
+    const selectedIds = Array.isArray(props.selectedIds)
+        ? props.selectedIds
+        : table.selectedIds.value;
+
+    table.selectedIds.value = selectedIds.filter((id) => valid.has(id));
+}
+
+watch(() => props.data, syncSelectedIds, { deep: true });
+watch(() => props.selectedIds, syncSelectedIds, { deep: true });
 
 watch(() => table.selectedIds.value, (ids) => {
     emit('selection-change', ids);

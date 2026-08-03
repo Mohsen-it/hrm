@@ -326,6 +326,7 @@ return [
     'rotation_employee_transferred' => 'Employee transferred to new rotation successfully.',
     'rotation_employee_unassigned' => 'Employee unassigned from rotation successfully.',
     'employee_already_assigned_to_rotation' => 'This employee already has an active rotation assignment.',
+    'employee_rotation_assignment_conflict' => 'This employee is already assigned to rotation :rotation, group :group during the selected dates.',
     'rotation_pattern_requires_work_day' => 'The pattern must contain at least one work day.',
     'rotation_too_many_groups' => 'The number of groups exceeds the maximum allowed for this cycle (:max groups).',
     'rotation_group_mismatch' => 'The selected group does not belong to this rotation.',

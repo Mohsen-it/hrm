@@ -24,10 +24,10 @@ class RotationResource extends JsonResource
             'work_on_holidays' => $this->work_on_holidays,
             'grace_minutes' => $this->grace_minutes,
             'color' => $this->color,
-            'in_ahead_margin' => $this->in_ahead_margin,
-            'in_above_margin' => $this->in_above_margin,
-            'out_ahead_margin' => $this->out_ahead_margin,
-            'out_above_margin' => $this->out_above_margin,
+            'in_ahead_margin' => $this->formatMarginTime($this->in_ahead_margin),
+            'in_above_margin' => $this->formatMarginTime($this->in_above_margin),
+            'out_ahead_margin' => $this->formatMarginTime($this->out_ahead_margin),
+            'out_above_margin' => $this->formatMarginTime($this->out_above_margin),
             'time_schedule' => $this->whenLoaded('timeSchedule', function () {
                 return $this->timeSchedule ? [
                     'id' => $this->timeSchedule->id,
@@ -42,5 +42,13 @@ class RotationResource extends JsonResource
             }),
             'created_at' => $this->created_at?->format('Y-m-d H:i:s'),
         ];
+    }
+
+    /**
+     * Format database TIME values for HTML time inputs.
+     */
+    private function formatMarginTime(?string $time): ?string
+    {
+        return $time === null ? null : substr($time, 0, 5);
     }
 }

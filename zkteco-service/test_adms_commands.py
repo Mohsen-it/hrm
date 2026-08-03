@@ -27,6 +27,28 @@ class AdmsCommandProtocolTest(unittest.TestCase):
         self.assertEqual("completed", result["status"])
         self.assertIsNone(result["error_message"])
 
+    def test_user_update_keeps_set_user_command_and_does_not_become_delete(self):
+        response = build_get_request_response(
+            [{
+                "id": 44,
+                "command_type": "user_update",
+                "command_body": "C:10#NEW-EMP##Employee Name##0####0",
+            }]
+        )
+
+        self.assertEqual("CMD 44 C:10#NEW-EMP##Employee Name##0####0\r\n", response)
+        self.assertNotIn("C:11", response)
+
+    def test_user_update_rejects_a_delete_command(self):
+        with self.assertRaises(ValueError):
+            build_get_request_response(
+                [{
+                    "id": 45,
+                    "command_type": "user_update",
+                    "command_body": "C:11#OLD-EMP",
+                }]
+            )
+
     def test_failed_device_acknowledgement(self):
         result = parse_command_result("ID=43&Return=-1&CMD=DATA%20UPDATE")
 

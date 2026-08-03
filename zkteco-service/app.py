@@ -254,30 +254,120 @@ class ZKTecoService:
             logger.error(f"Get users failed: {str(e)}")
             raise
     
-    def add_user(self, uid, user_id, name, password='', privilege=0, card=0):
-        """Add or update user on device"""
+    def _save_user_without_deleting_biometrics(self, current_user, uid, user_id, name=None,
+                                                password=None, privilege=None, card=None):
+        """Write USERINFO at an existing UID without issuing any delete command."""
+        old_user_id = str(getattr(current_user, 'user_id', '')).strip() if current_user else ''
+        if current_user:
+            password = getattr(current_user, 'password', '') if password is None else password
+            privilege = getattr(current_user, 'privilege', 0) if privilege is None else privilege
+            card = getattr(current_user, 'card', 0) if card is None else card
+            name = getattr(current_user, 'name', '') if name is None else name
+            group_id = getattr(current_user, 'group_id', '')
+        else:
+            password = '' if password is None else password
+            privilege = 0 if privilege is None else privilege
+            card = 0 if card is None else card
+            group_id = ''
+
+        if not name:
+            raise ValueError("name must not be empty")
+
+        # pyzk's set_user uses CMD_USER_WRQ (SetUser) for this exact UID.
+        # Do not replace this with delete_user + set_user: terminals keep
+        # fingerprints, face templates and user photos under the UID.
+        self.conn.set_user(
+            uid=uid,
+            name=name,
+            privilege=privilege,
+            password=password,
+            group_id=str(group_id or ''),
+            user_id=user_id,
+            card=card,
+        )
+
+        return {
+            'success': True,
+            'uid': uid,
+            'previous_user_id': old_user_id or None,
+            'user_id': user_id,
+            'renamed': bool(current_user and old_user_id != user_id),
+        }
+
+    def update_user_code(self, uid, user_id, name=None, password=None, privilege=None, card=None):
+        """Rename an existing device user while preserving all biometric data.
+
+        A valid, existing device ``uid`` is mandatory. Refusing an unknown UID
+        is deliberate: creating a replacement user would leave the employee's
+        fingerprints, face templates and photo attached to the old UID.
+        """
         try:
             if not self.conn:
                 raise Exception("Not connected")
-            
-            logger.info(f"Adding user: UID={uid}, UserID={user_id}, Name={name}")
-            
-            self.conn.set_user(
-                uid=uid,
-                name=name,
-                privilege=privilege,
-                password=password,
-                group_id='',
-                user_id=user_id,
-                card=card
+
+            uid = int(uid)
+            if uid <= 0:
+                raise ValueError("uid must be a positive existing device UID")
+            user_id = str(user_id).strip()
+            if not user_id:
+                raise ValueError("user_id must not be empty")
+
+            users = self.conn.get_users()
+            current_user = next((user for user in users if int(user.uid) == uid), None)
+            if current_user is None:
+                raise ValueError(f"User with UID {uid} was not found; refusing unsafe replacement")
+
+            duplicate = next(
+                (user for user in users if str(getattr(user, 'user_id', '')).strip() == user_id and int(user.uid) != uid),
+                None,
             )
-            
-            logger.info(f"✅ User added/updated successfully")
-            return True
-            
+            if duplicate:
+                raise ValueError(f"Employee code {user_id!r} is already assigned to UID {duplicate.uid}")
+
+            old_user_id = str(getattr(current_user, 'user_id', '')).strip()
+            logger.info(
+                "Renaming device user at UID=%s: PIN %r -> %r; biometric data is retained",
+                uid, old_user_id, user_id,
+            )
+            return self._save_user_without_deleting_biometrics(
+                current_user, uid, user_id, name, password, privilege, card,
+            )
         except Exception as e:
-            logger.error(f"Add user failed: {str(e)}")
-            return False
+            logger.error("Update user code failed: %s", str(e))
+            return {'success': False, 'error': str(e)}
+
+    def add_user(self, uid, user_id, name, password=None, privilege=None, card=None):
+        """Create a user, or safely update an existing UID without deleting data."""
+        try:
+            if not self.conn:
+                raise Exception("Not connected")
+
+            uid = int(uid)
+            user_id = str(user_id).strip()
+            if uid <= 0:
+                raise ValueError("uid must be a positive device UID")
+            if not user_id:
+                raise ValueError("user_id must not be empty")
+
+            users = self.conn.get_users()
+            current_user = next((user for user in users if int(user.uid) == uid), None)
+            if current_user:
+                return self.update_user_code(uid, user_id, name, password, privilege, card)
+
+            duplicate = next(
+                (user for user in users if str(getattr(user, 'user_id', '')).strip() == user_id),
+                None,
+            )
+            if duplicate:
+                raise ValueError(f"Employee code {user_id!r} is already assigned to UID {duplicate.uid}")
+
+            logger.info("Creating device user at UID=%s with PIN %r", uid, user_id)
+            return self._save_user_without_deleting_biometrics(
+                None, uid, user_id, name, password, privilege, card,
+            )
+        except Exception as e:
+            logger.error("Add user failed: %s", str(e))
+            return {'success': False, 'error': str(e)}
     
     def add_users_batch(self, users_data):
         """
@@ -285,7 +375,9 @@ class ZKTecoService:
         Optimized to fetch existing users only once
         
         Args:
-            users_data: List of dicts with keys: user_id, name, password, privilege, card
+            users_data: List of dicts with keys: user_id, name, password,
+                privilege, card and, for a code rename, the existing uid or
+                previous_user_id (old_user_id is accepted as an alias).
             
         Returns:
             dict with 'success', 'failed', 'errors' keys
@@ -297,6 +389,7 @@ class ZKTecoService:
             success_count = 0
             failed_count = 0
             errors = []
+            uid_map = {}
             
             # ✅ Fetch existing users ONCE for all operations
             logger.info(f"Fetching existing users for batch operation ({len(users_data)} users to add)")
@@ -334,26 +427,42 @@ class ZKTecoService:
             # Process each user
             for index, user_data in enumerate(users_data):
                 try:
-                    user_id = user_data.get('user_id', '')
+                    user_id = str(user_data.get('user_id', '')).strip()
                     name = user_data.get('name', '')
-                    password = user_data.get('password', '')
-                    privilege = user_data.get('privilege', 0)
-                    card = user_data.get('card', 0)
+                    password = user_data.get('password')
+                    privilege = user_data.get('privilege')
+                    card = user_data.get('card')
+                    requested_uid = user_data.get('uid')
+                    previous_user_id = str(user_data.get('previous_user_id', user_data.get('old_user_id', ''))).strip()
+                    is_rename = bool(user_data.get('rename') or previous_user_id)
+                    if not user_id:
+                        raise ValueError('user_id must not be empty')
                     
-                    # Determine UID using cached data
-                    if user_id in user_id_to_uid_map:
+                    # UID is the stable biometric key. A caller changing an
+                    # employee code must send uid (or previous_user_id), so we
+                    # never allocate a fresh UID and orphan biometric records.
+                    if requested_uid is not None and int(requested_uid) > 0:
+                        uid = int(requested_uid)
+                        if is_rename and uid not in existing_uids:
+                            raise ValueError(f'UID {uid} was not found; refusing unsafe employee-code replacement')
+                        existing_uids.add(uid)
+                    elif previous_user_id and previous_user_id in user_id_to_uid_map:
+                        uid = user_id_to_uid_map[previous_user_id]
+                    elif user_id in user_id_to_uid_map:
                         # User exists, use their existing UID and data
                         uid = user_id_to_uid_map[user_id]
                         
                         # ✅ استخدام البيانات الموجودة في الجهاز إذا كان المستخدم موجود
-                        if user_id in user_id_to_privilege_map:
+                        if user_id in user_id_to_privilege_map and privilege is None:
                             privilege = user_id_to_privilege_map[user_id]
-                        if user_id in user_id_to_password_map:
+                        if user_id in user_id_to_password_map and password is None:
                             password = user_id_to_password_map[user_id]
-                        if user_id in user_id_to_card_map:
+                        if user_id in user_id_to_card_map and card is None:
                             card = user_id_to_card_map[user_id]
                             
                         logger.info(f"Using existing data for user_id={user_id}: UID={uid}, privilege={privilege}")
+                    elif is_rename:
+                        raise ValueError('A rename requires an existing uid or previous_user_id')
                     else:
                         # User doesn't exist, find next available UID
                         if existing_uids:
@@ -371,16 +480,11 @@ class ZKTecoService:
                         
                         logger.info(f"Assigned new UID={uid} for user_id={user_id}")
                     
-                    # Add/update user with determined UID
-                    self.conn.set_user(
-                        uid=uid,
-                        name=name,
-                        privilege=privilege,
-                        password=password,
-                        group_id='',
-                        user_id=user_id,
-                        card=card
-                    )
+                    rename_result = self.add_user(uid, user_id, name, password, privilege, card)
+                    if not rename_result['success']:
+                        raise RuntimeError(rename_result['error'])
+                    user_id_to_uid_map[user_id] = uid
+                    uid_map[user_id] = uid
                     
                     success_count += 1
                     logger.info(f"✅ User added in batch: {name} (UID={uid}, UserID={user_id})")
@@ -396,6 +500,11 @@ class ZKTecoService:
             return {
                 'success': success_count,
                 'failed': failed_count,
+                # Keep the original response keys and expose the names used
+                # by Laravel's batch adapter.
+                'success_count': success_count,
+                'failed_count': failed_count,
+                'uid_map': uid_map,
                 'errors': errors
             }
             
@@ -938,9 +1047,12 @@ def add_user():
         uid = data.get('uid')
         user_id = data.get('user_id')
         name = data.get('name')
-        user_password = data.get('user_password', '')
-        privilege = data.get('privilege', 0)
-        card = data.get('card', 0)
+        # `password` is the terminal communication key.  Keep a user's own
+        # password separate, otherwise changing the employee code could
+        # overwrite it with the connection credential.
+        user_password = data.get('user_password')
+        privilege = data.get('privilege')
+        card = data.get('card')
         
         if not all([ip, uid is not None, user_id, name]):
             return jsonify({'success': False, 'error': 'Missing required parameters'}), 400
@@ -953,10 +1065,45 @@ def add_user():
         result = service.add_user(uid, user_id, name, user_password, privilege, card)
         service.disconnect()
         
-        return jsonify({'success': result})
+        return jsonify({
+            'success': result['success'],
+            'device_uid': result.get('uid'),
+            'renamed': result.get('renamed', False),
+            'previous_user_id': result.get('previous_user_id'),
+            'error': result.get('error'),
+        }), (200 if result['success'] else 422)
         
     except Exception as e:
         logger.error(f"Add user error: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/device/update-user-code', methods=['POST'])
+def update_user_code():
+    """Rename an employee code at an existing UID without deleting biometrics.
+
+    Required JSON: ``ip``, ``uid`` and the new ``user_id``.  The endpoint
+    intentionally rejects an unknown UID instead of creating another user.
+    """
+    try:
+        data = request.json or {}
+        ip, uid, user_id = data.get('ip'), data.get('uid'), data.get('user_id')
+        if not ip or uid is None or not user_id:
+            return jsonify({'success': False, 'error': 'ip, uid and user_id are required'}), 400
+
+        service = ZKTecoService(ip, data.get('port', 4370), data.get('password', 0))
+        if not service.connect():
+            return jsonify({'success': False, 'error': 'Could not connect'}), 500
+        try:
+            result = service.update_user_code(
+                uid, user_id, data.get('name'), data.get('user_password'),
+                data.get('privilege'), data.get('card'),
+            )
+        finally:
+            service.disconnect()
+        return jsonify(result), (200 if result['success'] else 422)
+    except Exception as e:
+        logger.error("Update user code error: %s", str(e))
         return jsonify({'success': False, 'error': str(e)}), 500
 
 

@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Modules\Users\Models\User;
 
 class RotationAssignment extends Model
@@ -44,6 +45,14 @@ class RotationAssignment extends Model
     public function rotationGroup(): BelongsTo
     {
         return $this->belongsTo(RotationGroup::class, 'rotation_group_id');
+    }
+
+    /**
+     * Get the lossless archived version of the original assignment snapshot.
+     */
+    public function snapshotArchive(): HasOne
+    {
+        return $this->hasOne(RotationAssignmentSnapshotArchive::class, 'rotation_assignment_id');
     }
 
     /**

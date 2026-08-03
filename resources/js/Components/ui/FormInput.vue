@@ -15,6 +15,8 @@ const props = defineProps({
     id: { type: String, default: '' },
     autofocus: { type: Boolean, default: false },
     autocomplete: { type: String, default: '' },
+    min: { type: [String, Number], default: undefined },
+    max: { type: [String, Number], default: undefined },
     dir: { type: String, default: 'rtl' },
 });
 
@@ -57,6 +59,8 @@ defineExpose({ focus });
                 :readonly="readonly"
                 :autofocus="autofocus"
                 :autocomplete="autocomplete || undefined"
+                :min="min"
+                :max="max"
                 :aria-invalid="!!error"
                 :aria-describedby="error ? `${inputId}-error` : hint ? `${inputId}-hint` : undefined"
                 :class="[

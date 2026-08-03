@@ -280,17 +280,15 @@ class RotationsController extends Controller
     {
         $this->authorize('assign-employees-to-rotation');
 
-        foreach ($request->employee_ids as $employeeId) {
-            $this->rotationService->assignEmployee(
-                $employeeId,
-                $request->rotation_id,
-                $request->rotation_group_id,
-                $request->start_date,
-                $request->end_date
-            );
-        }
+        $assignments = $this->rotationService->assignEmployees(
+            $request->employee_ids,
+            $request->rotation_id,
+            $request->rotation_group_id,
+            $request->start_date,
+            $request->end_date,
+        );
 
-        $count = count($request->employee_ids);
+        $count = count($assignments);
 
         return redirect()->route('rotations.assign')
             ->with('success', __('shifts.rotation_employees_assigned_count', ['count' => $count]));

@@ -22,10 +22,10 @@ const form = reactive({
     work_on_holidays: false,
     grace_minutes: 0,
     color: 'var(--color-mistral-primary)',
-    in_ahead_margin: 0,
-    in_above_margin: 0,
-    out_ahead_margin: 0,
-    out_above_margin: 0,
+    in_ahead_margin: '',
+    in_above_margin: '',
+    out_ahead_margin: '',
+    out_above_margin: '',
 });
 
 const patternInput = ref('');

@@ -53,6 +53,7 @@ return [
     'edit_request' => 'Edit Vacation Request',
     'start_date_must_be_today_or_later' => 'Start date must be today or later',
     'end_date_must_be_after_start' => 'End date must be after start date',
+    'overlapping_request' => 'This employee already has a pending or approved vacation request during the selected dates.',
     'insufficient_balance' => 'Insufficient vacation balance. Remaining: :remaining day(s), requested: :requested day(s).',
     'my_vacations' => 'My Vacations',
     'my_description' => 'View and manage your vacation requests',

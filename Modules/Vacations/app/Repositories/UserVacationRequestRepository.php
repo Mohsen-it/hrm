@@ -4,7 +4,6 @@ namespace Modules\Vacations\Repositories;
 
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\Collection;
 use Modules\Vacations\Models\UserVacationRequest;
 
 /**
@@ -56,18 +55,24 @@ class UserVacationRequestRepository
     }
 
     /**
-     * Return every approved request that overlaps the supplied range for
-     * a given user.
-     *
-     * @return Collection<int, UserVacationRequest>
+     * Determine whether an open or approved request overlaps the supplied
+     * range for a given user.
      */
-    public function approvedForUserInRange(int $userId, string $from, string $to): Collection
-    {
+    public function hasActiveOverlapForUser(
+        int $userId,
+        string $from,
+        string $to,
+        ?int $exceptRequestId = null,
+    ): bool {
         return $this->query()
             ->forUser($userId)
-            ->approved()
+            ->whereIn('status', [
+                UserVacationRequest::STATUS_PENDING,
+                UserVacationRequest::STATUS_APPROVED,
+            ])
             ->overlapping($from, $to)
-            ->get();
+            ->when($exceptRequestId, fn (Builder $query) => $query->where('id', '!=', $exceptRequestId))
+            ->exists();
     }
 
     /**

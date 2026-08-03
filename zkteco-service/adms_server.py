@@ -10,6 +10,7 @@ import argparse
 import json
 import logging
 import os
+import re
 import sqlite3
 import threading
 import time
@@ -292,14 +293,34 @@ def build_get_option_response(sn: str) -> str:
             "TransFlag=1111111111\r\nTimeZone=3\r\nRealtime=1\r\nEncrypt=0\r\n")
 
 
+def _format_device_command(command: dict) -> str:
+    """Format one ADMS command without changing the terminal PIN semantics.
+
+    A ``user_update`` is deliberately sent as the device's SetUser (C:10)
+    command.  It is not translated to C:11 (delete) followed by create: a
+    delete would discard templates, face data and the stored user photo.
+    """
+    command_id = command.get("id", 0)
+    command_type = command.get("command_type", "")
+    body = str(command.get("command_body", "")).replace("\r", "").replace("\n", "").strip()
+
+    if command_type == "face_template":
+        return f"C:{command_id}:{body}"
+
+    if command_type == "user_update":
+        # C:10 is SetUser.  C:11 deletes the user and therefore removes the
+        # data bound to it (fingerprints, face templates and user photo).
+        # Fail closed if the queue accidentally contains a non-update command.
+        if not re.match(r"^C:10(?:#|$)", body, re.IGNORECASE):
+            raise ValueError("A user_update must use SetUser (C:10), never delete-user (C:11)")
+
+    return f"CMD {command_id} {body}"
+
+
 def build_get_request_response(commands: list) -> str:
     if not commands:
         return "OK"
-    return "\r\n".join(
-        f"C:{command.get('id', 0)}:{command.get('command_body', '')}" if command.get("command_type") == "face_template"
-        else f"CMD {command.get('id', 0)} {command.get('command_body', '')}"
-        for command in commands
-    ) + "\r\n"
+    return "\r\n".join(_format_device_command(command) for command in commands) + "\r\n"
 
 
 def parse_command_result(body: str) -> dict | None:

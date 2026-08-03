@@ -47,6 +47,29 @@ class RotationAssignmentRepository
             ->first();
     }
 
+    /**
+     * Find an assignment for an employee whose inclusive date range conflicts
+     * with the requested one.
+     */
+    public function findOverlappingAssignment(
+        int $employeeId,
+        string $startDate,
+        ?string $endDate = null,
+    ): ?RotationAssignment {
+        $endDate ??= '9999-12-31';
+
+        return $this->query()
+            ->with($this->defaultWith)
+            ->forEmployee($employeeId)
+            ->where('start_date', '<=', $endDate)
+            ->where(function (Builder $query) use ($startDate): void {
+                $query->whereNull('end_date')
+                    ->orWhere('end_date', '>=', $startDate);
+            })
+            ->orderByDesc('start_date')
+            ->first();
+    }
+
     public function getAssignmentsForDate(string $date): Collection
     {
         return $this->query()

@@ -112,6 +112,8 @@ class VacationRequestService
             );
         }
 
+        $this->ensureNoOverlappingActiveRequest($userId, $start, $end);
+
         // $today = new DateTimeImmutable('today');
         // if ($startDt < $today) {
         //     throw new InvalidArgumentException(
@@ -204,6 +206,22 @@ class VacationRequestService
             );
         }
 
+        $payload = [
+            'vacation_type_id' => (int) ($data['vacation_type_id'] ?? $request->vacation_type_id),
+            'start_date' => (string) ($data['start_date'] ?? $request->start_date->format('Y-m-d')),
+            'end_date' => (string) ($data['end_date'] ?? $request->end_date->format('Y-m-d')),
+            'reason' => $data['reason'] ?? $request->reason,
+            'attachments' => $data['attachments'] ?? $request->attachments,
+            'metadata' => $data['metadata'] ?? $request->metadata,
+        ];
+
+        $this->ensureNoOverlappingActiveRequest(
+            (int) $request->user_id,
+            $payload['start_date'],
+            $payload['end_date'],
+            $request->id,
+        );
+
         // Refund the previously reserved days before re-reserving.
         $oldDays = (int) $request->working_days_count;
         $oldYear = (int) $request->start_date->format('Y');
@@ -214,15 +232,6 @@ class VacationRequestService
             $oldDays,
             $request->id,
         );
-
-        $payload = [
-            'vacation_type_id' => (int) ($data['vacation_type_id'] ?? $request->vacation_type_id),
-            'start_date' => (string) ($data['start_date'] ?? $request->start_date->format('Y-m-d')),
-            'end_date' => (string) ($data['end_date'] ?? $request->end_date->format('Y-m-d')),
-            'reason' => $data['reason'] ?? $request->reason,
-            'attachments' => $data['attachments'] ?? $request->attachments,
-            'metadata' => $data['metadata'] ?? $request->metadata,
-        ];
 
         $type = $this->typeService->findType($payload['vacation_type_id']);
         if (! $type) {
@@ -424,5 +433,21 @@ class VacationRequestService
     public function previewDays(VacationType $type, string $from, string $to): int
     {
         return $this->balanceService->projectDays($type, $from, $to, $this->holidayLookup);
+    }
+
+    /**
+     * Reject date ranges that conflict with another active vacation request.
+     */
+    private function ensureNoOverlappingActiveRequest(
+        int $userId,
+        string $startDate,
+        string $endDate,
+        ?int $exceptRequestId = null,
+    ): void {
+        if ($this->repository->hasActiveOverlapForUser($userId, $startDate, $endDate, $exceptRequestId)) {
+            throw ValidationException::withMessages([
+                'start_date' => __('vacations.overlapping_request'),
+            ]);
+        }
     }
 }

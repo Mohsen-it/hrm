@@ -253,15 +253,43 @@ class RotationService
     public function assignEmployee(int $employeeId, int $rotationId, int $groupId, string $startDate, ?string $endDate = null): RotationAssignment
     {
         return DB::transaction(function () use ($employeeId, $rotationId, $groupId, $startDate, $endDate) {
-            // Serialize concurrent assignments for the same employee so two
-            // parallel requests cannot both create an active assignment.
             User::query()->whereKey($employeeId)->lockForUpdate()->first();
-
-            $this->closePreviousAssignment($employeeId, $startDate);
 
             $this->validateAssignment($employeeId, $rotationId, $startDate, $endDate);
 
             return $this->createAssignment($employeeId, $rotationId, $groupId, $startDate, $endDate);
+        });
+    }
+
+    /**
+     * Assign multiple employees only when none has a conflicting assignment.
+     *
+     * @param  array<int, int|string>  $employeeIds
+     * @return array<int, RotationAssignment>
+     */
+    public function assignEmployees(
+        array $employeeIds,
+        int $rotationId,
+        int $groupId,
+        string $startDate,
+        ?string $endDate = null,
+    ): array {
+        $employeeIds = array_values(array_unique(array_map('intval', $employeeIds)));
+        sort($employeeIds);
+
+        return DB::transaction(function () use ($employeeIds, $rotationId, $groupId, $startDate, $endDate): array {
+            foreach ($employeeIds as $employeeId) {
+                User::query()->whereKey($employeeId)->lockForUpdate()->first();
+            }
+
+            foreach ($employeeIds as $employeeId) {
+                $this->validateAssignment($employeeId, $rotationId, $startDate, $endDate);
+            }
+
+            return array_map(
+                fn (int $employeeId) => $this->createAssignment($employeeId, $rotationId, $groupId, $startDate, $endDate),
+                $employeeIds,
+            );
         });
     }
 
@@ -395,8 +423,31 @@ class RotationService
 
         $timeSchedule = $rotation->timeSchedule;
         $snapshotData = [
-            'rotation' => $rotation->only(['id', 'name', 'description', 'anchor_start_date', 'pattern', 'cycle_length', 'work_days_count', 'rest_days_count', 'number_of_groups', 'time_schedule_id', 'overtime_enabled', 'work_on_holidays', 'grace_minutes', 'in_ahead_margin', 'in_above_margin', 'out_ahead_margin', 'out_above_margin', 'color']),
-            'group' => $group->only(['id', 'name', 'group_index']),
+            'rotation' => [
+                'id' => $rotation->id,
+                'name' => $rotation->name,
+                'description' => $rotation->description,
+                'anchor_start_date' => $rotation->anchor_start_date?->toDateString(),
+                'pattern' => $rotation->pattern,
+                'cycle_length' => $rotation->cycle_length,
+                'work_days_count' => $rotation->work_days_count,
+                'rest_days_count' => $rotation->rest_days_count,
+                'number_of_groups' => $rotation->number_of_groups,
+                'time_schedule_id' => $rotation->time_schedule_id,
+                'overtime_enabled' => $rotation->overtime_enabled,
+                'work_on_holidays' => $rotation->work_on_holidays,
+                'grace_minutes' => $rotation->grace_minutes,
+                'in_ahead_margin' => $rotation->in_ahead_margin,
+                'in_above_margin' => $rotation->in_above_margin,
+                'out_ahead_margin' => $rotation->out_ahead_margin,
+                'out_above_margin' => $rotation->out_above_margin,
+                'color' => $rotation->color,
+            ],
+            'group' => [
+                'id' => $group->id,
+                'name' => $group->name,
+                'group_index' => $group->group_index,
+            ],
             'time_schedule' => $timeSchedule ? [
                 'id' => $timeSchedule->id,
                 'name' => $timeSchedule->name,
@@ -423,16 +474,6 @@ class RotationService
         ]);
     }
 
-    private function closePreviousAssignment(int $employeeId, string $startDate): void
-    {
-        $active = $this->assignmentRepository->getActiveAssignment($employeeId);
-
-        if ($active) {
-            $previousDay = Carbon::parse($startDate)->subDay()->toDateString();
-            $this->assignmentRepository->closeAssignment($active, $previousDay);
-        }
-    }
-
     private function closeCurrentAssignment(int $employeeId, string $endDate): void
     {
         $active = $this->assignmentRepository->getActiveAssignment($employeeId);
@@ -444,11 +485,18 @@ class RotationService
 
     private function validateAssignment(int $employeeId, int $rotationId, string $startDate, ?string $endDate): void
     {
-        $existingActive = $this->assignmentRepository->getActiveAssignment($employeeId);
+        $existingAssignment = $this->assignmentRepository->findOverlappingAssignment(
+            $employeeId,
+            $startDate,
+            $endDate,
+        );
 
-        if ($existingActive) {
+        if ($existingAssignment) {
             throw ValidationException::withMessages([
-                'employee_id' => [__('shifts.employee_already_assigned_to_rotation')],
+                'employee_id' => [__('shifts.employee_rotation_assignment_conflict', [
+                    'rotation' => $existingAssignment->rotation?->name ?? '—',
+                    'group' => $existingAssignment->rotationGroup?->name ?? '—',
+                ])],
             ]);
         }
     }

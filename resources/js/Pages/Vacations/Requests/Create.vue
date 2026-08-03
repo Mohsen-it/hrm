@@ -2,8 +2,9 @@
 import { computed, reactive, ref } from 'vue';
 import { router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
-import { PageHeader, Button, FormInput, FormTextarea, FormSearchableSelect, FormSelect, FormSection, FormActions, ErrorSummary } from '@/Components/ui';
+import { PageHeader, Button, FormTextarea, FormSearchableSelect, FormSelect, FormSection, FormActions, ErrorSummary } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
+import VacationDateRangeFields from '../Partials/VacationDateRangeFields.vue';
 
 const { t } = useTranslations();
 
@@ -17,6 +18,7 @@ const form = reactive({
     vacation_type_id: '',
     start_date: '',
     end_date: '',
+    days_count: '',
     reason: '',
 });
 
@@ -79,21 +81,12 @@ function submit() {
                         required
                         :error="errorFor('vacation_type_id')"
                     />
-                    <FormInput
-                        v-model="form.start_date"
-                        :label="t('vacations.start_date')"
-                        name="start_date"
-                        type="date"
-                        required
-                        :error="errorFor('start_date')"
-                    />
-                    <FormInput
-                        v-model="form.end_date"
-                        :label="t('vacations.end_date')"
-                        name="end_date"
-                        type="date"
-                        required
-                        :error="errorFor('end_date')"
+                    <VacationDateRangeFields
+                        v-model:start-date="form.start_date"
+                        v-model:end-date="form.end_date"
+                        v-model:days-count="form.days_count"
+                        :errors="errors"
+                        :labels="{ startDate: t('vacations.start_date'), daysCount: t('vacations.total_days'), endDate: t('vacations.end_date') }"
                     />
                 </div>
             </FormSection>

@@ -103,8 +103,16 @@ function clearAll() {
 }
 
 function onSelectionChange(ids) {
-    selectedEmployees.value = employees.value.filter(e => ids.includes(e.id));
-    form.employee_ids = ids;
+    const visibleEmployeeIds = new Set(filteredEmployees.value.map((employee) => employee.id));
+    const retainedEmployees = selectedEmployees.value.filter(
+        (employee) => !visibleEmployeeIds.has(employee.id),
+    );
+    const selectedVisibleEmployees = employees.value.filter(
+        (employee) => visibleEmployeeIds.has(employee.id) && ids.includes(employee.id),
+    );
+
+    selectedEmployees.value = [...retainedEmployees, ...selectedVisibleEmployees];
+    form.employee_ids = selectedEmployees.value.map((employee) => employee.id);
 }
 
 function fetchEmployees() {
@@ -287,6 +295,7 @@ watch(() => form.department_id, () => {
                             :columns="employeeColumns"
                             :data="employeesData"
                             :selectable="true"
+                            :selected-ids="selectedIds"
                             :enable-search="false"
                             :enable-filters="false"
                             :enable-pagination="false"

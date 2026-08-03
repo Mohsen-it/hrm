@@ -7,7 +7,9 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Modules\Attendance\Services\RawAttendanceLogService;
 use Modules\AttendanceIntegration\Contracts\DeviceAdapterInterface;
+use Modules\AttendanceIntegration\DTOs\PunchType;
 use Modules\AttendanceIntegration\Services\DeviceAdapterResolver;
+use Modules\AttendanceIntegration\Services\SchedulePunchClassifierService;
 use Modules\FingerprintDevices\Http\Requests\StoreFingerprintDeviceRequest;
 use Modules\FingerprintDevices\Http\Requests\UpdateFingerprintDeviceRequest;
 use Modules\FingerprintDevices\Models\FingerprintDevice;
@@ -20,6 +22,7 @@ class FingerprintDeviceService
         private FingerprintDeviceRepository $repository,
         private DeviceAdapterResolver $adapterResolver,
         private RawAttendanceLogService $rawLogService,
+        private SchedulePunchClassifierService $schedulePunchClassifier,
     ) {}
 
     private function resolveAdapter(FingerprintDevice $device): DeviceAdapterInterface
@@ -139,14 +142,21 @@ class FingerprintDeviceService
 
             $userPk = $userMap['byUserId'][$externalId] ?? $userMap['byUid'][$uid] ?? null;
 
+            $devicePunchType = $this->resolveDevicePunchType($record);
+            $punchType = $this->schedulePunchClassifier->classify(
+                $userPk,
+                new \DateTimeImmutable($timestamp),
+                $devicePunchType,
+            );
+
             $rows[] = [
                 'user_id' => $userPk,
                 'device_id' => $device->id,
                 'device_user_id' => $externalId ?: (string) $uid,
                 'punch_time' => $timestamp,
-                'punch_type' => ((int) ($record['punch'] ?? 0)) === 1 ? 'check_out' : 'check_in',
-                'verify_type' => 'fingerprint',
-                'work_code' => (int) ($record['status'] ?? 0),
+                'punch_type' => $punchType->value,
+                'verify_type' => $this->resolveVerifyType($record),
+                'work_code' => (int) ($record['work_code'] ?? 0),
                 'source' => 'device_pull',
                 'ip_address' => $device->ip_address,
                 'raw_data' => $record,
@@ -164,6 +174,27 @@ class FingerprintDeviceService
             'sessions' => $processed['sessions'],
             'records' => $records,
         ];
+    }
+
+    private function resolveDevicePunchType(array $record): PunchType
+    {
+        return match ((int) ($record['status'] ?? -1)) {
+            0 => PunchType::CheckIn,
+            1 => PunchType::CheckOut,
+            2 => PunchType::BreakOut,
+            3 => PunchType::BreakIn,
+            default => PunchType::Unknown,
+        };
+    }
+
+    private function resolveVerifyType(array $record): string
+    {
+        return match ((int) ($record['punch'] ?? 0)) {
+            0, 1 => 'fingerprint',
+            2, 3 => 'card',
+            4 => 'password',
+            default => 'fingerprint',
+        };
     }
 
     private function buildUserMap(FingerprintDevice $device, DeviceAdapterInterface $adapter, array $records): array

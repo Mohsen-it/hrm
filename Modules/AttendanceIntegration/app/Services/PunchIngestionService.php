@@ -25,6 +25,7 @@ class PunchIngestionService
         private AttendanceSessionService $attendanceSessionService,
         private RawAttendanceLogService $rawLogService,
         private AuditLogger $auditLogger,
+        private SchedulePunchClassifierService $schedulePunchClassifier,
     ) {}
 
     public function ingest(?AttendanceDeviceInterface $device, NormalizedPunch $punch, string $correlationId = ''): ?AttendanceSession
@@ -54,8 +55,12 @@ class PunchIngestionService
                 return null;
             }
 
-            $punchTypeStr = $punch->punchType === PunchType::CheckIn ? 'check_in'
-                : ($punch->punchType === PunchType::CheckOut ? 'check_out' : 'unknown');
+            $classifiedPunchType = $this->schedulePunchClassifier->classify(
+                $user->id,
+                $punch->timestamp,
+                $punch->punchType,
+            );
+            $punchTypeStr = $classifiedPunchType->value;
 
             $this->guardAgainstDuplicate($deviceId ?? 0, $punch->deviceUserId, $punch->timestamp, $punchTypeStr);
 
@@ -93,7 +98,7 @@ class PunchIngestionService
 
             $typedAt = new DateTimeImmutable($punch->timestamp->format('Y-m-d H:i:s.u'));
 
-            $session = match ($punch->punchType) {
+            $session = match ($classifiedPunchType) {
                 PunchType::CheckIn => $this->attendanceSessionService->checkIn($user->id, $typedAt, $context),
                 PunchType::CheckOut => $this->attendanceSessionService->checkOut($user->id, $typedAt, $context),
                 default => null,
@@ -103,8 +108,12 @@ class PunchIngestionService
                 Log::channel('attendance_push')->warning('punch_ingestion_session_not_created', [
                     'raw_log_id' => $rawLog->id,
                     'user_id' => $user->id,
-                    'punch_type' => $punch->punchType->value,
+                    'punch_type' => $classifiedPunchType->value,
                 ]);
+
+                if (in_array($classifiedPunchType, [PunchType::BreakIn, PunchType::BreakOut], true)) {
+                    $rawLog->markProcessed();
+                }
 
                 return null;
             }
@@ -118,18 +127,18 @@ class PunchIngestionService
                 $deviceId ?? 0,
                 $deviceSerial,
                 $user->id,
-                $punch->punchType->value,
+                $classifiedPunchType->value,
                 $correlationId
             );
 
-            Event::dispatch(new PunchReceived($device, $user, $session, $punch));
+            Event::dispatch(new PunchReceived($device, $user, $session, $punch, $classifiedPunchType));
 
             Log::channel('attendance_push')->info('punch_ingestion_session_created', [
                 'session_id' => $session->id,
                 'raw_log_id' => $rawLog->id,
                 'user_id' => $user->id,
                 'device_id' => $device->getId(),
-                'punch_type' => $punch->punchType->value,
+                'punch_type' => $classifiedPunchType->value,
             ]);
 
             return $session->fresh(['user', 'shift']);

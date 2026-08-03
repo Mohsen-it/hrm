@@ -20,7 +20,7 @@ class PublishLivePunchEvent
                 'name' => $event->user->name,
                 'employee_code' => $event->user->employee_code,
             ],
-            'punch_type' => $event->punch->punchType->value,
+            'punch_type' => ($event->classifiedPunchType ?? $event->punch->punchType)->value,
             'punched_at' => $event->punch->timestamp->format(DATE_ATOM),
             'session_id' => $event->session->id,
             'status' => $event->session->status,

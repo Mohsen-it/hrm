@@ -26,6 +26,8 @@ const selectedLog = ref(null);
 const punchTypeOptions = [
     { value: 'check_in', label: t('attendance.punch_type.check_in') },
     { value: 'check_out', label: t('attendance.punch_type.check_out') },
+    { value: 'break_out', label: t('attendance.punch_type.break_out') },
+    { value: 'break_in', label: t('attendance.punch_type.break_in') },
     { value: 'unknown', label: t('attendance.punch_type.unknown') },
 ];
 
@@ -144,7 +146,7 @@ const flashSuccess = computed(() => page.props.flash?.success);
             <template #cell-punch_type="{ row }">
                 <Badge
                     :text="t(`attendance.punch_type.${row.punch_type}`, row.punch_type)"
-                    :variant="row.punch_type === 'check_in' ? 'active' : 'info'"
+                    :variant="({ check_in: 'active', check_out: 'info', break_out: 'pending', break_in: 'orange' })[row.punch_type] || 'inactive'"
                 />
             </template>
             <template #cell-source="{ row }">

@@ -118,6 +118,8 @@ return [
     'punch_type' => [
         'check_in' => 'حضور',
         'check_out' => 'انصراف',
+        'break_out' => 'خروج استراحة',
+        'break_in' => 'عودة من الاستراحة',
         'unknown' => 'غير معروف',
     ],
 

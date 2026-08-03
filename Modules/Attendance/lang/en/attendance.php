@@ -118,6 +118,8 @@ return [
     'punch_type' => [
         'check_in' => 'Check-In',
         'check_out' => 'Check-Out',
+        'break_out' => 'Break-Out',
+        'break_in' => 'Break-In',
         'unknown' => 'Unknown',
     ],
 

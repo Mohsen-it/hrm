@@ -224,6 +224,12 @@ function submit() {
             </FormSection>
 
             <FormSection :title="t('shifts.margins')" icon="fas fa-arrows-alt-h" :collapsible="true" :default-open="true">
+                <div class="mb-4 rounded-lg border border-mistral-info/20 bg-mistral-info/5 px-4 py-3 text-[13px] text-mistral-ink">
+                    <div class="flex items-start gap-2">
+                        <i class="fas fa-fingerprint mt-0.5 text-mistral-info"></i>
+                        <p>{{ t('shifts.punch_classification_description') }}</p>
+                    </div>
+                </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <FormInput
                         v-model="form.in_ahead_margin"
@@ -253,6 +259,16 @@ function submit() {
                         type="time"
                         :error="errorFor('out_above_margin')"
                     />
+                </div>
+                <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3 text-[13px]">
+                    <div class="rounded-lg bg-mistral-success/10 px-4 py-3 text-mistral-success">
+                        <span class="font-semibold">{{ t('shifts.check_in_window') }}:</span>
+                        <span dir="ltr">{{ form.in_ahead_margin || '—' }} – {{ form.in_above_margin || '—' }}</span>
+                    </div>
+                    <div class="rounded-lg bg-mistral-info/10 px-4 py-3 text-mistral-info">
+                        <span class="font-semibold">{{ t('shifts.check_out_window') }}:</span>
+                        <span dir="ltr">{{ form.out_ahead_margin || '—' }} – {{ form.out_above_margin || '—' }}</span>
+                    </div>
                 </div>
             </FormSection>
 

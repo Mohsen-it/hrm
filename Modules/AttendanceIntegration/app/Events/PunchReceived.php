@@ -11,6 +11,7 @@ use Illuminate\Queue\SerializesModels;
 use Modules\Attendance\Models\AttendanceSession;
 use Modules\AttendanceIntegration\Contracts\AttendanceDeviceInterface;
 use Modules\AttendanceIntegration\DTOs\NormalizedPunch;
+use Modules\AttendanceIntegration\DTOs\PunchType;
 use Modules\Users\Models\User;
 
 class PunchReceived implements ShouldBroadcast, ShouldDispatchAfterCommit
@@ -24,6 +25,7 @@ class PunchReceived implements ShouldBroadcast, ShouldDispatchAfterCommit
         public readonly User $user,
         public readonly AttendanceSession $session,
         public readonly NormalizedPunch $punch,
+        public readonly ?PunchType $classifiedPunchType = null,
     ) {}
 
     public function broadcastOn(): array
@@ -47,7 +49,7 @@ class PunchReceived implements ShouldBroadcast, ShouldDispatchAfterCommit
                 'name' => $this->user->name,
                 'employee_code' => $this->user->employee_code,
             ],
-            'punch_type' => $this->punch->punchType->value,
+            'punch_type' => ($this->classifiedPunchType ?? $this->punch->punchType)->value,
             'punched_at' => $this->punch->timestamp->format(DATE_ATOM),
             'session_id' => $this->session->id,
             'status' => $this->session->status,

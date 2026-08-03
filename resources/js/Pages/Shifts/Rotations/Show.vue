@@ -305,6 +305,26 @@ function performDeleteGroup() {
 
         <Card variant="base" padding="lg" class="mb-6">
             <template #header>
+                <h3 class="text-[16px] font-semibold text-mistral-ink">
+                    <i class="fas fa-fingerprint text-mistral-primary me-1"></i>
+                    {{ t('shifts.punch_classification') }}
+                </h3>
+            </template>
+            <p class="mb-4 text-[13px] text-mistral-slate">{{ t('shifts.punch_classification_description') }}</p>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div class="rounded-lg bg-mistral-success/10 px-4 py-3 text-mistral-success">
+                    <p class="text-[12px] font-semibold">{{ t('shifts.check_in_window') }}</p>
+                    <p dir="ltr" class="mt-1 text-[16px] font-bold">{{ rotation.in_ahead_margin || '—' }} – {{ rotation.in_above_margin || '—' }}</p>
+                </div>
+                <div class="rounded-lg bg-mistral-info/10 px-4 py-3 text-mistral-info">
+                    <p class="text-[12px] font-semibold">{{ t('shifts.check_out_window') }}</p>
+                    <p dir="ltr" class="mt-1 text-[16px] font-bold">{{ rotation.out_ahead_margin || '—' }} – {{ rotation.out_above_margin || '—' }}</p>
+                </div>
+            </div>
+        </Card>
+
+        <Card variant="base" padding="lg" class="mb-6">
+            <template #header>
                 <div class="flex items-center justify-between">
                     <h3 class="text-[16px] font-semibold text-mistral-ink">
                         {{ t('shifts.groups') }}

@@ -61,8 +61,10 @@ const statusVariant = (status) => {
 
 const punchTypeLabel = (type) => {
     return {
-        check_in: t('attendance.fields.check_in', 'دخول'),
-        check_out: t('attendance.fields.check_out', 'خروج'),
+        check_in: t('attendance.punch_type.check_in'),
+        check_out: t('attendance.punch_type.check_out'),
+        break_out: t('attendance.punch_type.break_out'),
+        break_in: t('attendance.punch_type.break_in'),
     }[type] || type;
 };
 
@@ -70,6 +72,8 @@ const punchTypeVariant = (type) => {
     return {
         check_in: 'active',
         check_out: 'info',
+        break_out: 'pending',
+        break_in: 'orange',
     }[type] || 'inactive';
 };
 

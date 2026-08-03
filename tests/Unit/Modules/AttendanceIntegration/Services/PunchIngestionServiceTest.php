@@ -11,6 +11,7 @@ use Modules\AttendanceIntegration\DTOs\PunchType;
 use Modules\AttendanceIntegration\DTOs\VerifyMethod;
 use Modules\AttendanceIntegration\Services\AuditLogger;
 use Modules\AttendanceIntegration\Services\PunchIngestionService;
+use Modules\AttendanceIntegration\Services\SchedulePunchClassifierService;
 use Tests\TestCase;
 
 class PunchIngestionServiceTest extends TestCase
@@ -25,6 +26,8 @@ class PunchIngestionServiceTest extends TestCase
 
     private $auditLogger;
 
+    private $schedulePunchClassifier;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -33,12 +36,15 @@ class PunchIngestionServiceTest extends TestCase
         $this->sessionService = $this->createMock(AttendanceSessionService::class);
         $this->rawLogService = $this->createMock(RawAttendanceLogService::class);
         $this->auditLogger = $this->createMock(AuditLogger::class);
+        $this->schedulePunchClassifier = $this->createMock(SchedulePunchClassifierService::class);
+        $this->schedulePunchClassifier->method('classify')->willReturn(PunchType::CheckIn);
 
         $this->service = new PunchIngestionService(
             $this->deviceRepository,
             $this->sessionService,
             $this->rawLogService,
             $this->auditLogger,
+            $this->schedulePunchClassifier,
         );
     }
 

@@ -197,6 +197,7 @@ return [
     'no_employees_selected' => 'No employees selected yet',
     'search_employees' => 'Search employees...',
     'search_employee_placeholder' => 'Type employee name or code...',
+    'search_employee_to_begin' => 'Type at least two characters to search for an employee.',
     'add' => 'Add',
     'transfer_title' => 'Transfer Employee',
     'transfer_message' => 'The employee will be transferred from their current system to a new one. The current assignment will end the day before the transfer date.',

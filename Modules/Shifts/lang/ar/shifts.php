@@ -197,6 +197,7 @@ return [
     'no_employees_selected' => 'لم يتم تحديد موظفين بعد',
     'search_employees' => 'بحث عن موظف...',
     'search_employee_placeholder' => 'اكتب اسم أو رمز الموظف...',
+    'search_employee_to_begin' => 'اكتب حرفين على الأقل للبحث عن موظف.',
     'add' => 'إضافة',
     'transfer_title' => 'نقل الموظف',
     'transfer_message' => 'سيتم نقل الموظف من نظامه الحالي إلى نظام جديد. سيتم إنهاء الإسناد الحالي في اليوم السابق لتاريخ النقل.',

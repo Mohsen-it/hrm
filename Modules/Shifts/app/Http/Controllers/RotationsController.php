@@ -539,8 +539,12 @@ class RotationsController extends Controller
     {
         $this->authorize('assign-employees-to-rotation');
 
-        $search = $request->input('search', '');
+        $search = trim((string) $request->input('search', ''));
         $departmentId = $request->input('department_id');
+
+        if (mb_strlen($search) < 2) {
+            return response()->json(['employees' => []]);
+        }
 
         $query = User::query()
             ->active()
@@ -560,7 +564,7 @@ class RotationsController extends Controller
             });
         }
 
-        $employees = $query->orderBy('name')->when($search, fn ($q) => $q->limit(20))->get();
+        $employees = $query->orderBy('name')->limit(20)->get();
 
         return response()->json([
             'employees' => $employees->map(function ($emp): array {

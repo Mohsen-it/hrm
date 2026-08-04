@@ -512,7 +512,10 @@ class DashboardController extends Controller
                 'absent' => (int) $row->absent,
                 'late' => (int) $row->late,
                 'total' => (int) $row->total,
-                'rate' => $row->total > 0 ? round(($row->present / $row->total) * 100, 1) : 0,
+                // A missing rate means there are no records for the day. Keep a
+                // genuine 0% rate visible as the lowest heatmap colour instead
+                // of treating it as an empty (silver) cell.
+                'rate' => $row->total > 0 ? round(($row->present / $row->total) * 100, 1) : null,
             ])->all();
         });
     }

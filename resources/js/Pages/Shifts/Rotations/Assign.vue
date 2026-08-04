@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, computed, watch } from 'vue';
+import { ref, reactive, computed, watch, onBeforeUnmount } from 'vue';
 import { router, Head } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import { PageHeader, Button, Card, FormInput, FormSelect, Badge, DataTable, ErrorSummary, FormSection, FormActions } from '@/Components/ui';
@@ -30,6 +30,8 @@ const loadingEmployees = ref(false);
 const employees = ref([]);
 const selectedEmployees = ref([]);
 const searchQuery = ref('');
+let searchTimeout;
+let employeeSearchController;
 
 const errorFor = (key) => errors.value[key] || '';
 
@@ -56,16 +58,7 @@ const departmentOptions = computed(() =>
     (props.departments || []).map(d => ({ value: d.id, label: d.department_name })),
 );
 
-const filteredEmployees = computed(() => {
-    if (!searchQuery.value) return employees.value;
-    const q = searchQuery.value.toLowerCase();
-    return employees.value.filter(e =>
-        e.name?.toLowerCase().includes(q) ||
-        e.employee_code?.toLowerCase().includes(q) ||
-        e.first_name?.toLowerCase().includes(q) ||
-        e.last_name?.toLowerCase().includes(q)
-    );
-});
+const filteredEmployees = computed(() => employees.value);
 
 const selectedIds = computed(() => selectedEmployees.value.map(e => e.id));
 
@@ -116,27 +109,45 @@ function onSelectionChange(ids) {
 }
 
 function fetchEmployees() {
-    if (!form.rotation_id) {
+    const search = searchQuery.value.trim();
+
+    if (!form.rotation_id || search.length < 2) {
+        employeeSearchController?.abort();
         employees.value = [];
+        loadingEmployees.value = false;
         return;
     }
+
+    employeeSearchController?.abort();
+    const controller = new AbortController();
+    employeeSearchController = controller;
     loadingEmployees.value = true;
-    const params = new URLSearchParams({ search: '' });
+    const params = new URLSearchParams({ search });
     if (form.department_id) params.set('department_id', form.department_id);
 
     fetch(route('rotations.search-employees') + '?' + params.toString(), {
         headers: { Accept: 'application/json' },
+        signal: controller.signal,
     })
         .then(r => r.json())
         .then(data => {
             employees.value = data.employees || [];
         })
-        .catch(() => {
-            employees.value = [];
+        .catch((error) => {
+            if (error.name !== 'AbortError') {
+                employees.value = [];
+            }
         })
         .finally(() => {
-            loadingEmployees.value = false;
+            if (employeeSearchController === controller && !controller.signal.aborted) {
+                loadingEmployees.value = false;
+            }
         });
+}
+
+function scheduleEmployeeSearch() {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(fetchEmployees, 300);
 }
 
 function submit() {
@@ -171,14 +182,21 @@ watch(() => form.rotation_id, (val) => {
     selectedEmployees.value = [];
     form.employee_ids = [];
     if (val) {
-        fetchEmployees();
+        scheduleEmployeeSearch();
     } else {
         employees.value = [];
     }
 }, { immediate: true });
 
 watch(() => form.department_id, () => {
-    fetchEmployees();
+    scheduleEmployeeSearch();
+});
+
+watch(searchQuery, scheduleEmployeeSearch);
+
+onBeforeUnmount(() => {
+    clearTimeout(searchTimeout);
+    employeeSearchController?.abort();
 });
 </script>
 
@@ -280,6 +298,10 @@ watch(() => form.department_id, () => {
                     <div v-if="loadingEmployees" class="p-8 text-center">
                         <i class="fas fa-spinner fa-spin text-mistral-primary text-xl"></i>
                         <p class="text-[13px] text-mistral-muted mt-2">{{ t('common.loading') }}...</p>
+                    </div>
+
+                    <div v-else-if="searchQuery.trim().length < 2 && form.rotation_id" class="p-8 text-center text-[13px] text-mistral-muted">
+                        {{ t('shifts.search_employee_to_begin') }}
                     </div>
 
                     <div v-else-if="filteredEmployees.length === 0 && form.rotation_id" class="p-8 text-center text-[13px] text-mistral-muted">

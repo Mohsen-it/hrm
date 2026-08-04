@@ -117,7 +117,14 @@ function syncSelectedIds() {
         ? props.selectedIds
         : table.selectedIds.value;
 
-    table.selectedIds.value = selectedIds.filter((id) => valid.has(id));
+    const nextSelectedIds = selectedIds.filter((id) => valid.has(id));
+
+    if (
+        nextSelectedIds.length !== table.selectedIds.value.length ||
+        nextSelectedIds.some((id, index) => id !== table.selectedIds.value[index])
+    ) {
+        table.selectedIds.value = nextSelectedIds;
+    }
 }
 
 watch(() => props.data, syncSelectedIds, { deep: true });

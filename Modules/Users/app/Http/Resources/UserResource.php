@@ -34,6 +34,9 @@ class UserResource extends JsonResource
 
             'hire_date' => $this->hire_date?->format('Y-m-d'),
             'termination_date' => $this->termination_date?->format('Y-m-d'),
+            'attendance_exemption_type' => $this->attendance_exemption_type,
+            'attendance_exemption_from' => $this->attendance_exemption_from?->format('Y-m-d'),
+            'attendance_exemption_to' => $this->attendance_exemption_to?->format('Y-m-d'),
             'employment_type' => $this->employment_type,
             'job_title' => $this->job_title,
             'work_location' => $this->work_location,

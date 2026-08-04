@@ -41,6 +41,9 @@ const form = useForm({
     nationality: props.user.nationality || '',
     hire_date: props.user.hire_date || '',
     termination_date: props.user.termination_date || '',
+    attendance_exemption_type: props.user.attendance_exemption_type || '',
+    attendance_exemption_from: props.user.attendance_exemption_from || '',
+    attendance_exemption_to: props.user.attendance_exemption_to || '',
     employment_type: props.user.employment_type || 'full_time',
     job_title: props.user.job_title || '',
     work_location: props.user.work_location || '',
@@ -100,6 +103,13 @@ const employmentOptions = [
     { value: 'contract', label: t('users.employment_contract') },
     { value: 'temporary', label: t('users.employment_temporary') },
     { value: 'intern', label: t('users.employment_intern') },
+];
+
+const attendanceExemptionOptions = [
+    { value: '', label: t('users.select_attendance_exemption') },
+    { value: 'resignation', label: t('users.attendance_exemption_resignation') },
+    { value: 'external_transfer', label: t('users.attendance_exemption_external_transfer') },
+    { value: 'suspension', label: t('users.attendance_exemption_suspension') },
 ];
 
 const filteredBranches = computed(() => {
@@ -376,6 +386,27 @@ function submit() {
                         name="termination_date"
                         type="date"
                         :error="form.errors.termination_date"
+                    />
+                    <FormSelect
+                        v-model="form.attendance_exemption_type"
+                        :label="t('users.attendance_exemption_type')"
+                        name="attendance_exemption_type"
+                        :options="attendanceExemptionOptions"
+                        :error="form.errors.attendance_exemption_type"
+                    />
+                    <FormInput
+                        v-model="form.attendance_exemption_from"
+                        :label="t('users.attendance_exemption_from')"
+                        name="attendance_exemption_from"
+                        type="date"
+                        :error="form.errors.attendance_exemption_from"
+                    />
+                    <FormInput
+                        v-model="form.attendance_exemption_to"
+                        :label="t('users.attendance_exemption_to')"
+                        name="attendance_exemption_to"
+                        type="date"
+                        :error="form.errors.attendance_exemption_to"
                     />
                     <FormSelect
                         v-model="form.employment_type"

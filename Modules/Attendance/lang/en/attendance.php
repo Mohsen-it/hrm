@@ -355,6 +355,16 @@ return [
     'employee_removed_from_group' => 'Employee removed from group successfully.',
     'employee_already_in_group' => 'Employee is already assigned to a group.',
 
+    'monthly_employee_log' => [
+        'title' => 'Monthly Employee Attendance Log',
+        'day' => 'Day',
+        'schedule_status' => 'Schedule Status',
+        'check_in_window' => 'Check-in Window',
+        'check_out_window' => 'Check-out Window',
+        'export_excel' => 'Export Excel',
+        'export_subtitle' => 'Employee: :employee | Month: :month',
+    ],
+
     'violations' => [
         'title' => 'Attendance Violations',
         'late_check_ins' => 'Late Check-ins',

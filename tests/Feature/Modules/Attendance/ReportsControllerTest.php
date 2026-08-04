@@ -52,4 +52,20 @@ class ReportsControllerTest extends TestCase
 
         $this->get(route('attendance.reports.user', ['user' => 1]))->assertOk();
     }
+
+    /**
+     * The schedule-window-aware employee log can be exported to Excel.
+     */
+    public function test_monthly_employee_log_exports(): void
+    {
+        $this->actAsSuperAdmin();
+
+        $this->get(route('attendance.reports.user.monthly-log.export', [
+            'user' => 1,
+            'year' => 2026,
+            'month' => 8,
+        ]))
+            ->assertOk()
+            ->assertHeader('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    }
 }

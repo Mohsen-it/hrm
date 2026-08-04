@@ -3,12 +3,15 @@
 namespace Modules\Attendance\Http\Controllers;
 
 use App\Http\Controllers\Controller;
-use App\Traits\ExcelExportable;
+use App\Services\ExcelExportService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 use Modules\Attendance\Exports\AttendanceReportExport;
+use Modules\Attendance\Exports\MonthlyEmployeeAttendanceLogExport;
+use Modules\Attendance\Http\Requests\MonthlyEmployeeAttendanceLogRequest;
 use Modules\Attendance\Services\AttendanceReportService;
+use Modules\Attendance\Services\MonthlyEmployeeAttendanceLogService;
 use Modules\Users\Services\UserService;
 
 /**
@@ -17,14 +20,14 @@ use Modules\Users\Services\UserService;
  */
 class ReportsController extends Controller
 {
-    use ExcelExportable;
-
     /**
      * Create a new controller instance.
      */
     public function __construct(
         private AttendanceReportService $reportService,
+        private MonthlyEmployeeAttendanceLogService $monthlyEmployeeLogService,
         private UserService $userService,
+        private ExcelExportService $excelExporter,
     ) {}
 
     /**
@@ -55,7 +58,7 @@ class ReportsController extends Controller
     /**
      * Per-user report inside a date range.
      */
-    public function userReport(Request $request, int $userId): Response
+    public function userReport(MonthlyEmployeeAttendanceLogRequest $request, int $userId): Response
     {
         $this->authorize('view-attendance');
 
@@ -64,12 +67,42 @@ class ReportsController extends Controller
 
         $report = $this->reportService->getUserReport($userId, $from, $to);
         $overtime = $this->reportService->getUserOvertimeReport($userId, $from, $to);
+        $year = (int) $request->input('year', now()->year);
+        $month = (int) $request->input('month', now()->month);
+        $monthlyLog = $this->monthlyEmployeeLogService->getMonthlyLog($userId, $year, $month);
 
         return Inertia::render('Attendance/Reports/User', [
             'userId' => fn () => $userId,
-            'filters' => fn () => $this->cleanFilters($request->only(['from', 'to'])),
+            'filters' => fn () => $this->cleanFilters($request->only(['from', 'to', 'year', 'month'])),
             'report' => fn () => $report,
             'overtime' => fn () => $overtime,
+            'monthlyLog' => fn () => $monthlyLog,
+            'monthlyLogFilters' => fn () => ['year' => $year, 'month' => $month],
+        ]);
+    }
+
+    /**
+     * Download the employee's schedule-window-aware monthly log as Excel.
+     */
+    public function exportMonthlyLog(MonthlyEmployeeAttendanceLogRequest $request, int $userId)
+    {
+        $this->authorize('view-attendance');
+
+        $year = (int) $request->input('year', now()->year);
+        $month = (int) $request->input('month', now()->month);
+        $employee = $this->userService->getUserById($userId);
+        $monthDate = now()->setDate($year, $month, 1);
+        $export = new MonthlyEmployeeAttendanceLogExport(
+            $this->excelExporter,
+            $employee?->name ?? (string) $userId,
+            $monthDate->translatedFormat('F Y'),
+            $this->monthlyEmployeeLogService->getMonthlyLog($userId, $year, $month),
+        );
+
+        return response($this->excelExporter->toBinary($export->build()), 200, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Content-Disposition' => 'attachment; filename="employee-attendance-'.$userId.'-'.$monthDate->format('Y-m').'.xlsx"',
+            'Cache-Control' => 'max-age=0',
         ]);
     }
 
@@ -94,7 +127,11 @@ class ReportsController extends Controller
             topLate: $this->reportService->getTopLateEmployees($from, $to, 10),
         );
 
-        return $this->downloadExcel($export->build(), 'attendance-report-'.$from.'_'.$to);
+        return response($this->excelExporter->toBinary($export->build()), 200, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Content-Disposition' => 'attachment; filename="attendance-report-'.$from.'_'.$to.'.xlsx"',
+            'Cache-Control' => 'max-age=0',
+        ]);
     }
 
     /**

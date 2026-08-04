@@ -90,6 +90,8 @@ class AbsenceCalculationService
                     ->orWhere('termination_date', '>=', $dateStr);
             });
 
+        $this->excludeAttendanceExemptions($query, $dateStr);
+
         if ($departmentId !== null) {
             $query->where('department_id', $departmentId);
         }
@@ -125,12 +127,15 @@ class AbsenceCalculationService
         $now = Carbon::now($date->getTimezone());
 
         $employees = DB::table('users')
-            ->select(['id', 'branch_id', 'department_id'])
+            ->select(['id', 'branch_id', 'department_id', 'attendance_exemption_type', 'attendance_exemption_from', 'attendance_exemption_to'])
             ->where('id', '!=', User::SUPER_ADMIN_ID)
             ->where('status', 1)
             ->where('is_active_employee', true)
-            ->where(fn ($query) => $query->whereNull('termination_date')->orWhere('termination_date', '>=', $dateStr))
-            ->get()
+            ->where(fn ($query) => $query->whereNull('termination_date')->orWhere('termination_date', '>=', $dateStr));
+
+        $this->excludeAttendanceExemptions($employees, $dateStr);
+
+        $employees = $employees->get()
             ->keyBy('id');
 
         $employeeIds = $employees->keys()->map(fn ($id) => (int) $id)->all();
@@ -354,7 +359,7 @@ class AbsenceCalculationService
             ->where('id', $employeeId)
             ->where('status', 1)
             ->where('is_active_employee', true)
-            ->first();
+            ->first(['id', 'attendance_exemption_type', 'attendance_exemption_from', 'attendance_exemption_to']);
 
         if (! $employee) {
             return [];
@@ -372,6 +377,11 @@ class AbsenceCalculationService
         $current = $startOfMonth->copy();
         while ($current->lte($endOfMonth)) {
             $dateStr = $current->toDateString();
+            if ($this->isAttendanceExempt($employee, $dateStr)) {
+                $current->addDay();
+
+                continue;
+            }
             $isExpected = $this->rotationEngine->isWorkDay($rotation, $group, $current);
 
             if ($isExpected) {
@@ -461,7 +471,7 @@ class AbsenceCalculationService
         $assignments = $this->rotationAssignmentRepository->getAssignmentsOverlapping($fromStr, $toStr);
 
         // Active employees, respecting the department filter.
-        // id => termination_date (null = still employed).
+        // id => employment / exemption metadata.
         $activeUsers = DB::table('users')
             ->where('status', 1)
             ->where('is_active_employee', true)
@@ -470,7 +480,8 @@ class AbsenceCalculationService
                     ->orWhere('termination_date', '>=', $fromStr);
             })
             ->when($departmentId !== null, fn ($q) => $q->where('department_id', $departmentId))
-            ->pluck('termination_date', 'id');
+            ->get(['id', 'termination_date', 'attendance_exemption_type', 'attendance_exemption_from', 'attendance_exemption_to'])
+            ->keyBy('id');
 
         $activeIds = $activeUsers->keys()->all();
 
@@ -538,8 +549,12 @@ class AbsenceCalculationService
                     continue;
                 }
                 // The employee must still be employed on this exact day.
-                $terminationDate = $activeUsers[$employeeId];
+                $employee = $activeUsers[$employeeId];
+                $terminationDate = $employee->termination_date;
                 if ($terminationDate !== null && $this->dateKey($terminationDate) < $dateStr) {
+                    continue;
+                }
+                if ($this->isAttendanceExempt($employee, $dateStr)) {
                     continue;
                 }
                 if ($rotationIdList !== [] && ! in_array($rotation->id, $rotationIdList, true)) {
@@ -711,6 +726,36 @@ class AbsenceCalculationService
     }
 
     /**
+     * Exclude an employee while an approved HR attendance-exemption is active.
+     */
+    private function excludeAttendanceExemptions($query, string $date): void
+    {
+        $query->where(function ($subQuery) use ($date): void {
+            $subQuery->whereNull('attendance_exemption_type')
+                ->orWhereNull('attendance_exemption_from')
+                ->orWhere('attendance_exemption_from', '>', $date)
+                ->orWhere('attendance_exemption_to', '<', $date);
+        });
+    }
+
+    /**
+     * Check whether one employee is exempt from absence reporting on a date.
+     */
+    private function isAttendanceExempt(object $employee, string $date): bool
+    {
+        if (! $employee->attendance_exemption_type || ! $employee->attendance_exemption_from) {
+            return false;
+        }
+
+        $from = $this->dateKey($employee->attendance_exemption_from);
+        $to = $employee->attendance_exemption_to
+            ? $this->dateKey($employee->attendance_exemption_to)
+            : null;
+
+        return $from <= $date && ($to === null || $to >= $date);
+    }
+
+    /**
      * Normalize a time value (string or Carbon) to H:i.
      */
     private function formatExpectedTime(mixed $value): ?string
@@ -741,9 +786,9 @@ class AbsenceCalculationService
             ->where('id', $employeeId)
             ->where('status', 1)
             ->where('is_active_employee', true)
-            ->first();
+            ->first(['id', 'attendance_exemption_type', 'attendance_exemption_from', 'attendance_exemption_to']);
 
-        if (! $employee) {
+        if (! $employee || $this->isAttendanceExempt($employee, $date->toDateString())) {
             return false;
         }
 

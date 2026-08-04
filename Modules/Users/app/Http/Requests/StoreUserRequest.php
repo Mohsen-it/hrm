@@ -82,6 +82,9 @@ class StoreUserRequest extends FormRequest
 
             'hire_date' => ['nullable', 'date'],
             'termination_date' => ['nullable', 'date', 'after_or_equal:hire_date'],
+            'attendance_exemption_type' => ['nullable', 'in:resignation,external_transfer,suspension'],
+            'attendance_exemption_from' => ['nullable', 'date', 'required_with:attendance_exemption_type'],
+            'attendance_exemption_to' => ['nullable', 'date', 'after_or_equal:attendance_exemption_from'],
             'employment_type' => ['nullable', 'in:full_time,part_time,contract,temporary,intern'],
             'job_title' => ['nullable', 'string', 'max:100'],
             'work_location' => ['nullable', 'string', 'max:255'],

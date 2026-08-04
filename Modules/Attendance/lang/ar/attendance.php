@@ -355,6 +355,16 @@ return [
     'employee_removed_from_group' => 'تم إزالة الموظف من الفئة بنجاح.',
     'employee_already_in_group' => 'الموظف معيّن بالفعل في فئة.',
 
+    'monthly_employee_log' => [
+        'title' => 'سجل دوام الموظف الشهري',
+        'day' => 'اليوم',
+        'schedule_status' => 'حالة الدورية',
+        'check_in_window' => 'نافذة الدخول',
+        'check_out_window' => 'نافذة الخروج',
+        'export_excel' => 'تصدير Excel',
+        'export_subtitle' => 'الموظف: :employee | الشهر: :month',
+    ],
+
     'violations' => [
         'title' => 'انتهاكات الحضور',
         'late_check_ins' => 'المتأخرون عن تسجيل الدخول',

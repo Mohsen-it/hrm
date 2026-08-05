@@ -7,12 +7,14 @@ import { PageHeader, Button, Card, StatCard, FormInput, FormSelect, DataTable, B
 const props = defineProps({
     report: { type: Object, default: () => ({ rows: [], stats: {} }) },
     filters: { type: Object, default: () => ({}) },
+    branches: { type: Array, default: () => [] },
     departments: { type: Array, default: () => [] },
     users: { type: Array, default: () => [] },
 });
 
 const date = ref(props.filters.date || new Date().toISOString().slice(0, 10));
 const cutoffTime = ref(props.filters.cutoff_time || '09:00');
+const branchId = ref(props.filters.branch_id || '');
 const departmentId = ref(props.filters.department_id || '');
 const userId = ref(props.filters.user_id || '');
 const status = ref(props.filters.status || '');
@@ -30,7 +32,7 @@ const columns = [
     { key: 'late_minutes', label: 'دقائق التأخر' }, { key: 'notes', label: 'الملاحظات' },
 ];
 
-function filterParams() { return { date: date.value, cutoff_time: cutoffTime.value, department_id: departmentId.value || undefined, user_id: userId.value || undefined, status: status.value || undefined }; }
+function filterParams() { return { date: date.value, cutoff_time: cutoffTime.value, branch_id: branchId.value || undefined, department_id: departmentId.value || undefined, user_id: userId.value || undefined, status: status.value || undefined }; }
 function applyFilters() { router.get(route('attendance.daily-summaries.daily-report'), filterParams(), { preserveState: true, replace: true }); }
 function exportReport() { window.location.href = route('attendance.daily-summaries.daily-report.export', filterParams()); }
 function badgeVariant(status) { return ({ present: 'active', late: 'warning', absent: 'absent', leave: 'info', mission: 'primary', incomplete: 'warning', no_fingerprint: 'neutral', rest: 'neutral' }[status] || 'neutral'); }
@@ -46,6 +48,7 @@ function badgeVariant(status) { return ({ present: 'active', late: 'warning', ab
             <div class="flex flex-wrap items-end gap-4">
                 <FormInput v-model="date" type="date" label="تاريخ التقرير" />
                 <FormInput v-model="cutoffTime" type="time" label="ساعة اعتبار التأخر" />
+                <FormSelect v-model="branchId" label="الفرع" :options="[{ value: '', label: 'كل الفروع' }, ...branches]" />
                 <FormSelect v-model="departmentId" label="القسم" :options="[{ value: '', label: 'كل الأقسام' }, ...departments]" />
                 <FormSelect v-model="userId" label="الموظف" :options="[{ value: '', label: 'كل الموظفين' }, ...users]" />
                 <FormSelect v-model="status" label="نوع التقرير" :options="statusOptions" />

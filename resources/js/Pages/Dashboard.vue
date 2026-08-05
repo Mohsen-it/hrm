@@ -250,7 +250,9 @@ async function poll() {
     isPolling = true;
     try {
         const [pullJson, snapshotJson] = await Promise.all([
-            fetchJson(route('dashboard.pullEvents', { sync: 1 })),
+            // Device synchronization is handled by the attendance services.
+            // Dashboard polling reads the live feed only; it must not poll every device.
+            fetchJson(route('dashboard.pullEvents', { sync: 0 })),
             fetchJson(route('dashboard.snapshot', { date: selectedDate.value })),
         ]);
         if (pullJson?.events) recentData.value = pullJson.events;

@@ -21,6 +21,7 @@ use Modules\Attendance\Jobs\RecalculateDateRangeChunk;
 use Modules\Attendance\Services\AttendanceViolationService;
 use Modules\Attendance\Services\DailyAttendanceSummaryService;
 use Modules\Attendance\Services\DailyReportService;
+use Modules\Branches\Services\BranchService;
 use Modules\Departments\Services\DepartmentService;
 use Modules\Users\Services\UserService;
 
@@ -44,6 +45,7 @@ class DailySummariesController extends Controller
         private UserService $userService,
         private DailyReportService $dailyReportService,
         private DepartmentService $departmentService,
+        private BranchService $branchService,
     ) {}
 
     /**
@@ -82,12 +84,14 @@ class DailySummariesController extends Controller
         $data = $request->validate([
             'date' => ['nullable', 'date_format:Y-m-d'],
             'cutoff_time' => ['nullable', 'date_format:H:i'],
+            'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
             'department_id' => ['nullable', 'integer', 'exists:departments,id'],
             'user_id' => ['nullable', 'integer', 'exists:users,id'],
             'status' => ['nullable', 'in:absent,late,leave,no_fingerprint,mission,incomplete'],
         ]);
         $report = $this->dailyReportService->build(
-            $data['date'] ?? now()->toDateString(), $data['cutoff_time'] ?? '09:00', $data['department_id'] ?? null,
+            $data['date'] ?? now()->toDateString(), $data['cutoff_time'] ?? '09:00', $data['branch_id'] ?? null,
+            $data['department_id'] ?? null,
             $data['user_id'] ?? null, $data['status'] ?? null,
         );
 
@@ -95,9 +99,12 @@ class DailySummariesController extends Controller
             'report' => ['date' => $report['date'], 'cutoff_time' => $report['cutoff_time'], 'rows' => $report['rows']->values()->all(), 'stats' => $report['stats']],
             'filters' => [
                 'date' => $report['date'], 'cutoff_time' => $report['cutoff_time'],
-                'department_id' => $data['department_id'] ?? null, 'user_id' => $data['user_id'] ?? null,
+                'branch_id' => $data['branch_id'] ?? null, 'department_id' => $data['department_id'] ?? null,
+                'user_id' => $data['user_id'] ?? null,
                 'status' => $data['status'] ?? null,
             ],
+            'branches' => fn () => $this->branchService->getActiveBranches()
+                ->map(fn ($branch) => ['value' => $branch->id, 'label' => $branch->branch_name]),
             'departments' => fn () => $this->departmentService->getAllDepartments([], 1000)->getCollection()
                 ->map(fn ($department) => ['value' => $department->id, 'label' => $department->department_name]),
             'users' => fn () => $this->userService->getActiveUsers()
@@ -111,12 +118,13 @@ class DailySummariesController extends Controller
         $this->authorize('view-attendance');
         $data = $request->validate([
             'date' => ['required', 'date_format:Y-m-d'], 'cutoff_time' => ['required', 'date_format:H:i'],
+            'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
             'department_id' => ['nullable', 'integer', 'exists:departments,id'],
             'user_id' => ['nullable', 'integer', 'exists:users,id'],
             'status' => ['nullable', 'in:absent,late,leave,no_fingerprint,mission,incomplete'],
         ]);
         $report = $this->dailyReportService->build(
-            $data['date'], $data['cutoff_time'], $data['department_id'] ?? null,
+            $data['date'], $data['cutoff_time'], $data['branch_id'] ?? null, $data['department_id'] ?? null,
             $data['user_id'] ?? null, $data['status'] ?? null,
         );
         $export = new DailyReportDocxExport($report);

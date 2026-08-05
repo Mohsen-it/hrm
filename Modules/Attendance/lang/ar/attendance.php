@@ -363,7 +363,16 @@ return [
         'check_in_window' => 'نافذة الدخول',
         'check_out_window' => 'نافذة الخروج',
         'export_excel' => 'تصدير Excel',
+        'print' => 'طباعة فورية',
+        'export_date' => 'تاريخ التصدير',
         'export_subtitle' => 'الموظف: :employee | الشهر: :month',
+        'schedule_statuses' => [
+            'work' => 'دوام',
+            'rest' => 'يوم راحة',
+            'leave_excused' => 'إجازة',
+            'swap' => 'تبديل دوام',
+            'unassigned' => 'بدون إسناد',
+        ],
     ],
 
     'violations' => [

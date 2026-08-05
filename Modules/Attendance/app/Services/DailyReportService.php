@@ -28,6 +28,7 @@ class DailyReportService
     public function build(
         string $date,
         string $cutoffTime,
+        ?int $branchId = null,
         ?int $departmentId = null,
         ?int $userId = null,
         ?string $statusFilter = null,
@@ -39,6 +40,7 @@ class DailyReportService
 
         $users = User::query()->employees()->active()
             ->where(fn ($q) => $q->whereNull('termination_date')->orWhere('termination_date', '>=', $date))
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
             ->when($departmentId, fn ($q) => $q->where('department_id', $departmentId))
             ->when($userId, fn ($q) => $q->whereKey($userId))
             ->with('department')

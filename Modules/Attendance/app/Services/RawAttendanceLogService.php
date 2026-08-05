@@ -170,6 +170,15 @@ class RawAttendanceLogService
             // Mark as seen to prevent duplicates within the same batch
             $existingKeys[$key] = true;
 
+            // Eloquent casts are bypassed by the repository's bulk insert.
+            // Persist JSON columns in their database representation explicitly.
+            if (array_key_exists('raw_data', $validated) && $validated['raw_data'] !== null) {
+                $validated['raw_data'] = json_encode(
+                    $validated['raw_data'],
+                    JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE,
+                );
+            }
+
             $batch[] = array_merge($validated, [
                 'processed' => false,
                 'created_at' => $now,

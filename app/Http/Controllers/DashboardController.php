@@ -34,7 +34,8 @@ class DashboardController extends Controller
 
     private const PULL_LOCK_TTL = 10;
 
-    private const PULL_COOLDOWN = 8;
+    /** Prevent device I/O from being triggered repeatedly by dashboard polling. */
+    private const PULL_COOLDOWN = 300;
 
     public function __construct(
         private LivePunchFeedService $livePunchProcessor,

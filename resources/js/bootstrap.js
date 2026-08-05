@@ -32,13 +32,14 @@ if (token) {
 import Echo from 'laravel-echo';
 import Pusher from 'pusher-js';
 
-const reverbScheme = import.meta.env.VITE_REVERB_SCHEME ?? 'http';
+const reverbScheme = import.meta.env.VITE_REVERB_SCHEME || 'http';
+const reverbHost = import.meta.env.VITE_REVERB_HOST || window.location.hostname;
 
 window.Pusher = Pusher;
 window.Echo = new Echo({
     broadcaster: 'reverb',
     key: import.meta.env.VITE_REVERB_APP_KEY,
-    wsHost: import.meta.env.VITE_REVERB_HOST ?? window.location.hostname,
+    wsHost: reverbHost,
     wsPort: Number(import.meta.env.VITE_REVERB_PORT ?? 8080),
     wssPort: Number(import.meta.env.VITE_REVERB_PORT ?? 8080),
     forceTLS: reverbScheme === 'https',

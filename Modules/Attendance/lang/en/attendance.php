@@ -363,7 +363,16 @@ return [
         'check_in_window' => 'Check-in Window',
         'check_out_window' => 'Check-out Window',
         'export_excel' => 'Export Excel',
+        'print' => 'Print',
+        'export_date' => 'Export date',
         'export_subtitle' => 'Employee: :employee | Month: :month',
+        'schedule_statuses' => [
+            'work' => 'Work',
+            'rest' => 'Rest Day',
+            'leave_excused' => 'Leave',
+            'swap' => 'Shift Swap',
+            'unassigned' => 'Unassigned',
+        ],
     ],
 
     'violations' => [

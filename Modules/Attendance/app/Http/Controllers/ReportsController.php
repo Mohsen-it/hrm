@@ -71,9 +71,11 @@ class ReportsController extends Controller
         $year = (int) $request->input('year', now()->year);
         $month = (int) $request->input('month', now()->month);
         $monthlyLog = $this->monthlyEmployeeLogService->getMonthlyLog($userId, $year, $month);
+        $employee = $this->userService->getUserById($userId);
 
         return Inertia::render('Attendance/Reports/User', [
             'userId' => fn () => $userId,
+            'employeeName' => fn () => $employee?->full_name ?? $employee?->name ?? (string) $userId,
             'filters' => fn () => $this->cleanFilters($request->only(['from', 'to', 'year', 'month'])),
             'report' => fn () => $report,
             'overtime' => fn () => $overtime,

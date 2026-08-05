@@ -55,7 +55,10 @@ class AbsenceCalculationService
         $rotationIdList = $this->normalizeRotationFilter($rotationIds);
         $groupIdList = $this->normalizeRotationFilter($rotationGroupIds);
 
-        $rotationAssignments = $this->rotationAssignmentRepository->getAssignmentsForDate($dateStr);
+        // Smart absence is an operational report: always calculate against
+        // the employee's latest open assignment, even when an old date range
+        // still has a closed history row for a previous rotation/group.
+        $rotationAssignments = $this->rotationAssignmentRepository->getLatestActiveAssignments();
         $expectedIds = collect();
 
         foreach ($rotationAssignments as $rotationAssignment) {
@@ -83,6 +86,7 @@ class AbsenceCalculationService
 
         $query = DB::table('users')
             ->whereIn('id', $expectedIds->toArray())
+            ->whereNull('deleted_at')
             ->where('status', 1)
             ->where('is_active_employee', true)
             ->where(function ($q) use ($dateStr) {
@@ -129,6 +133,7 @@ class AbsenceCalculationService
         $employees = DB::table('users')
             ->select(['id', 'branch_id', 'department_id', 'attendance_exemption_type', 'attendance_exemption_from', 'attendance_exemption_to'])
             ->where('id', '!=', User::SUPER_ADMIN_ID)
+            ->whereNull('deleted_at')
             ->where('status', 1)
             ->where('is_active_employee', true)
             ->where(fn ($query) => $query->whereNull('termination_date')->orWhere('termination_date', '>=', $dateStr));
@@ -357,6 +362,7 @@ class AbsenceCalculationService
 
         $employee = DB::table('users')
             ->where('id', $employeeId)
+            ->whereNull('deleted_at')
             ->where('status', 1)
             ->where('is_active_employee', true)
             ->first(['id', 'attendance_exemption_type', 'attendance_exemption_from', 'attendance_exemption_to']);
@@ -382,6 +388,7 @@ class AbsenceCalculationService
 
                 continue;
             }
+
             $isExpected = $this->rotationEngine->isWorkDay($rotation, $group, $current);
 
             if ($isExpected) {
@@ -467,12 +474,15 @@ class AbsenceCalculationService
         $rotationIdList = $this->normalizeRotationFilter($rotationIds);
         $groupIdList = $this->normalizeRotationFilter($rotationGroupIds);
 
-        // Assignments overlapping the range (single query, eager loaded).
-        $assignments = $this->rotationAssignmentRepository->getAssignmentsOverlapping($fromStr, $toStr);
+        // This is an operational report, so its roster is always the latest
+        // open assignment for each employee, not the historical assignment
+        // that was attached to a previous group/rotation.
+        $assignments = $this->rotationAssignmentRepository->getLatestActiveAssignments();
 
         // Active employees, respecting the department filter.
         // id => employment / exemption metadata.
         $activeUsers = DB::table('users')
+            ->whereNull('deleted_at')
             ->where('status', 1)
             ->where('is_active_employee', true)
             ->where(function ($q) use ($fromStr) {
@@ -531,14 +541,6 @@ class AbsenceCalculationService
             }
 
             foreach ($assignments as $assignment) {
-                // The assignment must be active on this exact day.
-                if ($assignment->start_date->greaterThan($dateStr)) {
-                    continue;
-                }
-                if ($assignment->end_date !== null && $assignment->end_date->lessThan($dateStr)) {
-                    continue;
-                }
-
                 $employeeId = $assignment->employee_id;
                 $rotation = $assignment->rotation;
                 $group = $assignment->rotationGroup;
@@ -784,6 +786,7 @@ class AbsenceCalculationService
     {
         $employee = DB::table('users')
             ->where('id', $employeeId)
+            ->whereNull('deleted_at')
             ->where('status', 1)
             ->where('is_active_employee', true)
             ->first(['id', 'attendance_exemption_type', 'attendance_exemption_from', 'attendance_exemption_to']);
@@ -792,7 +795,8 @@ class AbsenceCalculationService
             return false;
         }
 
-        $rotationAssignment = $this->rotationAssignmentRepository->getActiveAssignment($employeeId);
+        $rotationAssignment = $this->rotationAssignmentRepository
+            ->getAssignmentForDate($employeeId, $date->toDateString());
 
         if ($rotationAssignment) {
             $rotation = $rotationAssignment->rotation;

@@ -13,13 +13,13 @@ use Modules\Shifts\Services\RotationEngine;
  * AttendanceViolationService — fetches employees violating time rules.
  *
  * Queries attendance_sessions directly for always-up-to-date results.
- * Returns only the latest session per employee to avoid duplicates.
  */
 class AttendanceViolationService
 {
     public function __construct(
         private RotationAssignmentRepository $rotationAssignmentRepository,
         private RotationEngine $rotationEngine,
+        private PunchWindowService $punchWindowService,
     ) {}
 
     /**
@@ -36,10 +36,10 @@ class AttendanceViolationService
         string $cutoffTime,
         ?int $userId = null,
     ): Collection {
-        $latestIds = $this->getLatestSessionIds($from, $to, $userId);
+        $firstCheckInIds = $this->getFirstCheckInSessionIds($from, $to, $userId);
 
         $query = AttendanceSession::query()
-            ->whereIn('id', $latestIds)
+            ->whereIn('id', $firstCheckInIds)
             ->whereNotNull('check_in_at')
             ->whereRaw('TIME(check_in_at) > ?', [$cutoffTime])
             ->with(['user.department']);
@@ -49,7 +49,15 @@ class AttendanceViolationService
         return $query
             ->orderBy('attendance_date')
             ->orderBy('check_in_at')
-            ->get();
+            ->get()
+            ->filter(function (AttendanceSession $session) use ($cutoffTime): bool {
+                $date = $session->attendance_date?->toDateString();
+
+                return $date !== null
+                    && $this->punchWindowService->hasCheckInWindowStarted($session->user_id, $date, $cutoffTime)
+                    && $this->punchWindowService->isCheckInPunch($session->user_id, $session->check_in_at);
+            })
+            ->values();
     }
 
     /**
@@ -88,10 +96,10 @@ class AttendanceViolationService
         string $cutoffTime,
         ?int $userId = null,
     ): Collection {
-        $latestIds = $this->getLatestSessionIds($from, $to, $userId);
+        $firstCheckInIds = $this->getFirstCheckInSessionIds($from, $to, $userId);
 
         return AttendanceSession::query()
-            ->whereIn('id', $latestIds)
+            ->whereIn('id', $firstCheckInIds)
             ->whereNotNull('check_in_at')
             ->whereRaw('TIME(check_in_at) > ?', [$cutoffTime])
             ->with(['user.department'])
@@ -114,6 +122,31 @@ class AttendanceViolationService
             ->groupBy('user_id');
 
         return $query->pluck('latest_id')->toArray();
+    }
+
+    /**
+     * Get the first real check-in session ID for every employee and date.
+     *
+     * A second biometric punch must never make an employee late when they
+     * already checked in before the configured cutoff. Ordering by timestamp
+     * then ID makes equal-time punches deterministic as well.
+     *
+     * @return array<int, int>
+     */
+    private function getFirstCheckInSessionIds(string $from, string $to, ?int $userId = null): array
+    {
+        return AttendanceSession::query()
+            ->betweenDates($from, $to)
+            ->whereNotNull('check_in_at')
+            ->when($userId, fn ($query, $id) => $query->forUser($id))
+            ->orderBy('attendance_date')
+            ->orderBy('user_id')
+            ->orderBy('check_in_at')
+            ->orderBy('id')
+            ->get(['id', 'user_id', 'attendance_date'])
+            ->unique(fn (AttendanceSession $session) => $session->user_id.'|'.$session->attendance_date?->toDateString())
+            ->pluck('id')
+            ->all();
     }
 
     /**
@@ -150,26 +183,30 @@ class AttendanceViolationService
         $assignments = $this->rotationAssignmentRepository->getAssignmentsOverlapping($from, $to);
         $onDuty = [];
 
-        foreach ($assignments as $assignment) {
-            $rotation = $assignment->rotation;
-            $group = $assignment->rotationGroup;
+        $current = Carbon::parse($from)->startOfDay();
+        $end = Carbon::parse($to)->startOfDay();
 
-            if (! $rotation || ! $group) {
-                continue;
-            }
+        while ($current->lte($end)) {
+            $date = $current->toDateString();
 
-            $current = Carbon::parse($from)->startOfDay();
-            $end = Carbon::parse($to)->startOfDay();
+            // Only an assignment effective on this exact date may decide
+            // duty status. The repository puts latest transfers first, so a
+            // legacy overlap keeps the employee's newest group/duty rotation.
+            $effectiveAssignments = $assignments
+                ->filter(fn ($assignment) => $assignment->start_date->toDateString() <= $date
+                    && ($assignment->end_date === null || $assignment->end_date->toDateString() >= $date))
+                ->unique('employee_id');
 
-            while ($current->lte($end)) {
-                $date = $current->format('Y-m-d');
+            foreach ($effectiveAssignments as $assignment) {
+                $rotation = $assignment->rotation;
+                $group = $assignment->rotationGroup;
 
-                if ($this->rotationEngine->isWorkDay($rotation, $group, $current)) {
+                if ($rotation && $group && $this->rotationEngine->isWorkDay($rotation, $group, $current)) {
                     $onDuty[$date][] = $assignment->employee_id;
                 }
-
-                $current->addDay();
             }
+
+            $current->addDay();
         }
 
         return array_map(

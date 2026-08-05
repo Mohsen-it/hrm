@@ -402,7 +402,7 @@ class SmartAbsenceController extends Controller
                     'grades.grade_name',
                 ]);
 
-            $absentAssignments = $this->rotationAssignmentRepository->getAssignmentsForDate($dateStr);
+            $absentAssignments = $this->rotationAssignmentRepository->getLatestActiveAssignments();
 
             $absentDetails = $absentDetails->map(function ($row) use ($absentAssignments) {
                 $assignment = $absentAssignments->firstWhere('employee_id', $row->id);

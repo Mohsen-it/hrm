@@ -5,6 +5,8 @@ namespace Modules\Departments\Services;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Unique;
 use Illuminate\Validation\ValidationException;
 use Modules\Departments\Models\Department;
 use Modules\Departments\Repositories\DepartmentRepository;
@@ -86,7 +88,7 @@ class DepartmentService
      */
     public function updateDepartment(Department $department, array $data): Department
     {
-        $validated = $this->validateDepartmentData($data, $department->id, $department->branch_id);
+        $validated = $this->validateDepartmentData($data, $department->id);
 
         return $this->repository->update($department, $validated);
     }
@@ -133,21 +135,20 @@ class DepartmentService
 
     /**
      * Build the unique rule for department_code scoped to a branch.
-     *
-     * @return array<int, string>
      */
-    protected function uniqueDepartmentCodeRule(?int $ignoreId, ?int $branchId): array
+    protected function uniqueDepartmentCodeRule(?int $ignoreId, ?int $branchId): Unique|string
     {
         if (! $branchId) {
-            return ['string'];
+            return 'string';
         }
 
-        $table = 'departments';
-        $column = 'department_code';
-        $ignore = $ignoreId ? (string) $ignoreId : 'NULL';
+        $rule = Rule::unique('departments', 'department_code')
+            ->where('branch_id', $branchId);
 
-        $wheres = "branch_id = {$branchId}";
+        if ($ignoreId) {
+            $rule->ignore($ignoreId);
+        }
 
-        return ["unique:{$table},{$column},{$ignore},id,{$wheres}"];
+        return $rule;
     }
 }

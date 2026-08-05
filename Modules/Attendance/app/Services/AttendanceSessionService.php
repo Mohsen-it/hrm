@@ -34,6 +34,7 @@ class AttendanceSessionService
         private RawAttendanceLogRepository $rawLogRepository,
         private AttendanceSessionRepository $sessionRepository,
         private ScheduleResolverService $scheduleResolver,
+        private PunchWindowService $punchWindowService,
     ) {}
 
     // ------------------------------------------------------------------
@@ -335,15 +336,23 @@ class AttendanceSessionService
             'ip_address' => $log->ip_address,
         ];
 
-        $session = match ($log->punch_type) {
+        $classification = $this->punchWindowService->classify(
+            $log->user_id,
+            $at,
+            $this->getOpenSessionForUser($log->user_id) !== null,
+        );
+        $punchType = $classification['type']
+            ?? (! $classification['has_configured_window'] ? $log->punch_type : null);
+
+        $session = match ($punchType) {
             'check_in' => $this->checkIn($log->user_id, $at, $context),
             'check_out' => $this->checkOut($log->user_id, $at, $context),
             default => null,
         };
 
-        if ($session !== null) {
-            $this->rawLogRepository->markProcessed([$log->id], $at);
-        }
+        // A punch outside configured windows is retained in raw logs but is
+        // deliberately not converted into a misleading attendance session.
+        $this->rawLogRepository->markProcessed([$log->id], $at);
 
         return $session;
     }

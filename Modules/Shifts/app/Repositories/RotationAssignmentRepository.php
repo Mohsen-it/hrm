@@ -44,7 +44,32 @@ class RotationAssignmentRepository
             ->with($this->defaultWith)
             ->where('employee_id', $employeeId)
             ->whereNull('end_date')
+            // Imports made before transfer validation can contain more than
+            // one open row. The last transfer is the authoritative one.
+            ->orderByDesc('start_date')
+            ->orderByDesc('id')
             ->first();
+    }
+
+    /**
+     * Get one current (open-ended) assignment per employee.
+     *
+     * Smart operational reports intentionally use this source rather than a
+     * historical date window: the most recently saved transfer must replace
+     * the old rotation/group immediately in their calculations and labels.
+     *
+     * @return Collection<int, RotationAssignment>
+     */
+    public function getLatestActiveAssignments(): Collection
+    {
+        return $this->query()
+            ->with($this->defaultWith)
+            ->whereNull('end_date')
+            ->orderByDesc('start_date')
+            ->orderByDesc('id')
+            ->get()
+            ->unique('employee_id')
+            ->values();
     }
 
     /**
@@ -79,6 +104,8 @@ class RotationAssignmentRepository
                 $q->whereNull('end_date')
                     ->orWhere('end_date', '>=', $date);
             })
+            ->orderByDesc('start_date')
+            ->orderByDesc('id')
             ->get();
     }
 
@@ -98,6 +125,8 @@ class RotationAssignmentRepository
                 $q->whereNull('end_date')
                     ->orWhere('end_date', '>=', $from);
             })
+            ->orderByDesc('start_date')
+            ->orderByDesc('id')
             ->get();
     }
 
@@ -112,6 +141,7 @@ class RotationAssignmentRepository
                     ->orWhere('end_date', '>=', $date);
             })
             ->orderByDesc('start_date')
+            ->orderByDesc('id')
             ->first();
     }
 

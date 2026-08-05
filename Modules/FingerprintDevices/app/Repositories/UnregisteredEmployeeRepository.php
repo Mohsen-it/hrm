@@ -13,7 +13,7 @@ class UnregisteredEmployeeRepository
 {
     public function query(): Builder
     {
-        return User::query();
+        return User::query()->active();
     }
 
     /**

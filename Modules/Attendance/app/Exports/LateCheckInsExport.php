@@ -30,7 +30,7 @@ class LateCheckInsExport
 
         $this->exporter->setupSheet($sheet, 'المتأخرون عن تسجيل الدخول');
 
-        $lastColumn = 7;
+        $lastColumn = 8;
         $subtitle = "الفترة: {$this->fromDate} إلى {$this->toDate} | cutoff: {$this->cutoffTime}";
         $currentRow = $this->exporter->writeTitle(
             $sheet,
@@ -48,6 +48,7 @@ class LateCheckInsExport
         $currentRow++;
 
         $headers = ['#', 'الموظف', 'رمز الموظف', 'التاريخ', 'وقت الدخول', 'وقت الحد', 'دقائق التأخير'];
+        $headers = array_merge(array_slice($headers, 0, 3), ['القسم'], array_slice($headers, 3));
         $this->exporter->writeHeaders($sheet, $headers, $currentRow);
         $currentRow++;
 
@@ -55,6 +56,7 @@ class LateCheckInsExport
             'index' => ['key' => 'index', 'type' => 'integer', 'width' => 8],
             'user' => ['key' => 'user_name', 'type' => 'string', 'width' => 25],
             'code' => ['key' => 'employee_code', 'type' => 'string', 'width' => 15],
+            'department' => ['key' => 'department_name', 'type' => 'string', 'width' => 25],
             'date' => ['key' => 'summary_date', 'type' => 'string', 'width' => 14],
             'check_in' => ['key' => 'first_check_in_at', 'type' => 'string', 'width' => 20],
             'cutoff' => ['key' => 'cutoff_time', 'type' => 'string', 'width' => 12],
@@ -65,6 +67,7 @@ class LateCheckInsExport
             'index' => $i + 1,
             'user_name' => $s->user?->name ?? '—',
             'employee_code' => $s->user?->employee_code ?? '',
+            'department_name' => $s->user?->department?->department_name ?? '',
             'summary_date' => $s->attendance_date?->format('Y-m-d') ?? '',
             'first_check_in_at' => $s->check_in_at?->format('H:i') ?? '',
             'cutoff_time' => $this->cutoffTime,

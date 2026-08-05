@@ -153,6 +153,29 @@ function cellValue(row, col) {
     return row[key];
 }
 
+const sortedItems = computed(() => {
+    if (!table.sortColumn.value) return items.value;
+
+    const column = props.columns.find((col) => col.key === table.sortColumn.value);
+    if (!column) return items.value;
+
+    const collator = new Intl.Collator(isRtl.value ? 'ar' : 'en', {
+        numeric: true,
+        sensitivity: 'base',
+    });
+    const direction = table.sortDirection.value === 'asc' ? 1 : -1;
+
+    return [...items.value].sort((left, right) => {
+        const leftValue = cellValue(left, column);
+        const rightValue = cellValue(right, column);
+
+        if (leftValue == null || leftValue === '') return rightValue == null || rightValue === '' ? 0 : 1;
+        if (rightValue == null || rightValue === '') return -1;
+
+        return collator.compare(String(leftValue), String(rightValue)) * direction;
+    });
+});
+
 function onRowClick(row) {
     if (props.rowClickable) emit('row-click', row);
 }
@@ -342,7 +365,7 @@ const lastVisibleColIndex = computed(() => {
                                     </div>
                                 </td>
                             </tr>
-                            <tr v-else-if="items.length === 0">
+                            <tr v-else-if="sortedItems.length === 0">
                                 <td :colspan="table.visibleColumns.value.length + (selectable ? 1 : 0)" class="p-0">
                                     <slot name="empty">
                                         <EmptyState :title="emptyTitle || t('common.no_data')" :description="emptyDescription" />
@@ -351,7 +374,7 @@ const lastVisibleColIndex = computed(() => {
                             </tr>
                             <template v-else>
                                 <tr
-                                    v-for="(row, rowIndex) in items"
+                                    v-for="(row, rowIndex) in sortedItems"
                                     :key="`${meta.current_page}-${row.id || rowIndex}`"
                                     :data-row="row.id"
                                     :tabindex="rowClickable || selectable ? 0 : -1"

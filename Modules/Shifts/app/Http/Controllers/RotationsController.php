@@ -241,6 +241,7 @@ class RotationsController extends Controller
             'departments' => fn () => Department::orderBy('department_name')->get(['id', 'department_name']),
             'preselected_rotation_id' => $request->input('rotation') ? (int) $request->input('rotation') : null,
             'preselected_group_id' => $request->input('group') ? (int) $request->input('group') : null,
+            'today' => now()->toDateString(),
         ]);
     }
 

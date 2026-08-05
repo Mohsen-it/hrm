@@ -12,13 +12,16 @@ const props = defineProps({
     departments: { type: Array, default: () => [] },
     preselected_rotation_id: { type: Number, default: null },
     preselected_group_id: { type: Number, default: null },
+    today: { type: String, required: true },
 });
 
 const selectedRotationId = ref(props.preselected_rotation_id || '');
 const selectedGroupId = ref(props.preselected_group_id || '');
 const targetRotationId = ref('');
 const targetGroupId = ref('');
-const effectiveDate = ref(new Date().toISOString().split('T')[0]);
+// The effective date must follow the server clock, not a potentially incorrect
+// browser clock, because it determines which rotation the absence report uses.
+const effectiveDate = ref(props.today);
 const departmentFilter = ref('');
 const searchQuery = ref('');
 const employees = ref([]);

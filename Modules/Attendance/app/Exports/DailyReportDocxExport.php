@@ -165,6 +165,24 @@ class DailyReportDocxExport
     {
         $texts = $xpath->query('.//w:t', $element);
         if (! $texts || $texts->length === 0) {
+            // Some template note cells are intentionally blank and therefore
+            // have no text run to replace. Add one while retaining the cell's
+            // existing paragraph and table formatting.
+            $paragraph = $xpath->query('.//w:p', $element)?->item(0);
+            if (! $paragraph instanceof DOMElement) {
+                return;
+            }
+
+            $run = $element->ownerDocument?->createElementNS(self::WORD_NAMESPACE, 'w:r');
+            $text = $element->ownerDocument?->createElementNS(self::WORD_NAMESPACE, 'w:t');
+            if (! $run instanceof DOMElement || ! $text instanceof DOMElement) {
+                return;
+            }
+
+            $text->nodeValue = $value;
+            $run->appendChild($text);
+            $paragraph->appendChild($run);
+
             return;
         }
         $texts->item(0)->nodeValue = $value;

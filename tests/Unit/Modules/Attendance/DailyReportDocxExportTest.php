@@ -13,8 +13,9 @@ class DailyReportDocxExportTest extends TestCase
         $export = new DailyReportDocxExport([
             'date' => '2026-08-05',
             'rows' => [
-                ['status' => 'absent', 'name' => 'موظف غياب', 'department_name' => 'القسم', 'notes' => 'ملاحظة'],
-                ['status' => 'late', 'name' => 'موظف تأخر', 'department_name' => 'القسم', 'check_in' => '09:15', 'notes' => 'تأخر مرة هذا الشهر'],
+                ['status' => 'absent', 'name' => 'موظف غياب', 'department_name' => 'القسم', 'notes' => 'عدد أيام الغياب خلال الشهر: 3'],
+                ['status' => 'late', 'name' => 'موظف تأخر', 'department_name' => 'القسم', 'check_in' => '09:15', 'notes' => 'عدد مرات التأخر خلال الشهر: 4'],
+                ['status' => 'leave', 'name' => 'موظف إجازة', 'department_name' => 'القسم', 'notes' => 'عدد أيام الإجازة خلال الشهر: 5'],
             ],
         ]);
 
@@ -31,6 +32,9 @@ class DailyReportDocxExportTest extends TestCase
         $this->assertNotFalse($xml);
         $this->assertStringContainsString('05 / 08 /2026', $xml);
         $this->assertStringContainsString('موظف غياب', $xml);
+        $this->assertStringContainsString('عدد أيام الغياب خلال الشهر: 3', $xml);
+        $this->assertStringContainsString('عدد مرات التأخر خلال الشهر: 4', $xml);
+        $this->assertStringContainsString('عدد أيام الإجازة خلال الشهر: 5', $xml);
         $this->assertStringContainsString('موظف تأخر', $xml);
         $this->assertStringContainsString('09:15', $xml);
     }

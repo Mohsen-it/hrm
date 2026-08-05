@@ -5,6 +5,7 @@ namespace Modules\Attendance\Services;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Modules\Attendance\Models\AttendanceSession;
+use Modules\Attendance\Models\DailyAttendanceSummary;
 use Modules\FingerprintDevices\Models\UserFingerprint;
 use Modules\Shifts\Models\ShiftException;
 use Modules\Shifts\Repositories\RotationAssignmentRepository;
@@ -36,7 +37,6 @@ class DailyReportService
         $day = Carbon::parse($date)->startOfDay();
         $date = $day->toDateString();
         $monthFrom = $day->copy()->startOfMonth()->toDateString();
-        $monthTo = $day->copy()->endOfMonth()->toDateString();
 
         $users = User::query()->employees()->active()
             ->where(fn ($q) => $q->whereNull('termination_date')->orWhere('termination_date', '>=', $date))
@@ -55,17 +55,34 @@ class DailyReportService
 
         $sessions = AttendanceSession::onDate($date)->whereIn('user_id', $userIds)
             ->orderBy('check_in_at')->get()->groupBy('user_id');
-        $monthSessions = AttendanceSession::betweenDates($monthFrom, $monthTo)
+        $monthSessions = AttendanceSession::betweenDates($monthFrom, $date)
             ->whereIn('user_id', $userIds)->whereNotNull('check_in_at')
             ->orderBy('check_in_at')->get()->groupBy('user_id');
+        // Count only the preceding days; the selected report day is added below
+        // whenever the employee is absent, even if its daily summary is not yet rebuilt.
+        $monthlyAbsenceCounts = DailyAttendanceSummary::query()
+            ->whereIn('user_id', $userIds)
+            ->where('status', 'absent')
+            ->whereDate('summary_date', '>=', $monthFrom)
+            ->whereDate('summary_date', '<', $date)
+            ->selectRaw('user_id, COUNT(DISTINCT DATE(summary_date)) as absence_count')
+            ->groupBy('user_id')
+            ->pluck('absence_count', 'user_id');
         $fingerprints = UserFingerprint::whereIn('user_id', $userIds)->pluck('user_id')->flip();
         $vacations = UserVacationRequest::approved()->whereIn('user_id', $userIds)
             ->overlapping($date, $date)->with('vacationType')->get()->keyBy('user_id');
+        $monthlyVacationDays = UserVacationRequest::approved()->whereIn('user_id', $userIds)
+            ->overlapping($monthFrom, $date)
+            ->get()
+            ->groupBy('user_id')
+            ->map(fn (Collection $requests) => $requests->sum(
+                fn (UserVacationRequest $request) => $this->daysOverlappingPeriod($request, $monthFrom, $date)
+            ));
         $exceptions = ShiftException::active()->whereIn('employee_id', $userIds)
             ->whereIn('exception_type', ['leave', 'mission', 'training', 'swap'])
             ->overlapping($date)->get()->groupBy('employee_id');
 
-        $rows = $users->map(function (User $user) use ($date, $cutoffTime, $expected, $assignments, $sessions, $monthSessions, $fingerprints, $vacations, $exceptions): array {
+        $rows = $users->map(function (User $user) use ($date, $cutoffTime, $expected, $assignments, $sessions, $monthSessions, $monthlyAbsenceCounts, $monthlyVacationDays, $fingerprints, $vacations, $exceptions): array {
             $userSessions = $sessions->get($user->id, collect());
             $first = $userSessions->first();
             $last = $userSessions->last();
@@ -107,8 +124,16 @@ class DailyReportService
             }
 
             $notes = [];
-            if ($lateCount > 0) {
-                $notes[] = "تأخر {$lateCount} مرة هذا الشهر";
+            if ($status === 'late') {
+                $notes[] = "عدد مرات التأخر خلال الشهر: {$lateCount}";
+            }
+            if ($status === 'absent') {
+                $absenceCount = (int) ($monthlyAbsenceCounts->get($user->id, 0)) + 1;
+                $notes[] = "عدد أيام الغياب خلال الشهر: {$absenceCount}";
+            }
+            if ($status === 'leave' && $vacation !== null) {
+                $leaveDays = (int) $monthlyVacationDays->get($user->id, 0);
+                $notes[] = "عدد أيام الإجازة خلال الشهر: {$leaveDays}";
             }
             if ($status === 'incomplete') {
                 $notes[] = 'بعد انتهاء الدوام المتوقع '.($expectedCheckOut ?? '—');
@@ -140,6 +165,24 @@ class DailyReportService
         return str_contains(mb_strtolower(($type->code ?? '').' '.($type->name_ar ?? '').' '.($type->name_en ?? '')), 'مهم')
             || str_contains(mb_strtolower(($type->code ?? '').' '.($type->name_ar ?? '').' '.($type->name_en ?? '')), 'mission')
             || str_contains(mb_strtolower(($type->code ?? '').' '.($type->name_ar ?? '').' '.($type->name_en ?? '')), 'travel');
+    }
+
+    /** Count the inclusive vacation days that fall within a report period. */
+    private function daysOverlappingPeriod(UserVacationRequest $request, string $from, string $to): int
+    {
+        $periodStart = Carbon::parse($from)->startOfDay();
+        $periodEnd = Carbon::parse($to)->startOfDay();
+        $start = Carbon::parse($request->start_date)->startOfDay();
+        $end = Carbon::parse($request->end_date)->startOfDay();
+
+        if ($start->lt($periodStart)) {
+            $start = $periodStart;
+        }
+        if ($end->gt($periodEnd)) {
+            $end = $periodEnd;
+        }
+
+        return $start->gt($end) ? 0 : (int) $start->diffInDays($end) + 1;
     }
 
     /** Resolve the scheduled checkout time from the employee's active rotation. */

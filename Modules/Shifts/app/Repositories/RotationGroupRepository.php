@@ -49,6 +49,18 @@ class RotationGroupRepository
         return $group->delete();
     }
 
+    /**
+     * Delete all groups belonging to a rotation.
+     *
+     * Assignments must be removed first by the service.
+     */
+    public function deleteByRotation(int $rotationId): int
+    {
+        return $this->query()
+            ->where('rotation_id', $rotationId)
+            ->delete();
+    }
+
     public function hasActiveAssignments(int $groupId): bool
     {
         return RotationAssignment::query()

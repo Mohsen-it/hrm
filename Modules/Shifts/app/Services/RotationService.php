@@ -150,25 +150,26 @@ class RotationService
     }
 
     /**
-     * Delete a rotation.
+     * Delete a rotation and all of its groups and employee assignments.
      */
     public function delete(int $id): bool
     {
-        $rotation = $this->rotationRepository->findById($id);
+        return DB::transaction(function () use ($id): bool {
+            $rotation = $this->rotationRepository->findById($id);
 
-        if (! $rotation) {
-            throw ValidationException::withMessages([
-                'id' => [__('shifts.rotation_not_found')],
-            ]);
-        }
+            if (! $rotation) {
+                throw ValidationException::withMessages([
+                    'id' => [__('shifts.rotation_not_found')],
+                ]);
+            }
 
-        if ($this->rotationRepository->hasActiveAssignments($id)) {
-            throw ValidationException::withMessages([
-                'id' => [__('shifts.rotation_has_active_assignments')],
-            ]);
-        }
+            // Remove assignments explicitly so this remains correct even when
+            // foreign-key cascades are disabled in a development database.
+            $this->assignmentRepository->deleteByRotation($id);
+            $this->groupRepository->deleteByRotation($id);
 
-        return $this->rotationRepository->delete($rotation);
+            return $this->rotationRepository->delete($rotation);
+        });
     }
 
     /**

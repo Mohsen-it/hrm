@@ -158,6 +158,16 @@ class RotationAssignmentRepository
         return $assignment->fresh($this->defaultWith);
     }
 
+    /**
+     * Delete all historical and active assignments belonging to a rotation.
+     */
+    public function deleteByRotation(int $rotationId): int
+    {
+        return $this->query()
+            ->where('rotation_id', $rotationId)
+            ->delete();
+    }
+
     protected function applyFilters(Builder $query, array $filters): Builder
     {
         $query->when($filters['search'] ?? null, function (Builder $q, string $search): void {

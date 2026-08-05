@@ -23,6 +23,7 @@ return [
     'attendance_sessions' => 'جلسات الحضور',
     'attendance_raw_logs' => 'سجلات البصم الخام',
     'attendance_daily_summaries' => 'ملخصات الحضور اليومية',
+    'attendance_daily_report' => 'التقرير اليومي',
     'attendance_reports' => 'التقارير',
     'attendance_monthly_employee_report' => 'تقرير الموظف الشهري',
     'devices' => 'أجهزة البصمة',
@@ -45,4 +46,5 @@ return [
     'rotation_assignments' => 'إسناد الدوريات',
     'rotation_groups' => 'مجموعات الدوريات',
     'unregistered_employees' => 'الموظفون غير المسجلين للبصمة',
+    'role_assignments' => 'إسناد أدوار الموظفين',
 ];

@@ -38,6 +38,16 @@ class UserService
     }
 
     /**
+     * Get employees with their assigned roles for role administration.
+     *
+     * @param  array<string, mixed>  $filters
+     */
+    public function getUsersForRoleAssignments(array $filters = [], int $perPage = 20): LengthAwarePaginator
+    {
+        return $this->repository->getForRoleAssignments($filters, $perPage);
+    }
+
+    /**
      * Get all active employees.
      *
      * @return Collection<int, User>

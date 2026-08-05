@@ -86,7 +86,7 @@ if "%SKIP_BUILD%"=="0" (
 )
 popd
 
-echo Starting Laravel on http://127.0.0.1:8000 ...
+echo Starting Laravel on http://0.0.0.0:8000 ...
 call :StartService --laravel-server "%ROOT%" || (call :Fail "Could not launch Laravel." & exit /b 1)
 call :WaitForPort 8000 Laravel 20 || (call :Fail "Laravel did not start. See storage\logs\hrm-laravel-server.log" & exit /b 1)
 
@@ -109,7 +109,7 @@ if "%START_BRIDGE%"=="1" (
 
 echo.
 echo [OK] HRM services are running:
-echo      Laravel: http://127.0.0.1:8000
+echo      Laravel: http://SERVER-IP:8000
 echo      Reverb:  ws://127.0.0.1:8080
 echo      ADMS:    http://SERVER-IP:8081
 if "%START_BRIDGE%"=="1" echo      Bridge:  http://127.0.0.1:5000
@@ -127,7 +127,7 @@ call :SetRoot
 cd /d "%ROOT%"
 :LaravelLoop
 echo [%date% %time%] Starting Laravel >> "%ROOT%\storage\logs\hrm-laravel-server.log"
-php artisan serve --host=127.0.0.1 --port=8000 >> "%ROOT%\storage\logs\hrm-laravel-server.log" 2>&1
+php artisan serve --host=0.0.0.0 --port=8000 >> "%ROOT%\storage\logs\hrm-laravel-server.log" 2>&1
 echo [%date% %time%] Laravel stopped; retrying in 3 seconds. >> "%ROOT%\storage\logs\hrm-laravel-server.log"
 %SystemRoot%\System32\timeout.exe /t 3 /nobreak >nul
 goto :LaravelLoop
@@ -147,7 +147,7 @@ call :SetRoot
 cd /d "%ROOT%"
 :ReverbLoop
 echo [%date% %time%] Starting Reverb >> "%ROOT%\storage\logs\hrm-reverb.log"
-php artisan reverb:start --host=127.0.0.1 --port=8080 >> "%ROOT%\storage\logs\hrm-reverb.log" 2>&1
+php artisan reverb:start --host=0.0.0.0 --port=8000 >> "%ROOT%\storage\logs\hrm-reverb.log" 2>&1
 echo [%date% %time%] Reverb stopped; retrying in 3 seconds. >> "%ROOT%\storage\logs\hrm-reverb.log"
 %SystemRoot%\System32\timeout.exe /t 3 /nobreak >nul
 goto :ReverbLoop

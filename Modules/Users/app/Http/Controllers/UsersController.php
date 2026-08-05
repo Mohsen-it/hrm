@@ -249,6 +249,57 @@ class UsersController extends Controller
             ->with('success', __('users.bulk_deleted', ['count' => $count]));
     }
 
+    /**
+     * Display employees and their assigned roles for system administration.
+     */
+    public function roleAssignments(Request $request): Response
+    {
+        $this->authorize('edit-users');
+
+        $filters = $request->only(['search', 'role']);
+
+        return Inertia::render('Users/RoleAssignments/Index', [
+            'filters' => fn () => $filters,
+            'users' => fn () => $this->userService->getUsersForRoleAssignments(
+                $filters,
+                (int) $request->input('per_page', 20),
+            )->through(fn (User $user) => [
+                'id' => $user->id,
+                'employee_code' => $user->employee_code,
+                'name' => $user->full_name,
+                'email' => $user->email,
+                'roles' => $user->roles->pluck('name')->values(),
+            ]),
+            'roles' => fn () => Role::where('guard_name', 'web')->orderBy('name')
+                ->get(['id', 'name'])
+                ->map(fn (Role $role) => ['id' => $role->id, 'name' => $role->name]),
+        ]);
+    }
+
+    /**
+     * Replace the roles assigned to an employee from the system screen.
+     */
+    public function assignRoles(Request $request, int $user): RedirectResponse
+    {
+        $this->authorize('edit-users');
+
+        $data = $request->validate([
+            'roles' => ['present', 'array'],
+            'roles.*' => ['string', 'exists:roles,name'],
+        ]);
+
+        $employee = $this->userService->getUserById($user);
+
+        if (! $employee) {
+            abort(404);
+        }
+
+        $this->userService->syncRoles($employee, $data['roles']);
+
+        return redirect()->route('users.role-assignments')
+            ->with('success', __('users.roles_updated_successfully'));
+    }
+
     // ------------------------------------------------------------------
     // Shifts sub-resource
     // ------------------------------------------------------------------

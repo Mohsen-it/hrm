@@ -93,7 +93,7 @@ export function useNavigation() {
   // --- Permission check ---
   function hasPermission(...perms) {
     if (!perms.length) return true;
-    if (permissions.value.length === 0) return true;
+    if (permissions.value.length === 0) return false;
     return perms.some((p) => permissions.value.includes(p));
   }
 

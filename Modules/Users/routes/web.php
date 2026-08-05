@@ -13,6 +13,11 @@ Route::middleware(['auth', 'permission:view-users'])
         Route::post('users/bulk-delete', [UsersController::class, 'bulkDelete'])
             ->name('users.bulk-delete');
 
+        Route::get('system/role-assignments', [UsersController::class, 'roleAssignments'])
+            ->name('users.role-assignments');
+        Route::put('system/role-assignments/{user}', [UsersController::class, 'assignRoles'])
+            ->name('users.role-assignments.update');
+
         // Sub-resources
         Route::prefix('users/{user}')->name('users.')->group(function () {
             Route::get('shifts', [UsersController::class, 'shifts'])

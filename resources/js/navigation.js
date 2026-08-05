@@ -101,6 +101,13 @@ export const navigationGroups = [
         permissions: ['view-attendance'],
       },
       {
+        id: 'attendance.daily-report',
+        label: 'menu.attendance_daily_report',
+        route: 'attendance.daily-summaries.daily-report',
+        icon: 'fa-solid fa-file-waveform',
+        permissions: ['view-attendance'],
+      },
+      {
         id: 'attendance.raw-logs',
         label: 'menu.attendance_raw_logs',
         route: 'attendance.raw-logs.index',
@@ -328,6 +335,13 @@ export const navigationGroups = [
         route: 'roles.index',
         icon: 'fa-solid fa-shield-halved',
         permissions: ['view-roles'],
+      },
+      {
+        id: 'admin.role-assignments',
+        label: 'menu.role_assignments',
+        route: 'users.role-assignments',
+        icon: 'fa-solid fa-user-shield',
+        permissions: ['edit-users'],
       },
       {
         id: 'admin.permissions',

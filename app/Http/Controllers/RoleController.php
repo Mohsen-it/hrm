@@ -48,14 +48,28 @@ class RoleController extends Controller
                 'name' => $role->name,
                 'guard_name' => $role->guard_name,
                 'permissions_count' => $role->permissions->count(),
+                'permission_names' => $role->permissions->pluck('name')->values(),
                 'users_count' => $role->users_count,
                 'created_at' => optional($role->created_at)->toDateTimeString(),
             ]),
             'filters' => fn () => $filters,
             'permissions' => fn () => Permission::orderBy('name')
-                ->get(['id', 'name'])
-                ->groupBy(fn (Permission $p) => str($p->name)->after('-')->beforeLast('-')->toString()),
+                ->get(['id', 'name', 'guard_name'])
+                ->groupBy(fn (Permission $permission) => $this->permissionGroup($permission->name))
+                ->map(fn ($permissions) => $permissions->map(fn (Permission $permission) => [
+                    'id' => $permission->id,
+                    'name' => $permission->name,
+                    'guard_name' => $permission->guard_name,
+                ])->values()),
         ]);
+    }
+
+    /**
+     * Derive a readable group from a permission name.
+     */
+    private function permissionGroup(string $permission): string
+    {
+        return (string) str($permission)->after('-');
     }
 
     /**

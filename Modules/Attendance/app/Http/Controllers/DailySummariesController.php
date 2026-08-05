@@ -9,6 +9,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
+use Modules\Attendance\Exports\DailyReportDocxExport;
 use Modules\Attendance\Exports\DailySummariesExport;
 use Modules\Attendance\Exports\LateCheckInsExport;
 use Modules\Attendance\Exports\LateForVacationExport;
@@ -19,6 +20,8 @@ use Modules\Attendance\Jobs\RecalculateDailySummariesChunk;
 use Modules\Attendance\Jobs\RecalculateDateRangeChunk;
 use Modules\Attendance\Services\AttendanceViolationService;
 use Modules\Attendance\Services\DailyAttendanceSummaryService;
+use Modules\Attendance\Services\DailyReportService;
+use Modules\Departments\Services\DepartmentService;
 use Modules\Users\Services\UserService;
 
 /**
@@ -39,6 +42,8 @@ class DailySummariesController extends Controller
         private DailyAttendanceSummaryService $summaryService,
         private AttendanceViolationService $violationService,
         private UserService $userService,
+        private DailyReportService $dailyReportService,
+        private DepartmentService $departmentService,
     ) {}
 
     /**
@@ -67,6 +72,59 @@ class DailySummariesController extends Controller
             'stats' => fn () => $this->summaryService->getStats($filters),
             'users' => fn () => $this->userService->getActiveUsers()
                 ->map(fn ($u) => ['id' => $u->id, 'name' => $u->name, 'employee_code' => $u->employee_code]),
+        ]);
+    }
+
+    /** Display the consolidated daily operational report. */
+    public function dailyReport(Request $request): Response
+    {
+        $this->authorize('view-attendance');
+        $data = $request->validate([
+            'date' => ['nullable', 'date_format:Y-m-d'],
+            'cutoff_time' => ['nullable', 'date_format:H:i'],
+            'department_id' => ['nullable', 'integer', 'exists:departments,id'],
+            'user_id' => ['nullable', 'integer', 'exists:users,id'],
+            'status' => ['nullable', 'in:absent,late,leave,no_fingerprint,mission,incomplete'],
+        ]);
+        $report = $this->dailyReportService->build(
+            $data['date'] ?? now()->toDateString(), $data['cutoff_time'] ?? '09:00', $data['department_id'] ?? null,
+            $data['user_id'] ?? null, $data['status'] ?? null,
+        );
+
+        return Inertia::render('Attendance/DailyReport/Index', [
+            'report' => ['date' => $report['date'], 'cutoff_time' => $report['cutoff_time'], 'rows' => $report['rows']->values()->all(), 'stats' => $report['stats']],
+            'filters' => [
+                'date' => $report['date'], 'cutoff_time' => $report['cutoff_time'],
+                'department_id' => $data['department_id'] ?? null, 'user_id' => $data['user_id'] ?? null,
+                'status' => $data['status'] ?? null,
+            ],
+            'departments' => fn () => $this->departmentService->getAllDepartments([], 1000)->getCollection()
+                ->map(fn ($department) => ['value' => $department->id, 'label' => $department->department_name]),
+            'users' => fn () => $this->userService->getActiveUsers()
+                ->map(fn ($user) => ['value' => $user->id, 'label' => $user->full_name]),
+        ]);
+    }
+
+    /** Export the consolidated daily operational report. */
+    public function exportDailyReport(Request $request)
+    {
+        $this->authorize('view-attendance');
+        $data = $request->validate([
+            'date' => ['required', 'date_format:Y-m-d'], 'cutoff_time' => ['required', 'date_format:H:i'],
+            'department_id' => ['nullable', 'integer', 'exists:departments,id'],
+            'user_id' => ['nullable', 'integer', 'exists:users,id'],
+            'status' => ['nullable', 'in:absent,late,leave,no_fingerprint,mission,incomplete'],
+        ]);
+        $report = $this->dailyReportService->build(
+            $data['date'], $data['cutoff_time'], $data['department_id'] ?? null,
+            $data['user_id'] ?? null, $data['status'] ?? null,
+        );
+        $export = new DailyReportDocxExport($report);
+
+        return response($export->toBinary(), 200, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'Content-Disposition' => 'attachment; filename="تقرير يومي '.$data['date'].'.docx"',
+            'Cache-Control' => 'max-age=0',
         ]);
     }
 

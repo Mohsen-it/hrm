@@ -77,6 +77,22 @@ class RoleControllerTest extends TestCase
     }
 
     /**
+     * The edit form receives assigned permissions instead of clearing them.
+     */
+    public function test_index_includes_role_permission_names(): void
+    {
+        $this->actAsSuperAdmin();
+        $role = Role::create(['name' => 'manager', 'guard_name' => 'web']);
+        $role->givePermissionTo('view-companies');
+
+        $this->get(route('roles.index'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->has('roles.data', 2)
+                ->where('roles.data.0.permission_names', ['view-companies']));
+    }
+
+    /**
      * `destroy` removes the role from the catalogue.
      */
     public function test_destroy_deletes_role(): void

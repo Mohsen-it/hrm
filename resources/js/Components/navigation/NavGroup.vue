@@ -63,7 +63,7 @@ const groupLabel = computed(() => t(props.group.label));
     <!-- Multi-item expanded: show list -->
     <div
       v-else-if="!isCollapsed"
-      v-show="isExpanded || hasActiveItem"
+      v-show="group.items.length === 1 || isExpanded || hasActiveItem"
       class="nav-group__items"
     >
       <NavItem

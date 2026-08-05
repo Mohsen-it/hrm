@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue';
-import { Link, router } from '@inertiajs/vue3';
+import { Link, router, usePage } from '@inertiajs/vue3';
 import { useTranslations } from '@/composables/useTranslations';
 import Breadcrumb from '@/Components/ui/Breadcrumb.vue';
 
@@ -23,6 +23,7 @@ const emit = defineEmits([
 ]);
 
 const { t, isRtl } = useTranslations();
+const page = usePage();
 
 const showModuleSwitcher = ref(false);
 const showRecentDropdown = ref(false);
@@ -103,6 +104,10 @@ const breadcrumbItems = computed(() => {
   });
 });
 
+const canViewDashboard = computed(() =>
+  (page.props.auth?.permissions || []).includes('view-dashboard'),
+);
+
 function onClickOutside(e) {
   if (!e.target.closest('.navbar-dropdown')) {
     closeAllDropdowns();
@@ -136,6 +141,7 @@ onUnmounted(() => {
 
         <!-- Dashboard home button (persistent) -->
         <Link
+          v-if="canViewDashboard"
           :href="resolveRoute('dashboard')"
           class="navbar__home"
           :title="t('menu.dashboard')"

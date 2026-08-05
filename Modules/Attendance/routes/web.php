@@ -77,6 +77,8 @@ Route::middleware(['auth'])->group(function () {
 
     // Daily summaries
     Route::middleware('permission:view-attendance')->prefix('attendance/daily-summaries')->name('attendance.daily-summaries.')->group(function () {
+        Route::get('daily-report', [DailySummariesController::class, 'dailyReport'])->name('daily-report');
+        Route::get('daily-report/export', [DailySummariesController::class, 'exportDailyReport'])->name('daily-report.export');
         Route::get('/export/excel', [DailySummariesController::class, 'export'])->name('export');
         Route::get('/', [DailySummariesController::class, 'index'])->name('index');
 

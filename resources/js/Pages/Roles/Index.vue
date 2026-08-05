@@ -60,7 +60,7 @@ const openEdit = (role) => {
     editing.value = role
     form.name = role.name
     form.guard_name = role.guard_name
-    form.permissions = []
+    form.permissions = [...(role.permission_names || [])]
     showForm.value = true
 }
 
@@ -160,21 +160,26 @@ const executeDelete = () => {
                 <label class="block text-sm font-medium text-mistral-ink mb-2">
                     {{ t('roles.permissions') }}
                 </label>
-                <div class="grid grid-cols-2 gap-2 max-h-64 overflow-y-auto p-3 border border-mistral-hairline-soft rounded-lg">
-                    <FormCheckbox
-                        v-for="perm in permissionGroups"
-                        :key="perm.key"
-                        :model-value="form.permissions.includes(perm.key)"
-                        :label="perm.name"
-                        @change="(val) => {
-                            if (val) {
-                                form.permissions.push(perm.key)
-                            } else {
-                                form.permissions = form.permissions.filter(p => p !== perm.key)
-                            }
-                        }"
-                    />
+                <div class="max-h-64 space-y-4 overflow-y-auto rounded-lg border border-mistral-hairline-soft p-3">
+                    <section v-for="group in permissionGroups" :key="group.key">
+                        <h4 class="mb-2 text-xs font-semibold uppercase text-mistral-steel">
+                            {{ group.name }}
+                        </h4>
+                        <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                            <FormCheckbox
+                                v-for="permission in group.permissions"
+                                :key="permission.id"
+                                v-model="form.permissions"
+                                :value="permission.name"
+                                :label="permission.name"
+                                :disabled="permission.guard_name !== form.guard_name"
+                            />
+                        </div>
+                    </section>
                 </div>
+                <p v-if="form.errors.permissions" class="mt-1 text-[12px] text-mistral-danger" role="alert">
+                    {{ form.errors.permissions }}
+                </p>
             </div>
 
             <template #footer>

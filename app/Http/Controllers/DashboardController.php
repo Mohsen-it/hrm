@@ -50,6 +50,8 @@ class DashboardController extends Controller
      */
     public function index(Request $request): Response
     {
+        $this->authorize('view-dashboard');
+
         $today = $this->resolveDashboardDate($request);
 
         return Inertia::render('Dashboard', [
@@ -64,6 +66,8 @@ class DashboardController extends Controller
      */
     public function snapshot(Request $request): JsonResponse
     {
+        $this->authorize('view-dashboard');
+
         $today = $this->resolveDashboardDate($request);
 
         return response()->json([
@@ -77,6 +81,8 @@ class DashboardController extends Controller
      */
     public function pullEvents(Request $request): JsonResponse
     {
+        $this->authorize('view-dashboard');
+
         $payload = $this->getRecentAttendance(20);
 
         $response = [

@@ -57,6 +57,24 @@ class UserRepository
     }
 
     /**
+     * Get the compact employee list used by the role-assignment screen.
+     *
+     * @param  array<string, mixed>  $filters
+     */
+    public function getForRoleAssignments(array $filters = [], int $perPage = 20): LengthAwarePaginator
+    {
+        return $this->applyFilters(
+            $this->query()
+                ->select(['id', 'employee_code', 'name', 'first_name', 'last_name', 'email', 'status'])
+                ->with('roles:id,name'),
+            $filters,
+        )
+            ->orderBy('users.name')
+            ->paginate($perPage)
+            ->withQueryString();
+    }
+
+    /**
      * Find a user by its primary key.
      */
     public function findById(int $id): ?User

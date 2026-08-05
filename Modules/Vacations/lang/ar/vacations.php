@@ -46,6 +46,7 @@ return [
     'request_approved_successfully' => 'تمت الموافقة على الطلب بنجاح',
     'request_rejected_successfully' => 'تم رفض الطلب بنجاح',
     'request_deleted_successfully' => 'تم حذف الطلب بنجاح',
+    'delete_request_confirm_message' => 'هل أنت متأكد من حذف طلب الإجازة هذا؟',
     'request_cancelled_successfully' => 'تم إلغاء الطلب بنجاح',
     'cancel_request' => 'إلغاء الطلب',
     'view_type' => 'عرض نوع الإجازة',

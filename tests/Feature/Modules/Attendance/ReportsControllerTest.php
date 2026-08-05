@@ -54,6 +54,16 @@ class ReportsControllerTest extends TestCase
     }
 
     /**
+     * The employee selector for monthly reports renders.
+     */
+    public function test_user_report_index_renders(): void
+    {
+        $this->actAsSuperAdmin();
+
+        $this->get(route('attendance.reports.user.index'))->assertOk();
+    }
+
+    /**
      * The schedule-window-aware employee log can be exported to Excel.
      */
     public function test_monthly_employee_log_exports(): void

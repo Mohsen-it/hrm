@@ -2,11 +2,13 @@
 import { ref, computed } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
-import { PageHeader, DataTable, Badge, Button, IconButton, Alert } from '@/Components/ui';
+import { PageHeader, DataTable, Badge, Button, IconButton, Alert, ConfirmDialog } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
 const page = usePage();
+const showDelete = ref(false);
+const selectedRequest = ref(null);
 
 const props = defineProps({
     requests: { type: Object, default: () => ({ data: [], links: [] }) },
@@ -49,6 +51,28 @@ function onFilterChange(key, value) {
     router.get(route('vacations.requests.index'), { ...props.filters, [key]: value, page: 1 }, { preserveState: true, preserveScroll: true, replace: true, only: ['requests'] });
 }
 
+function editRequest(request) {
+    if (request.status !== 'pending') return;
+    router.get(route('vacations.requests.edit', request.id));
+}
+
+function confirmDelete(request) {
+    selectedRequest.value = request;
+    showDelete.value = true;
+}
+
+function deleteRequest() {
+    if (!selectedRequest.value) return;
+
+    router.delete(route('vacations.requests.destroy', selectedRequest.value.id), {
+        preserveScroll: true,
+        onFinish: () => {
+            showDelete.value = false;
+            selectedRequest.value = null;
+        },
+    });
+}
+
 const flashSuccess = computed(() => page.props.flash?.success);
 </script>
 
@@ -81,8 +105,30 @@ const flashSuccess = computed(() => page.props.flash?.success);
             <template #cell-actions="{ row }">
                 <div class="flex items-center justify-center gap-1.5">
                     <IconButton icon="fas fa-eye" :aria-label="t('common.view')" :href="route('vacations.requests.show', row.id)" />
+                    <IconButton
+                        v-if="row.status === 'pending'"
+                        icon="fas fa-pen"
+                        :aria-label="t('common.edit')"
+                        @click="editRequest(row)"
+                    />
+                    <IconButton
+                        icon="fas fa-trash"
+                        variant="danger"
+                        :aria-label="t('common.delete')"
+                        @click="confirmDelete(row)"
+                    />
                 </div>
             </template>
         </DataTable>
+
+        <ConfirmDialog
+            v-model="showDelete"
+            :title="t('common.confirm_delete')"
+            :message="t('vacations.delete_request_confirm_message')"
+            :confirm-text="t('common.delete')"
+            :cancel-text="t('common.cancel')"
+            confirm-variant="danger"
+            @confirm="deleteRequest"
+        />
     </AppLayout>
 </template>

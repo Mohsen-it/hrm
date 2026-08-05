@@ -47,6 +47,7 @@ return [
     'request_approved_successfully' => 'Vacation request approved successfully',
     'request_rejected_successfully' => 'Vacation request rejected successfully',
     'request_deleted_successfully' => 'Vacation request deleted successfully',
+    'delete_request_confirm_message' => 'Are you sure you want to delete this vacation request?',
     'request_cancelled_successfully' => 'Vacation request cancelled successfully',
     'cancel_request' => 'Cancel Request',
     'view_type' => 'View Vacation Type',

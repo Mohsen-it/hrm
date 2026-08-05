@@ -12,6 +12,7 @@ use Modules\Attendance\Exports\MonthlyEmployeeAttendanceLogExport;
 use Modules\Attendance\Http\Requests\MonthlyEmployeeAttendanceLogRequest;
 use Modules\Attendance\Services\AttendanceReportService;
 use Modules\Attendance\Services\MonthlyEmployeeAttendanceLogService;
+use Modules\Users\Http\Resources\UserIndexResource;
 use Modules\Users\Services\UserService;
 
 /**
@@ -78,6 +79,24 @@ class ReportsController extends Controller
             'overtime' => fn () => $overtime,
             'monthlyLog' => fn () => $monthlyLog,
             'monthlyLogFilters' => fn () => ['year' => $year, 'month' => $month],
+        ]);
+    }
+
+    /**
+     * Display the employee selector for monthly attendance reports.
+     */
+    public function userReportIndex(Request $request): Response
+    {
+        $this->authorize('view-attendance');
+
+        return Inertia::render('Attendance/Reports/UserIndex', [
+            'filters' => fn () => $this->cleanFilters($request->only(['search', 'per_page'])),
+            'users' => fn () => UserIndexResource::collection(
+                $this->userService->getAllUsers(
+                    $request->only(['search']),
+                    (int) $request->input('per_page', 20),
+                ),
+            ),
         ]);
     }
 

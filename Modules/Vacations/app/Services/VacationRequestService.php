@@ -420,6 +420,12 @@ class VacationRequestService
      */
     public function deleteRequest(UserVacationRequest $request): bool
     {
+        // Release any reserved/used balance and notify attendance integrations
+        // before removing the row from the active request list.
+        if ($request->isPending() || $request->isApproved()) {
+            $this->cancelRequest($request);
+        }
+
         return $this->repository->delete($request);
     }
 

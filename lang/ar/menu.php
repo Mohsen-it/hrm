@@ -24,6 +24,7 @@ return [
     'attendance_raw_logs' => 'سجلات البصم الخام',
     'attendance_daily_summaries' => 'ملخصات الحضور اليومية',
     'attendance_reports' => 'التقارير',
+    'attendance_monthly_employee_report' => 'تقرير الموظف الشهري',
     'devices' => 'أجهزة البصمة',
     'device_types' => 'أنواع الأجهزة',
     'device_dashboard' => 'لوحة تحكم الأجهزة',

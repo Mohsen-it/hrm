@@ -115,6 +115,13 @@ export const navigationGroups = [
         permissions: ['view-attendance'],
       },
       {
+        id: 'attendance.monthly-employee-report',
+        label: 'menu.attendance_monthly_employee_report',
+        route: 'attendance.reports.user.index',
+        icon: 'fa-solid fa-user-clock',
+        permissions: ['view-attendance'],
+      },
+      {
         id: 'attendance.groups',
         label: 'menu.attendance_groups',
         route: 'attendance.groups.index',

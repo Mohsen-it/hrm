@@ -15,6 +15,7 @@ return [
     'monthly_report' => 'تقرير شهري',
     'yearly_report' => 'تقرير سنوي',
     'user_report' => 'تقرير الموظف',
+    'monthly_employee_report' => 'تقرير الموظف الشهري',
 
     'navigation' => [
         'attendance' => 'الحضور',

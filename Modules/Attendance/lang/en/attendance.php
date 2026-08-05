@@ -15,6 +15,7 @@ return [
     'monthly_report' => 'Monthly Report',
     'yearly_report' => 'Yearly Report',
     'user_report' => 'Employee Report',
+    'monthly_employee_report' => 'Monthly Employee Report',
 
     'navigation' => [
         'attendance' => 'Attendance',

@@ -24,6 +24,7 @@ return [
     'attendance_raw_logs' => 'Raw Fingerprint Logs',
     'attendance_daily_summaries' => 'Daily Summaries',
     'attendance_reports' => 'Reports',
+    'attendance_monthly_employee_report' => 'Monthly Employee Report',
     'devices' => 'Fingerprint Devices',
     'device_types' => 'Device Types',
     'device_dashboard' => 'Device Dashboard',

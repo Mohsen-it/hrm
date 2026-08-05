@@ -86,6 +86,11 @@ const flashSuccess = computed(() => page.props.flash?.success);
             </template>
         </PageHeader>
 
+        <nav class="mb-6 flex gap-5 border-b border-mistral-hairline" aria-label="أنواع الطلبات">
+            <span class="border-b-2 border-mistral-primary pb-3 text-sm font-medium text-mistral-primary">الإجازات</span>
+            <a :href="route('vacations.justifications.index')" class="pb-3 text-sm text-mistral-steel">التبرير</a>
+        </nav>
+
         <Alert v-if="flashSuccess" type="success" :message="flashSuccess" class="mb-4" />
 
         <DataTable

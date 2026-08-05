@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use Modules\Holidays\Http\Controllers\HolidaysController;
+use Modules\Vacations\Http\Controllers\AttendanceJustificationRequestsController;
 use Modules\Vacations\Http\Controllers\MyVacationsController;
 use Modules\Vacations\Http\Controllers\VacationBalancesController;
 use Modules\Vacations\Http\Controllers\VacationRequestsController;
@@ -77,6 +78,18 @@ Route::middleware(['auth'])->group(function () {
         Route::delete('{vacationRequest}', [VacationRequestsController::class, 'destroy'])
             ->middleware('permission:delete-vacation-requests')
             ->name('destroy');
+    });
+
+    // Attendance justifications are presented as a sibling tab of the request queue.
+    Route::middleware('permission:view-vacation-requests')->prefix('vacations/justifications')->name('vacations.justifications.')->group(function () {
+        Route::get('export/excel', [AttendanceJustificationRequestsController::class, 'export'])->name('export');
+        Route::get('schedule', [AttendanceJustificationRequestsController::class, 'schedule'])->name('schedule');
+        Route::get('/', [AttendanceJustificationRequestsController::class, 'index'])->name('index');
+        Route::get('create', [AttendanceJustificationRequestsController::class, 'create'])->middleware('permission:create-vacation-requests')->name('create');
+        Route::post('/', [AttendanceJustificationRequestsController::class, 'store'])->middleware('permission:create-vacation-requests')->name('store');
+        Route::get('{justification}/edit', [AttendanceJustificationRequestsController::class, 'edit'])->middleware('permission:edit-vacation-requests')->name('edit');
+        Route::put('{justification}', [AttendanceJustificationRequestsController::class, 'update'])->middleware('permission:edit-vacation-requests')->name('update');
+        Route::delete('{justification}', [AttendanceJustificationRequestsController::class, 'destroy'])->middleware('permission:delete-vacation-requests')->name('destroy');
     });
 
     // ----------------------------------------------------------------

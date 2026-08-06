@@ -96,7 +96,11 @@ class DailyReportDocxExport
     private function rowsFor(string $status): array
     {
         return collect($this->report['rows'])
-            ->where('status', $status)
+            ->filter(fn (array $row) => match ($status) {
+                'no_fingerprint' => (bool) ($row['has_no_fingerprint'] ?? false),
+                'incomplete' => (bool) ($row['has_incomplete_punch'] ?? false),
+                default => ($row['status'] ?? null) === $status,
+            })
             ->values()
             ->all();
     }

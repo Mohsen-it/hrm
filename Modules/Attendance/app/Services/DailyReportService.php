@@ -6,7 +6,6 @@ use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Modules\Attendance\Models\AttendanceSession;
 use Modules\Attendance\Models\DailyAttendanceSummary;
-use Modules\FingerprintDevices\Models\UserFingerprint;
 use Modules\Shifts\Models\ShiftException;
 use Modules\Shifts\Repositories\RotationAssignmentRepository;
 use Modules\Shifts\Services\AbsenceCalculationService;
@@ -68,7 +67,14 @@ class DailyReportService
             ->selectRaw('user_id, COUNT(DISTINCT DATE(summary_date)) as absence_count')
             ->groupBy('user_id')
             ->pluck('absence_count', 'user_id');
-        $fingerprints = UserFingerprint::whereIn('user_id', $userIds)->pluck('user_id')->flip();
+        // Use the same source as the "Unregistered Employees" fingerprint
+        // page so this report cannot silently omit employees without templates.
+        $unregisteredFingerprintIds = User::query()
+            ->whereKey($userIds)
+            ->withoutSuperAdmin()
+            ->whereDoesntHave('fingerprintTemplates')
+            ->pluck('id')
+            ->flip();
         $vacations = UserVacationRequest::approved()->whereIn('user_id', $userIds)
             ->overlapping($date, $date)->with('vacationType')->get()->keyBy('user_id');
         $monthlyVacationDays = UserVacationRequest::approved()->whereIn('user_id', $userIds)
@@ -82,18 +88,24 @@ class DailyReportService
             ->whereIn('exception_type', ['leave', 'mission', 'training', 'swap'])
             ->overlapping($date)->get()->groupBy('employee_id');
 
-        $rows = $users->map(function (User $user) use ($date, $cutoffTime, $expected, $assignments, $sessions, $monthSessions, $monthlyAbsenceCounts, $monthlyVacationDays, $fingerprints, $vacations, $exceptions): array {
+        $rows = $users->map(function (User $user) use ($date, $cutoffTime, $expected, $assignments, $sessions, $monthSessions, $monthlyAbsenceCounts, $monthlyVacationDays, $unregisteredFingerprintIds, $vacations, $exceptions): array {
             $userSessions = $sessions->get($user->id, collect());
             $first = $userSessions->first();
             $last = $userSessions->last();
             $vacation = $vacations->get($user->id);
             $exception = $exceptions->get($user->id, collect())->first();
-            $hasIn = $userSessions->contains(fn ($s) => $s->check_in_at !== null);
-            $hasOut = $userSessions->contains(fn ($s) => $s->check_out_at !== null);
-            $expectedCheckOut = $this->expectedCheckOut($assignments->get($user->id));
+            $openSession = $userSessions
+                ->filter(fn ($session) => $session->check_in_at !== null && $session->check_out_at === null)
+                ->sortByDesc('check_in_at')
+                ->first();
+            $expectedCheckOut = $this->sessionExpectedCheckOut($openSession)
+                ?? $this->expectedCheckOut($assignments->get($user->id));
             $onMission = $exception?->exception_type === 'mission' || $this->isMission($vacation);
             $onLeave = $vacation !== null || in_array($exception?->exception_type, ['leave', 'training', 'swap'], true);
             $late = $first?->check_in_at && $first->check_in_at->format('H:i') > $cutoffTime;
+            $hasNoFingerprint = $unregisteredFingerprintIds->has($user->id);
+            $hasIncompletePunch = ! $onMission && ! $onLeave && $openSession !== null
+                && $this->isIncompletePunchDue($date, $expectedCheckOut, $user->id, $expected);
             $lateCount = $monthSessions->get($user->id, collect())->filter(
                 fn ($s) => $s->check_in_at && $s->check_in_at->format('H:i') > $cutoffTime
             )->unique(fn ($s) => $s->attendance_date?->toDateString())->count();
@@ -112,12 +124,9 @@ class DailyReportService
             } elseif (! $userSessions->count()) {
                 $status = 'absent';
                 $label = 'غياب';
-            } elseif (! $fingerprints->has($user->id)) {
-                $status = 'no_fingerprint';
-                $label = 'لا توجد بصمة مسجلة';
-            } elseif (($hasIn xor $hasOut) && $this->isIncompletePunchDue($date, $expectedCheckOut, $user->id, $expected)) {
+            } elseif ($hasIncompletePunch) {
                 $status = 'incomplete';
-                $label = $hasIn ? 'دخول دون خروج' : 'خروج دون دخول';
+                $label = 'دخول دون خروج';
             } elseif ($late) {
                 $status = 'late';
                 $label = 'متأخر';
@@ -125,20 +134,20 @@ class DailyReportService
 
             $notes = [];
             if ($status === 'late') {
-                $notes[] = "عدد مرات التأخر خلال الشهر: {$lateCount}";
+                $notes[] = 'عدد مرات التأخر خلال الشهر: '.$this->arabicNumber($lateCount);
             }
             if ($status === 'absent') {
                 $absenceCount = (int) ($monthlyAbsenceCounts->get($user->id, 0)) + 1;
-                $notes[] = "عدد أيام الغياب خلال الشهر: {$absenceCount}";
+                $notes[] = 'عدد أيام الغياب خلال الشهر: '.$this->arabicNumber($absenceCount);
             }
             if ($status === 'leave' && $vacation !== null) {
                 $leaveDays = (int) $monthlyVacationDays->get($user->id, 0);
-                $notes[] = "عدد أيام الإجازة خلال الشهر: {$leaveDays}";
+                $notes[] = 'عدد أيام الإجازة خلال الشهر: '.$this->arabicNumber($leaveDays);
             }
-            if ($status === 'incomplete') {
+            if ($hasIncompletePunch) {
                 $notes[] = 'بعد انتهاء الدوام المتوقع '.($expectedCheckOut ?? '—');
             }
-            if ($status === 'no_fingerprint') {
+            if ($hasNoFingerprint) {
                 $notes[] = 'الموظف غير مسجل في جهاز البصمة';
             }
 
@@ -147,12 +156,29 @@ class DailyReportService
                 'department_name' => $user->department?->department_name ?? '—', 'status' => $status, 'status_label' => $label,
                 'check_in' => $first?->check_in_at?->format('H:i') ?? '', 'check_out' => $last?->check_out_at?->format('H:i') ?? '',
                 'expected' => $expected->has($user->id), 'expected_check_out' => $expectedCheckOut,
+                'has_no_fingerprint' => $hasNoFingerprint, 'has_incomplete_punch' => $hasIncompletePunch,
                 'late_minutes' => $late && $first?->check_in_at ? $first->check_in_at->diffInMinutes(Carbon::parse($date.' '.$cutoffTime)) : 0,
                 'notes' => implode('، ', $notes),
             ];
-        })->when($statusFilter, fn ($collection) => $collection->where('status', $statusFilter))->values();
+        })->when($statusFilter, function (Collection $collection) use ($statusFilter): Collection {
+            return match ($statusFilter) {
+                'no_fingerprint' => $collection->where('has_no_fingerprint', true)
+                    ->map(fn (array $row) => [
+                        ...$row,
+                        'status' => 'no_fingerprint',
+                        'status_label' => 'لا توجد بصمة مسجلة',
+                    ]),
+                'incomplete' => $collection->where('has_incomplete_punch', true),
+                default => $collection->where('status', $statusFilter),
+            };
+        })->values();
 
-        return ['date' => $date, 'cutoff_time' => $cutoffTime, 'rows' => $rows, 'stats' => $rows->countBy('status')->all() + ['total' => $rows->count()]];
+        $stats = $rows->countBy('status')->all();
+        $stats['no_fingerprint'] = $rows->where('has_no_fingerprint', true)->count();
+        $stats['incomplete'] = $rows->where('has_incomplete_punch', true)->count();
+        $stats['total'] = $rows->count();
+
+        return ['date' => $date, 'cutoff_time' => $cutoffTime, 'rows' => $rows, 'stats' => $stats];
     }
 
     private function isMission(?UserVacationRequest $request): bool
@@ -185,6 +211,15 @@ class DailyReportService
         return $start->gt($end) ? 0 : (int) $start->diffInDays($end) + 1;
     }
 
+    /** Format a count as an Arabic numeral and keep it in RTL text order. */
+    private function arabicNumber(int $number): string
+    {
+        return "\u{200F}".strtr((string) $number, [
+            '0' => '٠', '1' => '١', '2' => '٢', '3' => '٣', '4' => '٤',
+            '5' => '٥', '6' => '٦', '7' => '٧', '8' => '٨', '9' => '٩',
+        ]);
+    }
+
     /** Resolve the scheduled checkout time from the employee's active rotation. */
     private function expectedCheckOut(mixed $assignment): ?string
     {
@@ -193,6 +228,16 @@ class DailyReportService
         }
 
         return $this->rotationEngine->resolveTimes($assignment)['check_out'] ?? null;
+    }
+
+    /** Prefer the session's stored schedule because it reflects its actual work day. */
+    private function sessionExpectedCheckOut(?AttendanceSession $session): ?string
+    {
+        if (! $session?->expected_check_out) {
+            return null;
+        }
+
+        return substr((string) $session->expected_check_out, 0, 5);
     }
 
     /**

@@ -7,6 +7,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Modules\Attendance\Models\AttendanceSession;
+use Modules\Attendance\Models\RawAttendanceLog;
 use Modules\Holidays\Models\Holiday;
 use Modules\Shifts\Models\ShiftException;
 use Modules\Shifts\Repositories\RotationAssignmentRepository;
@@ -323,6 +324,18 @@ class AbsenceCalculationService
             ->distinct()
             ->pluck('user_id');
 
+        // A raw device punch is physical proof of presence even when the
+        // session pipeline could not create an attendance session for this
+        // date (e.g. an early-morning punch outside the configured check-in
+        // window that was attached to a previous day's still-open session).
+        $punchedIds = $punchedIds->merge(
+            RawAttendanceLog::query()
+                ->whereIn('user_id', $expected->toArray())
+                ->whereBetween('punch_time', $this->localDayUtcBounds($dateStr))
+                ->distinct()
+                ->pluck('user_id')
+        )->unique()->values();
+
         $absent = $expected->diff($punchedIds)->values();
 
         $onLeaveIds = UserVacationRequest::where('status', UserVacationRequest::STATUS_APPROVED)
@@ -395,6 +408,15 @@ class AbsenceCalculationService
                 $hasPunch = AttendanceSession::onDate($dateStr)
                     ->where('user_id', $employeeId)
                     ->exists();
+
+                if (! $hasPunch) {
+                    // Fall back to raw device punches: a punch proves physical
+                    // presence even when no session was created for the date.
+                    $hasPunch = RawAttendanceLog::query()
+                        ->where('user_id', $employeeId)
+                        ->whereBetween('punch_time', $this->localDayUtcBounds($dateStr))
+                        ->exists();
+                }
 
                 $approvedLeave = UserVacationRequest::where('status', UserVacationRequest::STATUS_APPROVED)
                     ->where('user_id', $employeeId)
@@ -502,6 +524,26 @@ class AbsenceCalculationService
             ->get(['attendance_date', 'user_id'])
             ->groupBy(fn ($row) => $this->dateKey($row->attendance_date))
             ->map(fn ($rows) => $rows->pluck('user_id')->flip());
+
+        // Raw device punches are physical proof of presence too. The session
+        // pipeline can attach a punch to a previous day's open session (early
+        // morning punches outside the configured check-in window), leaving the
+        // expected day without a session - without these, such employees would
+        // be wrongly reported as absent.
+        $utcFrom = Carbon::parse($fromStr)->startOfDay()->setTimezone('UTC')->format('Y-m-d H:i:s');
+        $utcTo = Carbon::parse($toStr)->endOfDay()->setTimezone('UTC')->format('Y-m-d H:i:s');
+        $rawPunchesByDate = RawAttendanceLog::query()
+            ->whereIn('user_id', $activeIds)
+            ->whereBetween('punch_time', [$utcFrom, $utcTo])
+            ->get(['punch_time', 'user_id'])
+            ->groupBy(fn ($row) => $this->dateKey($row->punch_time))
+            ->map(fn ($rows) => $rows->pluck('user_id')->flip());
+
+        $punchesByDate = $punchesByDate->map(function (Collection $ids, string $date) use ($rawPunchesByDate): Collection {
+            $rawIds = $rawPunchesByDate->get($date, collect());
+
+            return $rawIds->isEmpty() ? $ids : $ids->union($rawIds);
+        });
 
         // Approved vacations overlapping the range.
         $vacations = $this->indexCoverage(
@@ -725,6 +767,24 @@ class AbsenceCalculationService
         }
 
         return (string) $value;
+    }
+
+    /**
+     * UTC boundary strings covering one full app-timezone day.
+     *
+     * Raw device punches are stored in UTC while report dates are local, so
+     * matching a local date requires shifting the day's bounds to UTC.
+     *
+     * @return array{0: string, 1: string}
+     */
+    private function localDayUtcBounds(string $dateStr): array
+    {
+        $day = Carbon::parse($dateStr);
+
+        return [
+            $day->copy()->startOfDay()->setTimezone('UTC')->format('Y-m-d H:i:s'),
+            $day->copy()->endOfDay()->setTimezone('UTC')->format('Y-m-d H:i:s'),
+        ];
     }
 
     /**

@@ -158,7 +158,7 @@ class CompaniesController extends Controller
 
         $companies = $this->companyService->getAllCompanies(
             $request->only(['search', 'status', 'is_default']),
-            10000 // جلب جميع السجلات للتصدير
+            'all'
         );
 
         $export = new CompaniesExport($companies->getCollection());

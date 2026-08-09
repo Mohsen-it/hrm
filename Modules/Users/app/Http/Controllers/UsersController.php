@@ -548,7 +548,7 @@ class UsersController extends Controller
             }
         }
 
-        $users = $this->userService->getAllUsers($filters, 10000);
+        $users = $this->userService->getAllUsers($filters, 'all');
 
         $export = new UsersExport($users->getCollection());
 

@@ -196,7 +196,7 @@ class SubordinationsController extends Controller
         $this->authorize('view-subordinations');
 
         $filters = $this->cleanFilters($request->only(['search', 'status']));
-        $subordinations = $this->subordinationService->getAllSubordinations($filters, 10000);
+        $subordinations = $this->subordinationService->getAllSubordinations($filters, 'all');
 
         $headers = ['#', 'الرمز', 'الاسم بالعربية', 'الاسم بالإنجليزية', 'الوصف', 'ترتيب العرض', 'الحالة'];
         $columns = [

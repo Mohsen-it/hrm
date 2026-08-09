@@ -150,7 +150,7 @@ class BranchesController extends Controller
 
         $branches = $this->branchService->getAllBranches(
             $request->only(['search', 'status', 'company_id', 'is_main']),
-            10000
+            'all'
         );
 
         $export = new BranchesExport($branches->getCollection());

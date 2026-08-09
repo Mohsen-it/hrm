@@ -301,7 +301,7 @@ class FingerprintDevicesController extends Controller
             'search', 'status', 'device_type_id', 'branch_id', 'connection_type',
         ]));
 
-        $devices = $this->deviceService->getAllDevices($filters, 10000);
+        $devices = $this->deviceService->getAllDevices($filters, 'all');
 
         $headers = ['#', 'اسم الجهاز', 'الرمز', 'النوع', 'الطراز', 'الفرع', 'الشركة', 'نوع الاتصال', 'العنوان IP', 'المنفذ', 'الحالة'];
         $columns = [

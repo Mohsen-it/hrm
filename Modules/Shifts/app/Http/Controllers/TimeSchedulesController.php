@@ -144,7 +144,8 @@ class TimeSchedulesController extends Controller
         $this->authorize('view-time-schedules');
 
         $schedules = $this->timeScheduleService->getAll(
-            $request->only(['search', 'company_id'])
+            $request->only(['search', 'company_id']),
+            'all'
         );
 
         $headers = ['#', 'اسم الجدول', 'وقت الدخول', 'وقت الخروج', 'فترة الراحة', 'ساعات العمل', 'الشركة', 'الوصف'];

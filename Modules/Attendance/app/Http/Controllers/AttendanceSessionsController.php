@@ -207,7 +207,7 @@ class AttendanceSessionsController extends Controller
             'session_type', 'source', 'date', 'from', 'to', 'open', 'per_page',
         ]));
 
-        $sessions = $this->sessionService->getAllSessions($filters, 10000);
+        $sessions = $this->sessionService->getAllSessions($filters, 'all');
 
         $export = new AttendanceSessionsExport($sessions->getCollection());
 

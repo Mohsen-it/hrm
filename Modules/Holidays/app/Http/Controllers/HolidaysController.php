@@ -255,7 +255,7 @@ class HolidaysController extends Controller
             $this->cleanFilters($request->only([
                 'search', 'category', 'is_active', 'is_recurring', 'date', 'from', 'to', 'year',
             ])),
-            10000
+            'all'
         );
 
         $headers = ['#', 'الاسم بالعربية', 'الاسم بالإنجليزية', 'الرمز', 'التصنيف', 'التاريخ', 'متكرر', 'مدفوع', 'نشط'];

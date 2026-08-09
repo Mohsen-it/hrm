@@ -165,7 +165,7 @@ class PositionsController extends Controller
 
         $positions = $this->positionService->getAllPositions(
             $request->only(['search', 'status', 'company_id', 'branch_id', 'department_id']),
-            10000
+            'all'
         );
 
         $headers = ['#', 'رمز الوظيفة', 'اسم الوظيفة', 'القسم', 'الفرع', 'الشركة', 'الحالة'];

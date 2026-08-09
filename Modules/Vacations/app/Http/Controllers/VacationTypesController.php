@@ -168,7 +168,7 @@ class VacationTypesController extends Controller
             'search', 'is_active', 'is_paid', 'requires_approval', 'per_page',
         ]));
 
-        $types = $this->typeService->getAllTypes($filters, 10000);
+        $types = $this->typeService->getAllTypes($filters, 'all');
 
         $export = new VacationTypesExport($types->getCollection());
 

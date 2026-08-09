@@ -149,7 +149,7 @@ class GradesController extends Controller
 
         $grades = $this->gradeService->getAllGrades(
             $request->only(['search', 'status', 'company_id', 'level']),
-            10000
+            'all'
         );
 
         $headers = ['#', 'رمز الدرجة', 'اسم الدرجة', 'المستوى', 'الشركة', 'الوصف', 'الحالة'];

@@ -71,7 +71,7 @@ class UnregisteredEmployeesController extends Controller
             'search', 'company_id', 'branch_id', 'department_id', 'subordination_id', 'status',
         ]));
 
-        $employees = $this->repository->getAll($filters, 10000);
+        $employees = $this->repository->getAll($filters, 'all');
 
         $headers = ['#', 'رمز الموظف', 'الاسم', 'البريد الإلكتروني', 'الشركة', 'الفرع', 'القسم', 'التبعية', 'الحالة'];
         $columns = [

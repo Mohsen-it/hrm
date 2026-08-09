@@ -152,7 +152,7 @@ class RawLogsController extends Controller
             'from', 'to', 'per_page',
         ]));
 
-        $logs = $this->rawLogService->getAllLogs($filters, 10000);
+        $logs = $this->rawLogService->getAllLogs($filters, 'all');
 
         $export = new RawLogsExport($logs->getCollection());
 

@@ -306,7 +306,7 @@ class ZonesController extends Controller
             'search', 'company_id', 'zone_type', 'city', 'region', 'is_active',
         ]));
 
-        $zones = $this->zoneService->getAllZones($filters, 10000);
+        $zones = $this->zoneService->getAllZones($filters, 'all');
 
         $headers = ['#', 'اسم المنطقة', 'الرمز', 'النوع', 'المدينة', 'المنطقة', 'الشركة', 'الفروع', 'الموظفين', 'الأجهزة', 'نشط'];
         $columns = [

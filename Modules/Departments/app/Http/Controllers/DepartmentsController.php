@@ -162,7 +162,7 @@ class DepartmentsController extends Controller
 
         $departments = $this->departmentService->getAllDepartments(
             $request->only(['search', 'status', 'company_id', 'branch_id', 'parent_id', 'roots_only']),
-            10000
+            'all'
         );
 
         $export = new DepartmentsExport($departments->getCollection());

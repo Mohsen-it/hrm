@@ -51,6 +51,6 @@ class AttendanceJustificationRequestRepository
     /** Retrieve all matching rows for a bounded export. */
     public function export(array $filters): Collection
     {
-        return $this->paginate($filters, 10000)->getCollection();
+        return $this->paginate($filters, 'all')->getCollection();
     }
 }

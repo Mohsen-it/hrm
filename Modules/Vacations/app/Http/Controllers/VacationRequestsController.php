@@ -253,7 +253,7 @@ class VacationRequestsController extends Controller
             'status', 'start_date', 'from', 'to', 'year', 'per_page',
         ]));
 
-        $requests = $this->requestService->getAllRequests($filters, 10000);
+        $requests = $this->requestService->getAllRequests($filters, 'all');
 
         $export = new VacationRequestsExport($requests->getCollection());
 

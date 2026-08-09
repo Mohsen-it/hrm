@@ -30,7 +30,7 @@ class CompanyService
      *
      * @param  array<string, mixed>  $filters
      */
-    public function getAllCompanies(array $filters = [], int $perPage = 20): LengthAwarePaginator
+    public function getAllCompanies(array $filters = [], int|string $perPage = 20): LengthAwarePaginator
     {
         return $this->repository->getAll($filters, $perPage);
     }

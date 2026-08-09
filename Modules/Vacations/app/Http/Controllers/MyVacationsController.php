@@ -57,7 +57,7 @@ class MyVacationsController extends Controller
         return Inertia::render('Vacations/My/Index', [
             'filters' => fn () => $filters,
             'requests' => fn () => UserVacationRequestResource::collection(
-                $this->requestService->getAllRequests($filters, (int) $request->input('per_page', 20))
+                $this->requestService->getAllRequests($filters, $request->input('per_page', 20))
             ),
             'balances' => fn () => UserVacationBalanceResource::collection($balances)->resolve(),
             'types' => fn () => $this->typeService->getActiveTypes()

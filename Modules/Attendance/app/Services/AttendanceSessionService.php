@@ -66,7 +66,7 @@ class AttendanceSessionService
      *
      * @param  array<string, mixed>  $filters
      */
-    public function getAllSessions(array $filters = [], int $perPage = 20): LengthAwarePaginator
+    public function getAllSessions(array $filters = [], int|string $perPage = 20): LengthAwarePaginator
     {
         return $this->sessionRepository->getAll($filters, $perPage);
     }

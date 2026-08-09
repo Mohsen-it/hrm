@@ -64,7 +64,7 @@ class DailySummariesController extends Controller
             $filters['to'] = now()->toDateString();
         }
 
-        $perPage = (int) ($filters['per_page'] ?? 20);
+        $perPage = $filters['per_page'] ?? 20;
 
         return Inertia::render('Attendance/DailySummaries/Index', [
             'filters' => fn () => $filters,

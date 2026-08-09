@@ -50,7 +50,15 @@ class SmartAbsenceController extends Controller
             : 100;
 
         $page = $request->integer('page', 1);
-        $perPage = $request->integer('per_page', 20);
+        $perPage = $request->input('per_page', 20);
+
+        if ($perPage === 'all' || $perPage === -1) {
+            $perPage = $report['absentDetails']->count();
+            $page = 1;
+        } else {
+            $perPage = (int) $perPage;
+        }
+
         $absentPaginator = new LengthAwarePaginator(
             $report['absentDetails']->forPage($page, $perPage),
             $report['absentDetails']->count(),
@@ -110,7 +118,15 @@ class SmartAbsenceController extends Controller
             : 100;
 
         $page = $request->integer('page', 1);
-        $perPage = $request->integer('per_page', 20);
+        $perPage = $request->input('per_page', 20);
+
+        if ($perPage === 'all' || $perPage === -1) {
+            $perPage = $absentDetails->count();
+            $page = 1;
+        } else {
+            $perPage = (int) $perPage;
+        }
+
         $paginator = new LengthAwarePaginator(
             $absentDetails->forPage($page, $perPage),
             $absentDetails->count(),

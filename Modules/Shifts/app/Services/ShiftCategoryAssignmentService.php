@@ -98,7 +98,7 @@ class ShiftCategoryAssignmentService
      *
      * @param  array<string, mixed>  $filters
      */
-    public function getAllAssignments(array $filters = [], int $perPage = 20): LengthAwarePaginator
+    public function getAllAssignments(array $filters = [], int|string $perPage = 20): LengthAwarePaginator
     {
         return $this->assignmentRepository->getAll($filters, $perPage);
     }

@@ -2,6 +2,7 @@
 
 namespace Modules\Branches\Repositories;
 
+use App\Traits\PaginatesResults;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
@@ -9,6 +10,8 @@ use Modules\Branches\Models\Branch;
 
 class BranchRepository
 {
+    use PaginatesResults;
+
     /**
      * Get a new query builder for the branches table.
      */
@@ -22,11 +25,12 @@ class BranchRepository
      *
      * @param  array<string, mixed>  $filters
      */
-    public function getAll(array $filters = [], int $perPage = 20): LengthAwarePaginator
+    public function getAll(array $filters = [], int|string $perPage = 20): LengthAwarePaginator
     {
-        return $this->applyFilters($this->query()->with(['company', 'departments']), $filters)
-            ->latest()
-            ->paginate($perPage);
+        return $this->paginateOrAll(
+            $this->applyFilters($this->query()->with(['company', 'departments']), $filters)->latest(),
+            $perPage
+        );
     }
 
     /**

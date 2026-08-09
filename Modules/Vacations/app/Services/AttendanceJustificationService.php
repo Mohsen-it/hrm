@@ -15,7 +15,7 @@ class AttendanceJustificationService
     public function __construct(private AttendanceJustificationRequestRepository $repository, private ScheduleResolverService $scheduleResolver) {}
 
     /** Get the HR queue. */
-    public function paginate(array $filters, int $perPage = 20): LengthAwarePaginator
+    public function paginate(array $filters, int|string $perPage = 20): LengthAwarePaginator
     {
         return $this->repository->paginate($filters, $perPage);
     }

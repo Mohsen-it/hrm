@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Inertia\Inertia;
 use Inertia\Response;
 use Spatie\Permission\Models\Permission;
@@ -25,7 +26,7 @@ class RoleController extends Controller
     {
         $this->authorize('view-roles');
 
-        $filters = $request->only(['search', 'guard']);
+        $filters = $request->only(['search', 'guard', 'per_page']);
 
         $roles = Role::query()
             ->with('permissions')
@@ -38,9 +39,23 @@ class RoleController extends Controller
                 ! empty($filters['guard']),
                 fn ($q) => $q->where('guard_name', $filters['guard']),
             )
-            ->orderBy('name')
-            ->paginate(20)
-            ->withQueryString();
+            ->orderBy('name');
+
+        $perPage = $filters['per_page'] ?? 20;
+
+        if ($perPage === 'all' || $perPage === -1) {
+            $items = $roles->get();
+            $total = $items->count();
+            $roles = new LengthAwarePaginator(
+                $items,
+                $total,
+                $total,
+                1,
+                ['path' => request()->url()]
+            );
+        } else {
+            $roles = $roles->paginate((int) $perPage)->withQueryString();
+        }
 
         return Inertia::render('Roles/Index', [
             'roles' => fn () => $roles->through(fn (Role $role) => [

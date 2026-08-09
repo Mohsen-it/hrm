@@ -4,6 +4,7 @@ namespace Modules\FingerprintDevices\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Inertia\Inertia;
 use Inertia\Response;
 use Modules\FingerprintDevices\Http\Requests\UpdateUserFingerprintRequest;
@@ -31,7 +32,7 @@ class FingerprintTemplateController extends Controller
         $this->authorize('view-fingerprint-devices');
 
         $filters = $this->cleanFilters(request()->only([
-            'user_id', 'device_id', 'finger_id', 'is_master', 'search',
+            'user_id', 'device_id', 'finger_id', 'is_master', 'search', 'per_page',
         ]));
 
         $query = FingerprintTemplate::query()->with(['user', 'device']);
@@ -56,7 +57,21 @@ class FingerprintTemplateController extends Controller
             });
         }
 
-        $templates = $query->latest()->paginate(20)->withQueryString();
+        $perPage = $filters['per_page'] ?? 20;
+
+        if ($perPage === 'all' || $perPage === -1) {
+            $items = $query->latest()->get();
+            $total = $items->count();
+            $templates = new LengthAwarePaginator(
+                $items,
+                $total,
+                $total,
+                1,
+                ['path' => request()->url()]
+            );
+        } else {
+            $templates = $query->latest()->paginate((int) $perPage)->withQueryString();
+        }
 
         return Inertia::render('FingerprintDevices/Templates/Index', [
             'filters' => fn () => $filters,

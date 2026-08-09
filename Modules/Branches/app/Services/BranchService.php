@@ -30,7 +30,7 @@ class BranchService
      *
      * @param  array<string, mixed>  $filters
      */
-    public function getAllBranches(array $filters = [], int $perPage = 20): LengthAwarePaginator
+    public function getAllBranches(array $filters = [], int|string $perPage = 20): LengthAwarePaginator
     {
         return $this->repository->getAll($filters, $perPage);
     }

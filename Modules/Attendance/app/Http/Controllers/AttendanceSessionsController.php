@@ -54,7 +54,7 @@ class AttendanceSessionsController extends Controller
         return Inertia::render('Attendance/Sessions/Index', [
             'filters' => fn () => $filters,
             'sessions' => fn () => AttendanceSessionResource::collection(
-                $this->sessionService->getAllSessions($filters, (int) $request->input('per_page', 20))
+                $this->sessionService->getAllSessions($filters, $request->input('per_page', 20))
             ),
             'users' => fn () => $this->userService->getActiveUsers()
                 ->map(fn ($u) => ['id' => $u->id, 'name' => $u->name, 'employee_code' => $u->employee_code]),

@@ -34,7 +34,7 @@ class VacationTypeService
      *
      * @param  array<string, mixed>  $filters
      */
-    public function getAllTypes(array $filters = [], int $perPage = 20): LengthAwarePaginator
+    public function getAllTypes(array $filters = [], int|string $perPage = 20): LengthAwarePaginator
     {
         return $this->repository->getAll($filters, $perPage);
     }

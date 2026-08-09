@@ -77,7 +77,7 @@ class AttendanceShiftService
         return $this->shiftRepository->getByCompany($companyId);
     }
 
-    public function getAllShifts(array $filters = [], int $perPage = 20): LengthAwarePaginator
+    public function getAllShifts(array $filters = [], int|string $perPage = 20): LengthAwarePaginator
     {
         return $this->shiftRepository->getAll($filters, $perPage);
     }

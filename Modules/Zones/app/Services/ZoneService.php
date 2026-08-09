@@ -32,7 +32,7 @@ class ZoneService
      *
      * @param  array<string, mixed>  $filters
      */
-    public function getAllZones(array $filters = [], int $perPage = 20): LengthAwarePaginator
+    public function getAllZones(array $filters = [], int|string $perPage = 20): LengthAwarePaginator
     {
         return $this->repository->getAll($filters, $perPage);
     }

@@ -22,6 +22,7 @@ const props = defineProps({
     preserveState: { type: Boolean, default: true },
     replace: { type: Boolean, default: true },
     autoNavigate: { type: Boolean, default: false },
+    enableShowAll: { type: Boolean, default: true },
 });
 
 const emit = defineEmits(['page-change', 'per-page-change', 'navigating', 'navigated']);
@@ -151,7 +152,27 @@ const goToPage = (page) => {
     }
 };
 
+const showAllValue = computed(() => props.enableShowAll ? 'all' : null);
+
+const allPerPageOptions = computed(() => {
+    if (!props.enableShowAll) return props.perPageOptions;
+    return [...props.perPageOptions, showAllValue.value];
+});
+
+const isShowingAll = computed(() => {
+    const val = props.data?.per_page ?? props.data?.meta?.per_page;
+    return val === 'all' || val === -1;
+});
+
 const goToPerPage = (size) => {
+    if (size === 'all' || size === '-1') {
+        startLoading('perPage');
+        emit('per-page-change', 'all');
+        if (props.autoNavigate) {
+            doNavigate({ ...props.filters, [paramKey.value]: 1, [props.perPageParam]: 'all' });
+        }
+        return;
+    }
     const newSize = Number(size);
     if (!newSize || newSize === meta.value.perPage) return;
     startLoading('perPage');
@@ -223,23 +244,23 @@ const rangeText = computed(() => {
             <span class="whitespace-nowrap tabular-nums">{{ rangeText }}</span>
         </div>
 
-        <div v-if="showPageSize" class="flex items-center gap-2">
-            <span class="whitespace-nowrap hidden sm:inline">
-                {{ isRtl ? 'لكل صفحة' : 'Rows per page' }}
-            </span>
-            <div class="relative">
-                <select
-                    :value="meta.perPage"
-                    :disabled="isLoading"
-                    class="h-8 ps-3 pe-7 text-[12px] font-medium text-mistral-ink bg-white border border-mistral-hairline-strong rounded-md appearance-none cursor-pointer select-with-arrow focus:outline-none focus:ring-2 focus:ring-mistral-primary/20 focus:border-mistral-primary transition-all duration-150 hover:border-mistral-primary/40 disabled:opacity-50"
-                    @change="goToPerPage($event.target.value)"
-                >
-                    <option v-for="opt in perPageOptions" :key="opt" :value="opt">
-                        {{ opt }}
-                    </option>
-                </select>
+            <div v-if="showPageSize" class="flex items-center gap-2">
+                <span class="whitespace-nowrap hidden sm:inline">
+                    {{ isRtl ? 'لكل صفحة' : 'Rows per page' }}
+                </span>
+                <div class="relative">
+                    <select
+                        :value="isShowingAll ? 'all' : meta.perPage"
+                        :disabled="isLoading"
+                        class="h-8 ps-3 pe-7 text-[12px] font-medium text-mistral-ink bg-white border border-mistral-hairline-strong rounded-md appearance-none cursor-pointer select-with-arrow focus:outline-none focus:ring-2 focus:ring-mistral-primary/20 focus:border-mistral-primary transition-all duration-150 hover:border-mistral-primary/40 disabled:opacity-50"
+                        @change="goToPerPage($event.target.value)"
+                    >
+                        <option v-for="opt in allPerPageOptions" :key="opt" :value="opt">
+                            {{ opt === 'all' ? (isRtl ? 'الكل' : 'All') : opt }}
+                        </option>
+                    </select>
+                </div>
             </div>
-        </div>
 
         <nav
             v-if="showPageNav"

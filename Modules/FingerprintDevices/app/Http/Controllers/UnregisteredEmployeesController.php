@@ -40,7 +40,7 @@ class UnregisteredEmployeesController extends Controller
         return Inertia::render('FingerprintDevices/UnregisteredEmployees', [
             'filters' => fn () => $filters,
             'employees' => fn () => UserIndexResource::collection(
-                $this->repository->getAll($filters, (int) $request->input('per_page', 20))
+                $this->repository->getAll($filters, $request->input('per_page', 20))
             ),
             'total' => fn () => $this->repository->countAll($filters),
             'companies' => fn () => $this->companyService->getActiveCompanies()

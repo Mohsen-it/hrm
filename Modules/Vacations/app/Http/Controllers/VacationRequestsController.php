@@ -52,7 +52,7 @@ class VacationRequestsController extends Controller
         return Inertia::render('Vacations/Requests/Index', [
             'filters' => fn () => $filters,
             'requests' => fn () => UserVacationRequestResource::collection(
-                $this->requestService->getAllRequests($filters, (int) $request->input('per_page', 20))
+                $this->requestService->getAllRequests($filters, $request->input('per_page', 20))
             ),
             'types' => fn () => $this->typeService->getActiveTypes()
                 ->map(fn (VacationType $t) => [

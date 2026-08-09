@@ -41,7 +41,7 @@ class RotationService
     /**
      * Get all rotations with filters and pagination.
      */
-    public function getAll(array $filters = [], int $perPage = 20): LengthAwarePaginator
+    public function getAll(array $filters = [], int|string $perPage = 20): LengthAwarePaginator
     {
         return $this->rotationRepository->getAll($filters, $perPage);
     }

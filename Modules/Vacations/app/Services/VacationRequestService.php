@@ -50,7 +50,7 @@ class VacationRequestService
      *
      * @param  array<string, mixed>  $filters
      */
-    public function getAllRequests(array $filters = [], int $perPage = 20): LengthAwarePaginator
+    public function getAllRequests(array $filters = [], int|string $perPage = 20): LengthAwarePaginator
     {
         return $this->repository->getAll($filters, $perPage);
     }

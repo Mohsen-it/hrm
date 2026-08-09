@@ -1,8 +1,10 @@
 <?php
+
 require __DIR__.'/vendor/autoload.php';
 $app = require_once __DIR__.'/bootstrap/app.php';
-$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+$app->make(Kernel::class)->bootstrap();
 
+use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Facades\DB;
 
 echo '=== tables with create/update times ==='.PHP_EOL;
@@ -12,7 +14,7 @@ foreach ($tables as $t) {
 }
 
 echo PHP_EOL.'=== row counts for key tables ==='.PHP_EOL;
-foreach (['users','companies','attendance_sessions','raw_attendance_logs','daily_attendance_summaries','att_rotations','att_rotation_assignments','att_rotation_groups','migrations','permissions','roles'] as $table) {
+foreach (['users', 'companies', 'attendance_sessions', 'raw_attendance_logs', 'daily_attendance_summaries', 'att_rotations', 'att_rotation_assignments', 'att_rotation_groups', 'migrations', 'permissions', 'roles'] as $table) {
     try {
         echo $table.': '.DB::table($table)->count().PHP_EOL;
     } catch (Throwable $e) {

@@ -2,6 +2,7 @@
 
 namespace Modules\Shifts\Repositories;
 
+use App\Traits\PaginatesResults;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
@@ -9,6 +10,8 @@ use Modules\Shifts\Models\Shift;
 
 class ShiftRepository
 {
+    use PaginatesResults;
+
     /**
      * Default eager-loaded relations to prevent N+1.
      *
@@ -29,14 +32,12 @@ class ShiftRepository
      *
      * @param  array<string, mixed>  $filters
      */
-    public function getAll(array $filters = [], int $perPage = 20): LengthAwarePaginator
+    public function getAll(array $filters = [], int|string $perPage = 20): LengthAwarePaginator
     {
-        return $this->applyFilters(
-            $this->query()->with($this->defaultWith),
-            $filters
-        )
-            ->latest()
-            ->paginate($perPage);
+        return $this->paginateOrAll(
+            $this->applyFilters($this->query()->with($this->defaultWith), $filters)->latest(),
+            $perPage
+        );
     }
 
     /**

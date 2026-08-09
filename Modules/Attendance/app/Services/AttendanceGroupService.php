@@ -76,7 +76,7 @@ class AttendanceGroupService
         return $group;
     }
 
-    public function getAllGroups(array $filters = [], int $perPage = 20): LengthAwarePaginator
+    public function getAllGroups(array $filters = [], int|string $perPage = 20): LengthAwarePaginator
     {
         return $this->groupRepository->getAll($filters, $perPage);
     }

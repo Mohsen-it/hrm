@@ -2,6 +2,7 @@
 
 namespace Modules\Users\Repositories;
 
+use App\Traits\PaginatesResults;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
@@ -9,6 +10,8 @@ use Modules\Users\Models\User;
 
 class UserRepository
 {
+    use PaginatesResults;
+
     /**
      * Default eager-loaded relations to prevent N+1.
      *
@@ -36,24 +39,25 @@ class UserRepository
      *
      * @param  array<string, mixed>  $filters
      */
-    public function getAll(array $filters = [], int $perPage = 20): LengthAwarePaginator
+    public function getAll(array $filters = [], int|string $perPage = 20): LengthAwarePaginator
     {
-        return $this->applyFilters(
-            $this->query()
-                ->select(['id', 'employee_code', 'name', 'first_name', 'last_name', 'full_name_ar', 'full_name_en', 'avatar', 'email', 'phone', 'company_id', 'branch_id', 'department_id', 'position_id', 'grade_id', 'subordination_id', 'shift_id', 'hire_date', 'status', 'created_at'])
-                ->with([
-                    'company:id,company_name',
-                    'branch:id,branch_name',
-                    'department:id,department_name',
-                    'position:id,position_name',
-                    'grade:id,grade_name',
-                    'subordination:id,code,name_ar,name_en',
-                    'shift:id,shift_name',
-                ]),
-            $filters
-        )
-            ->orderBy('users.id', 'desc')
-            ->paginate($perPage);
+        return $this->paginateOrAll(
+            $this->applyFilters(
+                $this->query()
+                    ->select(['id', 'employee_code', 'name', 'first_name', 'last_name', 'full_name_ar', 'full_name_en', 'avatar', 'email', 'phone', 'company_id', 'branch_id', 'department_id', 'position_id', 'grade_id', 'subordination_id', 'shift_id', 'hire_date', 'status', 'created_at'])
+                    ->with([
+                        'company:id,company_name',
+                        'branch:id,branch_name',
+                        'department:id,department_name',
+                        'position:id,position_name',
+                        'grade:id,grade_name',
+                        'subordination:id,code,name_ar,name_en',
+                        'shift:id,shift_name',
+                    ]),
+                $filters
+            )->orderBy('users.id', 'desc'),
+            $perPage
+        );
     }
 
     /**
@@ -61,17 +65,19 @@ class UserRepository
      *
      * @param  array<string, mixed>  $filters
      */
-    public function getForRoleAssignments(array $filters = [], int $perPage = 20): LengthAwarePaginator
+    public function getForRoleAssignments(array $filters = [], int|string $perPage = 20): LengthAwarePaginator
     {
-        return $this->applyFilters(
-            $this->query()
-                ->select(['id', 'employee_code', 'name', 'first_name', 'last_name', 'email', 'status'])
-                ->with('roles:id,name'),
-            $filters,
-        )
-            ->orderBy('users.name')
-            ->paginate($perPage)
-            ->withQueryString();
+        $paginator = $this->paginateOrAll(
+            $this->applyFilters(
+                $this->query()
+                    ->select(['id', 'employee_code', 'name', 'first_name', 'last_name', 'email', 'status'])
+                    ->with('roles:id,name'),
+                $filters,
+            )->orderBy('users.name'),
+            $perPage
+        );
+
+        return $paginator->withQueryString();
     }
 
     /**

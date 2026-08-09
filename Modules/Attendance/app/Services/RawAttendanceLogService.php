@@ -44,7 +44,7 @@ class RawAttendanceLogService
      *
      * @param  array<string, mixed>  $filters
      */
-    public function getAllLogs(array $filters = [], int $perPage = 20): LengthAwarePaginator
+    public function getAllLogs(array $filters = [], int|string $perPage = 20): LengthAwarePaginator
     {
         return $this->repository->getAll($filters, $perPage);
     }

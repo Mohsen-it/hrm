@@ -2,6 +2,7 @@
 
 namespace Modules\FingerprintDevices\Repositories;
 
+use App\Traits\PaginatesResults;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Modules\Users\Models\User;
@@ -11,6 +12,8 @@ use Modules\Users\Models\User;
  */
 class UnregisteredEmployeeRepository
 {
+    use PaginatesResults;
+
     public function query(): Builder
     {
         return User::query()->active();
@@ -21,27 +24,28 @@ class UnregisteredEmployeeRepository
      *
      * @param  array<string, mixed>  $filters
      */
-    public function getAll(array $filters = [], int $perPage = 20): LengthAwarePaginator
+    public function getAll(array $filters = [], int|string $perPage = 20): LengthAwarePaginator
     {
-        return $this->applyFilters(
-            $this->query()
-                ->select([
-                    'id', 'employee_code', 'first_name', 'last_name', 'name',
-                    'full_name_ar', 'full_name_en', 'email', 'avatar',
-                    'company_id', 'branch_id', 'department_id', 'subordination_id',
-                    'status', 'is_active_employee',
-                ])
-                ->with([
-                    'company:id,company_name',
-                    'branch:id,branch_name',
-                    'department:id,department_name',
-                    'subordination:id,code,name_ar,name_en',
-                ])
-                ->whereDoesntHave('fingerprintTemplates'),
-            $filters
-        )
-            ->orderBy('users.id', 'desc')
-            ->paginate($perPage);
+        return $this->paginateOrAll(
+            $this->applyFilters(
+                $this->query()
+                    ->select([
+                        'id', 'employee_code', 'first_name', 'last_name', 'name',
+                        'full_name_ar', 'full_name_en', 'email', 'avatar',
+                        'company_id', 'branch_id', 'department_id', 'subordination_id',
+                        'status', 'is_active_employee',
+                    ])
+                    ->with([
+                        'company:id,company_name',
+                        'branch:id,branch_name',
+                        'department:id,department_name',
+                        'subordination:id,code,name_ar,name_en',
+                    ])
+                    ->whereDoesntHave('fingerprintTemplates'),
+                $filters
+            )->orderBy('users.id', 'desc'),
+            $perPage
+        );
     }
 
     /**

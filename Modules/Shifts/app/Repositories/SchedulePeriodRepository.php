@@ -2,17 +2,20 @@
 
 namespace Modules\Shifts\Repositories;
 
+use App\Traits\PaginatesResults;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Modules\Shifts\Models\SchedulePeriod;
 
 class SchedulePeriodRepository
 {
+    use PaginatesResults;
+
     /**
      * Get all schedule periods with filters and pagination.
      *
      * @param  array<string, mixed>  $filters
      */
-    public function getAll(array $filters = [], int $perPage = 20): LengthAwarePaginator
+    public function getAll(array $filters = [], int|string $perPage = 20): LengthAwarePaginator
     {
         $query = SchedulePeriod::query()
             ->with(['generatedBy', 'publishedBy']);
@@ -32,7 +35,7 @@ class SchedulePeriodRepository
         $sortBy = $filters['sort_by'] ?? 'year';
         $sortDir = $filters['sort_dir'] ?? 'desc';
 
-        return $query->orderBy($sortBy, $sortDir)->paginate($perPage);
+        return $this->paginateOrAll($query->orderBy($sortBy, $sortDir), $perPage);
     }
 
     /**

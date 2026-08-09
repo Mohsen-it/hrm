@@ -20,7 +20,7 @@ class ShiftService
      *
      * @param  array<string, mixed>  $filters
      */
-    public function getAllShifts(array $filters = [], int $perPage = 20): LengthAwarePaginator
+    public function getAllShifts(array $filters = [], int|string $perPage = 20): LengthAwarePaginator
     {
         return $this->repository->getAll($filters, $perPage);
     }

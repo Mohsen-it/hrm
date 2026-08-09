@@ -45,7 +45,7 @@ class VacationTypesController extends Controller
         return Inertia::render('Vacations/Types/Index', [
             'filters' => fn () => $filters,
             'types' => fn () => VacationTypeResource::collection(
-                $this->typeService->getAllTypes($filters, (int) $request->input('per_page', 20))
+                $this->typeService->getAllTypes($filters, $request->input('per_page', 20))
             ),
         ]);
     }

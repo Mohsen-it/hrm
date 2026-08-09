@@ -2,6 +2,7 @@
 
 namespace Modules\Shifts\Repositories;
 
+use App\Traits\PaginatesResults;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
@@ -10,6 +11,8 @@ use Modules\Shifts\Models\ShiftCategory;
 
 class ShiftCategoryRepository
 {
+    use PaginatesResults;
+
     /**
      * Default eager-loaded relations to prevent N+1.
      *
@@ -30,18 +33,19 @@ class ShiftCategoryRepository
      *
      * @param  array<string, mixed>  $filters
      */
-    public function getAll(array $filters = [], int $perPage = 20): LengthAwarePaginator
+    public function getAll(array $filters = [], int|string $perPage = 20): LengthAwarePaginator
     {
-        return $this->applyFilters(
-            $this->query()
-                ->with($this->defaultWith)
-                ->withCount(['employees as active_employees_count' => function (Builder $q): void {
-                    $q->whereNull('end_date');
-                }]),
-            $filters
-        )
-            ->latest()
-            ->paginate($perPage);
+        return $this->paginateOrAll(
+            $this->applyFilters(
+                $this->query()
+                    ->with($this->defaultWith)
+                    ->withCount(['employees as active_employees_count' => function (Builder $q): void {
+                        $q->whereNull('end_date');
+                    }]),
+                $filters
+            )->latest(),
+            $perPage
+        );
     }
 
     /**

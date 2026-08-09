@@ -76,7 +76,7 @@ class UsersController extends Controller
                         'position_id', 'grade_id', 'subordination_id', 'shift_id', 'status',
                         'employment_type', 'role', 'is_active_employee',
                     ]),
-                    (int) $request->input('per_page', 20)
+                    $request->input('per_page', 20)
                 )
             ),
             'companies' => fn () => $this->companyService->getActiveCompanies()

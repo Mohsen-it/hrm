@@ -76,7 +76,7 @@ class DailyAttendanceSummaryService
      * @param  array<string, mixed>  $filters
      * @return LengthAwarePaginator
      */
-    public function getPaginated(array $filters = [], int $perPage = 20)
+    public function getPaginated(array $filters = [], int|string $perPage = 20)
     {
         return $this->repository->getAll($filters, $perPage);
     }

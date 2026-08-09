@@ -96,7 +96,7 @@ class ReportsController extends Controller
             'users' => fn () => UserIndexResource::collection(
                 $this->userService->getAllUsers(
                     $request->only(['search']),
-                    (int) $request->input('per_page', 20),
+                    $request->input('per_page', 20),
                 ),
             ),
         ]);

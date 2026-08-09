@@ -28,7 +28,7 @@ class AttendanceJustificationRequestsController extends Controller
         $this->authorize('view-vacation-requests');
         $filters = array_filter($request->only(['search', 'date']), fn ($value) => $value !== null && $value !== '');
 
-        return Inertia::render('Vacations/Justifications/Index', ['filters' => $filters, 'requests' => fn () => AttendanceJustificationRequestResource::collection($this->service->paginate($filters, (int) $request->input('per_page', 20)))]);
+        return Inertia::render('Vacations/Justifications/Index', ['filters' => $filters, 'requests' => fn () => AttendanceJustificationRequestResource::collection($this->service->paginate($filters, $request->input('per_page', 20)))]);
     }
 
     /** Display a new justification form. */

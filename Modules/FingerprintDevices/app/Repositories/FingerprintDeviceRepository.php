@@ -2,6 +2,7 @@
 
 namespace Modules\FingerprintDevices\Repositories;
 
+use App\Traits\PaginatesResults;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
@@ -12,17 +13,19 @@ use Modules\FingerprintDevices\Models\FingerprintDevice;
  */
 class FingerprintDeviceRepository
 {
+    use PaginatesResults;
+
     public function query(): Builder
     {
         return FingerprintDevice::query();
     }
 
-    public function getAll(array $filters = [], int $perPage = 20): LengthAwarePaginator
+    public function getAll(array $filters = [], int|string $perPage = 20): LengthAwarePaginator
     {
-        return $this->applyFilters(
-            $this->query()->with(['deviceType', 'branch']),
-            $filters
-        )->latest()->paginate($perPage);
+        return $this->paginateOrAll(
+            $this->applyFilters($this->query()->with(['deviceType', 'branch']), $filters)->latest(),
+            $perPage
+        );
     }
 
     public function findById(int $id): ?FingerprintDevice

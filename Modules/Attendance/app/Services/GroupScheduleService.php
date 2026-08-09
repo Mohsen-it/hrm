@@ -70,7 +70,7 @@ class GroupScheduleService
         return $this->scheduleRepository->getByGroup($groupId);
     }
 
-    public function getAllSchedules(array $filters = [], int $perPage = 20): LengthAwarePaginator
+    public function getAllSchedules(array $filters = [], int|string $perPage = 20): LengthAwarePaginator
     {
         return $this->scheduleRepository->getAll($filters, $perPage);
     }

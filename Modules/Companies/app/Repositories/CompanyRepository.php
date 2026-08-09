@@ -2,6 +2,7 @@
 
 namespace Modules\Companies\Repositories;
 
+use App\Traits\PaginatesResults;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
@@ -9,6 +10,8 @@ use Modules\Companies\Models\Company;
 
 class CompanyRepository
 {
+    use PaginatesResults;
+
     /**
      * Get a new query builder for the companies table.
      */
@@ -22,11 +25,12 @@ class CompanyRepository
      *
      * @param  array<string, mixed>  $filters
      */
-    public function getAll(array $filters = [], int $perPage = 20): LengthAwarePaginator
+    public function getAll(array $filters = [], int|string $perPage = 20): LengthAwarePaginator
     {
-        return $this->applyFilters($this->query()->with('branches'), $filters)
-            ->latest()
-            ->paginate($perPage);
+        return $this->paginateOrAll(
+            $this->applyFilters($this->query()->with('branches'), $filters)->latest(),
+            $perPage
+        );
     }
 
     /**

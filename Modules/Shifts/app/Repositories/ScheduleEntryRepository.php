@@ -2,6 +2,7 @@
 
 namespace Modules\Shifts\Repositories;
 
+use App\Traits\PaginatesResults;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
@@ -9,12 +10,14 @@ use Modules\Shifts\Models\ScheduleEntry;
 
 class ScheduleEntryRepository
 {
+    use PaginatesResults;
+
     /**
      * Get all schedule entries with filters and pagination.
      *
      * @param  array<string, mixed>  $filters
      */
-    public function getAll(array $filters = [], int $perPage = 20): LengthAwarePaginator
+    public function getAll(array $filters = [], int|string $perPage = 20): LengthAwarePaginator
     {
         $query = ScheduleEntry::query()
             ->with(['employee', 'dutyCategory']);
@@ -43,7 +46,7 @@ class ScheduleEntryRepository
             $query->where('date', '<=', $filters['date_to']);
         }
 
-        return $query->orderBy('date')->paginate($perPage);
+        return $this->paginateOrAll($query->orderBy('date'), $perPage);
     }
 
     /**

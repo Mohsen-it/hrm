@@ -32,7 +32,7 @@ class UserService
      *
      * @param  array<string, mixed>  $filters
      */
-    public function getAllUsers(array $filters = [], int $perPage = 20): LengthAwarePaginator
+    public function getAllUsers(array $filters = [], int|string $perPage = 20): LengthAwarePaginator
     {
         return $this->repository->getAll($filters, $perPage);
     }
@@ -42,7 +42,7 @@ class UserService
      *
      * @param  array<string, mixed>  $filters
      */
-    public function getUsersForRoleAssignments(array $filters = [], int $perPage = 20): LengthAwarePaginator
+    public function getUsersForRoleAssignments(array $filters = [], int|string $perPage = 20): LengthAwarePaginator
     {
         return $this->repository->getForRoleAssignments($filters, $perPage);
     }

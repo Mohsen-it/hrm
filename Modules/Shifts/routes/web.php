@@ -231,4 +231,6 @@ Route::middleware(['auth', 'permission:view-rotations'])
     ->group(function () {
         Route::get('rotations/{id}/employees', [RotationsController::class, 'getRotationEmployees'])
             ->name('rotations.employees');
+        Route::get('rotations/{id}/employees/export', [RotationsController::class, 'exportRotationEmployees'])
+            ->name('rotations.employees.export');
     });

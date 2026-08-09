@@ -7,9 +7,11 @@ use App\Traits\ExcelExportable;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 use Modules\Departments\Models\Department;
+use Modules\Shifts\Exports\RotationEmployeesExport;
 use Modules\Shifts\Exports\RotationGroupsExport;
 use Modules\Shifts\Exports\RotationsExport;
 use Modules\Shifts\Exports\RotationTimelineExport;
@@ -685,6 +687,75 @@ class RotationsController extends Controller
         return response()->json([
             'employees' => $result,
         ]);
+    }
+
+    /**
+     * Export all employees assigned to a rotation to Excel (with all their info).
+     */
+    public function exportRotationEmployees(int|string $id, Request $request)
+    {
+        $this->authorize('view-rotations');
+        $id = (int) $id;
+
+        $rotation = $this->rotationService->getById($id);
+
+        if (! $rotation) {
+            abort(404);
+        }
+
+        $departmentId = $request->input('department_id');
+        $groupId = $request->input('group_id');
+        $search = trim((string) $request->input('search', ''));
+
+        $assignmentQuery = RotationAssignment::query()
+            ->with([
+                'employee.company',
+                'employee.branch',
+                'employee.department',
+                'employee.position',
+                'employee.grade',
+                'rotationGroup',
+            ])
+            ->where('rotation_id', $id)
+            ->whereNull('end_date');
+
+        if ($groupId) {
+            $assignmentQuery->where('rotation_group_id', $groupId);
+        }
+
+        $assignments = $assignmentQuery->get()->filter(function (RotationAssignment $assignment) use ($departmentId, $search) {
+            $employee = $assignment->employee;
+
+            if (! $employee) {
+                return false;
+            }
+
+            if ($departmentId && (int) $employee->department_id !== (int) $departmentId) {
+                return false;
+            }
+
+            if ($search !== '') {
+                $haystack = mb_strtolower(implode(' ', [
+                    $employee->name ?? '',
+                    $employee->first_name ?? '',
+                    $employee->last_name ?? '',
+                    $employee->employee_code ?? '',
+                ]));
+
+                if (! str_contains($haystack, mb_strtolower($search))) {
+                    return false;
+                }
+            }
+
+            return true;
+        })
+            // Keep one row per employee, exactly like the page's getRotationEmployees.
+            ->unique('employee_id')
+            ->values();
+
+        $export = new RotationEmployeesExport($rotation, $assignments);
+
+        return $this->downloadExcel($export->build(), 'rotation-employees-'.Str::slug($rotation->name));
     }
 
     /**

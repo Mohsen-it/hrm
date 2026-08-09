@@ -155,6 +155,17 @@ const groupColorClass = (groupName) => {
     return colors[groupName] || 'bg-gray-100 text-gray-700 border-gray-200';
 };
 
+function exportExcel() {
+    if (!selectedRotationId.value) return;
+
+    const params = new URLSearchParams();
+    if (selectedGroupId.value) params.set('group_id', selectedGroupId.value);
+    if (departmentFilter.value) params.set('department_id', departmentFilter.value);
+    if (searchQuery.value) params.set('search', searchQuery.value);
+
+    window.location.href = route('rotations.employees.export', selectedRotationId.value) + '?' + params.toString();
+}
+
 const fetchEmployees = async () => {
     if (!selectedRotationId.value) {
         employees.value = [];
@@ -435,12 +446,22 @@ if (props.preselected_rotation_id) {
                             </Button>
                         </div>
                     </div>
-                    <div class="w-64">
-                        <FormInput
-                            v-model="searchQuery"
-                            :placeholder="t('shifts.search_employees_placeholder')"
-                            icon="fas fa-search"
-                        />
+                    <div class="flex items-center gap-2">
+                        <Button
+                            variant="secondary"
+                            size="sm"
+                            icon="fas fa-file-excel"
+                            @click="exportExcel"
+                        >
+                            {{ t('shifts.export_excel') }}
+                        </Button>
+                        <div class="w-64">
+                            <FormInput
+                                v-model="searchQuery"
+                                :placeholder="t('shifts.search_employees_placeholder')"
+                                icon="fas fa-search"
+                            />
+                        </div>
                     </div>
                 </div>
             </div>

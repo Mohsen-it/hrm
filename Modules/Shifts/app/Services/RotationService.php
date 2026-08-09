@@ -250,20 +250,29 @@ class RotationService
 
     /**
      * Assign an employee to a rotation group.
+     *
+     * If the employee already has an assignment overlapping the requested
+     * period, that assignment is closed the day before the new start date so
+     * the employee can be re-assigned without deleting any history.
      */
     public function assignEmployee(int $employeeId, int $rotationId, int $groupId, string $startDate, ?string $endDate = null): RotationAssignment
     {
         return DB::transaction(function () use ($employeeId, $rotationId, $groupId, $startDate, $endDate) {
             User::query()->whereKey($employeeId)->lockForUpdate()->first();
 
-            $this->validateAssignment($employeeId, $rotationId, $startDate, $endDate);
+            $this->resolveOverlappingAssignments($employeeId, $startDate, $endDate);
 
             return $this->createAssignment($employeeId, $rotationId, $groupId, $startDate, $endDate);
         });
     }
 
     /**
-     * Assign multiple employees only when none has a conflicting assignment.
+     * Assign multiple employees, closing any previous assignment that overlaps
+     * the requested period for each employee.
+     *
+     * The whole batch is atomic: if any employee has an unresolvable conflict
+     * (a previous assignment that starts after the requested start date), no
+     * assignment is created and no assignment is closed.
      *
      * @param  array<int, int|string>  $employeeIds
      * @return array<int, RotationAssignment>
@@ -284,7 +293,7 @@ class RotationService
             }
 
             foreach ($employeeIds as $employeeId) {
-                $this->validateAssignment($employeeId, $rotationId, $startDate, $endDate);
+                $this->resolveOverlappingAssignments($employeeId, $startDate, $endDate);
             }
 
             return array_map(
@@ -484,21 +493,39 @@ class RotationService
         }
     }
 
-    private function validateAssignment(int $employeeId, int $rotationId, string $startDate, ?string $endDate): void
+    /**
+     * Close any previous assignment that overlaps the requested period so the
+     * employee can be re-assigned without deleting any history.
+     *
+     * The previous row is never removed: its end_date is simply set to the day
+     * before the new start date, mirroring how transfers close the current
+     * assignment. When the overlap cannot be resolved this way (the requested
+     * period starts before the previous assignment began), the assignment is
+     * rejected with a clear conflict message.
+     */
+    private function resolveOverlappingAssignments(int $employeeId, string $startDate, ?string $endDate): void
     {
-        $existingAssignment = $this->assignmentRepository->findOverlappingAssignment(
+        $overlapping = $this->assignmentRepository->findAllOverlappingAssignments(
             $employeeId,
             $startDate,
             $endDate,
         );
 
-        if ($existingAssignment) {
-            throw ValidationException::withMessages([
-                'employee_id' => [__('shifts.employee_rotation_assignment_conflict', [
-                    'rotation' => $existingAssignment->rotation?->name ?? '—',
-                    'group' => $existingAssignment->rotationGroup?->name ?? '—',
-                ])],
-            ]);
+        $closeDate = Carbon::parse($startDate)->subDay()->toDateString();
+
+        foreach ($overlapping as $assignment) {
+            $existingStart = $assignment->start_date?->toDateString();
+
+            if ($existingStart !== null && $existingStart > $closeDate) {
+                throw ValidationException::withMessages([
+                    'employee_id' => [__('shifts.employee_rotation_assignment_conflict', [
+                        'rotation' => $assignment->rotation?->name ?? '—',
+                        'group' => $assignment->rotationGroup?->name ?? '—',
+                    ])],
+                ]);
+            }
+
+            $this->assignmentRepository->closeAssignment($assignment, $closeDate);
         }
     }
 }

@@ -101,7 +101,17 @@ class DailyReportService
             $expectedCheckOut = $this->sessionExpectedCheckOut($openSession)
                 ?? $this->expectedCheckOut($assignments->get($user->id));
             $onMission = $exception?->exception_type === 'mission' || $this->isMission($vacation);
-            $onLeave = $vacation !== null || in_array($exception?->exception_type, ['leave', 'training', 'swap'], true);
+            // The vacations table must reflect only the employees who are
+            // genuinely on vacation on the report day. An approved vacation
+            // only matters on a day the employee was expected to work: on one
+            // of their rotation rest days (e.g. a 1-work / 3-rest pattern) the
+            // vacation is meaningless and they must stay in the "rest" group
+            // instead. Someone who attended work (recorded a check-in) is
+            // classified by their actual attendance rather than listed as on
+            // leave.
+            $onLeave = $expected->has($user->id)
+                && ($vacation !== null || in_array($exception?->exception_type, ['leave', 'training', 'swap'], true))
+                && ! $userSessions->contains(fn ($session) => $session->check_in_at !== null);
             $late = $first?->check_in_at && $first->check_in_at->format('H:i') > $cutoffTime;
             $hasNoFingerprint = $unregisteredFingerprintIds->has($user->id);
             $hasIncompletePunch = ! $onMission && ! $onLeave && $openSession !== null

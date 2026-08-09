@@ -5,6 +5,8 @@ namespace Modules\Positions\Services;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Unique;
 use Illuminate\Validation\ValidationException;
 use Modules\Positions\Models\Position;
 use Modules\Positions\Repositories\PositionRepository;
@@ -143,20 +145,25 @@ class PositionService
     /**
      * Build the unique rule for position_code scoped to a department.
      *
-     * @return array<int, string>
+     * The string form of the unique rule cannot express the department scope on
+     * Laravel 13: extra conditions are parsed as "column,value" parameter pairs,
+     * so a hand-built "department_id = X" clause breaks the rule entirely. The
+     * object form is used instead, matching StorePositionRequest,
+     * UpdatePositionRequest and DepartmentService::uniqueDepartmentCodeRule.
      */
-    protected function uniquePositionCodeRule(?int $ignoreId, ?int $departmentId): array
+    protected function uniquePositionCodeRule(?int $ignoreId, ?int $departmentId): Unique|string
     {
         if (! $departmentId) {
-            return ['string'];
+            return 'string';
         }
 
-        $table = 'positions';
-        $column = 'position_code';
-        $ignore = $ignoreId ? (string) $ignoreId : 'NULL';
+        $rule = Rule::unique('positions', 'position_code')
+            ->where('department_id', $departmentId);
 
-        $wheres = "department_id = {$departmentId}";
+        if ($ignoreId) {
+            $rule->ignore($ignoreId);
+        }
 
-        return ["unique:{$table},{$column},{$ignore},id,{$wheres}"];
+        return $rule;
     }
 }

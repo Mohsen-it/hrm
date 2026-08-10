@@ -91,14 +91,18 @@ class DailyReportService
         $rows = $users->map(function (User $user) use ($date, $cutoffTime, $expected, $assignments, $sessions, $monthSessions, $monthlyAbsenceCounts, $monthlyVacationDays, $unregisteredFingerprintIds, $vacations, $exceptions): array {
             $userSessions = $sessions->get($user->id, collect());
             $first = $userSessions->first();
-            $last = $userSessions->last();
+            $assignment = $assignments->get($user->id);
+            $rotation = $assignment?->rotation?->name
+                ? $assignment->rotation->name.($assignment->rotationGroup?->name ? ' ('.$assignment->rotationGroup->name.')' : '')
+                : '';
             $vacation = $vacations->get($user->id);
             $exception = $exceptions->get($user->id, collect())->first();
-            $openSession = $userSessions
-                ->filter(fn ($session) => $session->check_in_at !== null && $session->check_out_at === null)
-                ->sortByDesc('check_in_at')
-                ->first();
-            $expectedCheckOut = $this->sessionExpectedCheckOut($openSession)
+            // The main shift session is the first session of the day that
+            // recorded a check-in. A later session (overtime, a second visit
+            // after the exit window) must never turn an already-recorded
+            // check-out into a missing-checkout violation.
+            $mainSession = $userSessions->firstWhere(fn ($session) => $session->check_in_at !== null);
+            $expectedCheckOut = $this->sessionExpectedCheckOut($mainSession)
                 ?? $this->expectedCheckOut($assignments->get($user->id));
             $onMission = $exception?->exception_type === 'mission' || $this->isMission($vacation);
             // The vacations table must reflect only the employees who are
@@ -114,8 +118,9 @@ class DailyReportService
                 && ! $userSessions->contains(fn ($session) => $session->check_in_at !== null);
             $late = $first?->check_in_at && $first->check_in_at->format('H:i') > $cutoffTime;
             $hasNoFingerprint = $unregisteredFingerprintIds->has($user->id);
-            $hasIncompletePunch = ! $onMission && ! $onLeave && $openSession !== null
-                && $this->isIncompletePunchDue($date, $expectedCheckOut, $user->id, $expected);
+            $hasIncompletePunch = ! $onMission && ! $onLeave && $mainSession !== null
+                && $mainSession->check_out_at === null
+                && $this->isIncompletePunchDue($date, $expectedCheckOut, $user->id, $expected, $assignment);
             $lateCount = $monthSessions->get($user->id, collect())->filter(
                 fn ($s) => $s->check_in_at && $s->check_in_at->format('H:i') > $cutoffTime
             )->unique(fn ($s) => $s->attendance_date?->toDateString())->count();
@@ -155,7 +160,10 @@ class DailyReportService
                 $notes[] = 'عدد أيام الإجازة خلال الشهر: '.$this->arabicNumber($leaveDays);
             }
             if ($hasIncompletePunch) {
-                $notes[] = 'بعد انتهاء الدوام المتوقع '.($expectedCheckOut ?? '—');
+                $windowEnd = $this->exitWindowEnd($date, $expectedCheckOut, $assignment)?->format('H:i');
+                $notes[] = $windowEnd !== null
+                    ? 'لم يسجل بصمة الخروج حتى نهاية نافذة الخروج '.$windowEnd
+                    : 'لم يسجل بصمة الخروج';
             }
             if ($hasNoFingerprint) {
                 $notes[] = 'الموظف غير مسجل في جهاز البصمة';
@@ -163,8 +171,9 @@ class DailyReportService
 
             return [
                 'id' => $user->id, 'name' => $user->full_name, 'employee_code' => $user->employee_code,
-                'department_name' => $user->department?->department_name ?? '—', 'status' => $status, 'status_label' => $label,
-                'check_in' => $first?->check_in_at?->format('H:i') ?? '', 'check_out' => $last?->check_out_at?->format('H:i') ?? '',
+                'department_name' => $user->department?->department_name ?? '—', 'rotation' => $rotation,
+                'status' => $status, 'status_label' => $label,
+                'check_in' => $first?->check_in_at?->format('H:i') ?? '', 'check_out' => $mainSession?->check_out_at?->format('H:i') ?? '',
                 'expected' => $expected->has($user->id), 'expected_check_out' => $expectedCheckOut,
                 'has_no_fingerprint' => $hasNoFingerprint, 'has_incomplete_punch' => $hasIncompletePunch,
                 'late_minutes' => $late && $first?->check_in_at ? $first->check_in_at->diffInMinutes(Carbon::parse($date.' '.$cutoffTime)) : 0,
@@ -251,12 +260,58 @@ class DailyReportService
     }
 
     /**
-     * A missing direction is a violation only once the employee's shift has ended.
-     * This prevents the report from flagging everyone who is still at work.
+     * Resolve the end of the rotation's exit window for a report day.
+     *
+     * Rotation margins are stored as absolute daily window times (e.g.
+     * "18:00:00"). When the rotation has no configured window, the
+     * time-schedule margin (minutes after the expected check-out) is used
+     * instead, matching the punch-classification services. Rotations without
+     * a time schedule have no expected check-out, but their absolute window
+     * still applies on its own.
      */
-    private function isIncompletePunchDue(string $date, ?string $expectedCheckOut, int $userId, Collection $expected): bool
+    private function exitWindowEnd(string $date, ?string $expectedCheckOut, mixed $assignment): ?Carbon
     {
-        if (! $expected->has($userId) || ! $expectedCheckOut) {
+        $rotation = $assignment?->rotation;
+        $windowEndTime = $rotation?->out_above_margin;
+
+        if ($windowEndTime) {
+            $end = Carbon::parse($date.' '.substr((string) $windowEndTime, 0, 8));
+            $windowStartTime = $rotation->out_ahead_margin;
+            if ($windowStartTime && $end->lt(Carbon::parse($date.' '.substr((string) $windowStartTime, 0, 8)))) {
+                // Overnight window: the end time belongs to the next day.
+                $end->addDay();
+            } elseif (! $windowStartTime && $expectedCheckOut && $end->lt(Carbon::parse($date.' '.$expectedCheckOut))) {
+                // No explicit window start but the end falls before the
+                // scheduled check-out: treat it as an overnight end.
+                $end->addDay();
+            }
+
+            return $end;
+        }
+
+        if (! $expectedCheckOut) {
+            // Without a window and without a check-out anchor there is
+            // nothing to evaluate the violation against.
+            return null;
+        }
+
+        // A zero margin closes the window exactly at the expected check-out;
+        // rotations without a configured window deliberately get no grace.
+        $marginMinutes = (int) ($rotation?->timeSchedule?->out_above_margin ?? 0);
+
+        return Carbon::parse($date.' '.$expectedCheckOut)->addMinutes($marginMinutes);
+    }
+
+    /**
+     * A missing direction is a violation only once the rotation exit window
+     * has ended. This prevents the report from flagging everyone who is still
+     * at work inside their configured checkout window. Past days are always
+     * violations: anyone expected to work who came in and never left is
+     * listed, even when their rotation has no resolvable check-out window.
+     */
+    private function isIncompletePunchDue(string $date, ?string $expectedCheckOut, int $userId, Collection $expected, mixed $assignment): bool
+    {
+        if (! $expected->has($userId)) {
             return false;
         }
 
@@ -268,6 +323,8 @@ class DailyReportService
             return false;
         }
 
-        return now()->gte(Carbon::parse($date.' '.$expectedCheckOut)->addMinutes(30));
+        $windowEnd = $this->exitWindowEnd($date, $expectedCheckOut, $assignment);
+
+        return $windowEnd !== null && now()->gte($windowEnd);
     }
 }

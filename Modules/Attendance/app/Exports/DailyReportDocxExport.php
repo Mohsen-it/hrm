@@ -77,13 +77,19 @@ class DailyReportDocxExport
         $this->replaceParagraph($xpath, 'التاريخ:', 'التاريخ:    '.$date->format('d / m /Y'));
 
         $groups = [
-            'absent', 'late', 'leave', 'no_fingerprint', 'mission', 'incomplete',
+            'absent', 'late', 'incomplete', 'leave', 'no_fingerprint', 'mission',
         ];
         $tables = $xpath->query('//w:tbl');
         foreach ($groups as $index => $status) {
             $table = $tables?->item($index);
             if ($table instanceof DOMElement) {
-                $this->replaceTableRows($document, $xpath, $table, $this->rowsFor($status), $status === 'late');
+                $this->replaceTableRows(
+                    $document,
+                    $xpath,
+                    $table,
+                    $this->rowsFor($status),
+                    in_array($status, ['late', 'incomplete'], true),
+                );
             }
         }
 
@@ -105,7 +111,14 @@ class DailyReportDocxExport
             ->all();
     }
 
-    /** Replace every template data row while retaining its complete styling. */
+    /**
+     * Replace every template data row while retaining its complete styling.
+     *
+     * For the lateness and missing-checkout tables ($hasCheckIn = true) the
+     * template must keep the "الدورية" column immediately before "وقت الحضور":
+     * the rotation value is written into that cell and the check-in time into
+     * the following one.
+     */
     private function replaceTableRows(DOMDocument $document, DOMXPath $xpath, DOMElement $table, array $rows, bool $hasCheckIn): void
     {
         $tableRows = $xpath->query('./w:tr', $table);
@@ -131,6 +144,10 @@ class DailyReportDocxExport
                     (string) ($row['department_name'] ?? '—'),
                 ];
                 if ($hasCheckIn) {
+                    // The lateness table carries the employee's rotation before
+                    // the check-in time so the reviewer can see which rotation
+                    // the late employee belongs to.
+                    $values[] = (string) ($row['rotation'] ?? '—');
                     $values[] = (string) ($row['check_in'] ?? '');
                 }
                 $values[] = (string) ($row['notes'] ?? '');

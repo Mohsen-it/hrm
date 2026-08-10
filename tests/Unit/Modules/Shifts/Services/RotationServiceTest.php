@@ -80,15 +80,19 @@ class RotationServiceTest extends TestCase
             'end_date' => null,
         ]);
 
-        $this->expectException(ValidationException::class);
-        $this->expectExceptionMessage('shifts.employee_rotation_assignment_conflict');
-
-        $this->service->assignEmployee(
-            $user->id,
-            $rotation->id,
-            $groupB->id,
-            '2026-08-01',
-        );
+        // The service translates the message at throw time (locale dependent),
+        // so assert on the validation key instead of the translated text.
+        try {
+            $this->service->assignEmployee(
+                $user->id,
+                $rotation->id,
+                $groupB->id,
+                '2026-08-01',
+            );
+            $this->fail('Expected a ValidationException for the assignment conflict.');
+        } catch (ValidationException $e) {
+            $this->assertArrayHasKey('employee_id', $e->errors());
+        }
     }
 
     /**

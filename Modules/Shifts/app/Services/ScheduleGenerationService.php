@@ -56,6 +56,7 @@ class ScheduleGenerationService
                 ->getAssignmentsOverlapping($periodStart->toDateString(), $periodEnd->toDateString());
 
             $entries = [];
+            $covered = [];
 
             foreach ($assignments as $assignment) {
                 $rotation = $assignment->rotation;
@@ -83,6 +84,24 @@ class ScheduleGenerationService
 
                         continue;
                     }
+
+                    // Assignments are ordered newest-first, so when two rows
+                    // cover the same employee+date (e.g. legacy imports that
+                    // left more than one open row), the most recent one wins
+                    // and the duplicate is skipped. schedule_entries has a
+                    // unique (schedule_period_id, employee_id, date) index, so
+                    // this also prevents the whole month from failing on a
+                    // duplicate key while preserving mid-month transfer
+                    // coverage (non-overlapping windows keep their own days).
+                    $entryKey = $assignment->employee_id.'|'.$current->format('Y-m-d');
+
+                    if (isset($covered[$entryKey])) {
+                        $current->addDay();
+
+                        continue;
+                    }
+
+                    $covered[$entryKey] = true;
 
                     $isWork = $this->rotationEngine->isWorkDay($rotation, $group, $current);
 

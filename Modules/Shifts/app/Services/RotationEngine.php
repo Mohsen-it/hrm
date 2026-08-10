@@ -164,7 +164,17 @@ class RotationEngine
     {
         $next = Carbon::parse($fromDate)->startOfDay()->addDay();
 
-        while (! $this->isWorkDay($rotation, $group, $next)) {
+        // Defensive bound: with a valid pattern a work day always appears
+        // within one full cycle, so this can never spin forever even if the
+        // rotation data is corrupted (e.g. an all-rest pattern). For valid
+        // rotations the returned date is identical to the old loop.
+        $maxAttempts = max(1, (int) $rotation->cycle_length) + 1;
+
+        for ($attempt = 0; $attempt < $maxAttempts; $attempt++) {
+            if ($this->isWorkDay($rotation, $group, $next)) {
+                return $next;
+            }
+
             $next->addDay();
         }
 
@@ -178,7 +188,17 @@ class RotationEngine
     {
         $next = Carbon::parse($fromDate)->startOfDay()->addDay();
 
-        while ($this->isWorkDay($rotation, $group, $next)) {
+        // Defensive bound: with a valid pattern a rest day always appears
+        // within one full cycle, so this can never spin forever even if the
+        // rotation data is corrupted (e.g. an all-work pattern). For valid
+        // rotations the returned date is identical to the old loop.
+        $maxAttempts = max(1, (int) $rotation->cycle_length) + 1;
+
+        for ($attempt = 0; $attempt < $maxAttempts; $attempt++) {
+            if (! $this->isWorkDay($rotation, $group, $next)) {
+                return $next;
+            }
+
             $next->addDay();
         }
 

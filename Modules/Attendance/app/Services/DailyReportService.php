@@ -52,7 +52,16 @@ class DailyReportService
             ->unique('employee_id')
             ->keyBy('employee_id');
 
+        $previousDate = $day->copy()->subDay()->toDateString();
+        $previousExpected = $this->absenceService->getExpectedEmployees($day->copy()->subDay(), $departmentId)->flip();
+        $previousAssignments = $this->rotationAssignmentRepository->getAssignmentsForDate($previousDate)
+            ->whereIn('employee_id', $userIds)
+            ->unique('employee_id')
+            ->keyBy('employee_id');
+
         $sessions = AttendanceSession::onDate($date)->whereIn('user_id', $userIds)
+            ->orderBy('check_in_at')->get()->groupBy('user_id');
+        $previousSessions = AttendanceSession::onDate($previousDate)->whereIn('user_id', $userIds)
             ->orderBy('check_in_at')->get()->groupBy('user_id');
         $monthSessions = AttendanceSession::betweenDates($monthFrom, $date)
             ->whereIn('user_id', $userIds)->whereNotNull('check_in_at')
@@ -88,7 +97,7 @@ class DailyReportService
             ->whereIn('exception_type', ['leave', 'mission', 'training', 'swap'])
             ->overlapping($date)->get()->groupBy('employee_id');
 
-        $rows = $users->map(function (User $user) use ($date, $cutoffTime, $expected, $assignments, $sessions, $monthSessions, $monthlyAbsenceCounts, $monthlyVacationDays, $unregisteredFingerprintIds, $vacations, $exceptions): array {
+        $rows = $users->map(function (User $user) use ($date, $cutoffTime, $expected, $assignments, $sessions, $previousSessions, $previousExpected, $previousAssignments, $previousDate, $monthSessions, $monthlyAbsenceCounts, $monthlyVacationDays, $unregisteredFingerprintIds, $vacations, $exceptions): array {
             $userSessions = $sessions->get($user->id, collect());
             $first = $userSessions->first();
             $assignment = $assignments->get($user->id);
@@ -118,9 +127,27 @@ class DailyReportService
                 && ! $userSessions->contains(fn ($session) => $session->check_in_at !== null);
             $late = $first?->check_in_at && $first->check_in_at->format('H:i') > $cutoffTime;
             $hasNoFingerprint = $unregisteredFingerprintIds->has($user->id);
-            $hasIncompletePunch = ! $onMission && ! $onLeave && $mainSession !== null
+            $currentDayIncomplete = ! $onMission && ! $onLeave && $mainSession !== null
                 && $mainSession->check_out_at === null
                 && $this->isIncompletePunchDue($date, $expectedCheckOut, $user->id, $expected, $assignment);
+
+            $hasPreviousDayMissingCheckout = false;
+            $previousCheckIn = null;
+            $previousExpectedCheckOut = null;
+            $previousAssignment = null;
+            $previousUserSessions = $previousSessions->get($user->id, collect());
+            $previousMainSession = $previousUserSessions->firstWhere(fn ($session) => $session->check_in_at !== null);
+            if ($previousMainSession && $previousMainSession->check_out_at === null && $previousExpected->has($user->id)) {
+                $previousAssignment = $previousAssignments->get($user->id);
+                $previousExpectedCheckOut = $this->sessionExpectedCheckOut($previousMainSession)
+                    ?? $this->expectedCheckOut($previousAssignment);
+                if ($this->isIncompletePunchDue($previousDate, $previousExpectedCheckOut, $user->id, $previousExpected, $previousAssignment)) {
+                    $hasPreviousDayMissingCheckout = true;
+                    $previousCheckIn = $previousMainSession->check_in_at->format('H:i');
+                }
+            }
+
+            $hasIncompletePunch = $currentDayIncomplete || $hasPreviousDayMissingCheckout;
             $lateCount = $monthSessions->get($user->id, collect())->filter(
                 fn ($s) => $s->check_in_at && $s->check_in_at->format('H:i') > $cutoffTime
             )->unique(fn ($s) => $s->attendance_date?->toDateString())->count();
@@ -133,10 +160,10 @@ class DailyReportService
             } elseif ($onLeave) {
                 $status = 'leave';
                 $label = 'إجازة';
-            } elseif (! $expected->has($user->id)) {
+            } elseif (! $expected->has($user->id) && ! $hasPreviousDayMissingCheckout) {
                 $status = 'rest';
                 $label = 'غير متوقع دوامه';
-            } elseif (! $userSessions->count()) {
+            } elseif (! $userSessions->count() && ! $hasPreviousDayMissingCheckout) {
                 $status = 'absent';
                 $label = 'غياب';
             } elseif ($hasIncompletePunch) {
@@ -160,20 +187,32 @@ class DailyReportService
                 $notes[] = 'عدد أيام الإجازة خلال الشهر: '.$this->arabicNumber($leaveDays);
             }
             if ($hasIncompletePunch) {
-                $windowEnd = $this->exitWindowEnd($date, $expectedCheckOut, $assignment)?->format('H:i');
-                $notes[] = $windowEnd !== null
-                    ? 'لم يسجل بصمة الخروج حتى نهاية نافذة الخروج '.$windowEnd
-                    : 'لم يسجل بصمة الخروج';
+                if ($currentDayIncomplete) {
+                    $windowEnd = $this->exitWindowEnd($date, $expectedCheckOut, $assignment)?->format('H:i');
+                    $notes[] = $windowEnd !== null
+                        ? 'لم يسجل الخروج (نافذة '.$windowEnd.')'
+                        : 'لم يسجل الخروج';
+                }
+                if ($hasPreviousDayMissingCheckout) {
+                    $windowEnd = $this->exitWindowEnd($previousDate, $previousExpectedCheckOut, $previousAssignment)?->format('H:i');
+                    $notes[] = 'لم يسجل الخروج بتاريخ '.$previousDate.($windowEnd ? ' (نافذة '.$windowEnd.')' : '');
+                }
             }
             if ($hasNoFingerprint) {
                 $notes[] = 'الموظف غير مسجل في جهاز البصمة';
+            }
+
+            $checkIn = $first?->check_in_at?->format('H:i') ?? '';
+
+            if (! $checkIn && $hasPreviousDayMissingCheckout) {
+                $checkIn = $previousCheckIn ?? '';
             }
 
             return [
                 'id' => $user->id, 'name' => $user->full_name, 'employee_code' => $user->employee_code,
                 'department_name' => $user->department?->department_name ?? '—', 'rotation' => $rotation,
                 'status' => $status, 'status_label' => $label,
-                'check_in' => $first?->check_in_at?->format('H:i') ?? '', 'check_out' => $mainSession?->check_out_at?->format('H:i') ?? '',
+                'check_in' => $checkIn, 'check_out' => $mainSession?->check_out_at?->format('H:i') ?? '',
                 'expected' => $expected->has($user->id), 'expected_check_out' => $expectedCheckOut,
                 'has_no_fingerprint' => $hasNoFingerprint, 'has_incomplete_punch' => $hasIncompletePunch,
                 'late_minutes' => $late && $first?->check_in_at ? $first->check_in_at->diffInMinutes(Carbon::parse($date.' '.$cutoffTime)) : 0,

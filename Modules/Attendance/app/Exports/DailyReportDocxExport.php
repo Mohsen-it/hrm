@@ -103,7 +103,7 @@ class DailyReportDocxExport
     {
         return collect($this->report['rows'])
             ->filter(fn (array $row) => match ($status) {
-                'no_fingerprint' => (bool) ($row['has_no_fingerprint'] ?? false),
+                'no_fingerprint' => (bool) ($row['has_no_fingerprint'] ?? false) && ($row['status'] === 'absent'),
                 'incomplete' => (bool) ($row['has_incomplete_punch'] ?? false),
                 default => ($row['status'] ?? null) === $status,
             })

@@ -186,6 +186,13 @@ export const navigationGroups = [
         icon: 'fa-solid fa-users-gear',
         permissions: ['view-rotations'],
       },
+      {
+        id: 'shifts.time-schedules',
+        label: 'menu.time_schedules',
+        route: 'time-schedules.index',
+        icon: 'fa-solid fa-clock',
+        permissions: ['view-time-schedules'],
+      },
         {
         id: 'shifts.schedules',
         label: 'menu.schedules',

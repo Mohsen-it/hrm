@@ -68,7 +68,7 @@ class TimeScheduleService
                 $validated['company_id'] = $this->resolveCompanyId();
             }
 
-            $schedule = $this->repository->create($validated);
+            $schedule = $this->repository->create($this->normalizeMargins($validated));
 
             foreach ($breaks as $break) {
                 TimeScheduleBreak::create([
@@ -98,7 +98,7 @@ class TimeScheduleService
 
         $breaks = $data['breaks'] ?? null;
 
-        $schedule = $this->repository->update($schedule, $validated);
+        $schedule = $this->repository->update($schedule, $this->normalizeMargins($validated));
 
         if ($breaks !== null) {
             $schedule->breaks()->delete();
@@ -167,5 +167,23 @@ class TimeScheduleService
         }
 
         return $newSchedule;
+    }
+
+    /**
+     * Coerce the optional window margins to integers. The columns are NOT NULL
+     * with a zero default, so an absent (or cleared) value must become 0.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private function normalizeMargins(array $data): array
+    {
+        foreach (['in_ahead_margin', 'in_above_margin', 'out_ahead_margin', 'out_above_margin'] as $field) {
+            if (array_key_exists($field, $data)) {
+                $data[$field] = max(0, (int) ($data[$field] ?? 0));
+            }
+        }
+
+        return $data;
     }
 }

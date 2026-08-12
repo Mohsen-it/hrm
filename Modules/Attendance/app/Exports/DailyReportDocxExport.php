@@ -83,12 +83,18 @@ class DailyReportDocxExport
         foreach ($groups as $index => $status) {
             $table = $tables?->item($index);
             if ($table instanceof DOMElement) {
+                $hasCheckIn = in_array($status, ['late', 'incomplete'], true);
+                if ($hasCheckIn) {
+                    // Give the notes column more room so its Arabic text does not
+                    // wrap into several lines and inflate the row height.
+                    $this->rebalanceGrid($xpath, $table);
+                }
                 $this->replaceTableRows(
                     $document,
                     $xpath,
                     $table,
                     $this->rowsFor($status),
-                    in_array($status, ['late', 'incomplete'], true),
+                    $hasCheckIn,
                 );
             }
         }
@@ -109,6 +115,51 @@ class DailyReportDocxExport
             })
             ->values()
             ->all();
+    }
+
+    /**
+     * Widen the notes column of the check-in tables at the expense of the
+     * rotation and check-in columns. Long Arabic notes otherwise wrap inside
+     * the narrow notes cell and push the row height far above the others.
+     *
+     * The prototype data row's cell widths are kept in sync with the new grid
+     * so every cloned row keeps its columns aligned with the table grid.
+     */
+    private function rebalanceGrid(DOMXPath $xpath, DOMElement $table): void
+    {
+        $columns = $xpath->query('./w:tblGrid/w:gridCol', $table);
+        if (! $columns || $columns->length < 6) {
+            return;
+        }
+
+        $adjustments = [0 => -100, 3 => -500, 4 => -350, 5 => 950];
+        $widths = [];
+        $index = 0;
+        foreach ($columns as $column) {
+            if ($column instanceof DOMElement) {
+                $delta = $adjustments[$index] ?? 0;
+                $widths[$index] = max(300, (int) $column->getAttribute('w:w') + $delta);
+                $column->setAttribute('w:w', (string) $widths[$index]);
+            }
+            $index++;
+        }
+
+        $rows = $xpath->query('./w:tr', $table);
+        $prototype = $rows?->item(1);
+        if (! $prototype instanceof DOMElement) {
+            return;
+        }
+
+        $index = 0;
+        foreach ($xpath->query('./w:tc', $prototype) as $cell) {
+            if ($cell instanceof DOMElement && isset($widths[$index])) {
+                $width = $xpath->query('./w:tcPr/w:tcW', $cell)->item(0);
+                if ($width instanceof DOMElement) {
+                    $width->setAttribute('w:w', (string) $widths[$index]);
+                }
+            }
+            $index++;
+        }
     }
 
     /**

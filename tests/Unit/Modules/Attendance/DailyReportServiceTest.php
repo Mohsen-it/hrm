@@ -304,6 +304,148 @@ class DailyReportServiceTest extends TestCase
         $this->assertSame('incomplete', $row['status']);
     }
 
+    /**
+     * An overnight rotation (multi-day schedule) closes its exit window on the
+     * next morning. When the daily report is prepared before that window ends
+     * (the manager submits it before the end of the shift), an employee who
+     * checked in yesterday but has not checked out yet must NOT be flagged yet.
+     */
+    public function test_overnight_rotation_not_flagged_before_next_day_exit_window(): void
+    {
+        $this->travelTo('2026-08-11 08:30:00');
+
+        $user = $this->makeEmployee('EMP40008');
+        $this->assignOneDayDuty($user, '2026-08-10');
+        $rotation = RotationAssignment::where('employee_id', $user->id)->first()->rotation;
+        $rotation->update([
+            'time_schedule_id' => $this->makeOvernightSchedule($user)->id,
+            'out_ahead_margin' => '07:30:00',
+            'out_above_margin' => '09:00:00',
+        ]);
+        $this->makeOpenSession($user, '2026-08-10 08:00:00');
+
+        $report = $this->service->build('2026-08-11', '09:00');
+        $row = $report['rows']->firstWhere('id', $user->id);
+
+        $this->assertFalse($row['has_incomplete_punch'], 'An overnight shift is still inside its next-day exit window.');
+    }
+
+    /**
+     * Once the overnight exit window (next morning) has ended, the employee is
+     * flagged as a missing check-out from the previous day.
+     */
+    public function test_overnight_rotation_flagged_after_next_day_exit_window(): void
+    {
+        $this->travelTo('2026-08-11 09:30:00');
+
+        $user = $this->makeEmployee('EMP40009');
+        $this->assignOneDayDuty($user, '2026-08-10');
+        $rotation = RotationAssignment::where('employee_id', $user->id)->first()->rotation;
+        $rotation->update([
+            'time_schedule_id' => $this->makeOvernightSchedule($user)->id,
+            'out_ahead_margin' => '07:30:00',
+            'out_above_margin' => '09:00:00',
+        ]);
+        $this->makeOpenSession($user, '2026-08-10 08:00:00');
+
+        $report = $this->service->build('2026-08-11', '09:00');
+        $row = $report['rows']->firstWhere('id', $user->id);
+
+        $this->assertTrue($row['has_incomplete_punch']);
+        $this->assertSame('incomplete', $row['status']);
+        $this->assertStringContainsString('أمس', $row['notes']);
+        $this->assertStringContainsString('نافذة الخروج 09:00', $row['notes']);
+    }
+
+    /**
+     * A 3-day duty rotation keeps the employee on site until the morning of the
+     * fourth day. While the report is prepared mid-duty (day 3), an employee
+     * with open per-day sessions must still NOT be flagged.
+     */
+    public function test_three_day_duty_not_flagged_while_still_on_duty(): void
+    {
+        $this->travelTo('2026-08-12 12:00:00');
+
+        $user = $this->makeEmployee('EMP40010');
+        $this->assignThreeDayDuty($user, '2026-08-10');
+        $rotation = RotationAssignment::where('employee_id', $user->id)->first()->rotation;
+        $rotation->update([
+            'time_schedule_id' => $this->makeOvernightSchedule($user)->id,
+            'out_ahead_margin' => '07:30:00',
+            'out_above_margin' => '09:00:00',
+        ]);
+        // Per-day sessions, like the live pipeline creates for continuous duty.
+        $this->makeOpenSession($user, '2026-08-10 07:00:00');
+        $this->makeOpenSession($user, '2026-08-11 07:00:00');
+        $this->makeOpenSession($user, '2026-08-12 07:00:00');
+
+        $report = $this->service->build('2026-08-12', '09:00');
+        $row = $report['rows']->firstWhere('id', $user->id);
+
+        $this->assertFalse($row['has_incomplete_punch'], '3-day duty is still inside its departure window.');
+        $this->assertSame('present', $row['status']);
+    }
+
+    /**
+     * A 3-day duty employee who never checked out is flagged on the morning
+     * after the departure day. The note carries the original duty day instead
+     * of "yesterday" because the open session predates the report by more than
+     * one day (single-session model).
+     */
+    public function test_three_day_duty_flagged_after_departure_morning(): void
+    {
+        $this->travelTo('2026-08-13 09:30:00');
+
+        $user = $this->makeEmployee('EMP40011');
+        $this->assignThreeDayDuty($user, '2026-08-10');
+        $rotation = RotationAssignment::where('employee_id', $user->id)->first()->rotation;
+        $rotation->update([
+            'time_schedule_id' => $this->makeOvernightSchedule($user)->id,
+            'out_ahead_margin' => '07:30:00',
+            'out_above_margin' => '09:00:00',
+        ]);
+        // Single open session from the first duty day.
+        $this->makeOpenSession($user, '2026-08-10 07:00:00');
+
+        $report = $this->service->build('2026-08-13', '09:00');
+        $row = $report['rows']->firstWhere('id', $user->id);
+
+        $this->assertTrue($row['has_incomplete_punch']);
+        $this->assertSame('incomplete', $row['status']);
+        $this->assertStringContainsString('2026-08-10', $row['notes']);
+        $this->assertStringContainsString('نافذة الخروج 09:00', $row['notes']);
+    }
+
+    /**
+     * Same departure rule with the per-day session model: the most recent open
+     * session lives on the previous calendar day, so the note still reads
+     * "أمس" and the window is the departure morning.
+     */
+    public function test_three_day_duty_flagged_via_previous_day_session(): void
+    {
+        $this->travelTo('2026-08-13 09:30:00');
+
+        $user = $this->makeEmployee('EMP40012');
+        $this->assignThreeDayDuty($user, '2026-08-10');
+        $rotation = RotationAssignment::where('employee_id', $user->id)->first()->rotation;
+        $rotation->update([
+            'time_schedule_id' => $this->makeOvernightSchedule($user)->id,
+            'out_ahead_margin' => '07:30:00',
+            'out_above_margin' => '09:00:00',
+        ]);
+        $this->makeOpenSession($user, '2026-08-10 07:00:00');
+        $this->makeOpenSession($user, '2026-08-11 07:00:00');
+        $this->makeOpenSession($user, '2026-08-12 07:00:00');
+
+        $report = $this->service->build('2026-08-13', '09:00');
+        $row = $report['rows']->firstWhere('id', $user->id);
+
+        $this->assertTrue($row['has_incomplete_punch']);
+        $this->assertSame('incomplete', $row['status']);
+        $this->assertStringContainsString('أمس', $row['notes']);
+        $this->assertStringContainsString('نافذة الخروج 09:00', $row['notes']);
+    }
+
     // ------------------------------------------------------------------
     // Helpers
     // ------------------------------------------------------------------
@@ -359,6 +501,20 @@ class DailyReportServiceTest extends TestCase
         return $this->assignOpenRotation($user, array_fill(0, 12, 1), '2026-08-03');
     }
 
+    /** 1-day duty rotation: works the start day, rests the following morning. */
+    private function assignOneDayDuty(User $user, string $start): RotationAssignment
+    {
+        return $this->assignOpenRotation($user, [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], $start);
+    }
+
+    /** 3-day duty rotation: works the start day and the two following days, rests on the fourth morning. */
+    private function assignThreeDayDuty(User $user, string $start): RotationAssignment
+    {
+        // The engine indexes the pattern backward from the anchor: position 0 is
+        // the anchor day, positions 11 and 10 are the +1 and +2 days.
+        return $this->assignOpenRotation($user, [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1], $start);
+    }
+
     private function assignOpenRotation(User $user, array $pattern, string $anchor): RotationAssignment
     {
         $rotation = $this->makeRotation($user, $pattern, $anchor);
@@ -411,6 +567,17 @@ class DailyReportServiceTest extends TestCase
             'name' => 'Schedule '.$user->employee_code,
             'in_time' => $inTime,
             'out_time' => $outTime,
+        ]);
+    }
+
+    private function makeOvernightSchedule(User $user): TimeSchedule
+    {
+        return TimeSchedule::create([
+            'company_id' => $user->company_id,
+            'name' => 'Overnight '.$user->employee_code,
+            'in_time' => '08:00',
+            'out_time' => '08:00',
+            'is_multi_day' => true,
         ]);
     }
 }

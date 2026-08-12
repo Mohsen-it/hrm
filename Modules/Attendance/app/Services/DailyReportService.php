@@ -63,6 +63,20 @@ class DailyReportService
             ->orderBy('check_in_at')->get()->groupBy('user_id');
         $previousSessions = AttendanceSession::onDate($previousDate)->whereIn('user_id', $userIds)
             ->orderBy('check_in_at')->get()->groupBy('user_id');
+        // Multi-day duty rotations can leave their (single) open session several
+        // days behind the report date (e.g. 3-day duty). Track the most recent
+        // open session strictly before the report day so those employees are
+        // still caught once their departure morning has passed.
+        $openBeforeReport = AttendanceSession::query()
+            ->whereIn('user_id', $userIds)
+            ->whereNotNull('check_in_at')
+            ->whereNull('check_out_at')
+            ->whereDate('attendance_date', '<', $date)
+            ->orderByDesc('attendance_date')
+            ->orderByDesc('check_in_at')
+            ->get()
+            ->groupBy('user_id')
+            ->map(fn (Collection $sessions) => $sessions->first());
         $monthSessions = AttendanceSession::betweenDates($monthFrom, $date)
             ->whereIn('user_id', $userIds)->whereNotNull('check_in_at')
             ->orderBy('check_in_at')->get()->groupBy('user_id');
@@ -97,7 +111,7 @@ class DailyReportService
             ->whereIn('exception_type', ['leave', 'mission', 'training', 'swap'])
             ->overlapping($date)->get()->groupBy('employee_id');
 
-        $rows = $users->map(function (User $user) use ($date, $cutoffTime, $expected, $assignments, $sessions, $previousSessions, $previousExpected, $previousAssignments, $previousDate, $monthSessions, $monthlyAbsenceCounts, $monthlyVacationDays, $unregisteredFingerprintIds, $vacations, $exceptions): array {
+        $rows = $users->map(function (User $user) use ($date, $cutoffTime, $expected, $assignments, $sessions, $previousSessions, $openBeforeReport, $previousExpected, $previousAssignments, $previousDate, $monthSessions, $monthlyAbsenceCounts, $monthlyVacationDays, $unregisteredFingerprintIds, $vacations, $exceptions): array {
             $userSessions = $sessions->get($user->id, collect());
             $first = $userSessions->first();
             $assignment = $assignments->get($user->id);
@@ -129,7 +143,7 @@ class DailyReportService
             $hasNoFingerprint = $unregisteredFingerprintIds->has($user->id);
             $currentDayIncomplete = ! $onMission && ! $onLeave && $mainSession !== null
                 && $mainSession->check_out_at === null
-                && $this->isIncompletePunchDue($date, $expectedCheckOut, $user->id, $expected, $assignment);
+                && $this->isIncompletePunchDue($date, $expectedCheckOut, $user->id, $expected->has($user->id), $assignment);
 
             $hasPreviousDayMissingCheckout = false;
             $previousCheckIn = null;
@@ -141,9 +155,38 @@ class DailyReportService
                 $previousAssignment = $previousAssignments->get($user->id);
                 $previousExpectedCheckOut = $this->sessionExpectedCheckOut($previousMainSession)
                     ?? $this->expectedCheckOut($previousAssignment);
-                if ($this->isIncompletePunchDue($previousDate, $previousExpectedCheckOut, $user->id, $previousExpected, $previousAssignment)) {
+                if ($this->isIncompletePunchDue($previousDate, $previousExpectedCheckOut, $user->id, $previousExpected->has($user->id), $previousAssignment)) {
                     $hasPreviousDayMissingCheckout = true;
                     $previousCheckIn = $previousMainSession->check_in_at->format('H:i');
+                }
+            }
+
+            // Duty rotations longer than one day leave their open session on an
+            // earlier day than yesterday (3-day duty, single-session model). When
+            // nothing was due from yesterday, evaluate the most recent open
+            // session before the report day against its own departure window.
+            if (! $hasPreviousDayMissingCheckout) {
+                $olderOpen = $openBeforeReport->get($user->id);
+                if ($olderOpen) {
+                    $dueDate = $olderOpen->attendance_date?->toDateString() ?? $previousDate;
+                    $dueAssignment = $dueDate === $previousDate
+                        ? $previousAssignments->get($user->id)
+                        : $this->rotationAssignmentRepository->getAssignmentForDate($user->id, $dueDate);
+                    $dueRotation = $dueAssignment?->rotation;
+                    $dueGroup = $dueAssignment?->rotationGroup;
+                    $isExpectedDay = $dueDate === $previousDate
+                        ? $previousExpected->has($user->id)
+                        : ($dueRotation !== null && $dueGroup !== null
+                            && $this->rotationEngine->isWorkDay($dueRotation, $dueGroup, $dueDate));
+                    $dueExpectedCheckOut = $this->sessionExpectedCheckOut($olderOpen)
+                        ?? $this->expectedCheckOut($dueAssignment);
+                    if ($isExpectedDay && $this->isIncompletePunchDue($dueDate, $dueExpectedCheckOut, $user->id, true, $dueAssignment)) {
+                        $hasPreviousDayMissingCheckout = true;
+                        $previousCheckIn = $olderOpen->check_in_at?->format('H:i') ?? '';
+                        $previousExpectedCheckOut = $dueExpectedCheckOut;
+                        $previousAssignment = $dueAssignment;
+                        $previousDate = $dueDate;
+                    }
                 }
             }
 
@@ -187,16 +230,17 @@ class DailyReportService
                 $notes[] = 'عدد أيام الإجازة خلال الشهر: '.$this->arabicNumber($leaveDays);
             }
             if ($hasIncompletePunch) {
+                $exitNotes = [];
                 if ($currentDayIncomplete) {
                     $windowEnd = $this->exitWindowEnd($date, $expectedCheckOut, $assignment)?->format('H:i');
-                    $notes[] = $windowEnd !== null
-                        ? 'لم يسجل الخروج (نافذة '.$windowEnd.')'
-                        : 'لم يسجل الخروج';
+                    $exitNotes[] = 'اليوم'.($windowEnd !== null ? ' (نافذة الخروج '.$windowEnd.')' : '');
                 }
                 if ($hasPreviousDayMissingCheckout) {
                     $windowEnd = $this->exitWindowEnd($previousDate, $previousExpectedCheckOut, $previousAssignment)?->format('H:i');
-                    $notes[] = 'لم يسجل الخروج بتاريخ '.$previousDate.($windowEnd ? ' (نافذة '.$windowEnd.')' : '');
+                    $label = $previousDate === Carbon::parse($date)->subDay()->toDateString() ? 'أمس' : $previousDate;
+                    $exitNotes[] = $label.($windowEnd !== null ? ' (نافذة الخروج '.$windowEnd.')' : '');
                 }
+                $notes[] = 'لم يسجل خروج '.implode(' و ', $exitNotes);
             }
             if ($hasNoFingerprint) {
                 $notes[] = 'الموظف غير مسجل في جهاز البصمة';
@@ -307,22 +351,23 @@ class DailyReportService
      * instead, matching the punch-classification services. Rotations without
      * a time schedule have no expected check-out, but their absolute window
      * still applies on its own.
+     *
+     * For overnight duty rotations both the window end and the expected
+     * check-out fall on the departure morning: the employee arrives on the
+     * report day and leaves on the morning of the first rest day after their
+     * duty block. The block length is encoded by the rotation pattern, so one
+     * rule serves both 1-day duty ([1,0,…]) and 3-day duty ([1,1,1,0,…]).
      */
     private function exitWindowEnd(string $date, ?string $expectedCheckOut, mixed $assignment): ?Carbon
     {
         $rotation = $assignment?->rotation;
         $windowEndTime = $rotation?->out_above_margin;
+        $isOvernight = $this->isAssignmentOvernight($assignment);
 
         if ($windowEndTime) {
             $end = Carbon::parse($date.' '.substr((string) $windowEndTime, 0, 8));
-            $windowStartTime = $rotation->out_ahead_margin;
-            if ($windowStartTime && $end->lt(Carbon::parse($date.' '.substr((string) $windowStartTime, 0, 8)))) {
-                // Overnight window: the end time belongs to the next day.
-                $end->addDay();
-            } elseif (! $windowStartTime && $expectedCheckOut && $end->lt(Carbon::parse($date.' '.$expectedCheckOut))) {
-                // No explicit window start but the end falls before the
-                // scheduled check-out: treat it as an overnight end.
-                $end->addDay();
+            if ($isOvernight) {
+                $end = $this->moveWindowToDepartureDay($date, $end, $assignment);
             }
 
             return $end;
@@ -338,32 +383,92 @@ class DailyReportService
         // rotations without a configured window deliberately get no grace.
         $marginMinutes = (int) ($rotation?->timeSchedule?->out_above_margin ?? 0);
 
-        return Carbon::parse($date.' '.$expectedCheckOut)->addMinutes($marginMinutes);
+        $expectedOut = Carbon::parse($date.' '.$expectedCheckOut);
+        if ($isOvernight) {
+            $expectedOut = $this->moveWindowToDepartureDay($date, $expectedOut, $assignment);
+        }
+
+        return $expectedOut->addMinutes($marginMinutes);
+    }
+
+    /**
+     * Move an exit-window time onto the morning the employee actually leaves.
+     *
+     * Overnight duty employees check in on the report day and leave on the
+     * morning of the first rest day after their duty block (1-day or 3-day
+     * duty, both encoded by the rotation pattern). The wall-clock time of the
+     * window is kept and only the calendar day moves, so a morning margin
+     * yields a morning window on the departure day. Assignments that resolve
+     * no group keep the historical "next calendar day" behavior.
+     */
+    private function moveWindowToDepartureDay(string $date, Carbon $window, mixed $assignment): Carbon
+    {
+        $rotation = $assignment?->rotation;
+        $group = $assignment?->rotationGroup;
+
+        if ($rotation && $group) {
+            $departure = $this->rotationEngine->getNextRestDay($rotation, $group, $date);
+
+            return Carbon::create(
+                $departure->year,
+                $departure->month,
+                $departure->day,
+                $window->hour,
+                $window->minute,
+                $window->second,
+            );
+        }
+
+        return $window->addDay();
+    }
+
+    /**
+     * Whether the employee's rotation expects the check-out on the next day
+     * (a multi-day / overnight schedule). This mirrors the flag the attendance
+     * pipeline uses when it builds the session's expected check-out, so the
+     * report never disagrees with the punch-classification logic.
+     */
+    private function isAssignmentOvernight(mixed $assignment): bool
+    {
+        if (! $assignment) {
+            return false;
+        }
+
+        $times = $this->rotationEngine->resolveTimes($assignment);
+
+        return (bool) ($times['is_overnight'] ?? false);
     }
 
     /**
      * A missing direction is a violation only once the rotation exit window
      * has ended. This prevents the report from flagging everyone who is still
-     * at work inside their configured checkout window. Past days are always
-     * violations: anyone expected to work who came in and never left is
-     * listed, even when their rotation has no resolvable check-out window.
+     * at work inside their configured checkout window.
+     *
+     * Past days are still judged against their own exit window: an overnight
+     * duty rotation closes its window on the departure morning (the first rest
+     * day after the duty block), so an employee who checked in on an earlier
+     * day is only listed once that morning window has passed — matching how the
+     * report is used before the end of the shift. Days without a resolvable
+     * window are always violations once they are in the past.
      */
-    private function isIncompletePunchDue(string $date, ?string $expectedCheckOut, int $userId, Collection $expected, mixed $assignment): bool
+    private function isIncompletePunchDue(string $date, ?string $expectedCheckOut, int $userId, bool $isExpectedDay, mixed $assignment): bool
     {
-        if (! $expected->has($userId)) {
+        if (! $isExpectedDay) {
             return false;
         }
 
         $reportDay = Carbon::parse($date)->startOfDay();
-        if ($reportDay->lt(now()->startOfDay())) {
-            return true;
-        }
         if ($reportDay->gt(now()->startOfDay())) {
             return false;
         }
 
         $windowEnd = $this->exitWindowEnd($date, $expectedCheckOut, $assignment);
+        if ($windowEnd === null) {
+            // Without a resolvable window a past day is always a violation,
+            // while the current day cannot be judged yet.
+            return $reportDay->lt(now()->startOfDay());
+        }
 
-        return $windowEnd !== null && now()->gte($windowEnd);
+        return now()->gte($windowEnd);
     }
 }

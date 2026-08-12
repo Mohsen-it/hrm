@@ -143,6 +143,7 @@ return [
     'options' => 'Additional Options',
     'time_schedule' => 'Time Schedule',
     'select_time_schedule' => '— Select Time Schedule —',
+    'multi_day_duty_hint' => 'Multi-day continuous schedule: the employee arrives and stays more than one day, leaving on the morning of the first rest day after the duty block. Set the exit window end ("out above margin") to a morning time so the departure is counted on the leave morning.',
     'weekend_days' => 'Weekend Days',
     'add_category' => 'Add Shift Category',
     'edit_category' => 'Edit Shift Category',

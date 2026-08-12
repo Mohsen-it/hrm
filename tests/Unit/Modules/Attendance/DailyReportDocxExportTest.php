@@ -16,7 +16,7 @@ class DailyReportDocxExportTest extends TestCase
                 ['status' => 'absent', 'name' => 'موظف غياب', 'department_name' => 'القسم', 'notes' => 'عدد أيام الغياب خلال الشهر: ‏٣'],
                 ['status' => 'late', 'name' => 'موظف تأخر', 'department_name' => 'القسم', 'rotation' => 'دورية الأمن (أ)', 'check_in' => '09:15', 'notes' => 'عدد مرات التأخر خلال الشهر: ‏٤'],
                 ['status' => 'leave', 'name' => 'موظف إجازة', 'department_name' => 'القسم', 'notes' => 'عدد أيام الإجازة خلال الشهر: ‏٥'],
-                ['status' => 'present', 'name' => 'موظف بلا بصمة', 'department_name' => 'القسم', 'has_no_fingerprint' => true, 'notes' => 'الموظف غير مسجل في جهاز البصمة'],
+                ['status' => 'absent', 'name' => 'موظف بلا بصمة', 'department_name' => 'القسم', 'has_no_fingerprint' => true, 'notes' => 'الموظف غير مسجل في جهاز البصمة'],
                 ['status' => 'present', 'name' => 'موظف دخول دون خروج', 'department_name' => 'القسم', 'rotation' => 'دورية النقل (ب)', 'check_in' => '08:30', 'has_incomplete_punch' => true, 'notes' => 'لم يسجل بصمة الخروج حتى نهاية نافذة الخروج 18:30'],
             ],
         ]);

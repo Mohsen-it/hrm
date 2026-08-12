@@ -2,6 +2,7 @@
 
 namespace Modules\Vacations\Models;
 
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -160,11 +161,16 @@ class UserVacationRequest extends Model
 
     /**
      * Scope to requests that overlap the supplied date range.
+     *
+     * The bounds are compared against the full start-of-day / end-of-day
+     * instants: on SQLite the date columns are stored with a time component
+     * ("2026-08-06 00:00:00") so a bare "YYYY-MM-DD" boundary would compare
+     * as text and silently drop same-day matches.
      */
     public function scopeOverlapping(Builder $query, string $from, string $to): Builder
     {
-        return $query->where('start_date', '<=', $to)
-            ->where('end_date', '>=', $from);
+        return $query->where('start_date', '<=', Carbon::parse($to)->endOfDay()->toDateTimeString())
+            ->where('end_date', '>=', Carbon::parse($from)->startOfDay()->toDateTimeString());
     }
 
     // ------------------------------------------------------------------

@@ -34,6 +34,15 @@ const processing = ref(false);
 
 const errorFor = (key) => errors.value[key] || '';
 
+const scheduleOptions = computed(() => (props.timeSchedules || []).map(ts => ({
+    value: ts.id,
+    label: ts.is_multi_day ? `${ts.name} — ${t('shifts.continuous')}` : ts.name,
+})));
+
+const selectedScheduleIsMultiDay = computed(() =>
+    (props.timeSchedules || []).some(ts => ts.is_multi_day && Number(ts.id) === Number(form.time_schedule_id)),
+);
+
 const presets = [
     { label: 'Sunday-Thursday (Admin)', pattern: [1, 1, 1, 1, 1, 0, 0], groups: 1 },
     { label: '3 On / 9 Off', pattern: [1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0], groups: 4 },
@@ -258,9 +267,15 @@ function submit() {
                         v-model="form.time_schedule_id"
                         :label="t('shifts.time_schedule')"
                         name="time_schedule_id"
-                        :options="timeSchedules.map(ts => ({ value: ts.id, label: ts.name }))"
+                        :options="scheduleOptions"
                         :error="errorFor('time_schedule_id')"
                     />
+                    <div v-if="selectedScheduleIsMultiDay" class="md:col-span-2">
+                        <div class="rounded-lg border border-mistral-info/20 bg-mistral-info/5 px-4 py-3 text-[13px] text-mistral-ink flex items-start gap-2">
+                            <i class="fas fa-moon mt-0.5 text-mistral-info"></i>
+                            <p>{{ t('shifts.multi_day_duty_hint') }}</p>
+                        </div>
+                    </div>
                     <FormSwitch v-model="form.overtime_enabled" :label="t('shifts.overtime_enabled')" name="overtime_enabled" />
                     <FormSwitch v-model="form.work_on_holidays" :label="t('shifts.work_on_holidays')" name="work_on_holidays" />
                     <FormInput

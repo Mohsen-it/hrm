@@ -24,6 +24,10 @@ class TimeScheduleValidationService
             'is_multi_day' => ['boolean'],
             'late_margin' => ['integer', 'min:0'],
             'early_margin' => ['integer', 'min:0'],
+            'in_ahead_margin' => ['nullable', 'integer', 'min:0'],
+            'in_above_margin' => ['nullable', 'integer', 'min:0'],
+            'out_ahead_margin' => ['nullable', 'integer', 'min:0'],
+            'out_above_margin' => ['nullable', 'integer', 'min:0'],
         ];
 
         return Validator::make($data, $rules)->validate();
@@ -47,6 +51,10 @@ class TimeScheduleValidationService
             'is_multi_day' => ['boolean'],
             'late_margin' => ['integer', 'min:0'],
             'early_margin' => ['integer', 'min:0'],
+            'in_ahead_margin' => ['nullable', 'integer', 'min:0'],
+            'in_above_margin' => ['nullable', 'integer', 'min:0'],
+            'out_ahead_margin' => ['nullable', 'integer', 'min:0'],
+            'out_above_margin' => ['nullable', 'integer', 'min:0'],
         ];
 
         return Validator::make($data, $rules)->validate();

@@ -139,13 +139,15 @@ if (! $incomplete instanceof DOMElement) {
         exit(1);
     }
 
-    // Retitle the heading to reflect the exit-window criterion.
+    // Retitle the heading to reflect the time-table criterion: the exit
+    // deadline comes from each rotation's time table (جدول الوقت), not from
+    // the rotation's absolute punch window.
     $headingTexts = $xpath->query('.//w:t', $heading);
     if ($headingTexts->length === 0) {
         fwrite(STDERR, "heading has no text\n");
         exit(1);
     }
-    $headingTexts->item(0)->nodeValue = 'تقرير عدم تسجيل بصمة الخروج حسب نافذة الخروج';
+    $headingTexts->item(0)->nodeValue = 'تقرير عدم تسجيل بصمة الخروج حسب جداول الوقت';
     for ($i = 1; $i < $headingTexts->length; $i++) {
         $headingTexts->item($i)->nodeValue = '';
     }
@@ -168,14 +170,104 @@ if (! $incomplete instanceof DOMElement) {
     $body->removeChild($incomplete);
 }
 
-// 4) Normalize every data table so the exported rows render cleanly in Word:
+// 4) Give the missing-checkout table its expected-exit column so the report
+//    reads against جداول الوقت: الدورية / وقت الدخول المتوقع / وقت الخروج
+//    المتوقع / ملاحظات. The table is located by its current heading, so an
+//    already-patched template is skipped and the patch stays idempotent.
+$incomplete = null;
+foreach ($xpath->query('//w:tbl') as $candidate) {
+    if (! $candidate instanceof DOMElement) {
+        continue;
+    }
+    $heading = $candidate->previousSibling;
+    while ($heading && ! ($heading instanceof DOMElement && $heading->localName === 'p')) {
+        $heading = $heading->previousSibling;
+    }
+    if ($heading instanceof DOMElement && str_contains($heading->textContent, 'تقرير عدم تسجيل بصمة الخروج')) {
+        $incomplete = $candidate;
+        break;
+    }
+}
+if (! $incomplete instanceof DOMElement) {
+    fwrite(STDERR, "missing-checkout table not found\n");
+    exit(1);
+}
+
+$incompleteHeaders = [];
+foreach ($xpath->query('./w:tr[1]/w:tc', $incomplete) as $cell) {
+    $incompleteHeaders[] = trim($cell->textContent);
+}
+if (in_array('وقت الخروج المتوقع', $incompleteHeaders, true)) {
+    echo "وقت الخروج المتوقع column already present, skipping\n";
+} else {
+    // Insert a grid column before the notes column.
+    $grid = $xpath->query('./w:tblGrid', $incomplete)->item(0);
+    if (! $grid instanceof DOMElement) {
+        fwrite(STDERR, "missing-checkout grid not found\n");
+        exit(1);
+    }
+    $gridCols = $xpath->query('./w:tblGrid/w:gridCol', $incomplete);
+    $notesCol = $gridCols->item($gridCols->length - 1);
+    if (! $notesCol instanceof DOMElement) {
+        fwrite(STDERR, "missing-checkout grid columns not found\n");
+        exit(1);
+    }
+    $gridCol = $doc->createElementNS(PATCH_NS, 'w:gridCol');
+    $gridCol->setAttributeNS(PATCH_NS, 'w:w', '950');
+    $grid->insertBefore($gridCol, $notesCol);
+
+    // Clone the "وقت الحضور" cell as the new column in every row; label the
+    // header cell and relabel the entry column for the time-table basis.
+    $inserted = 0;
+    foreach ($xpath->query('./w:tr', $incomplete) as $rowIndex => $row) {
+        if (! $row instanceof DOMElement) {
+            continue;
+        }
+        $cells = $xpath->query('./w:tc', $row);
+        $checkInCell = $cells->item($cells->length - 2); // وقت الحضور cell
+        $notesCell = $cells->item($cells->length - 1); // ملاحظات cell
+        if (! $checkInCell instanceof DOMElement || ! $notesCell instanceof DOMElement) {
+            continue;
+        }
+        $clone = $checkInCell->cloneNode(true);
+        foreach ($xpath->query('.//w:t', $clone) as $text) {
+            $text->nodeValue = '';
+        }
+        if ($rowIndex === 0) {
+            $cloneTexts = $xpath->query('.//w:t', $clone);
+            if ($cloneTexts->length > 0) {
+                $cloneTexts->item(0)->nodeValue = 'وقت الخروج المتوقع';
+                for ($i = 1; $i < $cloneTexts->length; $i++) {
+                    $cloneTexts->item($i)->nodeValue = '';
+                }
+            }
+            $checkInTexts = $xpath->query('.//w:t', $checkInCell);
+            if ($checkInTexts->length > 0) {
+                $checkInTexts->item(0)->nodeValue = 'وقت الدخول المتوقع';
+                for ($i = 1; $i < $checkInTexts->length; $i++) {
+                    $checkInTexts->item($i)->nodeValue = '';
+                }
+            }
+        }
+        $row->insertBefore($clone, $notesCell);
+        $inserted++;
+    }
+    if ($inserted === 0) {
+        fwrite(STDERR, "no rows patched for expected-exit column\n");
+        exit(1);
+    }
+    echo "inserted expected-exit column into {$inserted} rows\n";
+}
+
+// 5) Normalize every data table so the exported rows render cleanly in Word:
 //    cell content is centered vertically, stale sample rows are dropped, and
-//    the two six-column tables (lateness + missing-checkout) get column
-//    widths that match the grid. The bottom-aligned cells were the cause of
-//    the "pushed up" rows the user reported, so every table is aligned the
-//    same way to avoid a repeat complaint on the other tables.
+//    the check-in tables (six-column lateness + seven-column missing-checkout)
+//    get column widths that match the grid. The bottom-aligned cells were the
+//    cause of the "pushed up" rows the user reported, so every table is
+//    aligned the same way to avoid a repeat complaint on the other tables.
 $tables = $xpath->query('//w:tbl');
-$widths = [700, 3100, 2500, 2300, 1000, 1756]; // six-column grid, sum 11356
+$sixWidths = [700, 3100, 2500, 2300, 1000, 1756]; // lateness grid, sum 11356
+$sevenWidths = [600, 2700, 2200, 2000, 950, 950, 1956]; // missing-checkout grid, sum 11356
 $normalized = 0;
 foreach ($tables as $target) {
     if (! $target instanceof DOMElement) {
@@ -185,17 +277,25 @@ foreach ($tables as $target) {
         continue;
     }
 
-    // Six-column tables (lateness + missing-checkout) get their grid rebuilt
+    // The lateness table and the missing-checkout table get their grid rebuilt
     // to the canonical widths; other tables keep their proven layout.
-    $isSixColumn = $xpath->query('./w:tr[1]/w:tc', $target)->length === count($widths);
-    if ($isSixColumn) {
-        $headerText = [];
-        foreach ($xpath->query('./w:tr[1]/w:tc', $target) as $cell) {
-            $headerText[] = trim($cell->textContent);
-        }
-        $isSixColumn = in_array('الدورية', $headerText, true) && in_array('وقت الحضور', $headerText, true);
+    $cellCount = $xpath->query('./w:tr[1]/w:tc', $target)->length;
+    $headerText = [];
+    foreach ($xpath->query('./w:tr[1]/w:tc', $target) as $cell) {
+        $headerText[] = trim($cell->textContent);
     }
-    if ($isSixColumn) {
+    $rebuild = false;
+    $widths = [];
+    if ($cellCount === count($sixWidths)
+        && in_array('الدورية', $headerText, true)
+        && in_array('وقت الحضور', $headerText, true)) {
+        $rebuild = true;
+        $widths = $sixWidths;
+    } elseif ($cellCount === count($sevenWidths) && in_array('وقت الخروج المتوقع', $headerText, true)) {
+        $rebuild = true;
+        $widths = $sevenWidths;
+    }
+    if ($rebuild) {
         $grid = $xpath->query('./w:tblGrid', $target)->item(0);
         if ($grid instanceof DOMElement) {
             while ($grid->firstChild) {
@@ -228,7 +328,7 @@ foreach ($tables as $target) {
                 $tcPr = $doc->createElementNS(PATCH_NS, 'w:tcPr');
                 $cell->insertBefore($tcPr, $cell->firstChild);
             }
-            if ($isSixColumn && $cellIndex < count($widths)) {
+            if ($rebuild && $cellIndex < count($widths)) {
                 $tcW = $xpath->query('./w:tcW', $tcPr)->item(0);
                 if (! $tcW instanceof DOMElement) {
                     $tcW = $doc->createElementNS(PATCH_NS, 'w:tcW');

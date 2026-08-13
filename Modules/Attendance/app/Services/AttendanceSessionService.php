@@ -207,6 +207,31 @@ class AttendanceSessionService
 
         $session = $this->getOpenSessionForUser($userId);
 
+        if ($session) {
+            // One exit punch closes every open session of the current duty
+            // cycle, not just the most recent one. Multiple check-ins within a
+            // duty period (stray midnight punches, repeated visits) must never
+            // leave older sessions open forever — the employee left once, so
+            // every session that started before this punch is closed with it.
+            // Sessions from older duty days stay untouched: they belong to a
+            // different duty and are handled by the stale-session cleanup
+            // command instead.
+            $dutyCutoff = $at->modify('-48 hours');
+            $openSessions = AttendanceSession::forUser($userId)
+                ->open()
+                ->where('check_in_at', '<=', $at)
+                ->where('check_in_at', '>=', $dutyCutoff)
+                ->orderBy('check_in_at')
+                ->get();
+
+            $closed = null;
+            foreach ($openSessions as $openSession) {
+                $closed = $this->closeSession($openSession, $at, $context);
+            }
+
+            return $closed ?? $session;
+        }
+
         if (! $session) {
             $dateStr = $at->format('Y-m-d');
             $resolved = $this->scheduleResolver->resolve($userId, $dateStr);

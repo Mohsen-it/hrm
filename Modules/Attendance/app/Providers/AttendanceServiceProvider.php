@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\Schedule;
 use Illuminate\Support\ServiceProvider;
 use Modules\Attendance\Console\Commands\CleanupOldLogsCommand;
+use Modules\Attendance\Console\Commands\CloseOpenSessionsCommand;
 use Modules\Attendance\Console\Commands\DetectAnomaliesCommand;
 use Modules\Attendance\Console\Commands\ExportDailyReportCommand;
 use Modules\Attendance\Console\Commands\ExportMonthlyReportCommand;
@@ -79,6 +80,7 @@ class AttendanceServiceProvider extends ServiceProvider
             SendWeeklyDigestCommand::class,
             SyncFingerprintsCommand::class,
             ResolveRawLogUsersCommand::class,
+            CloseOpenSessionsCommand::class,
         ]);
     }
 
@@ -110,6 +112,11 @@ class AttendanceServiceProvider extends ServiceProvider
 
             // Send weekly digest every Sunday at 8:00 PM
             Schedule::command('attendance:send-weekly-digest')->weeklyOn(0, '20:00')->withoutOverlapping();
+
+            // Close stale open sessions whose scheduled exit deadline passed
+            // (nightly at 1:00 AM) so reports stay accurate without an
+            // ever-growing backlog of forgotten exit punches.
+            Schedule::command('attendance:close-open-sessions')->dailyAt('01:00')->withoutOverlapping();
 
             // Cleanup old raw logs weekly (Sunday at 3:00 AM)
             Schedule::command('attendance:cleanup-old-logs')->weeklyOn(0, '03:00')->withoutOverlapping();

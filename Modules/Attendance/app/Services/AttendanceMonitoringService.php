@@ -81,11 +81,21 @@ class AttendanceMonitoringService
         return $this->cache->remember($cacheKey, function () use ($date, $thresholdMinutes): Collection {
             $threshold = CarbonImmutable::now()->subMinutes($thresholdMinutes);
 
+            // An employee who recorded ANY exit punch that day has left —
+            // stray open sessions must never turn a registered check-out into
+            // a missing-checkout violation.
+            $checkedOutUserIds = $this->sessionRepository->query()
+                ->onDate($date)
+                ->whereNotNull('check_out_at')
+                ->distinct()
+                ->pluck('user_id');
+
             return $this->sessionRepository->query()
                 ->onDate($date)
                 ->whereNotNull('check_in_at')
                 ->whereNull('check_out_at')
                 ->where('check_in_at', '<=', $threshold)
+                ->whereNotIn('user_id', $checkedOutUserIds)
                 ->with(['user', 'shift'])
                 ->orderBy('check_in_at')
                 ->get();

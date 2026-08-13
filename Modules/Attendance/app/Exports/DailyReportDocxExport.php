@@ -84,6 +84,9 @@ class DailyReportDocxExport
             $table = $tables?->item($index);
             if ($table instanceof DOMElement) {
                 $hasCheckIn = in_array($status, ['late', 'incomplete'], true);
+                // The missing-checkout table carries the expected exit time
+                // from the rotation's time table as an extra column.
+                $hasExpectedExit = $status === 'incomplete';
                 if ($hasCheckIn) {
                     // Give the notes column more room so its Arabic text does not
                     // wrap into several lines and inflate the row height.
@@ -95,6 +98,7 @@ class DailyReportDocxExport
                     $table,
                     $this->rowsFor($status),
                     $hasCheckIn,
+                    $hasExpectedExit,
                 );
             }
         }
@@ -122,8 +126,10 @@ class DailyReportDocxExport
      * rotation and check-in columns. Long Arabic notes otherwise wrap inside
      * the narrow notes cell and push the row height far above the others.
      *
-     * The prototype data row's cell widths are kept in sync with the new grid
-     * so every cloned row keeps its columns aligned with the table grid.
+     * The six-column grid is the lateness table; the seven-column grid is the
+     * missing-checkout table (which also carries the expected exit time). The
+     * prototype data row's cell widths are kept in sync with the new grid so
+     * every cloned row keeps its columns aligned with the table grid.
      */
     private function rebalanceGrid(DOMXPath $xpath, DOMElement $table): void
     {
@@ -132,7 +138,9 @@ class DailyReportDocxExport
             return;
         }
 
-        $adjustments = [0 => -100, 3 => -500, 4 => -350, 5 => 950];
+        $adjustments = $columns->length === 7
+            ? [0 => -100, 3 => -500, 4 => -350, 5 => -350, 6 => 1300]
+            : [0 => -100, 3 => -500, 4 => -350, 5 => 950];
         $widths = [];
         $index = 0;
         foreach ($columns as $column) {
@@ -166,11 +174,14 @@ class DailyReportDocxExport
      * Replace every template data row while retaining its complete styling.
      *
      * For the lateness and missing-checkout tables ($hasCheckIn = true) the
-     * template must keep the "الدورية" column immediately before "وقت الحضور":
-     * the rotation value is written into that cell and the check-in time into
-     * the following one.
+     * template must keep the "الدورية" column immediately before the check-in
+     * column: the rotation value is written into that cell and the check-in
+     * time into the following one. In the missing-checkout table the check-in
+     * column shows the expected entry time from the rotation's time table and
+     * $hasExpectedExit adds the expected exit time column after it, so the
+     * table reads strictly against جداول الوقت.
      */
-    private function replaceTableRows(DOMDocument $document, DOMXPath $xpath, DOMElement $table, array $rows, bool $hasCheckIn): void
+    private function replaceTableRows(DOMDocument $document, DOMXPath $xpath, DOMElement $table, array $rows, bool $hasCheckIn, bool $hasExpectedExit = false): void
     {
         $tableRows = $xpath->query('./w:tr', $table);
         $prototype = $tableRows?->item(1);
@@ -197,9 +208,18 @@ class DailyReportDocxExport
                 if ($hasCheckIn) {
                     // The lateness table carries the employee's rotation before
                     // the check-in time so the reviewer can see which rotation
-                    // the late employee belongs to.
+                    // the late employee belongs to. The missing-checkout table
+                    // shows the expected entry time from the time table instead
+                    // of the raw punch.
                     $values[] = (string) ($row['rotation'] ?? '—');
-                    $values[] = (string) ($row['check_in'] ?? '');
+                    $values[] = $hasExpectedExit
+                        ? (string) ($row['expected_check_in'] ?? '')
+                        : (string) ($row['check_in'] ?? '');
+                }
+                if ($hasExpectedExit) {
+                    $exitTime = (string) ($row['expected_check_out'] ?? '');
+                    $values[] = $exitTime
+                        .(($exitTime !== '' && (bool) ($row['expected_check_out_next_day'] ?? false)) ? ' (اليوم التالي)' : '');
                 }
                 $values[] = (string) ($row['notes'] ?? '');
                 $this->fillRow($xpath, $clone, $values);

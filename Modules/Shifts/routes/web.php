@@ -15,17 +15,18 @@ Route::middleware(['auth', 'permission:view-shifts'])
         Route::resource('shifts', ShiftsController::class)->names('shifts');
     });
 
-// Shift Categories (T040)
-Route::middleware(['auth', 'permission:view-shift-categories'])
-    ->group(function () {
-        Route::get('shift-categories/export/excel', [ShiftCategoriesController::class, 'export'])
-            ->name('shift-categories.export');
-
-        Route::resource('shift-categories', ShiftCategoriesController::class)
-            ->names('shift-categories');
-        Route::get('shift-categories/{id}/schedule-preview', [ShiftCategoriesController::class, 'schedulePreview'])
-            ->name('shift-categories.schedule-preview');
-    });
+// Shift Categories (T040) — DISABLED: duplicate of Time Schedules; management goes through rotations.
+// Uncomment to restore the shift-categories pages.
+// Route::middleware(['auth', 'permission:view-shift-categories'])
+//     ->group(function () {
+//         Route::get('shift-categories/export/excel', [ShiftCategoriesController::class, 'export'])
+//             ->name('shift-categories.export');
+//
+//         Route::resource('shift-categories', ShiftCategoriesController::class)
+//             ->names('shift-categories');
+//         Route::get('shift-categories/{id}/schedule-preview', [ShiftCategoriesController::class, 'schedulePreview'])
+//             ->name('shift-categories.schedule-preview');
+//     });
 
 // Time Schedules (T041)
 Route::middleware(['auth', 'permission:view-time-schedules'])
@@ -40,31 +41,32 @@ Route::middleware(['auth', 'permission:view-time-schedules'])
             ->name('time-schedules.copy');
     });
 
-// Assignments (T057)
-Route::middleware(['auth', 'permission:view-shift-categories'])
-    ->group(function () {
-        Route::get('shift-assignments', [ShiftCategoryAssignmentController::class, 'index'])
-            ->name('shift-assignments.index');
-        Route::get('shift-assignments/assign', [ShiftCategoryAssignmentController::class, 'create'])
-            ->middleware('permission:assign-employees-to-category')
-            ->name('shift-assignments.assign');
-        Route::post('shift-assignments/assign', [ShiftCategoryAssignmentController::class, 'assign'])
-            ->middleware('permission:assign-employees-to-category');
-        Route::get('shift-assignments/bulk-assign', [ShiftCategoryAssignmentController::class, 'bulkCreate'])
-            ->middleware('permission:assign-employees-to-category')
-            ->name('shift-assignments.bulk-assign');
-        Route::post('shift-assignments/bulk-assign', [ShiftCategoryAssignmentController::class, 'bulkAssign'])
-            ->middleware('permission:assign-employees-to-category');
-        Route::get('shift-assignments/search-employees', [ShiftCategoryAssignmentController::class, 'searchEmployees'])
-            ->middleware('permission:assign-employees-to-category')
-            ->name('shift-assignments.search-employees');
-        Route::post('shift-assignments/transfer', [ShiftCategoryAssignmentController::class, 'transfer'])
-            ->middleware('permission:assign-employees-to-category')
-            ->name('shift-assignments.transfer');
-        Route::post('shift-assignments/unassign', [ShiftCategoryAssignmentController::class, 'unassign'])
-            ->middleware('permission:assign-employees-to-category')
-            ->name('shift-assignments.unassign');
-    });
+// Assignments (T057) — DISABLED: duplicate of Rotation Assignments; management goes through rotations.
+// Uncomment to restore the shift-assignments pages.
+// Route::middleware(['auth', 'permission:view-shift-categories'])
+//     ->group(function () {
+//         Route::get('shift-assignments', [ShiftCategoryAssignmentController::class, 'index'])
+//             ->name('shift-assignments.index');
+//         Route::get('shift-assignments/assign', [ShiftCategoryAssignmentController::class, 'create'])
+//             ->middleware('permission:assign-employees-to-category')
+//             ->name('shift-assignments.assign');
+//         Route::post('shift-assignments/assign', [ShiftCategoryAssignmentController::class, 'assign'])
+//             ->middleware('permission:assign-employees-to-category');
+//         Route::get('shift-assignments/bulk-assign', [ShiftCategoryAssignmentController::class, 'bulkCreate'])
+//             ->middleware('permission:assign-employees-to-category')
+//             ->name('shift-assignments.bulk-assign');
+//         Route::post('shift-assignments/bulk-assign', [ShiftCategoryAssignmentController::class, 'bulkAssign'])
+//             ->middleware('permission:assign-employees-to-category');
+//         Route::get('shift-assignments/search-employees', [ShiftCategoryAssignmentController::class, 'searchEmployees'])
+//             ->middleware('permission:assign-employees-to-category')
+//             ->name('shift-assignments.search-employees');
+//         Route::post('shift-assignments/transfer', [ShiftCategoryAssignmentController::class, 'transfer'])
+//             ->middleware('permission:assign-employees-to-category')
+//             ->name('shift-assignments.transfer');
+//         Route::post('shift-assignments/unassign', [ShiftCategoryAssignmentController::class, 'unassign'])
+//             ->middleware('permission:assign-employees-to-category')
+//             ->name('shift-assignments.unassign');
+//     });
 
 // Schedules (Generated Monthly Schedules)
 Route::middleware(['auth', 'permission:view-shift-categories'])

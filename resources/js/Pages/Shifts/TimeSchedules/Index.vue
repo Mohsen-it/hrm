@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed } from 'vue';
-import { router, Link, usePage } from '@inertiajs/vue3';
+import { router, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import PageHeader from '@/Components/ui/PageHeader.vue';
 import Button from '@/Components/ui/Button.vue';
@@ -29,7 +29,6 @@ const columns = computed(() => [
     { key: 'is_multi_day', label: t('shifts.is_multi_day'), cellClass: 'text-center' },
     { key: 'late_margin', label: t('shifts.late_margin'), cellClass: 'text-center' },
     { key: 'early_margin', label: t('shifts.early_margin'), cellClass: 'text-center' },
-    { key: 'linked_category', label: t('shifts.linked_category') },
     { key: 'actions', label: t('common.actions'), cellClass: 'text-center w-[180px]' },
 ]);
 
@@ -72,9 +71,6 @@ const flashError = computed(() => page.props.flash?.error);
             :description="t('shifts.time_schedules_description')"
         >
             <template #actions>
-                <Button variant="secondary" :href="route('shift-categories.index')" icon="fas fa-layer-group">
-                    {{ t('shifts.shift_categories') }}
-                </Button>
                 <Button variant="primary" :href="route('time-schedules.create')" icon="fas fa-plus">
                     {{ t('shifts.add_schedule') }}
                 </Button>
@@ -120,17 +116,6 @@ const flashError = computed(() => page.props.flash?.error);
 
             <template #cell-early_margin="{ row }">
                 <span>{{ row.early_margin ?? 0 }}</span>
-            </template>
-
-            <template #cell-linked_category="{ row }">
-                <Link
-                    v-if="row.linked_category_id"
-                    :href="route('shift-categories.show', row.linked_category_id)"
-                    class="text-mistral-primary hover:underline"
-                >
-                    {{ row.linked_category_name }}
-                </Link>
-                <span v-else class="text-mistral-muted">—</span>
             </template>
 
             <template #cell-actions="{ row }">

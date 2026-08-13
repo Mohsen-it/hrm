@@ -1,6 +1,5 @@
 <script setup>
 import { computed } from 'vue';
-import { Link } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import PageHeader from '@/Components/ui/PageHeader.vue';
 import Button from '@/Components/ui/Button.vue';
@@ -39,8 +38,6 @@ const breaksList = computed(() => {
     if (!Array.isArray(props.schedule.breaks) || props.schedule.breaks.length === 0) return [];
     return props.schedule.breaks;
 });
-
-const linkedCategoryId = computed(() => props.schedule.linked_category_id || null);
 
 const breakColumns = [
     { key: 'break_start', label: t('shifts.break_start') },
@@ -94,12 +91,6 @@ const breaksData = computed(() => ({
                             :text="t('shifts.daily')"
                             variant="inactive"
                         />
-                        <Link
-                            v-if="linkedCategoryId"
-                            :href="route('shift-categories.show', linkedCategoryId)"
-                        >
-                            <Badge :text="schedule.linked_category_name" variant="info" />
-                        </Link>
                     </div>
                 </div>
             </div>
@@ -148,25 +139,6 @@ const breaksData = computed(() => ({
                     {{ row.duration ?? '—' }}
                 </template>
             </DataTable>
-        </Card>
-
-        <Card v-if="linkedCategoryId" variant="cream" padding="md">
-            <div class="flex items-center justify-between flex-wrap gap-3">
-                <div class="flex items-center gap-3">
-                    <i class="fas fa-info-circle text-mistral-primary"></i>
-                    <span class="text-[14px] text-mistral-ink">
-                        {{ t('shifts.linked_category') }}: <strong>{{ schedule.linked_category_name }}</strong>
-                    </span>
-                </div>
-                <Button
-                    variant="on-cream"
-                    :href="route('shift-categories.show', linkedCategoryId)"
-                    icon="fas fa-arrow-left"
-                    iconPosition="start"
-                >
-                    {{ t('shifts.view_category') }}
-                </Button>
-            </div>
         </Card>
     </AppLayout>
 </template>

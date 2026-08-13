@@ -6,6 +6,7 @@ use Modules\Attendance\Models\AttendanceSession;
 use Modules\Attendance\Models\RawAttendanceLog;
 use Modules\Attendance\Services\DailyReportService;
 use Modules\Companies\Models\Company;
+use Modules\FingerprintDevices\Models\UserFingerprint;
 use Modules\Holidays\Models\Holiday;
 use Modules\Shifts\Models\Rotation;
 use Modules\Shifts\Models\RotationAssignment;
@@ -115,11 +116,14 @@ class DailyReportServiceTest extends TestCase
     }
 
     /**
-     * An employee who checked in but never checked out is flagged as
-     * "incomplete" only once the rotation exit window (نافذة الخروج) has
-     * ended, not by a hard-coded grace period.
+     * The exit deadline comes from the rotation's TIME TABLE (جدول الوقت):
+     * the scheduled out_time plus the schedule's grace minutes. The rotation's
+     * own absolute out_above_margin (نهاية نافذة الخروج) only describes the
+     * physical punch window and must NOT delay the report — a legacy "23:59"
+     * window on a rotation whose schedule ends at 17:00 must not postpone the
+     * flag to midnight.
      */
-    public function test_incomplete_punch_is_flagged_when_the_rotation_exit_window_has_passed(): void
+    public function test_time_schedule_deadline_wins_over_rotation_absolute_window(): void
     {
         $this->travelTo('2026-08-10 12:00:00');
 
@@ -127,32 +131,38 @@ class DailyReportServiceTest extends TestCase
         $this->assignOpenWorkEveryDay($user);
         $rotation = RotationAssignment::where('employee_id', $user->id)->first()->rotation;
         $rotation->update([
-            'time_schedule_id' => $this->makeTimeSchedule($user)->id,
+            'time_schedule_id' => $this->makeTimeSchedule($user)->id, // 08:00 -> 17:00
             'out_ahead_margin' => '11:00:00',
-            'out_above_margin' => '11:50:00',
+            'out_above_margin' => '11:50:00', // ignored: the time table says 17:00
         ]);
-        $this->makeOpenSession($user, '2026-08-10 08:00:00');
+        $this->makeOpenSession($user, '2026-08-09 08:00:00');
 
         $report = $this->service->build('2026-08-10', '09:00');
         $row = $report['rows']->firstWhere('id', $user->id);
 
+        $this->assertTrue($row['has_incomplete_punch']);
         $this->assertSame('incomplete', $row['status']);
-        $this->assertStringContainsString('نافذة الخروج 11:50', $row['notes']);
+        // The expected exit comes from the time table (17:00), never from the
+        // rotation's own window end (11:50).
+        $this->assertSame('08:00', $row['expected_check_in']);
+        $this->assertSame('17:00', $row['expected_check_out']);
+        $this->assertFalse($row['expected_check_out_next_day']);
     }
 
     /**
-     * While the employee is still inside (or before) the configured exit
-     * window they must not be flagged, even though their session is open.
+     * The missing-checkout table is a strict "اليوم السابق" snapshot: an open
+     * session on the report day itself is never evaluated, even when its exit
+     * window has already ended — it will appear on tomorrow's report instead.
      */
-    public function test_incomplete_punch_is_not_flagged_while_inside_the_exit_window(): void
+    public function test_same_day_session_is_not_flagged_because_table_is_yesterday_only(): void
     {
-        $this->travelTo('2026-08-10 12:00:00');
+        $this->travelTo('2026-08-10 20:00:00');
 
         $user = $this->makeEmployee('EMP40002');
         $this->assignOpenWorkEveryDay($user);
         $rotation = RotationAssignment::where('employee_id', $user->id)->first()->rotation;
         $rotation->update([
-            'time_schedule_id' => $this->makeTimeSchedule($user)->id,
+            'time_schedule_id' => $this->makeTimeSchedule($user)->id, // window ended at 17:00
             'out_ahead_margin' => '13:00:00',
             'out_above_margin' => '14:00:00',
         ]);
@@ -161,7 +171,6 @@ class DailyReportServiceTest extends TestCase
         $report = $this->service->build('2026-08-10', '09:00');
         $row = $report['rows']->firstWhere('id', $user->id);
 
-        $this->assertSame('present', $row['status']);
         $this->assertFalse($row['has_incomplete_punch']);
     }
 
@@ -184,22 +193,22 @@ class DailyReportServiceTest extends TestCase
         ]);
         // out_time 10:00 + 30 minutes margin => window ends at 10:30.
         $rotation->timeSchedule->update(['out_above_margin' => 30]);
-        $this->makeOpenSession($user, '2026-08-10 08:30:00');
+        $this->makeOpenSession($user, '2026-08-09 08:30:00');
 
         $report = $this->service->build('2026-08-10', '09:00');
         $row = $report['rows']->firstWhere('id', $user->id);
 
         $this->assertSame('incomplete', $row['status']);
-        $this->assertStringContainsString('نافذة الخروج 10:30', $row['notes']);
+        $this->assertSame('10:00', $row['expected_check_out']);
     }
 
     /**
      * Rotations without a time schedule have no expected check-out time, but
-     * the rotation still defines an absolute exit window. On a past report
-     * day those employees must still be listed in the missing-checkout table:
-     * they were expected to work, they came in and they never left.
+     * the rotation still defines an absolute exit window. Yesterday's open
+     * session is still listed: they were expected to work, they came in and
+     * they never left.
      */
-    public function test_incomplete_punch_flags_employees_without_time_schedule_on_past_days(): void
+    public function test_incomplete_punch_flags_employees_without_time_schedule_on_previous_day(): void
     {
         $this->travelTo('2026-08-10 12:00:00');
 
@@ -211,7 +220,7 @@ class DailyReportServiceTest extends TestCase
         ]);
         $this->makeOpenSession($user, '2026-08-09 20:15:00');
 
-        $report = $this->service->build('2026-08-09', '09:00');
+        $report = $this->service->build('2026-08-10', '09:00');
         $row = $report['rows']->firstWhere('id', $user->id);
 
         $this->assertTrue($row['has_incomplete_punch']);
@@ -219,11 +228,10 @@ class DailyReportServiceTest extends TestCase
     }
 
     /**
-     * On the current day the same rotation window applies even when the
-     * rotation has no time schedule: once the absolute window has ended the
-     * employee is flagged, and the note carries the window end.
+     * The same rotation window applies for a rotation without a time schedule:
+     * once yesterday's absolute window has ended the employee is flagged.
      */
-    public function test_incomplete_punch_uses_rotation_window_without_time_schedule_today(): void
+    public function test_incomplete_punch_uses_rotation_window_without_time_schedule(): void
     {
         $this->travelTo('2026-08-10 12:00:00');
 
@@ -233,22 +241,50 @@ class DailyReportServiceTest extends TestCase
             'out_ahead_margin' => '07:30:00',
             'out_above_margin' => '09:30:00',
         ]);
-        $this->makeOpenSession($user, '2026-08-10 07:45:00');
+        $this->makeOpenSession($user, '2026-08-09 07:45:00');
 
         $report = $this->service->build('2026-08-10', '09:00');
         $row = $report['rows']->firstWhere('id', $user->id);
 
         $this->assertSame('incomplete', $row['status']);
-        $this->assertStringContainsString('نافذة الخروج 09:30', $row['notes']);
+    }
+
+    /**
+     * A real check-out punch anywhere on the duty day proves the employee
+     * left — even when an earlier session is still open (e.g. a stray
+     * mid-night punch before the real shift). The report must never turn a
+     * registered exit into a missing-checkout violation.
+     */
+    public function test_incomplete_punch_ignores_open_session_when_any_checkout_was_recorded(): void
+    {
+        $this->travelTo('2026-08-10 12:00:00');
+
+        $user = $this->makeEmployee('EMP40016');
+        $this->registerFingerprint($user);
+        $this->assignOpenWorkEveryDay($user);
+        $rotation = RotationAssignment::where('employee_id', $user->id)->first()->rotation;
+        $rotation->update([
+            'time_schedule_id' => $this->makeTimeSchedule($user)->id,
+            'out_ahead_margin' => '07:30:00',
+            'out_above_margin' => '09:30:00',
+        ]);
+        // A stray open session before the real shift (mid-night punch).
+        $this->makeOpenSession($user, '2026-08-09 00:10:00');
+        // The real shift: checked in and out at 15:20.
+        $this->makeCompleteSession($user, '2026-08-09 10:42:00', '2026-08-09 15:20:58');
+
+        $report = $this->service->build('2026-08-10', '09:00');
+        $row = $report['rows']->firstWhere('id', $user->id);
+
+        $this->assertFalse($row['has_incomplete_punch'], 'A registered check-out must clear the violation.');
+        $this->assertNotSame('incomplete', $row['status']);
     }
 
     /**
      * An employee who already recorded a check-out on their main shift
      * session must not be flagged as a missing check-out just because they
      * punched in again later (e.g. stayed after an administrative shift) and
-     * left that second session open. The check-out column must reflect the
-     * main session too, so the report does not contradict the employee's
-     * recorded check-out.
+     * left that second session open.
      */
     public function test_incomplete_punch_ignores_later_open_session_when_main_shift_checked_out(): void
     {
@@ -264,27 +300,26 @@ class DailyReportServiceTest extends TestCase
         ]);
 
         // Main shift: checked in 08:03 and out at 15:35 (inside the exit window).
-        $this->makeCompleteSession($user, '2026-08-10 08:03:00', '15:35:00');
+        $this->makeCompleteSession($user, '2026-08-09 08:03:00', '15:35:00');
         // Stayed after the shift: a second visit after the exit window opens
         // a new session that stays open. This must not re-flag the employee.
-        $this->makeOpenSession($user, '2026-08-10 19:09:00');
+        $this->makeOpenSession($user, '2026-08-09 19:09:00');
 
         $report = $this->service->build('2026-08-10', '09:00');
         $row = $report['rows']->firstWhere('id', $user->id);
 
         $this->assertFalse($row['has_incomplete_punch']);
-        $this->assertSame('present', $row['status']);
-        $this->assertSame('15:35', $row['check_out']);
     }
 
     /**
-     * An open main shift session still counts as a missing check-out even
-     * when a later session was completed: the scheduled exit window applies
-     * to the main shift, not to an extra later visit.
+     * A session that recorded no check-out still counts as a missing
+     * check-out when the employee has NO registered exit punch at all that
+     * day: the scheduled exit window applies to the main shift, and an open
+     * later session must not clear it.
      */
-    public function test_incomplete_punch_still_flags_open_main_session_with_later_closed_session(): void
+    public function test_incomplete_punch_still_flags_when_no_checkout_was_recorded_at_all(): void
     {
-        $this->travelTo('2026-08-10 20:00:00');
+        $this->travelTo('2026-08-10 12:00:00');
 
         $user = $this->makeEmployee('EMP40007');
         $this->assignOpenWorkEveryDay($user);
@@ -295,9 +330,10 @@ class DailyReportServiceTest extends TestCase
             'out_above_margin' => '18:00:00',
         ]);
 
-        // Main shift never closed, and a later visit is completed.
-        $this->makeOpenSession($user, '2026-08-10 08:03:00');
-        $this->makeCompleteSession($user, '2026-08-10 19:09:00', '21:00:00');
+        // Main shift never closed, and a later visit is open too: no exit
+        // punch was recorded anywhere that day.
+        $this->makeOpenSession($user, '2026-08-09 08:03:00');
+        $this->makeOpenSession($user, '2026-08-09 19:09:00');
 
         $report = $this->service->build('2026-08-10', '09:00');
         $row = $report['rows']->firstWhere('id', $user->id);
@@ -315,6 +351,9 @@ class DailyReportServiceTest extends TestCase
     public function test_overnight_rotation_not_flagged_before_next_day_exit_window(): void
     {
         $this->travelTo('2026-08-11 08:30:00');
+
+        // The overnight schedule (08:00 out, multi-day) carries a 120-minute
+        // grace: the time-table deadline is 10:00 on the departure morning.
 
         $user = $this->makeEmployee('EMP40008');
         $this->assignOneDayDuty($user, '2026-08-10');
@@ -334,13 +373,16 @@ class DailyReportServiceTest extends TestCase
 
     /**
      * Once the overnight exit window (next morning) has ended, the employee is
-     * flagged as a missing check-out from the previous day.
+     * flagged as a missing check-out from the previous day with a plain note:
+     * the time-schedule details live in the expected-exit column, not in the
+     * notes any more.
      */
     public function test_overnight_rotation_flagged_after_next_day_exit_window(): void
     {
-        $this->travelTo('2026-08-11 09:30:00');
+        $this->travelTo('2026-08-11 10:30:00');
 
         $user = $this->makeEmployee('EMP40009');
+        $this->registerFingerprint($user);
         $this->assignOneDayDuty($user, '2026-08-10');
         $rotation = RotationAssignment::where('employee_id', $user->id)->first()->rotation;
         $rotation->update([
@@ -355,8 +397,101 @@ class DailyReportServiceTest extends TestCase
 
         $this->assertTrue($row['has_incomplete_punch']);
         $this->assertSame('incomplete', $row['status']);
-        $this->assertStringContainsString('أمس', $row['notes']);
-        $this->assertStringContainsString('نافذة الخروج 09:00', $row['notes']);
+        $this->assertSame('لم يسجل خروج أمس', $row['notes']);
+    }
+
+    /**
+     * The user's 1-3 duty scenario, straight from the time table: check in on
+     * the duty day, exit due on the second day at 08:00 + 120 minutes = 10:00.
+     * The rotation's absolute exit window (23:59, a legacy value that does not
+     * even cover the morning) must be ignored in favour of the time table.
+     */
+    public function test_one_three_duty_flagged_by_time_table_on_departure_morning(): void
+    {
+        $this->travelTo('2026-08-11 10:30:00');
+
+        $user = $this->makeEmployee('EMP40013');
+        $this->registerFingerprint($user);
+        $this->assignOneDayDuty($user, '2026-08-10');
+        $rotation = RotationAssignment::where('employee_id', $user->id)->first()->rotation;
+        $rotation->update([
+            'time_schedule_id' => $this->makeOvernightSchedule($user)->id, // 08:00 out, multi-day, +120 min
+            'out_ahead_margin' => '18:30:00',
+            'out_above_margin' => '23:59:00', // ignored in favour of the time table
+        ]);
+        $this->makeOpenSession($user, '2026-08-10 08:00:00');
+
+        $report = $this->service->build('2026-08-11', '09:00');
+        $row = $report['rows']->firstWhere('id', $user->id);
+
+        $this->assertTrue($row['has_incomplete_punch']);
+        $this->assertSame('incomplete', $row['status']);
+        $this->assertSame('لم يسجل خروج أمس', $row['notes']);
+        // The expected entry/exit columns come from the rotation's time table:
+        // in 08:00, out 08:00 on the next day (اليوم التالي).
+        $this->assertSame('08:00', $row['expected_check_in']);
+        $this->assertSame('08:00', $row['expected_check_out']);
+        $this->assertTrue($row['expected_check_out_next_day']);
+    }
+
+    /**
+     * While the 1-3 employee is still on their 24h duty (the report day is the
+     * duty day itself) they must not be flagged: the exit is due tomorrow.
+     */
+    public function test_one_three_duty_not_flagged_on_the_duty_day(): void
+    {
+        $this->travelTo('2026-08-10 12:00:00');
+
+        $user = $this->makeEmployee('EMP40014');
+        $this->assignOneDayDuty($user, '2026-08-10');
+        $rotation = RotationAssignment::where('employee_id', $user->id)->first()->rotation;
+        $rotation->update([
+            'time_schedule_id' => $this->makeOvernightSchedule($user)->id,
+            'out_ahead_margin' => '18:30:00',
+            'out_above_margin' => '23:59:00',
+        ]);
+        $this->makeOpenSession($user, '2026-08-10 08:00:00');
+
+        $report = $this->service->build('2026-08-10', '09:00');
+        $row = $report['rows']->firstWhere('id', $user->id);
+
+        $this->assertFalse($row['has_incomplete_punch']);
+        $this->assertSame('present', $row['status']);
+    }
+
+    /**
+     * The table is strictly a "اليوم السابق" snapshot: the same open session
+     * shows up on the report for the day after its duty, and disappears from
+     * every later report — it never piles up across days (this was the stale
+     * backlog the user complained about).
+     */
+    public function test_open_session_is_flagged_only_on_the_following_days_report(): void
+    {
+        $this->travelTo('2026-08-13 12:00:00');
+
+        $user = $this->makeEmployee('EMP40015');
+        $this->assignOneDayDuty($user, '2026-08-10');
+        $rotation = RotationAssignment::where('employee_id', $user->id)->first()->rotation;
+        $rotation->update([
+            'time_schedule_id' => $this->makeOvernightSchedule($user)->id,
+            'out_ahead_margin' => '07:30:00',
+            'out_above_margin' => '09:00:00',
+        ]);
+        $this->makeOpenSession($user, '2026-08-10 08:00:00');
+
+        // Report for 08-11 (the day after the duty): the session is yesterday's
+        // and the 10:00 deadline has passed -> flagged.
+        $report = $this->service->build('2026-08-11', '09:00');
+        $row = $report['rows']->firstWhere('id', $user->id);
+        $this->assertTrue($row['has_incomplete_punch']);
+        $this->assertSame('incomplete', $row['status']);
+
+        // On 08-12 and 08-13 the session is older than yesterday -> gone.
+        foreach (['2026-08-12', '2026-08-13'] as $reportDate) {
+            $report = $this->service->build($reportDate, '09:00');
+            $row = $report['rows']->firstWhere('id', $user->id);
+            $this->assertFalse($row['has_incomplete_punch']);
+        }
     }
 
     /**
@@ -389,14 +524,14 @@ class DailyReportServiceTest extends TestCase
     }
 
     /**
-     * A 3-day duty employee who never checked out is flagged on the morning
-     * after the departure day. The note carries the original duty day instead
-     * of "yesterday" because the open session predates the report by more than
-     * one day (single-session model).
+     * A single open session from the first duty day (legacy single-session
+     * model) is older than yesterday on the departure morning, so the strict
+     * "اليوم السابق" rule does not list it. Production sessions are per-day
+     * (see the next test), which is what the table covers.
      */
-    public function test_three_day_duty_flagged_after_departure_morning(): void
+    public function test_three_day_duty_single_old_session_is_not_flagged_on_departure_day(): void
     {
-        $this->travelTo('2026-08-13 09:30:00');
+        $this->travelTo('2026-08-13 10:30:00');
 
         $user = $this->makeEmployee('EMP40011');
         $this->assignThreeDayDuty($user, '2026-08-10');
@@ -406,28 +541,28 @@ class DailyReportServiceTest extends TestCase
             'out_ahead_margin' => '07:30:00',
             'out_above_margin' => '09:00:00',
         ]);
-        // Single open session from the first duty day.
+        // Single open session from the first duty day (three days before).
         $this->makeOpenSession($user, '2026-08-10 07:00:00');
 
         $report = $this->service->build('2026-08-13', '09:00');
         $row = $report['rows']->firstWhere('id', $user->id);
 
-        $this->assertTrue($row['has_incomplete_punch']);
-        $this->assertSame('incomplete', $row['status']);
-        $this->assertStringContainsString('2026-08-10', $row['notes']);
-        $this->assertStringContainsString('نافذة الخروج 09:00', $row['notes']);
+        $this->assertFalse($row['has_incomplete_punch']);
     }
 
     /**
-     * Same departure rule with the per-day session model: the most recent open
-     * session lives on the previous calendar day, so the note still reads
-     * "أمس" and the window is the departure morning.
+     * With the per-day session model (what the pipeline produces for continuous
+     * duty) the 3-day duty employee is flagged on the report for the day after
+     * the last duty day, because their X-1 session is still open: the note
+     * reads "أمس" and the expected exit is the departure morning per the time
+     * table.
      */
     public function test_three_day_duty_flagged_via_previous_day_session(): void
     {
-        $this->travelTo('2026-08-13 09:30:00');
+        $this->travelTo('2026-08-13 10:30:00');
 
         $user = $this->makeEmployee('EMP40012');
+        $this->registerFingerprint($user);
         $this->assignThreeDayDuty($user, '2026-08-10');
         $rotation = RotationAssignment::where('employee_id', $user->id)->first()->rotation;
         $rotation->update([
@@ -444,8 +579,10 @@ class DailyReportServiceTest extends TestCase
 
         $this->assertTrue($row['has_incomplete_punch']);
         $this->assertSame('incomplete', $row['status']);
-        $this->assertStringContainsString('أمس', $row['notes']);
-        $this->assertStringContainsString('نافذة الخروج 09:00', $row['notes']);
+        $this->assertSame('لم يسجل خروج أمس', $row['notes']);
+        $this->assertSame('08:00', $row['expected_check_in']);
+        $this->assertSame('08:00', $row['expected_check_out']);
+        $this->assertTrue($row['expected_check_out_next_day']);
     }
 
     /**
@@ -533,6 +670,17 @@ class DailyReportServiceTest extends TestCase
     // ------------------------------------------------------------------
     // Helpers
     // ------------------------------------------------------------------
+
+    private function registerFingerprint(User $user): void
+    {
+        UserFingerprint::create([
+            'user_id' => $user->id,
+            'finger_id' => 1,
+            'template_data' => 'dGVzdA==',
+            'template_format' => 'zk-face',
+            'is_master' => true,
+        ]);
+    }
 
     private function makeEmployee(string $code): User
     {
@@ -662,6 +810,9 @@ class DailyReportServiceTest extends TestCase
             'in_time' => '08:00',
             'out_time' => '08:00',
             'is_multi_day' => true,
+            // 120-minute grace: the time-table deadline is 08:00 + 120 = 10:00
+            // on the departure morning.
+            'out_above_margin' => 120,
         ]);
     }
 }

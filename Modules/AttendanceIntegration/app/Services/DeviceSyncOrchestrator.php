@@ -438,14 +438,31 @@ class DeviceSyncOrchestrator
 
         try {
             if ($punchType === 'check_out' && $open) {
-                $open->update([
-                    'check_out_at' => $stamp,
-                    'raw_log_id' => $raw->id,
-                    'updated_at' => now(),
-                ]);
+                // One exit punch closes every open session of the current duty
+                // cycle (within 48h), not just the most recent one — the same
+                // rule AttendanceSessionService uses. Repeated check-ins within
+                // a duty period must never leave older sessions open forever.
+                $dutyCutoff = $stamp->modify('-48 hours');
+                $openSessions = AttendanceSession::query()
+                    ->where('user_id', $userPk)
+                    ->whereNull('check_out_at')
+                    ->where('check_in_at', '<=', $stamp)
+                    ->where('check_in_at', '>=', $dutyCutoff)
+                    ->orderByDesc('check_in_at')
+                    ->get();
+
+                $closed = null;
+                foreach ($openSessions as $openSession) {
+                    $closed = $openSession;
+                    $openSession->update([
+                        'check_out_at' => $stamp,
+                        'raw_log_id' => $raw->id,
+                        'updated_at' => now(),
+                    ]);
+                }
                 $raw->markProcessed();
 
-                return $open->fresh();
+                return $closed?->fresh() ?? $open->fresh();
             }
 
             if ($punchType === 'check_in' && ! $open) {

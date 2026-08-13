@@ -63,8 +63,7 @@ class DailyReportService
 
         $sessions = AttendanceSession::onDate($date)->whereIn('user_id', $userIds)
             ->orderBy('check_in_at')->get()->groupBy('user_id');
-        $previousSessions = AttendanceSession::onDate($previousDate)->whereIn('user_id', $userIds)
-            ->orderBy('check_in_at')->get()->groupBy('user_id');
+
         // A raw device punch is physical proof of presence even when the
         // session pipeline could not create a session for this date (e.g. an
         // early-morning punch outside the configured check-in window). The
@@ -79,20 +78,11 @@ class DailyReportService
         // Active official holidays, checked per employee (branch/department
         // scoping + work_on_holidays) using the same rule as smart absence.
         $holidays = Holiday::active()->get();
-        // Multi-day duty rotations can leave their (single) open session several
-        // days behind the report date (e.g. 3-day duty). Track the most recent
-        // open session strictly before the report day so those employees are
-        // still caught once their departure morning has passed.
-        $openBeforeReport = AttendanceSession::query()
-            ->whereIn('user_id', $userIds)
-            ->whereNotNull('check_in_at')
-            ->whereNull('check_out_at')
-            ->whereDate('attendance_date', '<', $date)
-            ->orderByDesc('attendance_date')
-            ->orderByDesc('check_in_at')
-            ->get()
-            ->groupBy('user_id')
-            ->map(fn (Collection $sessions) => $sessions->first());
+        // The missing-checkout table is a "اليوم السابق" snapshot: it only ever
+        // looks at the previous day's open sessions, never at older duties or
+        // the report day itself.
+        $previousSessions = AttendanceSession::onDate($previousDate)->whereIn('user_id', $userIds)
+            ->orderBy('check_in_at')->get()->groupBy('user_id');
         $monthSessions = AttendanceSession::betweenDates($monthFrom, $date)
             ->whereIn('user_id', $userIds)->whereNotNull('check_in_at')
             ->orderBy('check_in_at')->get()->groupBy('user_id');
@@ -127,7 +117,7 @@ class DailyReportService
             ->whereIn('exception_type', ['leave', 'mission', 'training', 'swap'])
             ->overlapping($date)->get()->groupBy('employee_id');
 
-        $rows = $users->map(function (User $user) use ($date, $cutoffTime, $expected, $assignments, $sessions, $previousSessions, $openBeforeReport, $previousExpected, $previousAssignments, $previousDate, $monthSessions, $monthlyAbsenceCounts, $monthlyVacationDays, $unregisteredFingerprintIds, $vacations, $exceptions, $rawPunchIds, $holidays): array {
+        $rows = $users->map(function (User $user) use ($date, $cutoffTime, $expected, $assignments, $sessions, $previousSessions, $previousExpected, $previousAssignments, $previousDate, $monthSessions, $monthlyAbsenceCounts, $monthlyVacationDays, $unregisteredFingerprintIds, $vacations, $exceptions, $rawPunchIds, $holidays): array {
             $userSessions = $sessions->get($user->id, collect());
             $first = $userSessions->first();
             $assignment = $assignments->get($user->id);
@@ -141,8 +131,6 @@ class DailyReportService
             // after the exit window) must never turn an already-recorded
             // check-out into a missing-checkout violation.
             $mainSession = $userSessions->firstWhere(fn ($session) => $session->check_in_at !== null);
-            $expectedCheckOut = $this->sessionExpectedCheckOut($mainSession)
-                ?? $this->expectedCheckOut($assignments->get($user->id));
             $onMission = $exception?->exception_type === 'mission' || $this->isMission($vacation);
             // The vacations table must reflect only the employees who are
             // genuinely on vacation on the report day. An approved vacation
@@ -157,56 +145,41 @@ class DailyReportService
                 && ! $userSessions->contains(fn ($session) => $session->check_in_at !== null);
             $late = $first?->check_in_at && $first->check_in_at->format('H:i') > $cutoffTime;
             $hasNoFingerprint = $unregisteredFingerprintIds->has($user->id);
-            $currentDayIncomplete = ! $onMission && ! $onLeave && $mainSession !== null
-                && $mainSession->check_out_at === null
-                && $this->isIncompletePunchDue($date, $expectedCheckOut, $user->id, $expected->has($user->id), $assignment);
 
             $hasPreviousDayMissingCheckout = false;
             $previousCheckIn = null;
-            $previousExpectedCheckOut = null;
             $previousAssignment = null;
+            $previousFlaggedSession = null;
             $previousUserSessions = $previousSessions->get($user->id, collect());
-            $previousMainSession = $previousUserSessions->firstWhere(fn ($session) => $session->check_in_at !== null);
+            // Prefer the session that actually recorded a check-out: a real
+            // exit punch anywhere on the duty day proves the employee left
+            // (an earlier stray open session — e.g. a mid-night punch — must
+            // never turn a registered exit into a missing-checkout violation).
+            // Only when NO check-out was recorded do we evaluate the main
+            // open session.
+            $previousMainSession = $previousUserSessions->firstWhere(fn ($session) => $session->check_out_at !== null)
+                ?? $previousUserSessions->firstWhere(fn ($session) => $session->check_in_at !== null);
             if ($previousMainSession && $previousMainSession->check_out_at === null && $previousExpected->has($user->id)) {
                 $previousAssignment = $previousAssignments->get($user->id);
-                $previousExpectedCheckOut = $this->sessionExpectedCheckOut($previousMainSession)
-                    ?? $this->expectedCheckOut($previousAssignment);
-                if ($this->isIncompletePunchDue($previousDate, $previousExpectedCheckOut, $user->id, $previousExpected->has($user->id), $previousAssignment)) {
+                if ($this->isIncompletePunchDue($previousDate, $date, $previousMainSession, $previousExpected->has($user->id), $previousAssignment)) {
                     $hasPreviousDayMissingCheckout = true;
                     $previousCheckIn = $previousMainSession->check_in_at->format('H:i');
+                    $previousFlaggedSession = $previousMainSession;
                 }
             }
 
-            // Duty rotations longer than one day leave their open session on an
-            // earlier day than yesterday (3-day duty, single-session model). When
-            // nothing was due from yesterday, evaluate the most recent open
-            // session before the report day against its own departure window.
-            if (! $hasPreviousDayMissingCheckout) {
-                $olderOpen = $openBeforeReport->get($user->id);
-                if ($olderOpen) {
-                    $dueDate = $olderOpen->attendance_date?->toDateString() ?? $previousDate;
-                    $dueAssignment = $dueDate === $previousDate
-                        ? $previousAssignments->get($user->id)
-                        : $this->rotationAssignmentRepository->getAssignmentForDate($user->id, $dueDate);
-                    $dueRotation = $dueAssignment?->rotation;
-                    $dueGroup = $dueAssignment?->rotationGroup;
-                    $isExpectedDay = $dueDate === $previousDate
-                        ? $previousExpected->has($user->id)
-                        : ($dueRotation !== null && $dueGroup !== null
-                            && $this->rotationEngine->isWorkDay($dueRotation, $dueGroup, $dueDate));
-                    $dueExpectedCheckOut = $this->sessionExpectedCheckOut($olderOpen)
-                        ?? $this->expectedCheckOut($dueAssignment);
-                    if ($isExpectedDay && $this->isIncompletePunchDue($dueDate, $dueExpectedCheckOut, $user->id, true, $dueAssignment)) {
-                        $hasPreviousDayMissingCheckout = true;
-                        $previousCheckIn = $olderOpen->check_in_at?->format('H:i') ?? '';
-                        $previousExpectedCheckOut = $dueExpectedCheckOut;
-                        $previousAssignment = $dueAssignment;
-                        $previousDate = $dueDate;
-                    }
-                }
-            }
+            $hasIncompletePunch = $hasPreviousDayMissingCheckout;
 
-            $hasIncompletePunch = $currentDayIncomplete || $hasPreviousDayMissingCheckout;
+            // Expected entry/exit times per the rotation's time table (جدول
+            // الوقت), taken from the duty that is actually missing its exit so
+            // the report's columns always match the flagged session.
+            $flaggedSession = $hasPreviousDayMissingCheckout ? $previousFlaggedSession : $mainSession;
+            $flaggedAssignment = $hasPreviousDayMissingCheckout ? $previousAssignment : $assignment;
+            $expectations = $this->scheduleExpectations($flaggedAssignment, $flaggedSession);
+            $rowExpectedCheckIn = $expectations['check_in'];
+            $rowExpectedCheckOut = $expectations['check_out'];
+            $rowExpectedCheckOutNextDay = $expectations['is_multi_day'];
+
             $lateCount = $monthSessions->get($user->id, collect())->filter(
                 fn ($s) => $s->check_in_at && $s->check_in_at->format('H:i') > $cutoffTime
             )->unique(fn ($s) => $s->attendance_date?->toDateString())->count();
@@ -259,17 +232,7 @@ class DailyReportService
                 $notes[] = 'بصمة مسجلة دون جلسة';
             }
             if ($hasIncompletePunch) {
-                $exitNotes = [];
-                if ($currentDayIncomplete) {
-                    $windowEnd = $this->exitWindowEnd($date, $expectedCheckOut, $assignment)?->format('H:i');
-                    $exitNotes[] = 'اليوم'.($windowEnd !== null ? ' (نافذة الخروج '.$windowEnd.')' : '');
-                }
-                if ($hasPreviousDayMissingCheckout) {
-                    $windowEnd = $this->exitWindowEnd($previousDate, $previousExpectedCheckOut, $previousAssignment)?->format('H:i');
-                    $label = $previousDate === Carbon::parse($date)->subDay()->toDateString() ? 'أمس' : $previousDate;
-                    $exitNotes[] = $label.($windowEnd !== null ? ' (نافذة الخروج '.$windowEnd.')' : '');
-                }
-                $notes[] = 'لم يسجل خروج '.implode(' و ', $exitNotes);
+                $notes[] = 'لم يسجل خروج أمس';
             }
             if ($hasNoFingerprint) {
                 $notes[] = 'الموظف غير مسجل في جهاز البصمة';
@@ -277,7 +240,7 @@ class DailyReportService
 
             $checkIn = $first?->check_in_at?->format('H:i') ?? '';
 
-            if (! $checkIn && $hasPreviousDayMissingCheckout) {
+            if ($hasPreviousDayMissingCheckout) {
                 $checkIn = $previousCheckIn ?? '';
             }
 
@@ -286,7 +249,9 @@ class DailyReportService
                 'department_name' => $user->department?->department_name ?? '—', 'rotation' => $rotation,
                 'status' => $status, 'status_label' => $label,
                 'check_in' => $checkIn, 'check_out' => $mainSession?->check_out_at?->format('H:i') ?? '',
-                'expected' => $expected->has($user->id), 'expected_check_out' => $expectedCheckOut,
+                'expected' => $expected->has($user->id),
+                'expected_check_in' => $rowExpectedCheckIn, 'expected_check_out' => $rowExpectedCheckOut,
+                'expected_check_out_next_day' => $rowExpectedCheckOutNextDay,
                 'has_no_fingerprint' => $hasNoFingerprint, 'has_incomplete_punch' => $hasIncompletePunch,
                 'late_minutes' => $late && $first?->check_in_at ? $first->check_in_at->diffInMinutes(Carbon::parse($date.' '.$cutoffTime)) : 0,
                 'notes' => implode('، ', $notes),
@@ -351,6 +316,16 @@ class DailyReportService
         ]);
     }
 
+    /** Resolve the scheduled check-in time from the employee's active rotation. */
+    private function expectedCheckIn(mixed $assignment): ?string
+    {
+        if (! $assignment) {
+            return null;
+        }
+
+        return $this->rotationEngine->resolveTimes($assignment)['check_in'] ?? null;
+    }
+
     /** Resolve the scheduled checkout time from the employee's active rotation. */
     private function expectedCheckOut(mixed $assignment): ?string
     {
@@ -359,6 +334,16 @@ class DailyReportService
         }
 
         return $this->rotationEngine->resolveTimes($assignment)['check_out'] ?? null;
+    }
+
+    /** Prefer the session's stored schedule because it reflects its actual work day. */
+    private function sessionExpectedCheckIn(?AttendanceSession $session): ?string
+    {
+        if (! $session?->expected_check_in) {
+            return null;
+        }
+
+        return substr((string) $session->expected_check_in, 0, 5);
     }
 
     /** Prefer the session's stored schedule because it reflects its actual work day. */
@@ -371,55 +356,122 @@ class DailyReportService
         return substr((string) $session->expected_check_out, 0, 5);
     }
 
-    /**
-     * Resolve the end of the rotation's exit window for a report day.
-     *
-     * The exit window is sourced from the Time Schedule via RotationEngine::
-     * resolveTimes() (single source of truth). Margins configured as minutes
-     * are added to the scheduled check-out; legacy absolute window times
-     * ("18:00:00") stored on the rotation are kept as-is for backward
-     * compatibility. Rotations without a time schedule have no expected
-     * check-out, but their legacy absolute window still applies on its own.
-     *
-     * For overnight duty rotations both the window end and the expected
-     * check-out fall on the departure morning: the employee arrives on the
-     * report day and leaves on the morning of the first rest day after their
-     * duty block. The block length is encoded by the rotation pattern, so one
-     * rule serves both 1-day duty ([1,0,…]) and 3-day duty ([1,1,1,0,…]).
-     */
-    private function exitWindowEnd(string $date, ?string $expectedCheckOut, mixed $assignment): ?Carbon
+    /** Format a time-schedule column (string or Carbon) as H:i. */
+    private function formatScheduleTime(mixed $time): ?string
     {
-        $isOvernight = $this->isAssignmentOvernight($assignment);
-
-        if ($assignment) {
-            $windowEndTime = $this->rotationEngine->resolveTimes($assignment)['out_above_margin'] ?? null;
-
-            if ($windowEndTime) {
-                $end = Carbon::parse($date.' '.substr((string) $windowEndTime, 0, 5));
-                if ($isOvernight) {
-                    $end = $this->moveWindowToDepartureDay($date, $end, $assignment);
-                }
-
-                return $end;
-            }
-        }
-
-        if (! $expectedCheckOut) {
-            // Without a window and without a check-out anchor there is
-            // nothing to evaluate the violation against.
+        if (! $time) {
             return null;
         }
 
-        // A zero margin closes the window exactly at the expected check-out;
-        // rotations without a configured window deliberately get no grace.
-        $marginMinutes = (int) ($assignment?->rotation?->timeSchedule?->out_above_margin ?? 0);
-
-        $expectedOut = Carbon::parse($date.' '.$expectedCheckOut);
-        if ($isOvernight) {
-            $expectedOut = $this->moveWindowToDepartureDay($date, $expectedOut, $assignment);
+        if ($time instanceof \DateTimeInterface) {
+            return $time->format('H:i');
         }
 
-        return $expectedOut->addMinutes($marginMinutes);
+        $time = (string) $time;
+
+        return preg_match('/^(\d{2}:\d{2})/', $time, $matches) === 1 ? $matches[1] : null;
+    }
+
+    /**
+     * The current entry/exit times of the rotation's linked time table (جدول
+     * الوقت) — the schedules configured on the Time Schedules page. Sessions
+     * created before a schedule change keep their old times, so the report
+     * deliberately reads the live schedule as the authority.
+     *
+     * @return array{check_in: ?string, check_out: ?string, is_multi_day: bool, out_above_margin: int}
+     */
+    private function liveScheduleTimes(mixed $assignment): array
+    {
+        $schedule = $assignment?->rotation?->timeSchedule;
+        if (! $schedule) {
+            return ['check_in' => null, 'check_out' => null, 'is_multi_day' => false, 'out_above_margin' => 0];
+        }
+
+        return [
+            'check_in' => $this->formatScheduleTime($schedule->in_time),
+            'check_out' => $this->formatScheduleTime($schedule->out_time),
+            'is_multi_day' => (bool) $schedule->is_multi_day,
+            'out_above_margin' => (int) ($schedule->out_above_margin ?? 0),
+        ];
+    }
+
+    /**
+     * The expected entry/exit times for one duty, straight from the rotation's
+     * current time table. Rotations without a linked schedule fall back to the
+     * session's stored values (which mirror the schedule that was live on the
+     * duty day).
+     *
+     * @return array{check_in: ?string, check_out: ?string, is_multi_day: bool, out_above_margin: int}
+     */
+    private function scheduleExpectations(mixed $assignment, ?AttendanceSession $session): array
+    {
+        $live = $this->liveScheduleTimes($assignment);
+        if ($live['check_in'] !== null && $live['check_out'] !== null) {
+            return $live;
+        }
+
+        return [
+            'check_in' => $this->sessionExpectedCheckIn($session) ?? $this->expectedCheckIn($assignment),
+            'check_out' => $this->sessionExpectedCheckOut($session) ?? $this->expectedCheckOut($assignment),
+            'is_multi_day' => $this->isAssignmentOvernight($assignment),
+            'out_above_margin' => $live['out_above_margin'],
+        ];
+    }
+
+    /**
+     * Resolve the end of the exit deadline for a duty day.
+     *
+     * The deadline comes from the rotation's TIME TABLE (جدول الوقت), not
+     * from the rotation's absolute punch window: the expected check-out time
+     * from the live schedule plus the schedule's "out_above_margin" grace
+     * minutes. This is what the user expects a 1-3 duty rotation to obey —
+     * check in on the duty day, leave on the second day at the scheduled
+     * out_time plus the margin (e.g. 08:00 next day + 120 minutes = 10:00).
+     * The rotation's own out_ahead_margin / out_above_margin fields only
+     * describe the physical punch-classification window (بداية/نهاية نافذة
+     * الخروج) and are NOT a reliable deadline: e.g. a legacy "23:59" end would
+     * delay the report by a whole day.
+     *
+     * Rotations without a time schedule have no expected check-out, so their
+     * absolute exit window still applies on its own.
+     *
+     * For overnight duty rotations both the deadline and the expected
+     * check-out fall on the departure morning: the employee arrives on the
+     * duty day and leaves on the morning of the first rest day after their
+     * duty block. The block length is encoded by the rotation pattern, so one
+     * rule serves both 1-day duty ([1,0,…]) and 3-day duty ([1,1,1,0,…]).
+     */
+    private function exitWindowEnd(string $date, mixed $assignment, ?AttendanceSession $session = null): ?Carbon
+    {
+        $rotation = $assignment?->rotation;
+        $times = $this->scheduleExpectations($assignment, $session);
+
+        if ($times['check_out']) {
+            // Time-table deadline: scheduled out_time + the schedule's grace
+            // minutes (a zero margin closes it exactly at the check-out).
+            $expectedOut = Carbon::parse($date.' '.$times['check_out']);
+            if ($times['is_multi_day']) {
+                $expectedOut = $this->moveWindowToDepartureDay($date, $expectedOut, $assignment);
+            }
+
+            return $expectedOut->addMinutes($times['out_above_margin']);
+        }
+
+        // Rotations without a time schedule have no expected check-out, but
+        // their absolute exit window still applies on its own.
+        $windowEndTime = $rotation?->out_above_margin;
+        if ($windowEndTime) {
+            $end = Carbon::parse($date.' '.substr((string) $windowEndTime, 0, 8));
+            if ($this->isAssignmentOvernight($assignment)) {
+                $end = $this->moveWindowToDepartureDay($date, $end, $assignment);
+            }
+
+            return $end;
+        }
+
+        // Without a time table and without a window there is nothing to
+        // evaluate the violation against.
+        return null;
     }
 
     /**
@@ -529,33 +581,49 @@ class DailyReportService
     }
 
     /**
-     * A missing direction is a violation only once the rotation exit window
-     * has ended. This prevents the report from flagging everyone who is still
-     * at work inside their configured checkout window.
+     * A missing direction is a violation only once the exit deadline has
+     * ended. This prevents the report from flagging everyone who is still at
+     * work inside their scheduled checkout window.
      *
-     * Past days are still judged against their own exit window: an overnight
-     * duty rotation closes its window on the departure morning (the first rest
-     * day after the duty block), so an employee who checked in on an earlier
-     * day is only listed once that morning window has passed — matching how the
-     * report is used before the end of the shift. Days without a resolvable
-     * window are always violations once they are in the past.
+     * The violation is strictly limited to the previous day (اليوم السابق):
+     * only an open session whose duty day is the day before the report is
+     * evaluated — never the report day's own duty and never older sessions,
+     * so each report shows exactly yesterday's missed check-outs. An overnight
+     * duty closes its deadline on the departure morning (the first rest day
+     * after the duty block), so a 1-3 employee who checked in yesterday is
+     * listed once that morning deadline has passed.
      */
-    private function isIncompletePunchDue(string $date, ?string $expectedCheckOut, int $userId, bool $isExpectedDay, mixed $assignment): bool
-    {
+    private function isIncompletePunchDue(
+        string $dutyDate,
+        string $reportDate,
+        ?AttendanceSession $session,
+        bool $isExpectedDay,
+        mixed $assignment,
+    ): bool {
         if (! $isExpectedDay) {
             return false;
         }
 
-        $reportDay = Carbon::parse($date)->startOfDay();
-        if ($reportDay->gt(now()->startOfDay())) {
+        $reportDay = Carbon::parse($reportDate)->startOfDay();
+        $sessionDay = Carbon::parse($dutyDate)->startOfDay();
+
+        // The table is strictly a "اليوم السابق" snapshot: only the previous
+        // day's open sessions are evaluated, never the report day's own duty
+        // and never older stale sessions (the date notes those produced are
+        // gone).
+        if (! $sessionDay->eq($reportDay->copy()->subDay())) {
             return false;
         }
 
-        $windowEnd = $this->exitWindowEnd($date, $expectedCheckOut, $assignment);
+        // Never judge a duty from the future.
+        if ($sessionDay->gt(now()->startOfDay())) {
+            return false;
+        }
+
+        $windowEnd = $this->exitWindowEnd($dutyDate, $assignment, $session);
         if ($windowEnd === null) {
-            // Without a resolvable window a past day is always a violation,
-            // while the current day cannot be judged yet.
-            return $reportDay->lt(now()->startOfDay());
+            // Without a resolvable deadline yesterday's duty is a violation.
+            return true;
         }
 
         return now()->gte($windowEnd);

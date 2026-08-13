@@ -73,11 +73,22 @@ class AttendanceViolationService
     ): Collection {
         $latestIds = $this->getLatestSessionIds($from, $to, $userId);
 
+        // An employee who recorded ANY exit punch in the period has left —
+        // stray open sessions (midnight punches, repeated visits) must never
+        // turn a registered check-out into a missing-checkout violation.
+        $checkedOutUserIds = AttendanceSession::query()
+            ->betweenDates($from, $to)
+            ->whereNotNull('check_out_at')
+            ->when($userId, fn ($q, $id) => $q->forUser($id))
+            ->distinct()
+            ->pluck('user_id');
+
         return AttendanceSession::query()
             ->whereIn('id', $latestIds)
             ->whereNull('check_out_at')
             ->whereNotNull('check_in_at')
             ->whereRaw('TIME(check_in_at) <= ?', [$cutoffTime])
+            ->whereNotIn('user_id', $checkedOutUserIds)
             ->with(['user.department'])
             ->orderBy('attendance_date')
             ->orderBy('check_in_at')

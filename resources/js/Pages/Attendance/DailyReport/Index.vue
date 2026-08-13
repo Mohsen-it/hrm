@@ -68,7 +68,7 @@ function badgeVariant(status) { return ({ present: 'active', late: 'warning', ab
 
         <Card variant="base" padding="none" class="overflow-hidden">
             <div class="px-5 py-3 text-[12px] text-mistral-steel border-b border-mistral-hairline-soft">
-                عدم الالتزام بالبصمة يظهر فقط للموظف المتوقع دوامه، بعد انتهاء نافذة الخروج المحددة في جدول الوقت المرتبط بالدورية.
+                عدم تسجيل بصمة الخروج يظهر للموظف المتوقع دوامه والمسجّل بصمة، بعد انتهاء موعد الخروج المتوقع حسب جدول الوقت لدوريته (وقت الانصراف + هامش السماح) في يوم التقرير أو اليوم السابق له.
             </div>
             <DataTable :columns="columns" :data="data" storage-key="attendance-daily-report" :enable-search="true" :enable-filters="false" :enable-export="false" :enable-pagination="false">
                 <template #cell-status_label="{ row }"><Badge :text="row.status_label" :variant="badgeVariant(row.status)" dot /></template>

@@ -17,7 +17,7 @@ class DailyReportDocxExportTest extends TestCase
                 ['status' => 'late', 'name' => 'موظف تأخر', 'department_name' => 'القسم', 'rotation' => 'دورية الأمن (أ)', 'check_in' => '09:15', 'notes' => 'عدد مرات التأخر خلال الشهر: ‏٤'],
                 ['status' => 'leave', 'name' => 'موظف إجازة', 'department_name' => 'القسم', 'notes' => 'عدد أيام الإجازة خلال الشهر: ‏٥'],
                 ['status' => 'absent', 'name' => 'موظف بلا بصمة', 'department_name' => 'القسم', 'has_no_fingerprint' => true, 'notes' => 'الموظف غير مسجل في جهاز البصمة'],
-                ['status' => 'present', 'name' => 'موظف دخول دون خروج', 'department_name' => 'القسم', 'rotation' => 'دورية النقل (ب)', 'check_in' => '08:30', 'has_incomplete_punch' => true, 'notes' => 'لم يسجل بصمة الخروج حتى نهاية نافذة الخروج 18:30'],
+                ['status' => 'present', 'name' => 'موظف دخول دون خروج', 'department_name' => 'القسم', 'rotation' => 'دورية النقل (ب)', 'check_in' => '08:30', 'has_incomplete_punch' => true, 'expected_check_in' => '08:00', 'expected_check_out' => '08:00', 'expected_check_out_next_day' => true, 'notes' => 'لم يسجل بصمة الخروج حتى نهاية نافذة الخروج 10:00'],
             ],
         ]);
 
@@ -44,11 +44,14 @@ class DailyReportDocxExportTest extends TestCase
         $this->assertStringContainsString('09:15', $xml);
 
         // The missing-checkout table now sits right after the lateness table and
-        // carries the rotation plus check-in columns like the lateness table.
-        $this->assertStringContainsString('تقرير عدم تسجيل بصمة الخروج حسب نافذة الخروج', $xml);
+        // carries the rotation, the expected entry time and the expected exit
+        // time from the rotation's time table (جدول الوقت) — the report reads
+        // against the schedules on the Time Schedules page.
+        $this->assertStringContainsString('تقرير عدم تسجيل بصمة الخروج حسب جداول الوقت', $xml);
         $this->assertStringContainsString('دورية النقل (ب)', $xml);
-        $this->assertStringContainsString('08:30', $xml);
-        $this->assertStringContainsString('لم يسجل بصمة الخروج حتى نهاية نافذة الخروج 18:30', $xml);
+        $this->assertStringContainsString('08:00', $xml);
+        $this->assertStringContainsString('(اليوم التالي)', $xml);
+        $this->assertStringContainsString('لم يسجل بصمة الخروج حتى نهاية نافذة الخروج 10:00', $xml);
 
         $document = new \DOMDocument;
         $this->assertTrue($document->loadXML($xml));
@@ -56,12 +59,23 @@ class DailyReportDocxExportTest extends TestCase
         $xpath->registerNamespace('w', 'http://schemas.openxmlformats.org/wordprocessingml/2006/main');
         $tables = $xpath->query('//w:tbl');
         $this->assertSame(6, $tables->length);
+
+        // The lateness table keeps its six columns; the missing-checkout table
+        // gains the expected-exit column (seven columns).
+        $late = $tables->item(1);
+        $this->assertInstanceOf(\DOMElement::class, $late);
+        $lateHeader = $xpath->query('./w:tr[1]/w:tc', $late);
+        $this->assertSame(6, $lateHeader->length);
+        $this->assertStringContainsString('الدورية', $lateHeader->item(3)->textContent);
+        $this->assertStringContainsString('وقت الحضور', $lateHeader->item(4)->textContent);
+
         $incomplete = $tables->item(2);
         $this->assertInstanceOf(\DOMElement::class, $incomplete);
         $header = $xpath->query('./w:tr[1]/w:tc', $incomplete);
-        $this->assertSame(6, $header->length);
+        $this->assertSame(7, $header->length);
         $this->assertStringContainsString('الدورية', $header->item(3)->textContent);
-        $this->assertStringContainsString('وقت الحضور', $header->item(4)->textContent);
+        $this->assertStringContainsString('وقت الدخول المتوقع', $header->item(4)->textContent);
+        $this->assertStringContainsString('وقت الخروج المتوقع', $header->item(5)->textContent);
 
         // The lateness and missing-checkout data rows must be vertically
         // centered (previously bottom-aligned, which pushed the text up and
@@ -78,7 +92,7 @@ class DailyReportDocxExportTest extends TestCase
                 $this->assertSame('center', $align->getAttribute('w:val'));
             }
             $grid = $xpath->query('./w:tblGrid/w:gridCol', $table);
-            $this->assertSame(6, $grid->length);
+            $this->assertSame($tableIndex === 1 ? 6 : 7, $grid->length);
             foreach ($xpath->query('./w:tr[2]/w:tc', $table) as $index => $cell) {
                 $cellWidth = $xpath->query('./w:tcPr/w:tcW', $cell)->item(0);
                 $this->assertInstanceOf(\DOMElement::class, $cellWidth);

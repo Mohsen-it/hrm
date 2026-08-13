@@ -33,9 +33,9 @@ function loadData() {
 
 const columns = computed(() => [
     { key: 'name', label: t('shifts.employee_name'), sortable: true, filterable: true },
-    { key: 'department', label: t('shifts.department'), sortable: true, filterable: true },
-    { key: 'category', label: t('shifts.category'), sortable: true, filterable: true },
-    { key: 'expected_in', label: t('shifts.expected_in_time'), sortable: true, cellClass: 'text-center' },
+    { key: 'department_name', label: t('shifts.department'), sortable: true, filterable: true },
+    { key: 'rotation_name', label: t('shifts.rotation'), sortable: true, filterable: true },
+    { key: 'expected_in', label: t('shifts.expected_in'), sortable: true, cellClass: 'text-center' },
     { key: 'status', label: t('shifts.status'), sortable: true, filterable: true, cellClass: 'text-center' },
 ])
 
@@ -102,16 +102,19 @@ function statusVariant(status) {
                 <div class="text-[14px] font-medium text-mistral-ink">{{ row.name }}</div>
             </template>
 
-            <template #cell-department="{ row }">
+            <template #cell-department_name="{ row }">
                 <span class="text-mistral-ink">{{ row.department_name || '—' }}</span>
             </template>
 
-            <template #cell-category="{ row }">
-                <span class="text-mistral-ink">{{ row.category_name || '—' }}</span>
+            <template #cell-rotation_name="{ row }">
+                <span class="text-mistral-ink">{{ row.rotation_name || '—' }}</span>
             </template>
 
             <template #cell-expected_in="{ row }">
-                <span dir="ltr">{{ row.expected_in_time || '—' }}</span>
+                <div v-if="row.expected_in" dir="ltr" class="text-mistral-ink text-[13px]">
+                    {{ row.expected_in }}<template v-if="row.expected_out"> – {{ row.expected_out }}</template>
+                </div>
+                <span v-else class="text-mistral-muted">—</span>
             </template>
 
             <template #cell-status="{ row }">

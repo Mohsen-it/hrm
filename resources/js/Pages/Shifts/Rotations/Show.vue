@@ -1,11 +1,13 @@
 <script setup>
 import { ref, computed } from 'vue';
-import { Head, Link, router } from '@inertiajs/vue3';
+import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
-import { PageHeader, Button, Card, Badge, DataTable, LoadingSpinner, FormInput, FormModal, ConfirmDialog } from '@/Components/ui';
+import { PageHeader, Button, Card, Badge, DataTable, LoadingSpinner, FormInput, FormModal, ConfirmDialog, Alert } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
+const page = usePage();
+const flashSuccess = computed(() => page.props.flash?.success);
 
 const props = defineProps({
     rotation: { type: Object, required: true },
@@ -34,6 +36,28 @@ const shortDayNames = computed(() => [
 ]);
 
 const groupColors = ['#22c55e', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#14b8a6'];
+
+// Punch windows sourced from the linked time schedule (minutes around in/out times).
+function windowEdge(anchor, margin, ahead) {
+    if (!anchor || !margin) return '—';
+    const [h, m] = String(anchor).slice(0, 5).split(':').map(Number);
+    const total = h * 60 + m + (ahead ? -Number(margin) : Number(margin));
+    const wrapped = ((total % 1440) + 1440) % 1440;
+    return String(Math.floor(wrapped / 60)).padStart(2, '0') + ':' + String(wrapped % 60).padStart(2, '0');
+}
+
+const timeSchedule = computed(() => props.rotation.time_schedule || null);
+
+const scheduleWindows = computed(() => {
+    const ts = timeSchedule.value;
+    if (!ts) return { in_start: '—', in_end: '—', out_start: '—', out_end: '—' };
+    return {
+        in_start: windowEdge(ts.in_time, ts.in_ahead_margin, true),
+        in_end: windowEdge(ts.in_time, ts.in_above_margin, false),
+        out_start: windowEdge(ts.out_time, ts.out_ahead_margin, true),
+        out_end: windowEdge(ts.out_time, ts.out_above_margin, false),
+    };
+});
 
 const stats = computed(() => {
     const groups = props.rotation.groups || [];
@@ -231,6 +255,8 @@ function performDeleteGroup() {
             </template>
         </PageHeader>
 
+        <Alert v-if="flashSuccess" type="success" :message="flashSuccess" dismissible class="mb-4" />
+
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
             <Card variant="stat" padding="lg">
                 <div class="flex items-center justify-between">
@@ -310,15 +336,17 @@ function performDeleteGroup() {
                     {{ t('shifts.punch_classification') }}
                 </h3>
             </template>
-            <p class="mb-4 text-[13px] text-mistral-slate">{{ t('shifts.punch_classification_description') }}</p>
+            <p class="mb-4 text-[13px] text-mistral-slate">
+                {{ timeSchedule ? t('shifts.time_schedule') + ': ' + timeSchedule.name : t('shifts.punch_classification_description') }}
+            </p>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div class="rounded-lg bg-mistral-success/10 px-4 py-3 text-mistral-success">
                     <p class="text-[12px] font-semibold">{{ t('shifts.check_in_window') }}</p>
-                    <p dir="ltr" class="mt-1 text-[16px] font-bold">{{ rotation.in_ahead_margin || '—' }} – {{ rotation.in_above_margin || '—' }}</p>
+                    <p dir="ltr" class="mt-1 text-[16px] font-bold">{{ scheduleWindows.in_start }} – {{ scheduleWindows.in_end }}</p>
                 </div>
                 <div class="rounded-lg bg-mistral-info/10 px-4 py-3 text-mistral-info">
                     <p class="text-[12px] font-semibold">{{ t('shifts.check_out_window') }}</p>
-                    <p dir="ltr" class="mt-1 text-[16px] font-bold">{{ rotation.out_ahead_margin || '—' }} – {{ rotation.out_above_margin || '—' }}</p>
+                    <p dir="ltr" class="mt-1 text-[16px] font-bold">{{ scheduleWindows.out_start }} – {{ scheduleWindows.out_end }}</p>
                 </div>
             </div>
         </Card>

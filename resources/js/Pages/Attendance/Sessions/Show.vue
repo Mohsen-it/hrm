@@ -1,10 +1,13 @@
 <script setup>
 import { computed } from 'vue';
+import { usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
-import { PageHeader, Button, Card, Badge } from '@/Components/ui';
+import { PageHeader, Button, Card, Badge, Alert } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
+const page = usePage();
+const flashSuccess = computed(() => page.props.flash?.success);
 
 const props = defineProps({
     session: { type: Object, required: true },
@@ -65,6 +68,8 @@ const fields = computed(() => [
                 </Button>
             </template>
         </PageHeader>
+
+        <Alert v-if="flashSuccess" type="success" :message="flashSuccess" class="mb-4" />
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <Card variant="base" padding="none" class="lg:col-span-2">

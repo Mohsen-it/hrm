@@ -115,7 +115,8 @@ return new class extends Migration
             'group' => array_intersect_key($group, array_flip(['id', 'name', 'group_index'])),
             'time_schedule' => $timeSchedule === null ? null : array_intersect_key($timeSchedule, array_flip([
                 'id', 'name', 'in_time', 'out_time', 'is_multi_day', 'late_margin',
-                'early_margin', 'breaks',
+                'early_margin', 'in_ahead_margin', 'in_above_margin',
+                'out_ahead_margin', 'out_above_margin', 'breaks',
             ])),
         ];
     }

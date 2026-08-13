@@ -1,11 +1,16 @@
 <script setup>
+import { computed } from 'vue';
+import { usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import PageHeader from '@/Components/ui/PageHeader.vue';
 import Button from '@/Components/ui/Button.vue';
 import Card from '@/Components/ui/Card.vue';
+import Alert from '@/Components/ui/Alert.vue';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
+const page = usePage();
+const flashSuccess = computed(() => page.props.flash?.success);
 
 const props = defineProps({
     schedule: { type: Object, required: true },
@@ -27,6 +32,8 @@ const props = defineProps({
                 </Button>
             </template>
         </PageHeader>
+
+        <Alert v-if="flashSuccess" type="success" :message="flashSuccess" dismissible class="mb-4" />
 
         <Card variant="base" padding="none" class="max-w-4xl">
             <div class="p-5 sm:p-6">

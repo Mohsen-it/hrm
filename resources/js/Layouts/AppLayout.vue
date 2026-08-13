@@ -69,9 +69,6 @@ onUnmounted(() => {
     }
 });
 
-const flashSuccess = computed(() => page.props.flash?.success);
-const flashError = computed(() => page.props.flash?.error);
-
 const mainPadding = computed(() => {
     if (isMobile.value) {
         return isRtl.value ? 'mr-0' : 'ml-0';
@@ -160,17 +157,8 @@ watch(() => page.url, () => {
                 @open-command-palette="openCommandPalette"
             />
 
-            <!-- Flash messages -->
-            <div v-if="flashSuccess || flashError" class="px-4 md:px-6 pt-4 space-y-2">
-                <div v-if="flashSuccess" class="flex items-center gap-2.5 px-4 py-3 rounded-lg bg-mistral-success/8 border border-mistral-success/30 text-mistral-success text-[13px] font-medium">
-                    <i class="fas fa-circle-check text-[14px]" aria-hidden="true"></i>
-                    <span>{{ flashSuccess }}</span>
-                </div>
-                <div v-if="flashError" class="flex items-center gap-2.5 px-4 py-3 rounded-lg bg-mistral-danger/8 border border-mistral-danger/30 text-mistral-danger text-[13px] font-medium">
-                    <i class="fas fa-circle-exclamation text-[14px]" aria-hidden="true"></i>
-                    <span>{{ flashError }}</span>
-                </div>
-            </div>
+            <!-- Flash messages are rendered by each page via the <Alert> component
+                 (single source of truth) to avoid duplicate banners. -->
 
             <!-- Page content -->
             <main class="p-4 md:p-6 pb-10">

@@ -24,16 +24,19 @@ class RotationResource extends JsonResource
             'work_on_holidays' => $this->work_on_holidays,
             'grace_minutes' => $this->grace_minutes,
             'color' => $this->color,
-            'in_ahead_margin' => $this->formatMarginTime($this->in_ahead_margin),
-            'in_above_margin' => $this->formatMarginTime($this->in_above_margin),
-            'out_ahead_margin' => $this->formatMarginTime($this->out_ahead_margin),
-            'out_above_margin' => $this->formatMarginTime($this->out_above_margin),
             'time_schedule' => $this->whenLoaded('timeSchedule', function () {
                 return $this->timeSchedule ? [
                     'id' => $this->timeSchedule->id,
                     'name' => $this->timeSchedule->name,
                     'in_time' => $this->timeSchedule->in_time,
                     'out_time' => $this->timeSchedule->out_time,
+                    'is_multi_day' => $this->timeSchedule->is_multi_day,
+                    'late_margin' => $this->timeSchedule->late_margin,
+                    'early_margin' => $this->timeSchedule->early_margin,
+                    'in_ahead_margin' => $this->timeSchedule->in_ahead_margin,
+                    'in_above_margin' => $this->timeSchedule->in_above_margin,
+                    'out_ahead_margin' => $this->timeSchedule->out_ahead_margin,
+                    'out_above_margin' => $this->timeSchedule->out_above_margin,
                 ] : null;
             }),
             'active_employees_count' => $this->when(isset($this->active_employees_count), fn () => $this->active_employees_count),
@@ -44,11 +47,4 @@ class RotationResource extends JsonResource
         ];
     }
 
-    /**
-     * Format database TIME values for HTML time inputs.
-     */
-    private function formatMarginTime(?string $time): ?string
-    {
-        return $time === null ? null : substr($time, 0, 5);
-    }
 }

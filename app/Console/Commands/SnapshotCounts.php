@@ -27,6 +27,7 @@ class SnapshotCounts extends Command
             'user_vacation_balance_transactions',
             'device_sync_logs',
             'schedule_periods',
+            'user_activity_logs',
             'att_hours_tracking',
             'att_rotation_assignments',
             'att_employee_shift_categories',

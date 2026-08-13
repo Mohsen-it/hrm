@@ -298,6 +298,7 @@ function dayDetailStatusClass(status) {
         vacation: 'bg-mistral-info/10 text-mistral-info border-mistral-info/30',
         exception: 'bg-mistral-primary/10 text-mistral-primary border-mistral-primary/30',
         holiday: 'bg-mistral-cream-deeper text-mistral-ink border-mistral-hairline',
+        incomplete: 'bg-mistral-warning/10 text-mistral-warning border-mistral-warning/30',
         absent: 'bg-mistral-danger/10 text-mistral-danger border-mistral-danger/30',
     }[status] || 'bg-mistral-surface text-mistral-steel border-mistral-hairline'
 }

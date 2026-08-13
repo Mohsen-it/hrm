@@ -6,6 +6,8 @@ use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Modules\Attendance\Models\AttendanceSession;
 use Modules\Attendance\Models\DailyAttendanceSummary;
+use Modules\Attendance\Models\RawAttendanceLog;
+use Modules\Holidays\Models\Holiday;
 use Modules\Shifts\Models\ShiftException;
 use Modules\Shifts\Repositories\RotationAssignmentRepository;
 use Modules\Shifts\Services\AbsenceCalculationService;
@@ -63,6 +65,20 @@ class DailyReportService
             ->orderBy('check_in_at')->get()->groupBy('user_id');
         $previousSessions = AttendanceSession::onDate($previousDate)->whereIn('user_id', $userIds)
             ->orderBy('check_in_at')->get()->groupBy('user_id');
+        // A raw device punch is physical proof of presence even when the
+        // session pipeline could not create a session for this date (e.g. an
+        // early-morning punch outside the configured check-in window). The
+        // smart-absence report already treats raw punches as presence, so the
+        // daily report must never mark these employees absent.
+        $rawPunchIds = RawAttendanceLog::query()
+            ->whereIn('user_id', $userIds)
+            ->whereBetween('punch_time', $this->localDayUtcBounds($date))
+            ->distinct()
+            ->pluck('user_id')
+            ->flip();
+        // Active official holidays, checked per employee (branch/department
+        // scoping + work_on_holidays) using the same rule as smart absence.
+        $holidays = Holiday::active()->get();
         // Multi-day duty rotations can leave their (single) open session several
         // days behind the report date (e.g. 3-day duty). Track the most recent
         // open session strictly before the report day so those employees are
@@ -111,7 +127,7 @@ class DailyReportService
             ->whereIn('exception_type', ['leave', 'mission', 'training', 'swap'])
             ->overlapping($date)->get()->groupBy('employee_id');
 
-        $rows = $users->map(function (User $user) use ($date, $cutoffTime, $expected, $assignments, $sessions, $previousSessions, $openBeforeReport, $previousExpected, $previousAssignments, $previousDate, $monthSessions, $monthlyAbsenceCounts, $monthlyVacationDays, $unregisteredFingerprintIds, $vacations, $exceptions): array {
+        $rows = $users->map(function (User $user) use ($date, $cutoffTime, $expected, $assignments, $sessions, $previousSessions, $openBeforeReport, $previousExpected, $previousAssignments, $previousDate, $monthSessions, $monthlyAbsenceCounts, $monthlyVacationDays, $unregisteredFingerprintIds, $vacations, $exceptions, $rawPunchIds, $holidays): array {
             $userSessions = $sessions->get($user->id, collect());
             $first = $userSessions->first();
             $assignment = $assignments->get($user->id);
@@ -195,6 +211,13 @@ class DailyReportService
                 fn ($s) => $s->check_in_at && $s->check_in_at->format('H:i') > $cutoffTime
             )->unique(fn ($s) => $s->attendance_date?->toDateString())->count();
 
+            // An official holiday only excuses employees whose rotation does
+            // not work on holidays — matching smart absence. Employees who
+            // actually attended keep their real status.
+            $isHoliday = ! $userSessions->count()
+                && $this->isOfficialHoliday($date, $user, $holidays, $assignment);
+            $hasRawPunch = ! $userSessions->count() && $rawPunchIds->has($user->id);
+
             $status = 'present';
             $label = 'حاضر';
             if ($onMission) {
@@ -206,7 +229,10 @@ class DailyReportService
             } elseif (! $expected->has($user->id) && ! $hasPreviousDayMissingCheckout) {
                 $status = 'rest';
                 $label = 'غير متوقع دوامه';
-            } elseif (! $userSessions->count() && ! $hasPreviousDayMissingCheckout) {
+            } elseif ($isHoliday && ! $hasPreviousDayMissingCheckout) {
+                $status = 'holiday';
+                $label = 'إجازة رسمية';
+            } elseif (! $userSessions->count() && ! $hasPreviousDayMissingCheckout && ! $hasRawPunch) {
                 $status = 'absent';
                 $label = 'غياب';
             } elseif ($hasIncompletePunch) {
@@ -228,6 +254,9 @@ class DailyReportService
             if ($status === 'leave' && $vacation !== null) {
                 $leaveDays = (int) $monthlyVacationDays->get($user->id, 0);
                 $notes[] = 'عدد أيام الإجازة خلال الشهر: '.$this->arabicNumber($leaveDays);
+            }
+            if ($hasRawPunch) {
+                $notes[] = 'بصمة مسجلة دون جلسة';
             }
             if ($hasIncompletePunch) {
                 $exitNotes = [];
@@ -345,12 +374,12 @@ class DailyReportService
     /**
      * Resolve the end of the rotation's exit window for a report day.
      *
-     * Rotation margins are stored as absolute daily window times (e.g.
-     * "18:00:00"). When the rotation has no configured window, the
-     * time-schedule margin (minutes after the expected check-out) is used
-     * instead, matching the punch-classification services. Rotations without
-     * a time schedule have no expected check-out, but their absolute window
-     * still applies on its own.
+     * The exit window is sourced from the Time Schedule via RotationEngine::
+     * resolveTimes() (single source of truth). Margins configured as minutes
+     * are added to the scheduled check-out; legacy absolute window times
+     * ("18:00:00") stored on the rotation are kept as-is for backward
+     * compatibility. Rotations without a time schedule have no expected
+     * check-out, but their legacy absolute window still applies on its own.
      *
      * For overnight duty rotations both the window end and the expected
      * check-out fall on the departure morning: the employee arrives on the
@@ -360,17 +389,19 @@ class DailyReportService
      */
     private function exitWindowEnd(string $date, ?string $expectedCheckOut, mixed $assignment): ?Carbon
     {
-        $rotation = $assignment?->rotation;
-        $windowEndTime = $rotation?->out_above_margin;
         $isOvernight = $this->isAssignmentOvernight($assignment);
 
-        if ($windowEndTime) {
-            $end = Carbon::parse($date.' '.substr((string) $windowEndTime, 0, 8));
-            if ($isOvernight) {
-                $end = $this->moveWindowToDepartureDay($date, $end, $assignment);
-            }
+        if ($assignment) {
+            $windowEndTime = $this->rotationEngine->resolveTimes($assignment)['out_above_margin'] ?? null;
 
-            return $end;
+            if ($windowEndTime) {
+                $end = Carbon::parse($date.' '.substr((string) $windowEndTime, 0, 5));
+                if ($isOvernight) {
+                    $end = $this->moveWindowToDepartureDay($date, $end, $assignment);
+                }
+
+                return $end;
+            }
         }
 
         if (! $expectedCheckOut) {
@@ -381,7 +412,7 @@ class DailyReportService
 
         // A zero margin closes the window exactly at the expected check-out;
         // rotations without a configured window deliberately get no grace.
-        $marginMinutes = (int) ($rotation?->timeSchedule?->out_above_margin ?? 0);
+        $marginMinutes = (int) ($assignment?->rotation?->timeSchedule?->out_above_margin ?? 0);
 
         $expectedOut = Carbon::parse($date.' '.$expectedCheckOut);
         if ($isOvernight) {
@@ -420,6 +451,64 @@ class DailyReportService
         }
 
         return $window->addDay();
+    }
+
+    /**
+     * Whether the report date is an official holiday for this employee.
+     *
+     * Mirrors the smart-absence rule (AbsenceCalculationService): a holiday
+     * excuses the employee only when their rotation does not work on
+     * holidays, and only when the holiday applies to their branch/department
+     * (or to everyone). Multi-day holidays are covered via duration_days.
+     *
+     * @param  Collection<int, Holiday>  $holidays
+     */
+    private function isOfficialHoliday(string $date, User $user, Collection $holidays, mixed $assignment): bool
+    {
+        if ((bool) ($assignment?->rotation?->work_on_holidays ?? false)) {
+            return false;
+        }
+
+        foreach ($holidays as $holiday) {
+            $duration = max(1, (int) $holiday->duration_days);
+            $anchor = $holiday->is_recurring
+                ? Carbon::createFromDate(
+                    Carbon::parse($date)->year,
+                    (int) $holiday->recurring_month,
+                    (int) $holiday->recurring_day,
+                )
+                : $holiday->date?->copy()->startOfDay();
+
+            if (! $anchor || ! Carbon::parse($date)->betweenIncluded($anchor, $anchor->copy()->addDays($duration - 1))) {
+                continue;
+            }
+
+            if ($holiday->applies_to_all
+                || in_array((int) $user->branch_id, $holiday->applies_to_branches ?? [], true)
+                || in_array((int) $user->department_id, $holiday->applies_to_departments ?? [], true)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * UTC boundary strings covering one full app-timezone day.
+     *
+     * Raw device punches are stored in UTC while report dates are local, so
+     * matching a local date requires shifting the day's bounds to UTC.
+     *
+     * @return array{0: string, 1: string}
+     */
+    private function localDayUtcBounds(string $date): array
+    {
+        $day = Carbon::parse($date);
+
+        return [
+            $day->copy()->startOfDay()->setTimezone('UTC')->format('Y-m-d H:i:s'),
+            $day->copy()->endOfDay()->setTimezone('UTC')->format('Y-m-d H:i:s'),
+        ];
     }
 
     /**

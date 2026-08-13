@@ -13,5 +13,6 @@
   "Vacations": true,
   "Settings": true,
   "Zones": true,
-  "AttendanceIntegration": true
+  "AttendanceIntegration": true,
+  "UserActivity": true
 }

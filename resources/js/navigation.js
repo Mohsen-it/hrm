@@ -357,6 +357,13 @@ export const navigationGroups = [
         icon: 'fa-solid fa-key',
         permissions: ['view-permissions'],
       },
+      {
+        id: 'admin.activity-log',
+        label: 'menu.activity_log',
+        route: 'user-activity.index',
+        icon: 'fa-solid fa-user-clock',
+        permissions: ['view-activity-logs'],
+      },
     ],
   },
 ];

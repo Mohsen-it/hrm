@@ -22,7 +22,7 @@ const statusOptions = [
     { value: '', label: 'كل الحالات' }, { value: 'absent', label: 'الغياب' },
     { value: 'late', label: 'التأخير' }, { value: 'leave', label: 'الإجازات' },
     { value: 'mission', label: 'المهمات' }, { value: 'no_fingerprint', label: 'غير المسجلين بالبصمة' },
-    { value: 'incomplete', label: 'عدم الالتزام بالبصمة' },
+    { value: 'incomplete', label: 'عدم الالتزام بالبصمة' }, { value: 'holiday', label: 'إجازة رسمية' },
 ];
 const data = computed(() => ({ data: props.report.rows || [], links: [] }));
 const columns = [
@@ -35,7 +35,7 @@ const columns = [
 function filterParams() { return { date: date.value, cutoff_time: cutoffTime.value, branch_id: branchId.value || undefined, department_id: departmentId.value || undefined, user_id: userId.value || undefined, status: status.value || undefined }; }
 function applyFilters() { router.get(route('attendance.daily-summaries.daily-report'), filterParams(), { preserveState: true, replace: true }); }
 function exportReport() { window.location.href = route('attendance.daily-summaries.daily-report.export', filterParams()); }
-function badgeVariant(status) { return ({ present: 'active', late: 'warning', absent: 'absent', leave: 'info', mission: 'primary', incomplete: 'warning', no_fingerprint: 'neutral', rest: 'neutral' }[status] || 'neutral'); }
+function badgeVariant(status) { return ({ present: 'active', late: 'warning', absent: 'absent', leave: 'info', mission: 'primary', incomplete: 'warning', no_fingerprint: 'neutral', rest: 'neutral', holiday: 'neutral' }[status] || 'neutral'); }
 </script>
 
 <template>
@@ -68,7 +68,7 @@ function badgeVariant(status) { return ({ present: 'active', late: 'warning', ab
 
         <Card variant="base" padding="none" class="overflow-hidden">
             <div class="px-5 py-3 text-[12px] text-mistral-steel border-b border-mistral-hairline-soft">
-                عدم الالتزام يظهر فقط للموظف المتوقع دوامه والمسجّل بصمة، بعد مرور 30 دقيقة من وقت خروجه المتوقع.
+                عدم الالتزام بالبصمة يظهر فقط للموظف المتوقع دوامه، بعد انتهاء نافذة الخروج المحددة في جدول الوقت المرتبط بالدورية.
             </div>
             <DataTable :columns="columns" :data="data" storage-key="attendance-daily-report" :enable-search="true" :enable-filters="false" :enable-export="false" :enable-pagination="false">
                 <template #cell-status_label="{ row }"><Badge :text="row.status_label" :variant="badgeVariant(row.status)" dot /></template>

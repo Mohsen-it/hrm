@@ -2,7 +2,7 @@
 import { ref, computed } from 'vue';
 import { router, Link, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
-import { PageHeader, Button, DataTable, ConfirmDialog, Badge, IconButton } from '@/Components/ui';
+import { PageHeader, Button, DataTable, ConfirmDialog, Badge, IconButton, Alert } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
@@ -75,6 +75,8 @@ const flashSuccess = computed(() => page.props.flash?.success);
                 </Button>
             </template>
         </PageHeader>
+
+        <Alert v-if="flashSuccess" type="success" :message="flashSuccess" dismissible class="mb-4" />
 
         <DataTable
             :columns="columns"

@@ -87,7 +87,7 @@ class DailySummariesController extends Controller
             'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
             'department_id' => ['nullable', 'integer', 'exists:departments,id'],
             'user_id' => ['nullable', 'integer', 'exists:users,id'],
-            'status' => ['nullable', 'in:absent,late,leave,no_fingerprint,mission,incomplete'],
+            'status' => ['nullable', 'in:absent,late,leave,no_fingerprint,mission,incomplete,holiday'],
         ]);
         $report = $this->dailyReportService->build(
             $data['date'] ?? now()->toDateString(), $data['cutoff_time'] ?? '09:00', $data['branch_id'] ?? null,
@@ -121,7 +121,7 @@ class DailySummariesController extends Controller
             'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
             'department_id' => ['nullable', 'integer', 'exists:departments,id'],
             'user_id' => ['nullable', 'integer', 'exists:users,id'],
-            'status' => ['nullable', 'in:absent,late,leave,no_fingerprint,mission,incomplete'],
+            'status' => ['nullable', 'in:absent,late,leave,no_fingerprint,mission,incomplete,holiday'],
         ]);
         $report = $this->dailyReportService->build(
             $data['date'], $data['cutoff_time'], $data['branch_id'] ?? null, $data['department_id'] ?? null,

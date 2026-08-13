@@ -447,10 +447,6 @@ class RotationService
                 'overtime_enabled' => $rotation->overtime_enabled,
                 'work_on_holidays' => $rotation->work_on_holidays,
                 'grace_minutes' => $rotation->grace_minutes,
-                'in_ahead_margin' => $rotation->in_ahead_margin,
-                'in_above_margin' => $rotation->in_above_margin,
-                'out_ahead_margin' => $rotation->out_ahead_margin,
-                'out_above_margin' => $rotation->out_above_margin,
                 'color' => $rotation->color,
             ],
             'group' => [
@@ -466,6 +462,10 @@ class RotationService
                 'is_multi_day' => $timeSchedule->is_multi_day,
                 'late_margin' => $timeSchedule->late_margin,
                 'early_margin' => $timeSchedule->early_margin,
+                'in_ahead_margin' => $timeSchedule->in_ahead_margin,
+                'in_above_margin' => $timeSchedule->in_above_margin,
+                'out_ahead_margin' => $timeSchedule->out_ahead_margin,
+                'out_above_margin' => $timeSchedule->out_above_margin,
                 'breaks' => $timeSchedule->breaks->map(fn ($b) => [
                     'break_start' => $b->break_start,
                     'break_end' => $b->break_end,

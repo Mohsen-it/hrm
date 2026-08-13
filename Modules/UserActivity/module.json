@@ -1,0 +1,11 @@
+{
+    "name": "UserActivity",
+    "alias": "useractivity",
+    "description": "User activity monitoring — tracks every authenticated request and reports usage summaries, action counts and active working hours per user.",
+    "keywords": [],
+    "priority": 0,
+    "providers": [
+        "Modules\\UserActivity\\Providers\\UserActivityServiceProvider"
+    ],
+    "files": []
+}

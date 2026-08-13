@@ -66,6 +66,7 @@ class PermissionSeeder extends Seeder
         'edit-rotations',
         'delete-rotations',
         'assign-employees-to-rotation',
+        'view-activity-logs',
     ];
 
     /**

@@ -32,6 +32,51 @@ abstract class TestCase extends BaseTestCase
      */
     protected function setUp(): void
     {
+        // Force the isolated SQLite test environment in EVERY source Laravel
+        // may read. PHPUnit's phpunit.xml <env force="true"> only updates
+        // getenv() and $_ENV, but on this machine a real DB_CONNECTION=mysql /
+        // DB_DATABASE=hrmair pair also sits in $_SERVER, and Laravel's env()
+        // resolution can prefer $_SERVER. Without this triple assignment the
+        // test suite would run RefreshDatabase against the production MySQL
+        // database and wipe it.
+        foreach ([
+            // The same real-environment override problem applies to APP_ENV: a
+            // machine-level APP_ENV=local (or .env value) shadows phpunit.xml's
+            // non-forced <env>, so the app boots as "local" and runningUnitTests()
+            // returns false — which re-enables CSRF and makes every feature-test
+            // POST fail with 419. Forcing it here keeps the suite green.
+            'APP_ENV' => 'testing',
+            'DB_CONNECTION' => 'sqlite',
+            'DB_DATABASE' => ':memory:',
+            'DB_URL' => '',
+            'DB_HOST' => '',
+            'DB_PORT' => '',
+            'DB_USERNAME' => '',
+            'DB_PASSWORD' => '',
+        ] as $key => $value) {
+            putenv("{$key}={$value}");
+            $_ENV[$key] = $value;
+            $_SERVER[$key] = $value;
+        }
+
+        // Boot the application first so the guard below can inspect the real
+        // resolved database connection BEFORE any destructive trait runs.
+        if (! $this->app) {
+            $this->refreshApplication();
+        }
+
+        // Hard safety guard: the test suite MUST run on the in-memory SQLite
+        // database. RefreshDatabase drops every table it finds, so a real
+        // MySQL database must never be reachable from a test process. If this
+        // guard ever trips, fix the environment (config cache / OS env vars)
+        // before running any test.
+        if (config('database.default') !== 'sqlite') {
+            throw new \RuntimeException(
+                'Refusing to run tests: database.default is "'.config('database.default')
+                .'". Tests must run on "sqlite" (:memory:) to protect real data.'
+            );
+        }
+
         parent::setUp();
 
         app(PermissionRegistrar::class)->forgetCachedPermissions();

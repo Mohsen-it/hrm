@@ -22,10 +22,6 @@ const form = reactive({
     work_on_holidays: false,
     grace_minutes: 0,
     color: 'var(--color-mistral-primary)',
-    in_ahead_margin: '',
-    in_above_margin: '',
-    out_ahead_margin: '',
-    out_above_margin: '',
 });
 
 const patternInput = ref('');
@@ -42,6 +38,32 @@ const scheduleOptions = computed(() => (props.timeSchedules || []).map(ts => ({
 const selectedScheduleIsMultiDay = computed(() =>
     (props.timeSchedules || []).some(ts => ts.is_multi_day && Number(ts.id) === Number(form.time_schedule_id)),
 );
+
+const selectedSchedule = computed(() =>
+    (props.timeSchedules || []).find(ts => Number(ts.id) === Number(form.time_schedule_id)) || null,
+);
+
+// Punch windows derived from the selected time schedule (minutes around in/out times).
+function windowEdge(anchor, margin, ahead) {
+    if (!anchor || !margin) return '—';
+    const [h, m] = String(anchor).slice(0, 5).split(':').map(Number);
+    const total = h * 60 + m + (ahead ? -Number(margin) : Number(margin));
+    const wrapped = ((total % 1440) + 1440) % 1440;
+    return String(Math.floor(wrapped / 60)).padStart(2, '0') + ':' + String(wrapped % 60).padStart(2, '0');
+}
+
+const scheduleWindows = computed(() => {
+    const ts = selectedSchedule.value;
+    if (!ts) return null;
+    return {
+        in_start: windowEdge(ts.in_time, ts.in_ahead_margin, true),
+        in_end: windowEdge(ts.in_time, ts.in_above_margin, false),
+        out_start: windowEdge(ts.out_time, ts.out_ahead_margin, true),
+        out_end: windowEdge(ts.out_time, ts.out_above_margin, false),
+        in_time: ts.in_time ? String(ts.in_time).slice(0, 5) : '—',
+        out_time: ts.out_time ? String(ts.out_time).slice(0, 5) : '—',
+    };
+});
 
 const presets = [
     { label: 'Sunday-Thursday (Admin)', pattern: [1, 1, 1, 1, 1, 0, 0], groups: 1 },
@@ -297,51 +319,29 @@ function submit() {
                 </div>
             </FormSection>
 
-            <FormSection :title="t('shifts.margins')" icon="fas fa-arrows-alt-h" :collapsible="true" :default-open="true">
+            <FormSection v-if="selectedSchedule" :title="t('shifts.time_schedule') + ' — ' + selectedSchedule.name" icon="fas fa-clock" :collapsible="true" :default-open="true">
                 <div class="mb-4 rounded-lg border border-mistral-info/20 bg-mistral-info/5 px-4 py-3 text-[13px] text-mistral-ink">
                     <div class="flex items-start gap-2">
-                        <i class="fas fa-fingerprint mt-0.5 text-mistral-info"></i>
-                        <p>{{ t('shifts.punch_classification_description') }}</p>
+                        <i class="fas fa-clock mt-0.5 text-mistral-info"></i>
+                        <p>{{ t('shifts.time_schedule_summary_hint') }}</p>
                     </div>
                 </div>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <FormInput
-                        v-model="form.in_ahead_margin"
-                        :label="t('shifts.in_ahead_margin')"
-                        name="in_ahead_margin"
-                        type="time"
-                        :error="errorFor('in_ahead_margin')"
-                    />
-                    <FormInput
-                        v-model="form.in_above_margin"
-                        :label="t('shifts.in_above_margin')"
-                        name="in_above_margin"
-                        type="time"
-                        :error="errorFor('in_above_margin')"
-                    />
-                    <FormInput
-                        v-model="form.out_ahead_margin"
-                        :label="t('shifts.out_ahead_margin')"
-                        name="out_ahead_margin"
-                        type="time"
-                        :error="errorFor('out_ahead_margin')"
-                    />
-                    <FormInput
-                        v-model="form.out_above_margin"
-                        :label="t('shifts.out_above_margin')"
-                        name="out_above_margin"
-                        type="time"
-                        :error="errorFor('out_above_margin')"
-                    />
-                </div>
-                <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3 text-[13px]">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-[13px]">
+                    <div class="rounded-lg bg-mistral-surface px-4 py-3">
+                        <span class="font-semibold text-mistral-slate">{{ t('shifts.schedule_hours') }}:</span>
+                        <span dir="ltr" class="text-mistral-ink">{{ scheduleWindows.in_time }} – {{ scheduleWindows.out_time }}</span>
+                    </div>
                     <div class="rounded-lg bg-mistral-success/10 px-4 py-3 text-mistral-success">
                         <span class="font-semibold">{{ t('shifts.check_in_window') }}:</span>
-                        <span dir="ltr">{{ form.in_ahead_margin || '—' }} – {{ form.in_above_margin || '—' }}</span>
+                        <span dir="ltr">{{ scheduleWindows.in_start }} – {{ scheduleWindows.in_end }}</span>
                     </div>
                     <div class="rounded-lg bg-mistral-info/10 px-4 py-3 text-mistral-info">
                         <span class="font-semibold">{{ t('shifts.check_out_window') }}:</span>
-                        <span dir="ltr">{{ form.out_ahead_margin || '—' }} – {{ form.out_above_margin || '—' }}</span>
+                        <span dir="ltr">{{ scheduleWindows.out_start }} – {{ scheduleWindows.out_end }}</span>
+                    </div>
+                    <div class="rounded-lg bg-mistral-warning/10 px-4 py-3 text-mistral-warning">
+                        <span class="font-semibold">{{ t('shifts.grace_minutes') }}:</span>
+                        <span dir="ltr">{{ selectedSchedule.late_margin ?? 0 }} {{ t('shifts.minutes') }}</span>
                     </div>
                 </div>
             </FormSection>

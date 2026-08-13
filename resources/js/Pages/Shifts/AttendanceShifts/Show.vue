@@ -12,6 +12,8 @@
       </div>
     </PageHeader>
 
+    <Alert v-if="flashSuccess" type="success" :message="flashSuccess" dismissible class="mb-4" />
+
     <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
       <Card class="lg:col-span-1">
         <h3 class="mb-4 text-lg font-semibold">{{ t('attendance.fields.details') }}</h3>
@@ -60,11 +62,15 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
+import { usePage } from '@inertiajs/vue3'
 import AppLayout from '@/layouts/AppLayout.vue'
-import { PageHeader, Button, Card, DataTable, Badge } from '@/Components/ui'
+import { PageHeader, Button, Card, DataTable, Badge, Alert } from '@/Components/ui'
 import { useTranslations } from '@/composables/useTranslations'
 
 const { t } = useTranslations()
+const page = usePage()
+const flashSuccess = computed(() => page.props.flash?.success)
 
 const props = defineProps({
   shift: Object,

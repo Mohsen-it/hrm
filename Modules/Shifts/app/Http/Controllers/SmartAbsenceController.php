@@ -15,6 +15,7 @@ use Modules\Shifts\Exports\SmartAbsenceMonthlyExport;
 use Modules\Shifts\Repositories\RotationAssignmentRepository;
 use Modules\Shifts\Repositories\RotationRepository;
 use Modules\Shifts\Services\AbsenceCalculationService;
+use Modules\Shifts\Services\RotationEngine;
 use Symfony\Component\HttpFoundation\Response as HttpResponse;
 
 class SmartAbsenceController extends Controller
@@ -23,6 +24,7 @@ class SmartAbsenceController extends Controller
         private AbsenceCalculationService $absenceService,
         private RotationRepository $rotationRepository,
         private RotationAssignmentRepository $rotationAssignmentRepository,
+        private RotationEngine $rotationEngine,
     ) {}
 
     /**
@@ -271,6 +273,7 @@ class SmartAbsenceController extends Controller
                 $row->vacation_days = collect($dayDetails)->where('status', 'vacation')->count();
                 $row->exception_days = collect($dayDetails)->where('status', 'exception')->count();
                 $row->holiday_days = collect($dayDetails)->where('status', 'holiday')->count();
+                $row->incomplete_days = collect($dayDetails)->where('status', 'incomplete')->count();
                 $row->absent_days = $absent;
                 $row->day_details = array_values($dayDetails);
                 $row->absent_dates = $absentDates;
@@ -283,7 +286,7 @@ class SmartAbsenceController extends Controller
 
                 return $row;
             })
-            ->filter(fn ($row) => $row->absent_days > 0 || $row->vacation_days > 0 || $row->exception_days > 0)
+            ->filter(fn ($row) => $row->absent_days > 0 || $row->vacation_days > 0 || $row->exception_days > 0 || $row->incomplete_days > 0)
             ->sortBy('name')
             ->sortByDesc(fn ($row) => $row->absent_days + $row->vacation_days + $row->exception_days)
             ->values();
@@ -422,10 +425,14 @@ class SmartAbsenceController extends Controller
 
             $absentDetails = $absentDetails->map(function ($row) use ($absentAssignments) {
                 $assignment = $absentAssignments->firstWhere('employee_id', $row->id);
+                // Expected times come from RotationEngine::resolveTimes() — the
+                // same single source of truth the punch classifier and session
+                // pipeline use (assignment snapshot → live time schedule).
+                $times = $assignment ? $this->rotationEngine->resolveTimes($assignment) : null;
                 $row->rotation_name = $assignment?->rotation?->name;
                 $row->rotation_group_name = $assignment?->rotationGroup?->name;
-                $row->expected_in = $assignment?->rotation?->timeSchedule?->in_time;
-                $row->expected_out = $assignment?->rotation?->timeSchedule?->out_time;
+                $row->expected_in = $times['check_in'] ?? null;
+                $row->expected_out = $times['check_out'] ?? null;
                 $row->status = 'absent';
 
                 return $row;
@@ -486,8 +493,34 @@ class SmartAbsenceController extends Controller
         $absentTeam = $absentTeam->intersect($teamIds)->values();
 
         $absentDetails = DB::table('users')
-            ->whereIn('id', $absentTeam->toArray())
-            ->get(['id', 'name', 'employee_code', 'department_id']);
+            ->whereIn('users.id', $absentTeam->toArray())
+            ->leftJoin('departments', 'users.department_id', '=', 'departments.id')
+            ->leftJoin('positions', 'users.position_id', '=', 'positions.id')
+            ->get([
+                'users.id',
+                'users.name',
+                'users.employee_code',
+                'users.department_id',
+                'users.position_id',
+                'departments.department_name',
+                'positions.position_name',
+            ]);
+
+        $absentAssignments = $this->rotationAssignmentRepository->getLatestActiveAssignments();
+
+        $absentDetails = $absentDetails->map(function ($row) use ($absentAssignments) {
+            $assignment = $absentAssignments->firstWhere('employee_id', $row->id);
+            // Expected times come from RotationEngine::resolveTimes() — the
+            // same single source of truth the punch classifier uses.
+            $times = $assignment ? $this->rotationEngine->resolveTimes($assignment) : null;
+            $row->rotation_name = $assignment?->rotation?->name;
+            $row->expected_in = $times['check_in'] ?? null;
+            $row->expected_out = $times['check_out'] ?? null;
+            $row->status = 'absent';
+            $row->status_label = __('shifts::shifts.absent_short');
+
+            return $row;
+        })->values();
 
         return Inertia::render('Shifts/Absence/TeamAbsence', [
             'date' => $dateStr,

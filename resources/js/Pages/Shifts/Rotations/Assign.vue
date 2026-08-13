@@ -1,11 +1,13 @@
 <script setup>
 import { ref, reactive, computed, watch, onBeforeUnmount } from 'vue';
-import { router, Head } from '@inertiajs/vue3';
+import { router, Head, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
-import { PageHeader, Button, Card, FormInput, FormSelect, Badge, DataTable, ErrorSummary, FormSection, FormActions } from '@/Components/ui';
+import { PageHeader, Button, Card, FormInput, FormSelect, Badge, DataTable, ErrorSummary, FormSection, FormActions, Alert } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
+const page = usePage();
+const flashSuccess = computed(() => page.props.flash?.success);
 
 const props = defineProps({
     rotations: { type: Array, default: () => [] },
@@ -212,6 +214,8 @@ onBeforeUnmount(() => {
                 <Button variant="secondary" :href="route('rotations.index')">{{ t('common.back') }}</Button>
             </template>
         </PageHeader>
+
+        <Alert v-if="flashSuccess" type="success" :message="flashSuccess" dismissible class="mb-4" />
 
         <div class="max-w-5xl">
             <form class="space-y-6" @submit.prevent="submit">

@@ -132,6 +132,7 @@ class SmartAbsenceMonthlyExport
         'vacation' => '2563EB',  // blue
         'exception' => 'D97706', // orange
         'holiday' => '64748B',   // slate
+        'incomplete' => '9333EA', // purple
         'absent' => 'DC2626',    // red
     ];
 
@@ -151,6 +152,7 @@ class SmartAbsenceMonthlyExport
             ['label' => __('shifts::shifts.on_vacation'), 'status' => 'vacation'],
             ['label' => __('shifts::shifts.on_exception'), 'status' => 'exception'],
             ['label' => __('shifts::shifts.official_holiday'), 'status' => 'holiday'],
+            ['label' => __('shifts::shifts.incomplete'), 'status' => 'incomplete'],
             ['label' => __('shifts::shifts.absent_short'), 'status' => 'absent'],
         ];
 

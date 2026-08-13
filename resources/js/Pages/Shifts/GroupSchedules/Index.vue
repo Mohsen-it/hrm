@@ -1,11 +1,13 @@
 <script setup>
-import { ref } from 'vue';
-import { router } from '@inertiajs/vue3';
+import { ref, computed } from 'vue';
+import { router, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
-import { PageHeader, Button, Card, DataTable, IconButton, ConfirmDialog } from '@/Components/ui';
+import { PageHeader, Button, Card, DataTable, IconButton, ConfirmDialog, Alert } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
+const page = usePage();
+const flashSuccess = computed(() => page.props.flash?.success);
 
 const props = defineProps({
     schedules: { type: Object, default: () => ({ data: [], links: [] }) },
@@ -58,6 +60,8 @@ const deleteSchedule = () => {
                 </Button>
             </template>
         </PageHeader>
+
+        <Alert v-if="flashSuccess" type="success" :message="flashSuccess" dismissible class="mb-4" />
 
         <Card variant="base" padding="none">
             <DataTable

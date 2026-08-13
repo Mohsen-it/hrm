@@ -3,8 +3,10 @@
 namespace Tests\Unit\Modules\Attendance;
 
 use Modules\Attendance\Models\AttendanceSession;
+use Modules\Attendance\Models\RawAttendanceLog;
 use Modules\Attendance\Services\DailyReportService;
 use Modules\Companies\Models\Company;
+use Modules\Holidays\Models\Holiday;
 use Modules\Shifts\Models\Rotation;
 use Modules\Shifts\Models\RotationAssignment;
 use Modules\Shifts\Models\RotationGroup;
@@ -444,6 +446,88 @@ class DailyReportServiceTest extends TestCase
         $this->assertSame('incomplete', $row['status']);
         $this->assertStringContainsString('أمس', $row['notes']);
         $this->assertStringContainsString('نافذة الخروج 09:00', $row['notes']);
+    }
+
+    /**
+     * The smart-absence report treats a raw device punch as proof of presence
+     * even when the session pipeline could not create a session for that date
+     * (e.g. an early-morning punch outside the configured check-in window).
+     * The daily report must use the same rule so both reports never disagree
+     * on who is absent.
+     */
+    public function test_employee_with_raw_punch_but_no_session_is_not_absent(): void
+    {
+        $user = $this->makeEmployee('EMP50001');
+        $this->assignOpenWorkEveryDay($user);
+
+        // Device punch at 06:05 Asia/Riyadh = 03:05 UTC; no session created.
+        RawAttendanceLog::create([
+            'user_id' => $user->id,
+            'punch_time' => '2026-08-06 03:05:04',
+            'punch_type' => 'check_in',
+            'source' => 'device',
+            'processed' => true,
+        ]);
+
+        $report = $this->service->build('2026-08-06', '09:00');
+        $row = $report['rows']->firstWhere('id', $user->id);
+
+        $this->assertNotSame('absent', $row['status'], 'A raw device punch must prove presence.');
+        $this->assertSame('present', $row['status']);
+        $this->assertStringContainsString('بصمة مسجلة دون جلسة', $row['notes']);
+    }
+
+    /**
+     * An official holiday must never turn expected employees into absentees:
+     * smart absence cancels absence for the whole day, so the daily report
+     * must show them as "إجازة رسمية" instead of "غياب".
+     */
+    public function test_official_holiday_does_not_mark_expected_employees_absent(): void
+    {
+        Holiday::create([
+            'name_ar' => 'عيد وطني',
+            'name_en' => 'National Day',
+            'date' => '2026-08-06',
+            'is_recurring' => false,
+            'is_active' => true,
+            'applies_to_all' => true,
+            'duration_days' => 1,
+        ]);
+
+        $user = $this->makeEmployee('EMP50002');
+        $this->assignOpenWorkEveryDay($user);
+
+        $report = $this->service->build('2026-08-06', '09:00');
+        $row = $report['rows']->firstWhere('id', $user->id);
+
+        $this->assertNotSame('absent', $row['status'], 'An official holiday must not be reported as absence.');
+        $this->assertSame('holiday', $row['status']);
+    }
+
+    /**
+     * A rotation configured to work on holidays is not excused by an official
+     * holiday: the employee stays expected and absent without a punch.
+     */
+    public function test_holiday_does_not_excuse_rotations_that_work_on_holidays(): void
+    {
+        Holiday::create([
+            'name_ar' => 'عيد وطني',
+            'name_en' => 'National Day',
+            'date' => '2026-08-06',
+            'is_recurring' => false,
+            'is_active' => true,
+            'applies_to_all' => true,
+            'duration_days' => 1,
+        ]);
+
+        $user = $this->makeEmployee('EMP50003');
+        $assignment = $this->assignOpenWorkEveryDay($user);
+        $assignment->rotation()->update(['work_on_holidays' => true]);
+
+        $report = $this->service->build('2026-08-06', '09:00');
+        $row = $report['rows']->firstWhere('id', $user->id);
+
+        $this->assertSame('absent', $row['status'], 'Rotations that work on holidays stay accountable on holidays.');
     }
 
     // ------------------------------------------------------------------

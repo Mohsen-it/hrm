@@ -48,4 +48,5 @@ return [
     'rotation_groups' => 'Rotation Groups',
     'time_schedules' => 'Time Schedules',
     'unregistered_employees' => 'Unregistered Employees',
+    'activity_log' => 'User Activity Log',
 ];

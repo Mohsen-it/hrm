@@ -223,6 +223,10 @@ class RotationEngine
      *     source: string,
      *     grace_minutes: ?int,
      *     early_margin: ?int,
+     *     in_ahead_margin: ?string,
+     *     in_above_margin: ?string,
+     *     out_ahead_margin: ?string,
+     *     out_above_margin: ?string,
      *     overtime_enabled: bool,
      *     work_on_holidays: bool,
      *     is_overnight: bool,
@@ -270,7 +274,19 @@ class RotationEngine
     }
 
     /**
-     * Resolve expected check-in/out times from rotation group snapshot or time schedule.
+     * Resolve expected check-in/out times and punch windows for an assignment.
+     *
+     * Expected times are sourced from the assignment snapshot, falling back to
+     * the live time schedule — the single source of truth for timings used by
+     * the punch classifier and the session pipeline.
+     *
+     * Punch-window edges (in_ahead_margin … out_above_margin) resolve in this
+     * priority:
+     *   1. the legacy absolute window times stored on the rotation (H:i) when
+     *      present — backward compatible with pre-migration data;
+     *   2. the time-schedule margin (integer minutes before in_time / after
+     *      out_time) when the schedule carries one;
+     *   3. null when neither source provides a value.
      *
      * @return array{
      *     check_in: ?string,
@@ -279,6 +295,10 @@ class RotationEngine
      *     late_margin: ?int,
      *     early_margin: ?int,
      *     break_minutes: int,
+     *     in_ahead_margin: ?string,
+     *     in_above_margin: ?string,
+     *     out_ahead_margin: ?string,
+     *     out_above_margin: ?string,
      * }
      */
     public function resolveTimes(RotationAssignment $assignment): array
@@ -311,6 +331,30 @@ class RotationEngine
                 'break_minutes' => is_array($breaksData)
                     ? $this->sumBreakMinutes($breaksData)
                     : 0,
+                'in_ahead_margin' => $this->resolveWindowEdge(
+                    $checkIn,
+                    $snapshot['time_schedule']['in_ahead_margin'] ?? null,
+                    $this->legacyRotationValue($assignment, 'in_ahead_margin'),
+                    ahead: true,
+                ),
+                'in_above_margin' => $this->resolveWindowEdge(
+                    $checkIn,
+                    $snapshot['time_schedule']['in_above_margin'] ?? null,
+                    $this->legacyRotationValue($assignment, 'in_above_margin'),
+                    ahead: false,
+                ),
+                'out_ahead_margin' => $this->resolveWindowEdge(
+                    $checkOut,
+                    $snapshot['time_schedule']['out_ahead_margin'] ?? null,
+                    $this->legacyRotationValue($assignment, 'out_ahead_margin'),
+                    ahead: true,
+                ),
+                'out_above_margin' => $this->resolveWindowEdge(
+                    $checkOut,
+                    $snapshot['time_schedule']['out_above_margin'] ?? null,
+                    $this->legacyRotationValue($assignment, 'out_above_margin'),
+                    ahead: false,
+                ),
             ];
         }
 
@@ -333,6 +377,30 @@ class RotationEngine
                 'late_margin' => $timeSchedule->late_margin !== null ? (int) $timeSchedule->late_margin : null,
                 'early_margin' => $timeSchedule->early_margin !== null ? (int) $timeSchedule->early_margin : null,
                 'break_minutes' => $this->sumBreakMinutes($breaks),
+                'in_ahead_margin' => $this->resolveWindowEdge(
+                    $checkIn,
+                    $timeSchedule->in_ahead_margin,
+                    $this->legacyRotationValue($assignment, 'in_ahead_margin'),
+                    ahead: true,
+                ),
+                'in_above_margin' => $this->resolveWindowEdge(
+                    $checkIn,
+                    $timeSchedule->in_above_margin,
+                    $this->legacyRotationValue($assignment, 'in_above_margin'),
+                    ahead: false,
+                ),
+                'out_ahead_margin' => $this->resolveWindowEdge(
+                    $checkOut,
+                    $timeSchedule->out_ahead_margin,
+                    $this->legacyRotationValue($assignment, 'out_ahead_margin'),
+                    ahead: true,
+                ),
+                'out_above_margin' => $this->resolveWindowEdge(
+                    $checkOut,
+                    $timeSchedule->out_above_margin,
+                    $this->legacyRotationValue($assignment, 'out_above_margin'),
+                    ahead: false,
+                ),
             ];
         }
 
@@ -343,7 +411,105 @@ class RotationEngine
             'late_margin' => null,
             'early_margin' => null,
             'break_minutes' => 0,
+            'in_ahead_margin' => $this->legacyWindowTime($this->legacyRotationValue($assignment, 'in_ahead_margin')),
+            'in_above_margin' => $this->legacyWindowTime($this->legacyRotationValue($assignment, 'in_above_margin')),
+            'out_ahead_margin' => $this->legacyWindowTime($this->legacyRotationValue($assignment, 'out_ahead_margin')),
+            'out_above_margin' => $this->legacyWindowTime($this->legacyRotationValue($assignment, 'out_above_margin')),
         ];
+    }
+
+    /**
+     * Resolve one punch-window edge as an absolute H:i time.
+     *
+     * Priority: the legacy rotation window fields (att_rotations) — absolute
+     * H:i times configured on the rotation page — are the primary source of
+     * truth for punch windows, exactly as they were before the time-schedule
+     * migration. The time-schedule margins (integer minutes relative to
+     * in_time / out_time) are only used as a fallback when the rotation does
+     * not carry a window on that side.
+     */
+    private function resolveWindowEdge(?string $anchor, mixed $scheduleMargin, mixed $legacyMargin, bool $ahead): ?string
+    {
+        // Legacy absolute window time (e.g. "07:00:00") wins when present.
+        if ($legacyMargin !== null && $legacyMargin !== '') {
+            if (is_string($legacyMargin) && preg_match('/^\d{1,2}:\d{2}/', $legacyMargin) === 1) {
+                return substr($legacyMargin, 0, 5);
+            }
+        }
+
+        $margin = ($scheduleMargin !== null && $scheduleMargin !== '' && (int) $scheduleMargin !== 0)
+            ? $scheduleMargin
+            : $legacyMargin;
+
+        if ($margin === null || $margin === '') {
+            return null;
+        }
+
+        // Legacy absolute window time (e.g. "07:00:00") — keep as-is.
+        if (is_string($margin) && preg_match('/^\d{1,2}:\d{2}/', $margin) === 1) {
+            return substr($margin, 0, 5);
+        }
+
+        $minutes = (int) $margin;
+
+        if ($minutes <= 0 || ! $anchor || preg_match('/^\d{1,2}:\d{2}/', $anchor) !== 1) {
+            return null;
+        }
+
+        $time = Carbon::createFromFormat('H:i', $anchor);
+
+        if (! $time) {
+            return null;
+        }
+
+        $time = $ahead ? $time->subMinutes($minutes) : $time->addMinutes($minutes);
+
+        return $time->format('H:i');
+    }
+
+    /**
+     * Read a legacy rotation margin field from the assignment snapshot first,
+     * falling back to the live rotation row.
+     *
+     * The snapshot preserves the punch windows that were configured on the
+     * rotation page when the employee was assigned — those are the windows
+     * the system relied on before the time-schedule migration and remain the
+     * source of truth for punch classification. The live row is only used
+     * when the snapshot carries no value (pre-migration assignments).
+     */
+    private function legacyRotationValue(RotationAssignment $assignment, string $field): mixed
+    {
+        $snapshot = $assignment->snapshot_data;
+
+        if (is_array($snapshot['rotation'] ?? null) && array_key_exists($field, $snapshot['rotation'])) {
+            return $snapshot['rotation'][$field] ?? null;
+        }
+
+        $live = $assignment->rotation?->{$field};
+
+        if ($live !== null && $live !== '') {
+            return $live;
+        }
+
+        return null;
+    }
+
+    /**
+     * Normalize a legacy rotation margin (H:i[:s] time string) to H:i.
+     */
+    private function legacyWindowTime(mixed $value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        $value = (string) $value;
+
+        if (preg_match('/^\d{1,2}:\d{2}/', $value, $matches) === 1) {
+            return $matches[0];
+        }
+
+        return null;
     }
 
     /**

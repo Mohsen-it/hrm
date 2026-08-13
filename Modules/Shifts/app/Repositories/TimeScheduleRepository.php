@@ -51,7 +51,11 @@ class TimeScheduleRepository
     {
         return $this->query()
             ->orderBy('name')
-            ->get(['id', 'name', 'is_multi_day', 'in_time', 'out_time']);
+            ->get([
+                'id', 'name', 'is_multi_day', 'in_time', 'out_time',
+                'late_margin', 'early_margin',
+                'in_ahead_margin', 'in_above_margin', 'out_ahead_margin', 'out_above_margin',
+            ]);
     }
 
     /**

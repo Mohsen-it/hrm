@@ -1,11 +1,13 @@
 <script setup>
-import { ref } from 'vue';
-import { router } from '@inertiajs/vue3';
+import { ref, computed } from 'vue';
+import { router, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
-import { PageHeader, Button, Card, DataTable, Badge, IconButton, ConfirmDialog } from '@/Components/ui';
+import { PageHeader, Button, Card, DataTable, Badge, IconButton, ConfirmDialog, Alert } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
+const page = usePage();
+const flashSuccess = computed(() => page.props.flash?.success);
 
 const props = defineProps({
     group: { type: Object, required: true },
@@ -48,6 +50,8 @@ const removeEmployee = () => {
                 </Button>
             </template>
         </PageHeader>
+
+        <Alert v-if="flashSuccess" type="success" :message="flashSuccess" dismissible class="mb-4" />
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
             <Card variant="base" padding="none">

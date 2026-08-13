@@ -125,10 +125,14 @@ class ScheduleResolverService
         $timesMeta = [
             'grace_minutes' => $graceMinutes,
             'early_margin' => $times['early_margin'] ?? null,
-            'in_ahead_margin' => $rotation->in_ahead_margin,
-            'in_above_margin' => $rotation->in_above_margin,
-            'out_ahead_margin' => $rotation->out_ahead_margin,
-            'out_above_margin' => $rotation->out_above_margin,
+            // Punch windows come from RotationEngine::resolveTimes() — the
+            // single source of truth used by the punch classifier (legacy
+            // rotation window fields win over schedule margins for backward
+            // compatibility).
+            'in_ahead_margin' => $times['in_ahead_margin'] ?? null,
+            'in_above_margin' => $times['in_above_margin'] ?? null,
+            'out_ahead_margin' => $times['out_ahead_margin'] ?? null,
+            'out_above_margin' => $times['out_above_margin'] ?? null,
             'overtime_enabled' => (bool) $rotation->overtime_enabled,
             'work_on_holidays' => (bool) $rotation->work_on_holidays,
             'is_overnight' => $times['is_overnight'] ?? false,

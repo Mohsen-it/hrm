@@ -62,17 +62,21 @@ function statusVariant(status) {
         early: 'info',
         present: 'active',
         on_leave: 'vacation',
+        holiday: 'cream',
+        incomplete: 'pending',
     }
     return map[status] || 'inactive'
 }
 
 function statusLabel(status) {
     const map = {
-        absent: t('shifts.absent'),
+        absent: t('shifts.absent_short'),
         late: t('shifts.late'),
         early: t('shifts.early_leave'),
         present: t('shifts.present'),
         on_leave: t('shifts.on_leave'),
+        holiday: t('shifts.official_holiday'),
+        incomplete: t('shifts.incomplete'),
     }
     return map[status] || status
 }

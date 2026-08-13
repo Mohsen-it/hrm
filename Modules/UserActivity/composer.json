@@ -1,0 +1,27 @@
+{
+    "name": "nwidart/useractivity",
+    "description": "User activity monitoring and working-hours analytics.",
+    "authors": [
+        {
+            "name": "HRM Team"
+        }
+    ],
+    "extra": {
+        "laravel": {
+            "providers": [],
+            "aliases": {}
+        }
+    },
+    "autoload": {
+        "psr-4": {
+            "Modules\\UserActivity\\": "app/",
+            "Modules\\UserActivity\\Database\\Factories\\": "database/factories/",
+            "Modules\\UserActivity\\Database\\Seeders\\": "database/seeders/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Modules\\UserActivity\\Tests\\": "tests/"
+        }
+    }
+}

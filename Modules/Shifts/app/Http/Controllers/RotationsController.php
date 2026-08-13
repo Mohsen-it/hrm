@@ -144,7 +144,7 @@ class RotationsController extends Controller
         }
 
         return Inertia::render('Shifts/Rotations/Edit', [
-            'rotation' => fn () => new RotationResource($rotation),
+            'rotation' => fn () => new RotationResource($rotation->load('timeSchedule')),
             'timeSchedules' => fn () => $this->timeScheduleService->getList(),
         ]);
     }

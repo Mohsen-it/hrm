@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Modules\Attendance\Models\AttendanceSession;
 use Modules\Attendance\Models\DailyAttendanceSummary;
+use Modules\Attendance\Models\RawAttendanceLog;
 use Modules\Attendance\Repositories\DailyAttendanceSummaryRepository;
 use Modules\Shifts\Services\ScheduleResolverService;
 use Modules\Users\Models\User;
@@ -138,10 +139,24 @@ class DailyAttendanceSummaryService
 
         $computed = $this->aggregateSessions($sessions);
 
+        // A raw device punch is physical proof of presence even when the
+        // session pipeline could not create a session for this date. The
+        // smart-absence report already treats raw punches as presence, so a
+        // work day with a raw punch must never be persisted as "absent".
+        $hasRawPunch = RawAttendanceLog::query()
+            ->where('user_id', $userId)
+            ->whereBetween('punch_time', $this->localDayUtcBounds($date))
+            ->exists();
+
         $employee = User::select('id', 'branch_id', 'department_id')->find($userId);
 
         $status = $this->resolveExternalStatus($userId, $date, $employee, $resolved)
-            ?? $this->determineStatus($sessions, $resolved, $userId, $date);
+            ?? $this->determineStatus($sessions, $resolved, $userId, $date, $hasRawPunch);
+
+        $notes = $sessions->pluck('notes')->filter()->implode("\n") ?: null;
+        if ($sessions->isEmpty() && $hasRawPunch) {
+            $notes = trim(($notes ? $notes."\n" : '').'بصمة مسجلة دون جلسة');
+        }
 
         $payload = array_merge($computed, [
             'user_id' => $userId,
@@ -155,7 +170,7 @@ class DailyAttendanceSummaryService
             'session_type' => $sessions->first()?->session_type ?? 'normal',
             'first_check_in_at' => $sessions->first()?->check_in_at,
             'last_check_out_at' => $sessions->last()?->check_out_at,
-            'notes' => $sessions->pluck('notes')->filter()->implode("\n") ?: null,
+            'notes' => $notes,
             'calculated_at' => now(),
             'updated_at' => now(),
         ]);
@@ -213,7 +228,7 @@ class DailyAttendanceSummaryService
      *
      * @param  Collection<int, AttendanceSession>  $sessions
      */
-    protected function determineStatus(Collection $sessions, array $resolved, int $userId, string $date): string
+    protected function determineStatus(Collection $sessions, array $resolved, int $userId, string $date, bool $hasRawPunch = false): string
     {
         // If resolver says employee is on rest day
         if ($resolved['status'] === ScheduleResolverService::STATUS_REST) {
@@ -230,9 +245,10 @@ class DailyAttendanceSummaryService
             return 'vacation';
         }
 
-        // No sessions on a work day → absent
+        // No sessions on a work day → absent, unless a raw device punch proves
+        // physical presence (mirrors the smart-absence raw-log fallback).
         if ($sessions->isEmpty()) {
-            return 'absent';
+            return $hasRawPunch ? 'present' : 'absent';
         }
 
         $hasMissing = $sessions->contains(fn (AttendanceSession $s) => $s->check_out_at === null || $s->check_in_at === null);
@@ -252,6 +268,24 @@ class DailyAttendanceSummaryService
         }
 
         return 'present';
+    }
+
+    /**
+     * UTC boundary strings covering one full app-timezone day.
+     *
+     * Raw device punches are stored in UTC while summary dates are local, so
+     * matching a local date requires shifting the day's bounds to UTC.
+     *
+     * @return array{0: string, 1: string}
+     */
+    private function localDayUtcBounds(string $date): array
+    {
+        $day = \Carbon\Carbon::parse($date);
+
+        return [
+            $day->copy()->startOfDay()->setTimezone('UTC')->format('Y-m-d H:i:s'),
+            $day->copy()->endOfDay()->setTimezone('UTC')->format('Y-m-d H:i:s'),
+        ];
     }
 
     /**

@@ -65,7 +65,15 @@ class RotationAssignmentRepository
     {
         return $this->query()
             ->with($this->defaultWith)
-            ->whereNull('end_date')
+            ->where(function (Builder $q): void {
+                // Open assignments plus assignments whose end date is still in
+                // the future. The rotation UI stores a far-future placeholder
+                // end date (e.g. 2030-08-03) for "open-ended" assignments;
+                // treating those as closed silently drops the employee from
+                // every expected-attendance calculation.
+                $q->whereNull('end_date')
+                    ->orWhere('end_date', '>=', now()->toDateString());
+            })
             ->orderByDesc('start_date')
             ->orderByDesc('id')
             ->get()

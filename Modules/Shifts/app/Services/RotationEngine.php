@@ -227,6 +227,8 @@ class RotationEngine
      *     in_above_margin: ?string,
      *     out_ahead_margin: ?string,
      *     out_above_margin: ?string,
+     *     next_day_out_ahead_margin: ?string,
+     *     next_day_out_above_margin: ?string,
      *     overtime_enabled: bool,
      *     work_on_holidays: bool,
      *     is_overnight: bool,
@@ -266,6 +268,8 @@ class RotationEngine
             'in_above_margin' => $timesMeta['in_above_margin'] ?? null,
             'out_ahead_margin' => $timesMeta['out_ahead_margin'] ?? null,
             'out_above_margin' => $timesMeta['out_above_margin'] ?? null,
+            'next_day_out_ahead_margin' => $timesMeta['next_day_out_ahead_margin'] ?? null,
+            'next_day_out_above_margin' => $timesMeta['next_day_out_above_margin'] ?? null,
             'overtime_enabled' => $timesMeta['overtime_enabled'] ?? false,
             'work_on_holidays' => $timesMeta['work_on_holidays'] ?? false,
             'is_overnight' => $timesMeta['is_overnight'] ?? false,
@@ -276,17 +280,26 @@ class RotationEngine
     /**
      * Resolve expected check-in/out times and punch windows for an assignment.
      *
-     * Expected times are sourced from the assignment snapshot, falling back to
-     * the live time schedule — the single source of truth for timings used by
-     * the punch classifier and the session pipeline.
+     * Expected times are sourced from the LIVE time schedule — the single
+     * source of truth the user maintains on the Time Schedules page. The
+     * assignment snapshot is only a fallback for rotations whose schedule was
+     * unlinked after the assignment, because snapshots freeze the schedule at
+     * assignment time and go stale the moment the user edits /time-schedules.
      *
      * Punch-window edges (in_ahead_margin … out_above_margin) resolve in this
      * priority:
      *   1. the legacy absolute window times stored on the rotation (H:i) when
-     *      present — backward compatible with pre-migration data;
+     *      present — backward compatible with pre-migration data (single-day
+     *      schedules and the same-day exit window of overnight duties);
      *   2. the time-schedule margin (integer minutes before in_time / after
      *      out_time) when the schedule carries one;
      *   3. null when neither source provides a value.
+     *
+     * Overnight (multi-day) duties additionally expose a next-day exit window
+     * (next_day_out_*): the departure morning derived from the schedule's
+     * out_time ± margins. It lets the punch classifiers recognize the morning
+     * punch on the first rest day after a duty as the check-out of that duty
+     * instead of a phantom new check-in.
      *
      * @return array{
      *     check_in: ?string,
@@ -299,109 +312,48 @@ class RotationEngine
      *     in_above_margin: ?string,
      *     out_ahead_margin: ?string,
      *     out_above_margin: ?string,
+     *     next_day_out_ahead_margin: ?string,
+     *     next_day_out_above_margin: ?string,
      * }
      */
     public function resolveTimes(RotationAssignment $assignment): array
     {
+        $timeSchedule = $assignment->rotation?->timeSchedule;
         $snapshot = $assignment->snapshot_data;
+        $snapshotSchedule = is_array($snapshot['time_schedule'] ?? null) ? $snapshot['time_schedule'] : null;
 
-        $expectedIn = $snapshot['time_schedule']['in_time'] ?? null;
-        $expectedOut = $snapshot['time_schedule']['out_time'] ?? null;
-        $isMultiDay = $snapshot['time_schedule']['is_multi_day'] ?? null;
-        $lateMargin = $snapshot['time_schedule']['late_margin'] ?? null;
-        $earlyMargin = $snapshot['time_schedule']['early_margin'] ?? null;
-        $breaksData = $snapshot['time_schedule']['breaks'] ?? null;
-
-        if ($expectedIn && $expectedOut) {
-            $checkIn = substr((string) $expectedIn, 0, 5);
-            $checkOut = substr((string) $expectedOut, 0, 5);
-
-            // Older assignments snapshotted before breaks were stored fall back
-            // to the live time schedule so break minutes are never silently 0.
-            if (! is_array($breaksData)) {
-                $breaksData = $this->liveBreaks($assignment);
-            }
-
-            return [
-                'check_in' => $checkIn,
-                'check_out' => $checkOut,
-                'is_overnight' => $isMultiDay ?? ($checkOut < $checkIn),
-                'late_margin' => $lateMargin !== null ? (int) $lateMargin : null,
-                'early_margin' => $earlyMargin !== null ? (int) $earlyMargin : null,
-                'break_minutes' => is_array($breaksData)
-                    ? $this->sumBreakMinutes($breaksData)
-                    : 0,
-                'in_ahead_margin' => $this->resolveWindowEdge(
-                    $checkIn,
-                    $snapshot['time_schedule']['in_ahead_margin'] ?? null,
-                    $this->legacyRotationValue($assignment, 'in_ahead_margin'),
-                    ahead: true,
-                ),
-                'in_above_margin' => $this->resolveWindowEdge(
-                    $checkIn,
-                    $snapshot['time_schedule']['in_above_margin'] ?? null,
-                    $this->legacyRotationValue($assignment, 'in_above_margin'),
-                    ahead: false,
-                ),
-                'out_ahead_margin' => $this->resolveWindowEdge(
-                    $checkOut,
-                    $snapshot['time_schedule']['out_ahead_margin'] ?? null,
-                    $this->legacyRotationValue($assignment, 'out_ahead_margin'),
-                    ahead: true,
-                ),
-                'out_above_margin' => $this->resolveWindowEdge(
-                    $checkOut,
-                    $snapshot['time_schedule']['out_above_margin'] ?? null,
-                    $this->legacyRotationValue($assignment, 'out_above_margin'),
-                    ahead: false,
-                ),
-            ];
+        // Live schedule first — it is the user's source of truth.
+        if ($timeSchedule) {
+            return $this->resolveTimesFromSchedule([
+                'in_time' => $timeSchedule->in_time,
+                'out_time' => $timeSchedule->out_time,
+                'is_multi_day' => (bool) $timeSchedule->is_multi_day,
+                'late_margin' => $timeSchedule->late_margin,
+                'early_margin' => $timeSchedule->early_margin,
+                'in_ahead_margin' => $timeSchedule->in_ahead_margin,
+                'in_above_margin' => $timeSchedule->in_above_margin,
+                'out_ahead_margin' => $timeSchedule->out_ahead_margin,
+                'out_above_margin' => $timeSchedule->out_above_margin,
+                'breaks' => $this->liveBreaks($assignment),
+            ], $assignment);
         }
 
-        $timeSchedule = $assignment->rotation?->timeSchedule;
-
-        if ($timeSchedule) {
-            $inTime = $timeSchedule->in_time;
-            $outTime = $timeSchedule->out_time;
-
-            // time columns may be returned as strings or Carbon instances depending on the driver
-            $checkIn = $inTime ? $this->formatTime($inTime) : null;
-            $checkOut = $outTime ? $this->formatTime($outTime) : null;
-
-            $breaks = is_array($breaksData) ? $breaksData : $this->liveBreaks($assignment);
-
-            return [
-                'check_in' => $checkIn,
-                'check_out' => $checkOut,
-                'is_overnight' => $timeSchedule->is_multi_day ?? ($checkOut && $checkIn && $checkOut < $checkIn),
-                'late_margin' => $timeSchedule->late_margin !== null ? (int) $timeSchedule->late_margin : null,
-                'early_margin' => $timeSchedule->early_margin !== null ? (int) $timeSchedule->early_margin : null,
-                'break_minutes' => $this->sumBreakMinutes($breaks),
-                'in_ahead_margin' => $this->resolveWindowEdge(
-                    $checkIn,
-                    $timeSchedule->in_ahead_margin,
-                    $this->legacyRotationValue($assignment, 'in_ahead_margin'),
-                    ahead: true,
-                ),
-                'in_above_margin' => $this->resolveWindowEdge(
-                    $checkIn,
-                    $timeSchedule->in_above_margin,
-                    $this->legacyRotationValue($assignment, 'in_above_margin'),
-                    ahead: false,
-                ),
-                'out_ahead_margin' => $this->resolveWindowEdge(
-                    $checkOut,
-                    $timeSchedule->out_ahead_margin,
-                    $this->legacyRotationValue($assignment, 'out_ahead_margin'),
-                    ahead: true,
-                ),
-                'out_above_margin' => $this->resolveWindowEdge(
-                    $checkOut,
-                    $timeSchedule->out_above_margin,
-                    $this->legacyRotationValue($assignment, 'out_above_margin'),
-                    ahead: false,
-                ),
-            ];
+        // Snapshot fallback — only when the rotation no longer has a live schedule.
+        if ($snapshotSchedule && ! empty($snapshotSchedule['in_time']) && ! empty($snapshotSchedule['out_time'])) {
+            return $this->resolveTimesFromSchedule([
+                'in_time' => $snapshotSchedule['in_time'],
+                'out_time' => $snapshotSchedule['out_time'],
+                'is_multi_day' => (bool) ($snapshotSchedule['is_multi_day'] ?? false),
+                'late_margin' => $snapshotSchedule['late_margin'] ?? null,
+                'early_margin' => $snapshotSchedule['early_margin'] ?? null,
+                'in_ahead_margin' => $snapshotSchedule['in_ahead_margin'] ?? null,
+                'in_above_margin' => $snapshotSchedule['in_above_margin'] ?? null,
+                'out_ahead_margin' => $snapshotSchedule['out_ahead_margin'] ?? null,
+                'out_above_margin' => $snapshotSchedule['out_above_margin'] ?? null,
+                'breaks' => is_array($snapshotSchedule['breaks'] ?? null)
+                    ? $snapshotSchedule['breaks']
+                    : $this->liveBreaks($assignment),
+            ], $assignment);
         }
 
         return [
@@ -415,7 +367,83 @@ class RotationEngine
             'in_above_margin' => $this->legacyWindowTime($this->legacyRotationValue($assignment, 'in_above_margin')),
             'out_ahead_margin' => $this->legacyWindowTime($this->legacyRotationValue($assignment, 'out_ahead_margin')),
             'out_above_margin' => $this->legacyWindowTime($this->legacyRotationValue($assignment, 'out_above_margin')),
+            'next_day_out_ahead_margin' => null,
+            'next_day_out_above_margin' => null,
         ];
+    }
+
+    /**
+     * Build the resolveTimes payload from one schedule source (live or snapshot).
+     *
+     * Overnight (multi-day) schedules derive the check-in window from the
+     * schedule margins — legacy rotation windows on those rotations describe
+     * a pre-migration same-day model and would miss the early 07:30-08:00
+     * duty check-ins. The same-day exit window keeps legacy priority (the
+     * evening punch that ends the duty), and the departure-morning exit window
+     * is exposed separately via next_day_out_*.
+     *
+     * @param  array<string, mixed>  $schedule
+     * @return array<string, mixed>
+     */
+    private function resolveTimesFromSchedule(array $schedule, RotationAssignment $assignment): array
+    {
+        $checkIn = $this->formatTime($schedule['in_time'] ?? null);
+        $checkOut = $this->formatTime($schedule['out_time'] ?? null);
+        $isMultiDay = (bool) ($schedule['is_multi_day'] ?? ($checkOut && $checkIn && $checkOut < $checkIn));
+        $breaks = is_array($schedule['breaks'] ?? null) ? $schedule['breaks'] : [];
+
+        return [
+            'check_in' => $checkIn,
+            'check_out' => $checkOut,
+            'is_overnight' => $isMultiDay,
+            'late_margin' => $this->firstPositiveInt($schedule['late_margin'] ?? null),
+            'early_margin' => $this->firstPositiveInt($schedule['early_margin'] ?? null),
+            'break_minutes' => $this->sumBreakMinutes($breaks),
+            'in_ahead_margin' => $this->resolveWindowEdge(
+                $checkIn,
+                $schedule['in_ahead_margin'] ?? null,
+                $this->legacyRotationValue($assignment, 'in_ahead_margin'),
+                ahead: true,
+                preferSchedule: $isMultiDay,
+            ),
+            'in_above_margin' => $this->resolveWindowEdge(
+                $checkIn,
+                $schedule['in_above_margin'] ?? null,
+                $this->legacyRotationValue($assignment, 'in_above_margin'),
+                ahead: false,
+                preferSchedule: $isMultiDay,
+            ),
+            'out_ahead_margin' => $this->resolveWindowEdge(
+                $checkOut,
+                $schedule['out_ahead_margin'] ?? null,
+                $this->legacyRotationValue($assignment, 'out_ahead_margin'),
+                ahead: true,
+            ),
+            'out_above_margin' => $this->resolveWindowEdge(
+                $checkOut,
+                $schedule['out_above_margin'] ?? null,
+                $this->legacyRotationValue($assignment, 'out_above_margin'),
+                ahead: false,
+            ),
+            'next_day_out_ahead_margin' => $isMultiDay
+                ? $this->relativeWindowEdge($checkOut, $schedule['out_ahead_margin'] ?? null, ahead: true)
+                : null,
+            'next_day_out_above_margin' => $isMultiDay
+                ? $this->relativeWindowEdge($checkOut, $schedule['out_above_margin'] ?? null, ahead: false)
+                : null,
+        ];
+    }
+
+    /**
+     * Integer-cast a margin value, preserving 0 but treating empty as null.
+     */
+    private function firstPositiveInt(mixed $value): ?int
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        return (int) $value;
     }
 
     /**
@@ -427,11 +455,17 @@ class RotationEngine
      * migration. The time-schedule margins (integer minutes relative to
      * in_time / out_time) are only used as a fallback when the rotation does
      * not carry a window on that side.
+     *
+     * Overnight schedules pass preferSchedule=true for the check-in side: the
+     * schedule margins define the actual entry window (legacy rotations carry
+     * a same-day 09:30-12:00 window that misses the real 07:30-08:00 duty
+     * check-ins), while the same-day exit window keeps legacy priority.
      */
-    private function resolveWindowEdge(?string $anchor, mixed $scheduleMargin, mixed $legacyMargin, bool $ahead): ?string
+    private function resolveWindowEdge(?string $anchor, mixed $scheduleMargin, mixed $legacyMargin, bool $ahead, bool $preferSchedule = false): ?string
     {
-        // Legacy absolute window time (e.g. "07:00:00") wins when present.
-        if ($legacyMargin !== null && $legacyMargin !== '') {
+        // Legacy absolute window time (e.g. "07:00:00") wins when present —
+        // unless the schedule explicitly takes priority for this edge.
+        if (! $preferSchedule && $legacyMargin !== null && $legacyMargin !== '') {
             if (is_string($legacyMargin) && preg_match('/^\d{1,2}:\d{2}/', $legacyMargin) === 1) {
                 return substr($legacyMargin, 0, 5);
             }
@@ -468,27 +502,60 @@ class RotationEngine
     }
 
     /**
-     * Read a legacy rotation margin field from the assignment snapshot first,
-     * falling back to the live rotation row.
+     * Resolve an exit-window edge relative to the schedule's out_time, using
+     * only integer minute margins (never legacy absolute H:i window times).
      *
-     * The snapshot preserves the punch windows that were configured on the
-     * rotation page when the employee was assigned — those are the windows
-     * the system relied on before the time-schedule migration and remain the
-     * source of truth for punch classification. The live row is only used
-     * when the snapshot carries no value (pre-migration assignments).
+     * This powers the departure-morning window of overnight duties: the
+     * schedule's out_time (e.g. 08:00 next day) ± its margins yields the
+     * morning window on the first rest day after the duty.
+     */
+    private function relativeWindowEdge(?string $anchor, mixed $margin, bool $ahead): ?string
+    {
+        if ($margin === null || $margin === '' || (int) $margin <= 0) {
+            return null;
+        }
+
+        if (is_string($margin) && preg_match('/^\d{1,2}:\d{2}/', $margin) === 1) {
+            return null;
+        }
+
+        if (! $anchor || preg_match('/^\d{1,2}:\d{2}/', $anchor) !== 1) {
+            return null;
+        }
+
+        $time = Carbon::createFromFormat('H:i', $anchor);
+
+        if (! $time) {
+            return null;
+        }
+
+        $time = $ahead ? $time->subMinutes((int) $margin) : $time->addMinutes((int) $margin);
+
+        return $time->format('H:i');
+    }
+
+    /**
+     * Read a legacy rotation margin field from the live rotation row first,
+     * falling back to the assignment snapshot.
+     *
+     * The rotation page and the time-schedule page are the user's source of
+     * truth — editing them must take effect immediately. Assignment snapshots
+     * freeze the rotation at assignment time and routinely go stale (e.g. an
+     * exit window changed from 14:30-18:00 to 18:00-23:59), so they are only
+     * used for rotations whose live row no longer carries the field.
      */
     private function legacyRotationValue(RotationAssignment $assignment, string $field): mixed
     {
-        $snapshot = $assignment->snapshot_data;
-
-        if (is_array($snapshot['rotation'] ?? null) && array_key_exists($field, $snapshot['rotation'])) {
-            return $snapshot['rotation'][$field] ?? null;
-        }
-
         $live = $assignment->rotation?->{$field};
 
         if ($live !== null && $live !== '') {
             return $live;
+        }
+
+        $snapshot = $assignment->snapshot_data;
+
+        if (is_array($snapshot['rotation'] ?? null) && array_key_exists($field, $snapshot['rotation'])) {
+            return $snapshot['rotation'][$field] ?? null;
         }
 
         return null;

@@ -58,6 +58,8 @@ class ScheduleResolverService
      *     rotation_id: ?int,
      *     rotation_group_id: ?int,
      *     exception_id: ?int,
+     *     next_day_out_ahead_margin: ?string,
+     *     next_day_out_above_margin: ?string,
      *     source: string
      * }
      */
@@ -133,6 +135,8 @@ class ScheduleResolverService
             'in_above_margin' => $times['in_above_margin'] ?? null,
             'out_ahead_margin' => $times['out_ahead_margin'] ?? null,
             'out_above_margin' => $times['out_above_margin'] ?? null,
+            'next_day_out_ahead_margin' => $times['next_day_out_ahead_margin'] ?? null,
+            'next_day_out_above_margin' => $times['next_day_out_above_margin'] ?? null,
             'overtime_enabled' => (bool) $rotation->overtime_enabled,
             'work_on_holidays' => (bool) $rotation->work_on_holidays,
             'is_overnight' => $times['is_overnight'] ?? false,
@@ -172,6 +176,8 @@ class ScheduleResolverService
         ?string $inAboveMargin = null,
         ?string $outAheadMargin = null,
         ?string $outAboveMargin = null,
+        ?string $nextDayOutAheadMargin = null,
+        ?string $nextDayOutAboveMargin = null,
         bool $overtimeEnabled = false,
         bool $workOnHolidays = false,
         bool $isOvernight = false,
@@ -196,6 +202,8 @@ class ScheduleResolverService
             'in_above_margin' => $inAboveMargin,
             'out_ahead_margin' => $outAheadMargin,
             'out_above_margin' => $outAboveMargin,
+            'next_day_out_ahead_margin' => $nextDayOutAheadMargin,
+            'next_day_out_above_margin' => $nextDayOutAboveMargin,
             'overtime_enabled' => $overtimeEnabled,
             'work_on_holidays' => $workOnHolidays,
             'is_overnight' => $isOvernight,

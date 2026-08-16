@@ -84,7 +84,7 @@ class RotationEngineResolveTimesTest extends TestCase
         $this->assertSame('17:00', $times['out_above_margin']);
     }
 
-    public function test_snapshot_time_schedule_windows_take_priority_over_live_data(): void
+    public function test_live_time_schedule_windows_take_priority_over_stale_snapshot(): void
     {
         [$user, $assignment] = $this->makeAssignment();
 
@@ -133,11 +133,41 @@ class RotationEngineResolveTimesTest extends TestCase
 
         $times = $this->engine->resolveTimes($assignment->fresh(['rotation.timeSchedule']));
 
-        // The snapshot is authoritative: historical schedules stay stable.
-        $this->assertSame('09:00', $times['check_in']);
-        $this->assertSame('18:00', $times['check_out']);
-        $this->assertSame('08:00', $times['in_ahead_margin']);
-        $this->assertSame('19:00', $times['out_above_margin']);
+        // The live time schedule is the user's source of truth: editing
+        // /time-schedules must take effect immediately, stale snapshots never win.
+        $this->assertSame('10:00', $times['check_in']);
+        $this->assertSame('19:00', $times['check_out']);
+        $this->assertSame('09:50', $times['in_ahead_margin']);
+        $this->assertSame('19:10', $times['out_above_margin']);
+    }
+
+    public function test_overnight_schedule_exposes_next_day_exit_window(): void
+    {
+        [$user, $assignment] = $this->makeAssignment();
+
+        $schedule = TimeSchedule::create([
+            'company_id' => $user->company_id,
+            'name' => 'Overnight',
+            'in_time' => '08:00',
+            'out_time' => '08:00',
+            'is_multi_day' => true,
+            'in_ahead_margin' => 240,
+            'in_above_margin' => 240,
+            'out_ahead_margin' => 60,
+            'out_above_margin' => 120,
+        ]);
+
+        $assignment->rotation()->update(['time_schedule_id' => $schedule->id]);
+
+        $times = $this->engine->resolveTimes($assignment->fresh(['rotation.timeSchedule']));
+
+        $this->assertTrue($times['is_overnight']);
+        // Entry window derived from schedule margins (04:00-12:00).
+        $this->assertSame('04:00', $times['in_ahead_margin']);
+        $this->assertSame('12:00', $times['in_above_margin']);
+        // Departure-morning exit window (08:00 next day ± margins).
+        $this->assertSame('07:00', $times['next_day_out_ahead_margin']);
+        $this->assertSame('10:00', $times['next_day_out_above_margin']);
     }
 
     public function test_breaks_are_summed_from_time_schedule(): void

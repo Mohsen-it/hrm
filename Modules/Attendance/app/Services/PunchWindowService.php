@@ -29,9 +29,18 @@ class PunchWindowService
         $hasConfiguredWindow = false;
         $matchingTypes = [];
 
-        // The previous day is included for checkout windows that cross midnight.
+        // The previous day is included for checkout windows that cross midnight
+        // and for overnight duties whose check-out lands on the next morning.
         foreach ([$punchAt->toDateString(), $punchAt->subDay()->toDateString()] as $scheduleDate) {
             $schedule = $this->schedule($employeeId, $scheduleDate);
+
+            foreach (['in_ahead_margin', 'in_above_margin', 'out_ahead_margin', 'out_above_margin'] as $edge) {
+                if (($schedule[$edge] ?? null) !== null && ($schedule[$edge] ?? '') !== '') {
+                    $hasConfiguredWindow = true;
+                    break;
+                }
+            }
+
             if (! ($schedule['is_work_day'] ?? false)) {
                 continue;
             }
@@ -46,9 +55,24 @@ class PunchWindowService
                     continue;
                 }
 
-                $hasConfiguredWindow = true;
                 if ($this->isWithinWindow($punchAt, $scheduleDate, $start, $end)) {
                     $matchingTypes[] = $type;
+                }
+            }
+
+            // Overnight duties end on the departure morning — the first rest
+            // day after the duty. The morning punch of that day closes the
+            // previous duty; it must never open a phantom new session.
+            $nextDayAhead = $schedule['next_day_out_ahead_margin'] ?? null;
+            $nextDayAbove = $schedule['next_day_out_above_margin'] ?? null;
+
+            if (($schedule['is_overnight'] ?? false) && $nextDayAhead && $nextDayAbove) {
+                $departureDate = CarbonImmutable::parse($scheduleDate)->addDay()->toDateString();
+                $departure = $this->schedule($employeeId, $departureDate);
+
+                if (! ($departure['is_work_day'] ?? false)
+                    && $this->isWithinWindow($punchAt, $departureDate, $nextDayAhead, $nextDayAbove)) {
+                    $matchingTypes[] = 'check_out';
                 }
             }
         }

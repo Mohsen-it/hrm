@@ -2,7 +2,7 @@
 import { ref, computed, watch } from 'vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
-import { PageHeader, Button, Card, Badge, StatCard, SearchInput, FormSelect } from '@/Components/ui';
+import { PageHeader, Button, Card, Badge, StatCard, SearchInput, FormSelect, FormInput, FormModal, ErrorSummary, Alert } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
@@ -13,6 +13,7 @@ const props = defineProps({
     timeline: { type: Array, required: true },
     from: { type: String, required: true },
     to: { type: String, required: true },
+    today: { type: String, default: '' },
     filters: { type: Object, default: () => ({ search: '', group_id: '' }) },
 });
 
@@ -174,6 +175,89 @@ const groupOptions = computed(() => {
         ...props.groups.map(g => ({ value: String(g.id), label: g.name })),
     ];
 });
+
+// Quick per-employee transfer (reassign within the same rotation).
+const showTransferModal = ref(false);
+const transferEmployee = ref(null);
+const transferTargetGroupId = ref('');
+const transferEffectiveDate = ref(props.today || new Date().toISOString().split('T')[0]);
+const transferErrors = ref({});
+const transferSaving = ref(false);
+const transferSuccess = ref('');
+let transferSuccessTimer = null;
+
+const quickTransferGroupOptions = computed(() => {
+    if (!props.groups?.length || !transferEmployee.value) return [];
+    const currentGroupId = Number(transferEmployee.value.group_id);
+
+    return props.groups
+        .filter((g) => Number(g.id) !== currentGroupId)
+        .map((g) => ({
+            value: g.id,
+            label: `${g.name} (${t('shifts.offset')}: ${g.group_index})`,
+        }));
+});
+
+function openQuickTransfer(employee) {
+    transferEmployee.value = employee;
+    transferTargetGroupId.value = '';
+    transferEffectiveDate.value = props.today || new Date().toISOString().split('T')[0];
+    transferErrors.value = {};
+    showTransferModal.value = true;
+}
+
+function closeQuickTransfer() {
+    showTransferModal.value = false;
+    transferEmployee.value = null;
+    transferTargetGroupId.value = '';
+    transferErrors.value = {};
+}
+
+const submitQuickTransfer = async () => {
+    if (!transferEmployee.value || !transferTargetGroupId.value || !transferEffectiveDate.value) return;
+
+    transferSaving.value = true;
+    transferErrors.value = {};
+
+    try {
+        const response = await fetch(route('rotations.assign.transfer'), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-XSRF-TOKEN': decodeURIComponent(document.cookie.match(/XSRF-TOKEN=([^;]+)/)?.[1] || ''),
+            },
+            body: JSON.stringify({
+                employee_id: transferEmployee.value.employee_id,
+                new_rotation_id: Number(props.rotation.id),
+                new_group_id: Number(transferTargetGroupId.value),
+                effective_date: transferEffectiveDate.value,
+            }),
+        });
+
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            if (data.errors) {
+                transferErrors.value = data.errors;
+            }
+            throw new Error(data.message || 'Failed');
+        }
+
+        closeQuickTransfer();
+        transferSuccess.value = data.message || t('shifts.rotation_employee_transferred');
+        if (transferSuccessTimer) clearTimeout(transferSuccessTimer);
+        transferSuccessTimer = setTimeout(() => {
+            transferSuccess.value = '';
+        }, 5000);
+
+        router.reload({ preserveState: true, preserveScroll: true });
+    } catch (e) {
+        console.error(e);
+    } finally {
+        transferSaving.value = false;
+    }
+};
 </script>
 
 <template>
@@ -194,6 +278,8 @@ const groupOptions = computed(() => {
                 </div>
             </template>
         </PageHeader>
+
+        <Alert v-if="transferSuccess" type="success" :message="transferSuccess" dismissible class="mb-4" @dismiss="transferSuccess = ''" />
 
         <div class="space-y-5" dir="rtl">
             <!-- Summary Stats -->
@@ -323,7 +409,7 @@ const groupOptions = computed(() => {
                                 <!-- Month Header Row -->
                                 <tr>
                                     <th
-                                        class="sticky right-0 z-30 bg-mistral-surface border-b border-l border-mistral-hairline px-4 py-2 text-right text-sm font-bold min-w-[200px]"
+                                        class="sticky right-0 z-30 bg-mistral-surface border-b border-l border-mistral-hairline px-4 py-2 text-right text-sm font-bold min-w-[240px]"
                                         colspan="1"
                                         rowspan="2"
                                     >
@@ -333,7 +419,7 @@ const groupOptions = computed(() => {
                                         </div>
                                     </th>
                                     <th
-                                        class="sticky right-[200px] z-30 bg-mistral-surface border-b border-l border-mistral-hairline px-3 py-2 text-center text-sm font-bold min-w-[70px]"
+                                        class="sticky right-[240px] z-30 bg-mistral-surface border-b border-l border-mistral-hairline px-3 py-2 text-center text-sm font-bold min-w-[70px]"
                                         rowspan="2"
                                     >
                                         <div class="flex items-center justify-center gap-1">
@@ -388,7 +474,7 @@ const groupOptions = computed(() => {
                                     :class="rowIdx % 2 === 0 ? 'bg-white' : 'bg-mistral-surface/30'"
                                 >
                                     <!-- Employee Name -->
-                                    <td class="sticky right-0 z-10 border-b border-l border-mistral-hairline px-4 py-2.5 min-w-[200px]"
+                                    <td class="sticky right-0 z-10 border-b border-l border-mistral-hairline px-4 py-2.5 min-w-[240px]"
                                         :class="rowIdx % 2 === 0 ? 'bg-white' : 'bg-mistral-surface/30'"
                                     >
                                         <div class="flex items-center gap-3">
@@ -397,15 +483,24 @@ const groupOptions = computed(() => {
                                                     {{ emp.employee_name?.charAt(0) }}
                                                 </span>
                                             </div>
-                                            <div class="min-w-0">
+                                            <div class="min-w-0 flex-1">
                                                 <div class="text-sm font-semibold text-mistral-ink truncate">{{ emp.employee_name }}</div>
                                                 <div class="text-xs text-mistral-steel">{{ emp.employee_code }}</div>
                                             </div>
+                                            <Button
+                                                variant="icon"
+                                                size="sm"
+                                                icon="fas fa-right-left"
+                                                :title="t('shifts.quick_transfer')"
+                                                :aria-label="t('shifts.quick_transfer')"
+                                                class="shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
+                                                @click="openQuickTransfer(emp)"
+                                            />
                                         </div>
                                     </td>
 
                                     <!-- Group Badge -->
-                                    <td class="sticky right-[200px] z-10 border-b border-l border-mistral-hairline px-3 py-2.5 text-center min-w-[70px]"
+                                    <td class="sticky right-[240px] z-10 border-b border-l border-mistral-hairline px-3 py-2.5 text-center min-w-[70px]"
                                         :class="rowIdx % 2 === 0 ? 'bg-white' : 'bg-mistral-surface/30'"
                                     >
                                         <span
@@ -444,5 +539,62 @@ const groupOptions = computed(() => {
                 </div>
             </Card>
         </div>
+
+        <FormModal
+            v-model="showTransferModal"
+            :title="t('shifts.quick_transfer_title')"
+            size="sm"
+            @close="closeQuickTransfer"
+        >
+            <div v-if="transferEmployee" class="space-y-4">
+                <div class="rounded-lg bg-mistral-surface px-4 py-3">
+                    <p class="text-[12px] font-semibold text-mistral-slate uppercase tracking-wider">
+                        {{ t('shifts.employee_name') }}
+                    </p>
+                    <p class="mt-1 text-[14px] font-semibold text-mistral-ink">{{ transferEmployee.employee_name }}</p>
+                    <p v-if="transferEmployee.employee_code" class="text-[12px] text-mistral-muted">
+                        {{ transferEmployee.employee_code }}
+                    </p>
+                </div>
+
+                <FormSelect
+                    v-model="transferTargetGroupId"
+                    name="target_group"
+                    :label="t('shifts.select_target_group')"
+                    :options="quickTransferGroupOptions"
+                    :placeholder="t('shifts.select_target_group')"
+                    required
+                />
+
+                <FormInput
+                    v-model="transferEffectiveDate"
+                    :label="t('shifts.effective_date')"
+                    name="effective_date"
+                    type="date"
+                    required
+                />
+
+                <p class="text-[12px] text-mistral-muted leading-relaxed">
+                    <i class="fas fa-circle-info me-1"></i>
+                    {{ t('shifts.quick_transfer_hint') }}
+                </p>
+
+                <ErrorSummary v-if="Object.keys(transferErrors).length" :errors="transferErrors" />
+            </div>
+
+            <template #footer>
+                <Button variant="ghost" @click="closeQuickTransfer">
+                    {{ t('common.cancel') }}
+                </Button>
+                <Button
+                    variant="primary"
+                    :loading="transferSaving"
+                    :disabled="!transferTargetGroupId || !transferEffectiveDate"
+                    @click="submitQuickTransfer"
+                >
+                    {{ t('shifts.transfer') }}
+                </Button>
+            </template>
+        </FormModal>
     </AppLayout>
 </template>

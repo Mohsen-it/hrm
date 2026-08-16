@@ -314,7 +314,9 @@ class RotationService
             // Serialize concurrent transfers for the same employee.
             User::query()->whereKey($employeeId)->lockForUpdate()->first();
 
-            $this->closeCurrentAssignment($employeeId, $previousDay);
+            // Close EVERY open assignment (imports can leave more than one)
+            // so no stale row survives the transfer.
+            $this->assignmentRepository->closeAllActiveAssignments($employeeId, $previousDay);
 
             return $this->createAssignment($employeeId, $newRotationId, $newGroupId, $effectiveDate);
         });
@@ -482,15 +484,6 @@ class RotationService
             'end_date' => $endDate,
             'snapshot_data' => $snapshotData,
         ]);
-    }
-
-    private function closeCurrentAssignment(int $employeeId, string $endDate): void
-    {
-        $active = $this->assignmentRepository->getActiveAssignment($employeeId);
-
-        if ($active) {
-            $this->assignmentRepository->closeAssignment($active, $endDate);
-        }
     }
 
     /**

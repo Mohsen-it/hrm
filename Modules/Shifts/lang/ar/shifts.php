@@ -459,6 +459,11 @@ return [
     'rotation_timeline' => 'جدول الدورية الزمني',
     'timeline' => 'الجدول الزمني',
     'timeline_export' => 'تصدير الجدول',
+
+    // Quick per-employee transfer
+    'quick_transfer' => 'نقل سريع إلى مجموعة أخرى',
+    'quick_transfer_title' => 'نقل موظف إلى مجموعة أخرى',
+    'quick_transfer_hint' => 'سيتم إنهاء جميع إسنادات هذا الموظف القديمة تلقائياً اعتباراً من اليوم السابق لتاريخ النفاذ، وإنشاء الإسناد الجديد.',
     'search_employee' => 'بحث عن موظف...',
     'filter_by_group' => 'فلترة بالمجموعة',
     'all_groups' => 'جميع المجموعات',

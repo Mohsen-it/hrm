@@ -439,6 +439,11 @@ return [
     'rotation_timeline' => 'Rotation Timeline',
     'timeline' => 'Timeline',
     'timeline_export' => 'Export Schedule',
+
+    // Quick per-employee transfer
+    'quick_transfer' => 'Quick transfer to another group',
+    'quick_transfer_title' => 'Transfer employee to another group',
+    'quick_transfer_hint' => 'All of this employee\'s old assignments will be closed automatically the day before the effective date, and the new assignment will be created.',
     'search_employee' => 'Search employee...',
     'filter_by_group' => 'Filter by Group',
     'all_groups' => 'All Groups',

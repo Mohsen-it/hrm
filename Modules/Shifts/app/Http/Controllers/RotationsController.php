@@ -299,8 +299,11 @@ class RotationsController extends Controller
 
     /**
      * Transfer an employee to a different rotation/group.
+     *
+     * Closes every open assignment for the employee (all old assignments are
+     * ended on the day before the effective date) and creates the new one.
      */
-    public function transfer(Request $request): RedirectResponse
+    public function transfer(Request $request)
     {
         $this->authorize('assign-employees-to-rotation');
 
@@ -318,8 +321,18 @@ class RotationsController extends Controller
             $request->effective_date
         );
 
-        return redirect()->route('rotations.assign')
-            ->with('success', __('shifts.rotation_employee_transferred'));
+        // AJAX callers (quick per-row transfer) consume a JSON payload.
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => __('shifts.rotation_employee_transferred'),
+            ]);
+        }
+
+        return redirect()->route('rotations.assign.manage', [
+            'rotation' => $request->new_rotation_id,
+            'group' => $request->input('redirect_group_id'),
+        ])->with('success', __('shifts.rotation_employee_transferred'));
     }
 
     /**
@@ -456,6 +469,7 @@ class RotationsController extends Controller
             'timeline' => fn () => $timeline,
             'from' => $from,
             'to' => $to,
+            'today' => now()->toDateString(),
             'filters' => [
                 'search' => $search,
                 'group_id' => $groupId,
@@ -613,6 +627,7 @@ class RotationsController extends Controller
             'departments' => fn () => Department::orderBy('department_name')->get(['id', 'department_name']),
             'preselected_rotation_id' => $request->input('rotation') ? (int) $request->input('rotation') : null,
             'preselected_group_id' => $request->input('group') ? (int) $request->input('group') : null,
+            'today' => now()->toDateString(),
         ]);
     }
 

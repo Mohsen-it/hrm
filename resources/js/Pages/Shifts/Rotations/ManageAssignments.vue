@@ -2,7 +2,7 @@
 import { ref, reactive, computed, watch } from 'vue';
 import { router, Head } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
-import { PageHeader, Button, Card, FormInput, FormSelect, Badge, DataTable, EmptyState, ErrorSummary } from '@/Components/ui';
+import { PageHeader, Button, Card, FormInput, FormSelect, Badge, DataTable, EmptyState, ErrorSummary, FormModal } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
@@ -29,6 +29,14 @@ const selectedEmployees = ref([]);
 const loading = ref(false);
 const saving = ref(false);
 const errors = ref({});
+
+// Quick per-employee transfer (reassign within the same rotation).
+const showTransferModal = ref(false);
+const transferEmployee = ref(null);
+const transferTargetGroupId = ref('');
+const transferEffectiveDate = ref(props.today);
+const transferErrors = ref({});
+const transferSaving = ref(false);
 
 const rotationOptions = computed(() => {
     const items = Array.isArray(props.rotations) ? props.rotations : (props.rotations?.data || []);
@@ -121,6 +129,7 @@ const employeeColumns = computed(() => [
     { key: 'rotation_group_name', label: t('shifts.rotation_group'), headerClass: 'text-center' },
     { key: 'start_date', label: t('shifts.start_date'), headerClass: 'text-center' },
     { key: 'status', label: t('common.status'), headerClass: 'text-center' },
+    { key: 'actions', label: t('common.actions'), headerClass: 'text-center', sortable: false },
 ]);
 
 const employeesData = computed(() => ({
@@ -285,6 +294,75 @@ const unassignSelected = async () => {
         console.error(e);
     } finally {
         saving.value = false;
+    }
+};
+
+// Groups available for a quick single-employee transfer: every group of the
+// current rotation except the one the employee is already assigned to.
+const quickTransferGroupOptions = computed(() => {
+    if (!selectedRotation.value?.groups || !transferEmployee.value) return [];
+    const currentGroupId = Number(transferEmployee.value.rotation_group_id);
+
+    return selectedRotation.value.groups
+        .filter((g) => Number(g.id) !== currentGroupId)
+        .map((g) => ({
+            value: g.id,
+            label: `${g.name} (${t('shifts.offset')}: ${g.group_index})`,
+        }));
+});
+
+function openQuickTransfer(employee) {
+    transferEmployee.value = employee;
+    transferTargetGroupId.value = '';
+    transferEffectiveDate.value = props.today;
+    transferErrors.value = {};
+    showTransferModal.value = true;
+}
+
+function closeQuickTransfer() {
+    showTransferModal.value = false;
+    transferEmployee.value = null;
+    transferTargetGroupId.value = '';
+    transferErrors.value = {};
+}
+
+const submitQuickTransfer = async () => {
+    if (!transferEmployee.value || !transferTargetGroupId.value || !transferEffectiveDate.value) return;
+
+    transferSaving.value = true;
+    transferErrors.value = {};
+
+    try {
+        const response = await fetch(route('rotations.assign.transfer'), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-XSRF-TOKEN': decodeURIComponent(document.cookie.match(/XSRF-TOKEN=([^;]+)/)?.[1] || ''),
+            },
+            body: JSON.stringify({
+                employee_id: transferEmployee.value.id,
+                new_rotation_id: Number(selectedRotationId.value),
+                new_group_id: Number(transferTargetGroupId.value),
+                effective_date: transferEffectiveDate.value,
+            }),
+        });
+
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            if (data.errors) {
+                transferErrors.value = data.errors;
+            }
+            throw new Error(data.message || 'Failed');
+        }
+
+        closeQuickTransfer();
+        await fetchEmployees();
+    } catch (e) {
+        console.error(e);
+    } finally {
+        transferSaving.value = false;
     }
 };
 
@@ -527,6 +605,19 @@ if (props.preselected_rotation_id) {
                         variant="inactive"
                     />
                 </template>
+                <template #cell-actions="{ row }">
+                    <div class="flex items-center justify-center gap-1.5">
+                        <Button
+                            v-if="row.rotation_group_id"
+                            variant="ghost"
+                            size="sm"
+                            icon="fas fa-right-left"
+                            :title="t('shifts.quick_transfer')"
+                            :aria-label="t('shifts.quick_transfer')"
+                            @click="openQuickTransfer(row)"
+                        />
+                    </div>
+                </template>
             </DataTable>
         </Card>
 
@@ -537,5 +628,62 @@ if (props.preselected_rotation_id) {
                 :description="t('shifts.select_rotation_description')"
             />
         </Card>
+
+        <FormModal
+            v-model="showTransferModal"
+            :title="t('shifts.quick_transfer_title')"
+            size="sm"
+            @close="closeQuickTransfer"
+        >
+            <div v-if="transferEmployee" class="space-y-4">
+                <div class="rounded-lg bg-mistral-surface px-4 py-3">
+                    <p class="text-[12px] font-semibold text-mistral-slate uppercase tracking-wider">
+                        {{ t('shifts.employee_name') }}
+                    </p>
+                    <p class="mt-1 text-[14px] font-semibold text-mistral-ink">{{ transferEmployee.name }}</p>
+                    <p v-if="transferEmployee.employee_code" class="text-[12px] text-mistral-muted">
+                        {{ transferEmployee.employee_code }}
+                    </p>
+                </div>
+
+                <FormSelect
+                    v-model="transferTargetGroupId"
+                    name="target_group"
+                    :label="t('shifts.select_target_group')"
+                    :options="quickTransferGroupOptions"
+                    :placeholder="t('shifts.select_target_group')"
+                    required
+                />
+
+                <FormInput
+                    v-model="transferEffectiveDate"
+                    :label="t('shifts.effective_date')"
+                    name="effective_date"
+                    type="date"
+                    required
+                />
+
+                <p class="text-[12px] text-mistral-muted leading-relaxed">
+                    <i class="fas fa-circle-info me-1"></i>
+                    {{ t('shifts.quick_transfer_hint') }}
+                </p>
+
+                <ErrorSummary v-if="Object.keys(transferErrors).length" :errors="transferErrors" />
+            </div>
+
+            <template #footer>
+                <Button variant="ghost" @click="closeQuickTransfer">
+                    {{ t('common.cancel') }}
+                </Button>
+                <Button
+                    variant="primary"
+                    :loading="transferSaving"
+                    :disabled="!transferTargetGroupId || !transferEffectiveDate"
+                    @click="submitQuickTransfer"
+                >
+                    {{ t('shifts.transfer') }}
+                </Button>
+            </template>
+        </FormModal>
     </AppLayout>
 </template>

@@ -183,6 +183,21 @@ class RotationAssignmentRepository
     }
 
     /**
+     * Close every open-ended assignment for an employee.
+     *
+     * Imports and legacy data can leave more than one open row per employee;
+     * closing all of them (instead of only the latest) guarantees a transfer
+     * never leaves a stale, conflicting assignment behind.
+     */
+    public function closeAllActiveAssignments(int $employeeId, string $endDate): int
+    {
+        return $this->query()
+            ->where('employee_id', $employeeId)
+            ->whereNull('end_date')
+            ->update(['end_date' => $endDate]);
+    }
+
+    /**
      * Delete all historical and active assignments belonging to a rotation.
      */
     public function deleteByRotation(int $rotationId): int

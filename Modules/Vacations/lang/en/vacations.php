@@ -30,6 +30,7 @@ return [
     'start_date' => 'Start Date',
     'end_date' => 'End Date',
     'total_days' => 'Total Days',
+    'created_updated_at' => 'Created / Last Modified',
     'reason' => 'Reason',
     'status' => 'Status',
     'pending' => 'Pending',

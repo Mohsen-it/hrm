@@ -214,13 +214,6 @@ export const navigationGroups = [
         permissions: ['view-vacation-requests'],
       },
       {
-        id: 'leave.my',
-        label: 'menu.my_vacations',
-        route: 'vacations.my.index',
-        icon: 'fa-solid fa-suitcase-rolling',
-        permissions: ['view-vacations'],
-      },
-      {
         id: 'leave.types',
         label: 'menu.vacation_types',
         route: 'vacations.types.index',

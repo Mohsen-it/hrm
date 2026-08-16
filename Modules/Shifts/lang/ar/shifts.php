@@ -457,6 +457,7 @@ return [
 
     // Rotation Timeline
     'rotation_timeline' => 'جدول الدورية الزمني',
+    'timeline' => 'الجدول الزمني',
     'timeline_export' => 'تصدير الجدول',
     'search_employee' => 'بحث عن موظف...',
     'filter_by_group' => 'فلترة بالمجموعة',

@@ -29,6 +29,7 @@ return [
     'start_date' => 'تاريخ البداية',
     'end_date' => 'تاريخ النهاية',
     'total_days' => 'إجمالي الأيام',
+    'created_updated_at' => 'تاريخ الإنشاء / آخر تعديل',
     'reason' => 'السبب',
     'status' => 'الحالة',
     'pending' => 'قيد الانتظار',

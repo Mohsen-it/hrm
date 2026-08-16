@@ -201,6 +201,17 @@ function getSortIcon(col) {
     return 'fas fa-sort-down text-mistral-primary';
 }
 
+// Keep header labels aligned with their cell content: when a column is
+// centered/right-aligned via `cellClass` (or an explicit `headerClass`),
+// apply the matching alignment to the header label so the data lines up
+// with its column title.
+function headerAlignmentClass(col) {
+    const alignment = `${col.cellClass || ''} ${col.headerClass || ''}`;
+    if (alignment.includes('text-center')) return 'justify-center';
+    if (alignment.includes('text-end')) return 'justify-end';
+    return col.key === 'actions' ? 'justify-center' : '';
+}
+
 function onSearch(value) {
     table.globalSearch.value = value;
     emit('search', value);
@@ -305,7 +316,7 @@ const lastVisibleColIndex = computed(() => {
                             >
                                 <th
                                     v-if="selectable"
-                                    class="sticky bg-mistral-surface/60 z-10 px-4 py-3 text-center w-[48px]"
+                                    class="sticky bg-mistral-surface/60 z-10 px-4 py-3 text-center w-[48px] align-middle"
                                     :class="dir === 'rtl' ? 'right-0' : 'left-0'"
                                 >
                                     <input
@@ -320,10 +331,11 @@ const lastVisibleColIndex = computed(() => {
                                     v-for="(col, colIdx) in table.visibleColumns.value"
                                     :key="col.key"
                                     :class="[
-                                        'px-4 py-3 text-[11px] font-semibold text-mistral-steel uppercase tracking-wider',
+                                        'px-4 py-3 text-[11px] font-semibold text-mistral-steel uppercase tracking-wider align-middle',
                                         col.sortable ? 'cursor-pointer select-none hover:text-mistral-ink transition-colors' : '',
                                         table.sortColumn.value === col.key ? 'text-mistral-primary' : '',
                                         col.headerClass,
+                                        headerAlignmentClass(col) === 'justify-center' ? 'text-center' : headerAlignmentClass(col) === 'justify-end' ? 'text-end' : '',
                                         col.key === 'actions' ? 'sticky bg-mistral-surface/60 z-10 text-center w-[120px]' : '',
                                         col.key === 'actions' ? (dir === 'rtl' ? 'right-0' : 'left-0') : '',
                                         colIdx === lastVisibleColIndex && col.key !== 'actions' ? (dir === 'rtl' ? 'ps-4' : 'pe-4') : '',
@@ -331,7 +343,7 @@ const lastVisibleColIndex = computed(() => {
                                     :style="col.width ? { width: col.width } : {}"
                                     @click="col.sortable ? table.toggleSort(col.key) : null"
                                 >
-                                    <div class="flex items-center gap-1.5" :class="col.key === 'actions' ? 'justify-center' : ''">
+                                    <div class="flex items-center gap-1.5" :class="headerAlignmentClass(col)">
                                         <span>{{ col.label }}</span>
                                         <i
                                             v-if="col.sortable"
@@ -407,17 +419,17 @@ const lastVisibleColIndex = computed(() => {
                                             />
                                         </div>
                                     </td>
-                                    <td
-                                        v-for="(col, colIdx) in table.visibleColumns.value"
-                                        :key="col.key"
-                                        :class="[
-                                            'px-4 py-3 text-[13px] text-mistral-ink',
-                                            col.cellClass,
-                                            col.key === 'actions' ? 'sticky z-10 text-center' : '',
-                                            col.key === 'actions' ? (dir === 'rtl' ? 'right-0' : 'left-0') : '',
-                                            col.key === 'actions' ? (rowIndex % 2 === 1 ? 'bg-mistral-surface/30' : 'bg-white') : '',
-                                            col.key === 'actions' && table.selectedIds.value.includes(row.id) ? 'bg-mistral-primary/5' : '',
-                                        ]"
+                                <td
+                                    v-for="(col, colIdx) in table.visibleColumns.value"
+                                    :key="col.key"
+                                    :class="[
+                                        'px-4 py-3 text-[13px] text-mistral-ink align-middle',
+                                        col.cellClass,
+                                        col.key === 'actions' ? 'sticky z-10 text-center' : '',
+                                        col.key === 'actions' ? (dir === 'rtl' ? 'right-0' : 'left-0') : '',
+                                        col.key === 'actions' ? (rowIndex % 2 === 1 ? 'bg-mistral-surface/30' : 'bg-white') : '',
+                                        col.key === 'actions' && table.selectedIds.value.includes(row.id) ? 'bg-mistral-primary/5' : '',
+                                    ]"
                                     >
                                         <slot :name="`cell-${col.key}`" :row="row" :value="cellValue(row, col)">
                                             <span v-if="col.badge">

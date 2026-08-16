@@ -27,6 +27,7 @@ const columns = computed(() => [
     { key: 'start_date', label: t('vacations.start_date'), sortable: true },
     { key: 'end_date', label: t('vacations.end_date'), sortable: true },
     { key: 'total_days', label: t('vacations.total_days'), cellClass: 'text-center' },
+    { key: 'created_at', label: t('vacations.created_updated_at'), sortable: true },
     {
         key: 'status',
         label: t('common.status'),
@@ -105,6 +106,16 @@ const flashSuccess = computed(() => page.props.flash?.success);
         >
             <template #cell-status="{ row }">
                 <Badge :text="t('vacations.' + row.status)" :variant="statusVariant(row.status)" />
+            </template>
+
+            <template #cell-created_at="{ row }">
+                <div class="flex items-center justify-end gap-1.5" dir="ltr">
+                    <span>{{ row.created_at }}</span>
+                    <span v-if="row.updated_at && row.updated_at !== row.created_at" class="flex items-center gap-1 text-[11px] text-mistral-muted">
+                        <i class="fas fa-pen-to-square"></i>
+                        <span>{{ row.updated_at }}</span>
+                    </span>
+                </div>
             </template>
 
             <template #cell-actions="{ row }">

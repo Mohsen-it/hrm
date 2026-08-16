@@ -437,6 +437,7 @@ return [
 
     // Rotation Timeline
     'rotation_timeline' => 'Rotation Timeline',
+    'timeline' => 'Timeline',
     'timeline_export' => 'Export Schedule',
     'search_employee' => 'Search employee...',
     'filter_by_group' => 'Filter by Group',

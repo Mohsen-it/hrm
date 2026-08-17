@@ -10,10 +10,13 @@ import SunsetStripeBand from '@/Components/layout/SunsetStripeBand.vue';
 import LanguageSwitcher from '@/Components/LanguageSwitcher.vue';
 import IconButton from '@/Components/ui/IconButton.vue';
 import { useRealtimeAttendance } from '@/composables/useRealtimeAttendance';
+import { usePageTitle, resetPageTitle } from '@/composables/usePageTitle';
 
-defineProps({
-    title: { type: String, default: '' },
-});
+// With the persistent-layout pattern Inertia passes every page prop down to
+// this layout, so don't let them fall through onto the root element.
+defineOptions({ inheritAttrs: false });
+
+const title = usePageTitle();
 
 const page = usePage();
 const { direction, isRtl } = useTranslations();
@@ -102,8 +105,10 @@ function closeCommandPalette() {
     isCommandPaletteOpen.value = false;
 }
 
-// Track page visits for recent pages
+// Track page visits for recent pages; also reset the shared page title so
+// pages without a title don't inherit the previous page's one.
 watch(() => page.url, () => {
+    resetPageTitle();
     trackPageVisit();
 }, { immediate: true });
 </script>

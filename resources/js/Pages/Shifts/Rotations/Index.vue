@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { ref, computed } from 'vue';
 import { router, Link, usePage } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import { PageHeader, Button, DataTable, ConfirmDialog, Badge, IconButton, Alert } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
@@ -58,10 +67,13 @@ function performDelete() {
 }
 
 const flashSuccess = computed(() => page.props.flash?.success);
+
+
+usePageTitle(t('shifts.rotations'));
 </script>
 
 <template>
-    <AppLayout :title="t('shifts.rotations')">
+    
         <PageHeader
             :title="t('shifts.rotations')"
             :description="t('shifts.rotations_description')"
@@ -165,5 +177,4 @@ const flashSuccess = computed(() => page.props.flash?.success);
             confirm-variant="danger"
             @confirm="performDelete"
         />
-    </AppLayout>
-</template>
+    </template>

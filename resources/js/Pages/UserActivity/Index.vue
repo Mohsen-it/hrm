@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { computed, ref } from 'vue';
 import { router } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import IdleGapControl from '@/Components/UserActivity/IdleGapControl.vue';
 import { Avatar, Badge, Button, DataTable, FormDatepicker, FormSelect, PageHeader, SearchInput, StatCard } from '@/Components/ui';
 import { usePeriodFilter } from '@/composables/usePeriodFilter';
@@ -105,10 +114,13 @@ const kpiCards = [
     { label: t('useractivity.total_active_hours'), value: formatHours(props.overview.totals.total_active_minutes), icon: 'fas fa-clock', color: 'success' },
     { label: t('useractivity.inactive_users'), value: props.overview.totals.inactive_users, icon: 'fas fa-user-xmark', color: 'danger' },
 ];
+
+
+usePageTitle(t('useractivity.title'));
 </script>
 
 <template>
-    <AppLayout :title="t('useractivity.title')">
+    
         <div class="space-y-5">
             <PageHeader :title="t('useractivity.title')" :description="t('useractivity.subtitle')" :dir="direction">
                 <template #actions>
@@ -288,5 +300,4 @@ const kpiCards = [
                 </div>
             </div>
         </div>
-    </AppLayout>
-</template>
+    </template>

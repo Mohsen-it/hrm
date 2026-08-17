@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { Head, useForm, router } from '@inertiajs/vue3'
 import { ref, computed } from 'vue'
-import AppLayout from '@/Layouts/AppLayout.vue'
 import { PageHeader, Button, Badge, DataTable, FormInput, FormSelect, FormCheckbox, FormModal, ConfirmDialog, IconButton } from '@/Components/ui'
 import { useTranslations } from '@/composables/useTranslations'
 
@@ -84,10 +93,13 @@ const executeDelete = () => {
         })
     }
 }
+
+
+usePageTitle(t('roles.title'));
 </script>
 
 <template>
-    <AppLayout :title="t('roles.title')">
+    
         <Head :title="t('roles.title')" />
 
         <PageHeader
@@ -203,5 +215,4 @@ const executeDelete = () => {
             :message="t('roles.confirm_delete')"
             @confirm="executeDelete"
         />
-    </AppLayout>
-</template>
+    </template>

@@ -1,6 +1,15 @@
-<script setup>
-import { computed } from 'vue';
+<script>
 import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
+<script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
+import { computed } from 'vue';
 import { PageHeader, Button, Card, Badge } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
@@ -28,10 +37,13 @@ const employeesCount = computed(() => {
     }
     return 0;
 });
+
+
+usePageTitle(t('positions.view_position'));
 </script>
 
 <template>
-    <AppLayout :title="t('positions.view_position')">
+    
         <PageHeader
             :title="t('positions.view_position')"
             :description="position.position_name"
@@ -79,5 +91,4 @@ const employeesCount = computed(() => {
                 </dl>
             </div>
         </Card>
-    </AppLayout>
-</template>
+    </template>

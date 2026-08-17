@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { reactive, ref, computed } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import { PageHeader, Button, Card, FormInput, FormSelect, FormCheckbox, Badge, EmptyState, IconButton, Alert, ErrorSummary, FormSection, FormActions } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
@@ -83,10 +92,13 @@ function submit() {
 }
 
 const flashSuccess = computed(() => page.props.flash?.success);
+
+
+usePageTitle(t('users.manage_shifts'));
 </script>
 
 <template>
-    <AppLayout :title="t('users.manage_shifts')">
+    
         <PageHeader
             :title="t('users.manage_shifts')"
             :description="`${user.name} — ${t('users.shifts_description')}`"
@@ -176,5 +188,4 @@ const flashSuccess = computed(() => page.props.flash?.success);
                 :saving="processing"
             />
         </form>
-    </AppLayout>
-</template>
+    </template>

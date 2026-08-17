@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { computed } from 'vue';
 import { usePage } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import PageHeader from '@/Components/ui/PageHeader.vue';
 import Button from '@/Components/ui/Button.vue';
 import Card from '@/Components/ui/Card.vue';
@@ -15,10 +24,13 @@ const flashSuccess = computed(() => page.props.flash?.success);
 const props = defineProps({
     schedule: { type: Object, required: true },
 });
+
+
+usePageTitle(t('attendance.group_schedule', 'جدول الفئة') + ': ' + (schedule.group?.name || ''));
 </script>
 
 <template>
-    <AppLayout :title="t('attendance.group_schedule', 'جدول الفئة') + ': ' + (schedule.group?.name || '')">
+    
         <PageHeader
             :title="t('attendance.group_schedule', 'جدول الفئة')"
             :description="schedule.group?.name + ' - ' + schedule.shift?.alias"
@@ -57,5 +69,4 @@ const props = defineProps({
                 </dl>
             </div>
         </Card>
-    </AppLayout>
-</template>
+    </template>

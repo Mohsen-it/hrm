@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { computed } from 'vue';
 import { router, Link } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import PageHeader from '@/Components/ui/PageHeader.vue';
 import Button from '@/Components/ui/Button.vue';
 import Card from '@/Components/ui/Card.vue';
@@ -35,10 +44,13 @@ const fields = computed(() => [
     { label: t('fingerprint_devices.synced_at'), value: formatDateTime(props.template.synced_at) },
     { label: t('fingerprint_devices.created_at'), value: formatDateTime(props.template.created_at) },
 ]);
+
+
+usePageTitle(t('fingerprint_devices.template_details'));
 </script>
 
 <template>
-    <AppLayout :title="t('fingerprint_devices.template_details')">
+    
         <PageHeader
             :title="t('fingerprint_devices.template_details')"
             :description="`#${template.id}`"
@@ -132,5 +144,4 @@ const fields = computed(() => [
                 </div>
             </div>
         </Card>
-    </AppLayout>
-</template>
+    </template>

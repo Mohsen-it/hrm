@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { computed, ref, onBeforeUnmount, watch } from 'vue';
 import { router, Link } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import PageHeader from '@/Components/ui/PageHeader.vue';
 import Button from '@/Components/ui/Button.vue';
 import Card from '@/Components/ui/Card.vue';
@@ -533,10 +542,13 @@ watch(deviceId, (v) => {
         pickDevice();
     }
 });
+
+
+usePageTitle(t('fingerprint_devices.sync_title'));
 </script>
 
 <template>
-    <AppLayout :title="t('fingerprint_devices.sync_title')">
+    
         <PageHeader
             :title="t('fingerprint_devices.sync_title')"
             :description="t('fingerprint_devices.sync_description')"
@@ -880,5 +892,4 @@ watch(deviceId, (v) => {
                 </div>
             </Card>
         </div>
-    </AppLayout>
-</template>
+    </template>

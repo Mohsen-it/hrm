@@ -1,6 +1,15 @@
-<script setup>
-import { computed } from 'vue';
+<script>
 import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
+<script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
+import { computed } from 'vue';
 import PageHeader from '@/Components/ui/PageHeader.vue';
 import Button from '@/Components/ui/Button.vue';
 import Card from '@/Components/ui/Card.vue';
@@ -26,10 +35,13 @@ const fields = computed(() => [
     { label: t('attendance.fields.processed_at'), value: props.log.processed_at || '—' },
     { label: t('attendance.fields.created_at'), value: props.log.created_at || '—' },
 ]);
+
+
+usePageTitle(t('attendance.raw_log'));
 </script>
 
 <template>
-    <AppLayout :title="t('attendance.raw_log')">
+    
         <PageHeader
             :title="t('attendance.raw_log') + ' #' + log.id"
             :description="t('attendance.show_description')"
@@ -84,5 +96,4 @@ const fields = computed(() => [
                 </div>
             </Card>
         </div>
-    </AppLayout>
-</template>
+    </template>

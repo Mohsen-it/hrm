@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { ref } from 'vue'
 import { router } from '@inertiajs/vue3'
-import AppLayout from '@/Layouts/AppLayout.vue'
 import { PageHeader, Card, Badge, DataTable, FormInput } from '@/Components/ui'
 import CalendarLegend from '@/Pages/Shifts/Partials/CalendarLegend.vue'
 import { useTranslations } from '@/composables/useTranslations'
@@ -26,10 +35,13 @@ const columns = [
     { key: 'is_expected', label: t('shifts.expected_today') || 'Expected' },
     { key: 'has_punch', label: t('shifts.has_punch') || 'Has Punch' },
 ]
+
+
+usePageTitle(t('shifts.department_calendar'));
 </script>
 
 <template>
-    <AppLayout :title="t('shifts.department_calendar')">
+    
         <PageHeader :title="t('shifts.department_calendar')" :description="date">
             <template #actions>
                 <FormInput
@@ -64,5 +76,4 @@ const columns = [
                 </template>
             </DataTable>
         </Card>
-    </AppLayout>
-</template>
+    </template>

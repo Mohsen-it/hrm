@@ -1,6 +1,15 @@
-<script setup>
-import { computed } from 'vue';
+<script>
 import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
+<script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
+import { computed } from 'vue';
 import { PageHeader, Button, Card, Badge } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
@@ -27,10 +36,13 @@ const fields = computed(() => [
     { label: t('companies.address2'), value: props.company.address2 || '—' },
     { label: t('companies.description'), value: props.company.description || '—' },
 ]);
+
+
+usePageTitle(t('companies.view_company'));
 </script>
 
 <template>
-    <AppLayout :title="t('companies.view_company')">
+    
         <PageHeader
             :title="t('companies.view_company')"
             :description="company.company_name"
@@ -96,5 +108,4 @@ const fields = computed(() => [
                 </dl>
             </div>
         </Card>
-    </AppLayout>
-</template>
+    </template>

@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { computed, ref } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import { Alert, Button, ConfirmDialog, DataTable, IconButton, PageHeader } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
@@ -60,10 +69,13 @@ function destroy() {
         },
     });
 }
+
+
+usePageTitle('التبريرات');
 </script>
 
 <template>
-    <AppLayout title="التبريرات">
+    
         <PageHeader title="طلبات الإجازات" description="سجل التبريرات المرتبطة ببصمات الموظفين والدوريات">
             <template #actions>
                 <Button variant="secondary" :href="route('vacations.requests.index')">طلبات الإجازات</Button>
@@ -119,5 +131,4 @@ function destroy() {
             confirm-variant="danger"
             @confirm="destroy"
         />
-    </AppLayout>
-</template>
+    </template>

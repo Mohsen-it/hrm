@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { ref, computed } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import { PageHeader, DataTable, ConfirmDialog, Badge, Button, Card, IconButton, Alert, EmptyState } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
@@ -54,10 +63,13 @@ function performDelete() {
 
 const flashSuccess = computed(() => page.props.flash?.success);
 const isEmpty = computed(() => !props.subordinations?.data?.length && !props.filters?.search);
+
+
+usePageTitle(t('subordinations.title'));
 </script>
 
 <template>
-    <AppLayout :title="t('subordinations.title')">
+    
         <PageHeader :title="t('subordinations.title')" :description="t('subordinations.index_description')">
             <template #actions>
                 <Button variant="primary" icon="fas fa-plus" :href="route('subordinations.create')">
@@ -116,5 +128,4 @@ const isEmpty = computed(() => !props.subordinations?.data?.length && !props.fil
             confirm-variant="danger"
             @confirm="performDelete"
         />
-    </AppLayout>
-</template>
+    </template>

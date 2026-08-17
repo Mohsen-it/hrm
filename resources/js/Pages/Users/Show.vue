@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { computed } from 'vue';
 import { Link, usePage } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import { PageHeader, Button, Card, Badge, Alert } from '@/Components/ui';
 import { BalanceEditModal } from '@/Components/Vacations';
 import { useTranslations } from '@/composables/useTranslations';
@@ -69,10 +78,13 @@ const bankingFields = computed(() => [
 ]);
 
 const flashSuccess = computed(() => page.props.flash?.success);
+
+
+usePageTitle(t('users.view_user'));
 </script>
 
 <template>
-    <AppLayout :title="t('users.view_user')">
+    
         <PageHeader
             :title="t('users.view_user')"
             :description="user.name"
@@ -317,5 +329,4 @@ const flashSuccess = computed(() => page.props.flash?.success);
                 </div>
             </div>
         </Card>
-    </AppLayout>
-</template>
+    </template>

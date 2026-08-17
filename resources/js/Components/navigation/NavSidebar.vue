@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, onMounted, onUnmounted } from 'vue';
+import { computed } from 'vue';
 import { useTranslations } from '@/composables/useTranslations';
 import { useNavSidebar } from '@/composables/useNavSidebar';
 import NavSearch from './NavSearch.vue';
@@ -31,23 +31,6 @@ const {
   isFavorite,
   resolveRoute,
 } = useNavSidebar();
-
-const scrollRef = ref(null);
-
-// Keep the sidebar's scroll position across page navigations. The layout
-// re-mounts on every Inertia visit, which would otherwise reset the scroll
-// back to the top and away from the tab the user just opened.
-let lastSidebarScrollTop = 0;
-
-function captureSidebarScroll() {
-  if (scrollRef.value) lastSidebarScrollTop = scrollRef.value.scrollTop;
-}
-
-onMounted(() => {
-  if (scrollRef.value) scrollRef.value.scrollTop = lastSidebarScrollTop;
-});
-
-onUnmounted(captureSidebarScroll);
 
 // Close search on escape
 function closeSearch() {
@@ -106,7 +89,7 @@ const visibilityClass = computed(() => {
     </div>
 
     <!-- Scrollable content -->
-    <div ref="scrollRef" class="nav-sidebar__scroll" @scroll="captureSidebarScroll">
+    <div class="nav-sidebar__scroll">
       <!-- Search -->
       <div class="nav-sidebar__search">
         <NavSearch

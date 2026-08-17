@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { ref, computed, nextTick, watch } from 'vue';
 import { router } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import { PageHeader, Button, Card, StatCard, Badge, FormInput, FormSelect, DataTable } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
@@ -157,10 +166,13 @@ const monthlyLogColumns = [
     { key: 'check_out_window', label: t('attendance.monthly_employee_log.check_out_window') },
     { key: 'last_check_out_at', label: t('attendance.fields.last_check_out_at') },
 ];
+
+
+usePageTitle(t('attendance.user_report') + ' #' + userId);
 </script>
 
 <template>
-    <AppLayout :title="t('attendance.user_report') + ' #' + userId">
+    
         <PageHeader
             :title="t('attendance.user_report') + ' #' + userId"
             :description="`${report.from} → ${report.to}`"
@@ -301,8 +313,7 @@ const monthlyLogColumns = [
                 </template>
             </DataTable>
         </Card>
-    </AppLayout>
-</template>
+    </template>
 
 <style>
 .monthly-log-print-heading {

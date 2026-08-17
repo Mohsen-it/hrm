@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { computed } from 'vue';
 import { router } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import { Badge, Button, Card, DataTable, IconButton, PageHeader } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
@@ -32,10 +41,13 @@ function searchUsers(search) {
 function openReport(user) {
     router.get(route('attendance.reports.user', user.id));
 }
+
+
+usePageTitle(t('attendance.monthly_employee_report'));
 </script>
 
 <template>
-    <AppLayout :title="t('attendance.monthly_employee_report')">
+    
         <PageHeader
             :title="t('attendance.monthly_employee_report')"
             :description="t('attendance.user_report')"
@@ -88,5 +100,4 @@ function openReport(user) {
                 </template>
             </DataTable>
         </Card>
-    </AppLayout>
-</template>
+    </template>

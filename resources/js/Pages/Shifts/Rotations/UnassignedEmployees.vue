@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { ref, computed } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import { PageHeader, DataTable, Badge, Button, Card, SearchInput, FormSelect, Alert, Avatar } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
@@ -80,10 +89,13 @@ function onExport() {
 
 const flashSuccess = computed(() => page.props.flash?.success);
 const flashError = computed(() => page.props.flash?.error);
+
+
+usePageTitle(t('shifts.unassigned_rotation_employees'));
 </script>
 
 <template>
-    <AppLayout :title="t('shifts.unassigned_rotation_employees')">
+    
         <PageHeader
             :title="t('shifts.unassigned_rotation_employees')"
             :description="t('shifts.unassigned_rotation_employees_description')"
@@ -207,5 +219,4 @@ const flashError = computed(() => page.props.flash?.error);
                 <Badge v-else :text="t('common.inactive')" variant="inactive" />
             </template>
         </DataTable>
-    </AppLayout>
-</template>
+    </template>

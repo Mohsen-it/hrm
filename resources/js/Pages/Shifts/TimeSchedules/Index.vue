@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { ref, computed } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import PageHeader from '@/Components/ui/PageHeader.vue';
 import Button from '@/Components/ui/Button.vue';
 import DataTable from '@/Components/ui/DataTable.vue';
@@ -62,10 +71,13 @@ function copySchedule(schedule) {
 
 const flashSuccess = computed(() => page.props.flash?.success);
 const flashError = computed(() => page.props.flash?.error);
+
+
+usePageTitle(t('shifts.time_schedules_title'));
 </script>
 
 <template>
-    <AppLayout :title="t('shifts.time_schedules_title')">
+    
         <PageHeader
             :title="t('shifts.time_schedules_title')"
             :description="t('shifts.time_schedules_description')"
@@ -161,5 +173,4 @@ const flashError = computed(() => page.props.flash?.error);
             confirm-variant="danger"
             @confirm="performDelete"
         />
-    </AppLayout>
-</template>
+    </template>

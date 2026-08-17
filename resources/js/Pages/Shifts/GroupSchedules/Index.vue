@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { ref, computed } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import { PageHeader, Button, Card, DataTable, IconButton, ConfirmDialog, Alert } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
@@ -46,10 +55,13 @@ const deleteSchedule = () => {
         },
     });
 };
+
+
+usePageTitle(t('attendance.group_schedules'));
 </script>
 
 <template>
-    <AppLayout :title="t('attendance.group_schedules')">
+    
         <PageHeader
             :title="t('attendance.group_schedules')"
             :description="t('attendance.group_schedules_description', 'جدول فئات الحضور')"
@@ -126,5 +138,4 @@ const deleteSchedule = () => {
             confirm-variant="danger"
             @confirm="deleteSchedule"
         />
-    </AppLayout>
-</template>
+    </template>

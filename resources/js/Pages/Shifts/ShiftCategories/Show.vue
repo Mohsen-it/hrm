@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { computed } from 'vue';
 import { Link } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import PageHeader from '@/Components/ui/PageHeader.vue';
 import Button from '@/Components/ui/Button.vue';
 import Card from '@/Components/ui/Card.vue';
@@ -113,10 +122,13 @@ const formatTime = (val) => {
     if (!val) return '—';
     return String(val).slice(0, 5);
 };
+
+
+usePageTitle(props.category?.name || '');
 </script>
 
 <template>
-    <AppLayout :title="props.category?.name || ''">
+    
         <PageHeader
             :title="props.category?.name || ''"
             :description="t('shifts.shift_categories')"
@@ -319,5 +331,4 @@ const formatTime = (val) => {
                 </template>
             </DataTable>
         </Card>
-    </AppLayout>
-</template>
+    </template>

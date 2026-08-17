@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { computed } from 'vue';
 import { Link } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import { PageHeader, Button, Card, EmptyState } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
@@ -38,10 +47,13 @@ function componentLabel(component) {
         ? `#${component.component_index}`
         : `#${component.id}`;
 }
+
+
+usePageTitle(t('users.manage_fingerprints'));
 </script>
 
 <template>
-    <AppLayout :title="t('users.manage_fingerprints')">
+    
         <PageHeader
             :title="t('users.manage_fingerprints')"
             :description="`${user.name} — ${t('users.fingerprints_description')}`"
@@ -108,5 +120,4 @@ function componentLabel(component) {
                 />
             </div>
         </Card>
-    </AppLayout>
-</template>
+    </template>

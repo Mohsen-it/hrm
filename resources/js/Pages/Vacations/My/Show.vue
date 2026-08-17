@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { computed } from 'vue';
 import { router } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import PageHeader from '@/Components/ui/PageHeader.vue';
 import Button from '@/Components/ui/Button.vue';
 import Card from '@/Components/ui/Card.vue';
@@ -28,10 +37,13 @@ const fields = computed(() => [
     { label: t('vacations.manager_note'), value: props.request.manager_note || '—' },
     { label: t('vacations.decided_at'), value: props.request.decided_at || '—' },
 ]);
+
+
+usePageTitle(t('vacations.view_request'));
 </script>
 
 <template>
-    <AppLayout :title="t('vacations.view_request')">
+    
         <PageHeader :title="t('vacations.view_request')" :description="request.vacation_type?.name_ar">
             <template #actions>
                 <Button variant="secondary" icon="fas fa-arrow-right rtl-flip" :href="route('vacations.my.index')">{{ t('common.back') }}</Button>
@@ -74,5 +86,4 @@ const fields = computed(() => [
                 </div>
             </div>
         </Card>
-    </AppLayout>
-</template>
+    </template>

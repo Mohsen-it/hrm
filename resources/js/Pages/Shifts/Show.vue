@@ -1,6 +1,15 @@
-<script setup>
-import { computed } from 'vue';
+<script>
 import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
+<script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
+import { computed } from 'vue';
 import { PageHeader, Button, Card, Badge } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
@@ -54,10 +63,13 @@ const employeesCount = computed(() => {
     }
     return 0;
 });
+
+
+usePageTitle(t('shifts.view_shift'));
 </script>
 
 <template>
-    <AppLayout :title="t('shifts.view_shift')">
+    
         <PageHeader
             :title="t('shifts.view_shift')"
             :description="shift.shift_name"
@@ -110,5 +122,4 @@ const employeesCount = computed(() => {
                 </dl>
             </div>
         </Card>
-    </AppLayout>
-</template>
+    </template>

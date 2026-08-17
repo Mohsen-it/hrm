@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
 import { Link } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import { Badge, Avatar, EmptyState, Button, FormDatepicker } from '@/Components/ui';
 import DashboardWidget from '@/Components/dashboard/DashboardWidget.vue';
 import DashboardChart from '@/Components/dashboard/DashboardChart.vue';
@@ -311,10 +320,13 @@ onBeforeUnmount(() => {
     inflightControllers.forEach((c) => c.abort());
     inflightControllers.clear();
 });
+
+
+usePageTitle(t('dashboard.title'));
 </script>
 
 <template>
-    <AppLayout :title="t('dashboard.title')">
+    
         <div class="space-y-5">
             <!-- ===== TOP BAR ===== -->
             <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -1047,5 +1059,4 @@ onBeforeUnmount(() => {
                 />
             </DashboardWidget>
         </div>
-    </AppLayout>
-</template>
+    </template>

@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { ref, computed } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import { PageHeader, Button, Card, Badge, DataTable, Alert, ConfirmDialog } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
@@ -151,10 +160,13 @@ const entriesData = computed(() => ({
 function toggleEmployeeSelection(row) {
     selectedEmployee.value = selectedEmployee.value === row.employee_id ? null : row.employee_id;
 }
+
+
+usePageTitle(`${t('shifts.schedules_title')} - ${formatMonth(period.month)} ${period.year}`);
 </script>
 
 <template>
-    <AppLayout :title="`${t('shifts.schedules_title')} - ${formatMonth(period.month)} ${period.year}`">
+    
         <PageHeader
             :title="`${formatMonth(period.month)} ${period.year}`"
             :description="`${t('shifts.schedule_version')}: ${period.schedule_version}`"
@@ -293,5 +305,4 @@ function toggleEmployeeSelection(row) {
             confirm-variant="warning"
             @confirm="performRegenerate"
         />
-    </AppLayout>
-</template>
+    </template>

@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { Head } from '@inertiajs/vue3';
 import { useForm } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import { PageHeader, Button, Card, FormInput, FormSection, FormActions, ErrorSummary } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
@@ -16,11 +25,14 @@ const form = useForm({
 const submit = () => {
     form.post(route('attendance.groups.store'));
 };
+
+
+usePageTitle(t('attendance.create_attendance_group', 'إنشاء فئة حضور'));
 </script>
 
 <template>
     <Head :title="t('attendance.create_attendance_group', 'إنشاء فئة حضور')" />
-    <AppLayout :title="t('attendance.create_attendance_group', 'إنشاء فئة حضور')">
+    
         <PageHeader
             :title="t('attendance.create_attendance_group', 'إنشاء فئة حضور')"
             :description="t('attendance.attendance_group_description', 'إضافة فئة حضور جديدة')"
@@ -61,5 +73,4 @@ const submit = () => {
                 :saving="form.processing"
             />
         </form>
-    </AppLayout>
-</template>
+    </template>

@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { computed, ref, watch } from 'vue'
 import { router } from '@inertiajs/vue3'
-import AppLayout from '@/Layouts/AppLayout.vue'
 import {
     PageHeader, Card, Button, DataTable, FormInput, FormSelect, FormMultiSelect,
     StatCard, Badge, EmptyState, SearchInput,
@@ -426,10 +435,13 @@ const filterPills = computed(() => {
     })
     return pills
 })
+
+
+usePageTitle(t('shifts.smart_absence_report'));
 </script>
 
 <template>
-    <AppLayout :title="t('shifts.smart_absence_report')">
+    
         <PageHeader
             :title="t('shifts.smart_absence_report')"
             :description="t('shifts.absent_list_subtitle')"
@@ -1087,5 +1099,4 @@ const filterPills = computed(() => {
                 </DataTable>
             </Card>
         </div>
-    </AppLayout>
-</template>
+    </template>

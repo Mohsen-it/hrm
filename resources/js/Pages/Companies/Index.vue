@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { ref, computed } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import { PageHeader, DataTable, ConfirmDialog, Badge, Button, IconButton, Alert } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
@@ -51,10 +60,13 @@ function performDelete() {
 
 const flashSuccess = computed(() => page.props.flash?.success);
 const flashError = computed(() => page.props.flash?.error);
+
+
+usePageTitle(t('companies.title'));
 </script>
 
 <template>
-    <AppLayout :title="t('companies.title')">
+    
         <PageHeader :title="t('companies.title')" :description="t('companies.index_description')">
             <template #actions>
                 <Button variant="primary" icon="fas fa-plus" :href="route('companies.create')">
@@ -105,5 +117,4 @@ const flashError = computed(() => page.props.flash?.error);
             confirm-variant="danger"
             @confirm="performDelete"
         />
-    </AppLayout>
-</template>
+    </template>

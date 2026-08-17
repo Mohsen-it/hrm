@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { reactive, ref } from 'vue';
 import { router } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import { PageHeader, Button, Card, FormInput, FormTextarea, FormSelect, FormSection, FormActions, ErrorSummary } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
@@ -58,10 +67,13 @@ function submit() {
         onFinish: () => { processing.value = false; },
     });
 }
+
+
+usePageTitle(t('zones.edit_zone'));
 </script>
 
 <template>
-    <AppLayout :title="t('zones.edit_zone')">
+    
         <PageHeader :title="t('zones.edit_zone')" :description="zone.name_ar">
             <template #actions>
                 <Button variant="secondary" :href="route('zones.show', zone.id)">{{ t('common.back') }}</Button>
@@ -104,5 +116,4 @@ function submit() {
 
             <FormActions :save-label="t('common.update')" :cancel-label="t('common.cancel')" :cancel-href="route('zones.show', zone.id)" :saving="processing" />
         </form>
-    </AppLayout>
-</template>
+    </template>

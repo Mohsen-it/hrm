@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { ref, computed, watch } from 'vue';
 import { router, useForm, usePage } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import { PageHeader, Card, Button, Badge, Alert, FormModal, FormSelect, FormInput, FormActions } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
@@ -154,10 +163,13 @@ function exportExcel() {
 
     window.location.href = route('vacations.balances.export') + '?' + params.toString();
 }
+
+
+usePageTitle(t('vacations.vacation_balances'));
 </script>
 
 <template>
-    <AppLayout :title="t('vacations.vacation_balances')">
+    
         <PageHeader
             :title="t('vacations.balances_matrix_title')"
             :description="t('vacations.balances_matrix_description')"
@@ -349,5 +361,4 @@ function exportExcel() {
                 />
             </form>
         </FormModal>
-    </AppLayout>
-</template>
+    </template>

@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { computed, watch } from 'vue';
 import { useForm } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import { PageHeader, Button, Card, FormInput, FormTextarea, FormSelect, FormCheckbox, FormFileUpload, FormSection, FormActions, ErrorSummary } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
@@ -214,10 +223,13 @@ function submit() {
         preserveScroll: true,
     });
 }
+
+
+usePageTitle(t('users.edit_user'));
 </script>
 
 <template>
-    <AppLayout :title="t('users.edit_user')">
+    
         <PageHeader
             :title="t('users.edit_user')"
             :description="user.name"
@@ -718,5 +730,4 @@ function submit() {
                 :saving="form.processing"
             />
         </form>
-    </AppLayout>
-</template>
+    </template>

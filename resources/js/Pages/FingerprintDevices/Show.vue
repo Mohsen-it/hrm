@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { computed, ref } from 'vue';
 import { router, Link } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import { PageHeader, Button, Card, Badge, ConfirmDialog } from '@/Components/ui';
 import QuickPushModal from '@/Components/FingerprintDevices/QuickPushModal.vue';
 import { useTranslations } from '@/composables/useTranslations';
@@ -50,10 +59,13 @@ const fields = computed(() => [
     { label: t('fingerprint_devices.push_enabled'), value: props.device.is_push_enabled ? t('common.yes') : t('common.no') },
     { label: t('fingerprint_devices.notes'), value: props.device.notes || '—' },
 ]);
+
+
+usePageTitle(t('fingerprint_devices.view_device'));
 </script>
 
 <template>
-    <AppLayout :title="t('fingerprint_devices.view_device')">
+    
         <PageHeader
             :title="t('fingerprint_devices.view_device')"
             :description="device.name"
@@ -134,5 +146,4 @@ const fields = computed(() => [
             :device="device"
             :branches="branches"
         />
-    </AppLayout>
-</template>
+    </template>

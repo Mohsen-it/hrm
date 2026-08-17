@@ -1,6 +1,15 @@
-<script setup>
-import { computed } from 'vue';
+<script>
 import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
+<script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
+import { computed } from 'vue';
 import PageHeader from '@/Components/ui/PageHeader.vue';
 import Button from '@/Components/ui/Button.vue';
 import Card from '@/Components/ui/Card.vue';
@@ -55,10 +64,13 @@ const breaksData = computed(() => ({
     from: 1,
     to: (props.schedule.breaks || []).length,
 }));
+
+
+usePageTitle(t('shifts.view_schedule'));
 </script>
 
 <template>
-    <AppLayout :title="t('shifts.view_schedule')">
+    
         <PageHeader
             :title="t('shifts.view_schedule')"
             :description="schedule.name"
@@ -140,5 +152,4 @@ const breaksData = computed(() => ({
                 </template>
             </DataTable>
         </Card>
-    </AppLayout>
-</template>
+    </template>

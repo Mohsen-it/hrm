@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { ref, computed, onMounted } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import { PageHeader, Button, Card, DataTable, FormModal, FormInput, FormSelect, FormCheckbox, Badge, Alert, EmptyState, StatCard } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
@@ -236,10 +245,13 @@ function performRangeRecalc() {
 }
 
 const flashSuccess = computed(() => page.props.flash?.success);
+
+
+usePageTitle(t('attendance.summaries'));
 </script>
 
 <template>
-    <AppLayout :title="t('attendance.summaries')">
+    
         <PageHeader
             :title="t('attendance.summaries')"
             :description="t('attendance.index_description')"
@@ -623,5 +635,4 @@ const flashSuccess = computed(() => page.props.flash?.success);
                 </Button>
             </template>
         </FormModal>
-    </AppLayout>
-</template>
+    </template>

@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { ref, computed } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import { PageHeader, DataTable, ConfirmDialog, Badge, Button, IconButton, Alert } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
@@ -69,10 +78,13 @@ function zoneTypeLabel(value) {
     const match = zoneTypeOptions.find((o) => o.value === value);
     return match ? match.label : value;
 }
+
+
+usePageTitle(t('zones.title'));
 </script>
 
 <template>
-    <AppLayout :title="t('zones.title')">
+    
         <PageHeader :title="t('zones.title')" :description="t('zones.index_description')">
             <template #actions>
                 <Button variant="secondary" icon="fas fa-chart-pie" :href="route('zones.dashboard')">
@@ -127,5 +139,4 @@ function zoneTypeLabel(value) {
             confirm-variant="danger"
             @confirm="performDelete"
         />
-    </AppLayout>
-</template>
+    </template>

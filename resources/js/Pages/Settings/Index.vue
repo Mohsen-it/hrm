@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { ref, computed, reactive } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import { PageHeader, Badge, Button, Card, FormInput, FormSelect, FormTextarea, Alert } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
@@ -68,10 +77,13 @@ function saveGroup() {
         onFinish: () => { processing.value = false; },
     });
 }
+
+
+usePageTitle(t('settings.title'));
 </script>
 
 <template>
-    <AppLayout :title="t('settings.title')">
+    
         <PageHeader :title="t('settings.title')" :description="t('settings.index_description')">
             <template #actions>
                 <Button variant="secondary" icon="fas fa-cog" :href="route('settings.general')">
@@ -169,5 +181,4 @@ function saveGroup() {
                 </div>
             </Card>
         </div>
-    </AppLayout>
-</template>
+    </template>

@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { computed, ref } from 'vue'
 import { Head, router, useForm } from '@inertiajs/vue3'
-import AppLayout from '@/Layouts/AppLayout.vue'
 import { Badge, Button, DataTable, FormCheckbox, FormModal, PageHeader } from '@/Components/ui'
 import { useTranslations } from '@/composables/useTranslations'
 
@@ -46,10 +55,13 @@ function saveAssignment() {
         onSuccess: () => { showForm.value = false },
     })
 }
+
+
+usePageTitle(t('menu.role_assignments'));
 </script>
 
 <template>
-    <AppLayout :title="t('menu.role_assignments')">
+    
         <Head :title="t('menu.role_assignments')" />
 
         <PageHeader :title="t('menu.role_assignments')" :description="t('users.roles_section')" />
@@ -109,5 +121,4 @@ function saveAssignment() {
                 </Button>
             </template>
         </FormModal>
-    </AppLayout>
-</template>
+    </template>

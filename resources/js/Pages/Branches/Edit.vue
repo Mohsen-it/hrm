@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { reactive, ref, computed } from 'vue';
 import { router } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import { PageHeader, Button, Card, FormInput, FormTextarea, FormSelect, FormCheckbox, FormSection, FormActions, ErrorSummary } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
@@ -59,10 +68,13 @@ function submit() {
         },
     });
 }
+
+
+usePageTitle(t('branches.edit_branch'));
 </script>
 
 <template>
-    <AppLayout :title="t('branches.edit_branch')">
+    
         <PageHeader
             :title="t('branches.edit_branch')"
             :description="branch.branch_name"
@@ -225,5 +237,4 @@ function submit() {
                 :saving="processing"
             />
         </form>
-    </AppLayout>
-</template>
+    </template>

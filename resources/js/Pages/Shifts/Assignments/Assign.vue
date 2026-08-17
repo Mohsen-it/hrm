@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { ref, reactive, computed, watch } from 'vue';
 import { router, Head } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import { PageHeader, Button, Card, FormInput, FormSelect, FormDatepicker, ErrorSummary, FormSection, FormActions } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
@@ -84,11 +93,14 @@ function submit() {
 }
 
 watch(employeeSearch, searchEmployees);
+
+
+usePageTitle(t('shifts.assign_employee'));
 </script>
 
 <template>
     <Head :title="t('shifts.assign_employee')" />
-    <AppLayout :title="t('shifts.assign_employee')">
+    
         <PageHeader
             :title="t('shifts.assign_employee')"
             :description="t('shifts.assignments_description')"
@@ -193,5 +205,4 @@ watch(employeeSearch, searchEmployees);
                 :saving="processing"
             />
         </form>
-    </AppLayout>
-</template>
+    </template>

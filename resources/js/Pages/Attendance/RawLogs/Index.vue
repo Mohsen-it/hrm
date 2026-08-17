@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { ref, computed } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import PageHeader from '@/Components/ui/PageHeader.vue';
 import Button from '@/Components/ui/Button.vue';
 import DataTable from '@/Components/ui/DataTable.vue';
@@ -109,10 +118,13 @@ function markProcessed(id) {
 }
 
 const flashSuccess = computed(() => page.props.flash?.success);
+
+
+usePageTitle(t('attendance.raw_logs'));
 </script>
 
 <template>
-    <AppLayout :title="t('attendance.raw_logs')">
+    
         <PageHeader
             :title="t('attendance.raw_logs')"
             :description="t('attendance.index_description')"
@@ -182,5 +194,4 @@ const flashSuccess = computed(() => page.props.flash?.success);
             confirm-variant="danger"
             @confirm="performDelete"
         />
-    </AppLayout>
-</template>
+    </template>

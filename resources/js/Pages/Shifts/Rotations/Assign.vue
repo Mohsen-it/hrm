@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { ref, reactive, computed, watch, onBeforeUnmount } from 'vue';
 import { router, Head, usePage } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import { PageHeader, Button, Card, FormInput, FormSelect, Badge, DataTable, ErrorSummary, FormSection, FormActions, Alert } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
@@ -200,11 +209,14 @@ onBeforeUnmount(() => {
     clearTimeout(searchTimeout);
     employeeSearchController?.abort();
 });
+
+
+usePageTitle(t('shifts.assign_rotation'));
 </script>
 
 <template>
     <Head :title="t('shifts.assign_rotation')" />
-    <AppLayout :title="t('shifts.assign_rotation')">
+    
         <PageHeader
             :title="t('shifts.assign_rotation')"
             :description="t('shifts.rotation_assign_description')"
@@ -367,5 +379,4 @@ onBeforeUnmount(() => {
                 />
             </form>
         </div>
-    </AppLayout>
-</template>
+    </template>

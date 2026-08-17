@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { ref, computed } from 'vue';
 import { router, useForm, usePage } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import { PageHeader, Button, IconButton, DataTable, Badge, Alert, ConfirmDialog } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
@@ -129,10 +138,13 @@ function performRegenerate() {
 
 const flashSuccess = computed(() => page.props.flash?.success);
 const flashError = computed(() => page.props.flash?.error);
+
+
+usePageTitle(t('shifts.schedules_title'));
 </script>
 
 <template>
-    <AppLayout :title="t('shifts.schedules_title')">
+    
         <PageHeader
             :title="t('shifts.schedules_title')"
             :description="t('shifts.schedules_description')"
@@ -216,5 +228,4 @@ const flashError = computed(() => page.props.flash?.error);
             confirm-variant="warning"
             @confirm="performRegenerate"
         />
-    </AppLayout>
-</template>
+    </template>

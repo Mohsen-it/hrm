@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { ref, computed, reactive } from 'vue';
 import { router, Link, usePage } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import PageHeader from '@/Components/ui/PageHeader.vue';
 import Button from '@/Components/ui/Button.vue';
 import Card from '@/Components/ui/Card.vue';
@@ -162,10 +171,13 @@ const transferCurrentCategory = computed(() => {
 
 const flashSuccess = computed(() => page.props.flash?.success);
 const flashError = computed(() => page.props.flash?.error);
+
+
+usePageTitle(t('shifts.shift_assignments'));
 </script>
 
 <template>
-    <AppLayout :title="t('shifts.shift_assignments')">
+    
         <PageHeader
             :title="t('shifts.shift_assignments')"
             :description="t('shifts.assignments_description')"
@@ -321,5 +333,4 @@ const flashError = computed(() => page.props.flash?.error);
                 </Button>
             </template>
         </FormModal>
-    </AppLayout>
-</template>
+    </template>

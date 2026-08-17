@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { computed } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import PageHeader from '@/Components/ui/PageHeader.vue';
 import Button from '@/Components/ui/Button.vue';
 import DataTable from '@/Components/ui/DataTable.vue';
@@ -36,10 +45,13 @@ function onSearch(value) {
 
 const flashSuccess = computed(() => page.props.flash?.success);
 const flashError = computed(() => page.props.flash?.error);
+
+
+usePageTitle(t('shifts.rotation_groups_title'));
 </script>
 
 <template>
-    <AppLayout :title="t('shifts.rotation_groups_title')">
+    
         <PageHeader
             :title="t('shifts.rotation_groups_title')"
             :description="t('shifts.rotation_groups_description')"
@@ -81,5 +93,4 @@ const flashError = computed(() => page.props.flash?.error);
                 </div>
             </template>
         </DataTable>
-    </AppLayout>
-</template>
+    </template>

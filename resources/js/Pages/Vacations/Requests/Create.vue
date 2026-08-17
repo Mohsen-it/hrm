@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { computed, reactive, ref } from 'vue';
 import { router } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import { PageHeader, Button, FormTextarea, FormSearchableSelect, FormSelect, FormSection, FormActions, ErrorSummary } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 import VacationDateRangeFields from '../Partials/VacationDateRangeFields.vue';
@@ -50,10 +59,13 @@ function submit() {
         onFinish: () => { processing.value = false; },
     });
 }
+
+
+usePageTitle(t('vacations.new_request'));
 </script>
 
 <template>
-    <AppLayout :title="t('vacations.new_request')">
+    
         <PageHeader :title="t('vacations.new_request')" :description="t('vacations.requests_description')">
             <template #actions>
                 <Button variant="secondary" icon="fas fa-arrow-right rtl-flip" :href="route('vacations.requests.index')">{{ t('common.back') }}</Button>
@@ -108,5 +120,4 @@ function submit() {
                 :saving="processing"
             />
         </form>
-    </AppLayout>
-</template>
+    </template>

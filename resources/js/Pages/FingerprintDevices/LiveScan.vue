@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { onMounted, onUnmounted, ref, computed } from 'vue';
 import { router, Link } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import PageHeader from '@/Components/ui/PageHeader.vue';
 import Button from '@/Components/ui/Button.vue';
 import Card from '@/Components/ui/Card.vue';
@@ -86,10 +95,13 @@ onUnmounted(() => {
 function punchVariant(type) {
     return type === 'check_in' ? 'active' : 'pending';
 }
+
+
+usePageTitle(t('fingerprint_devices.live_scan'));
 </script>
 
 <template>
-    <AppLayout :title="t('fingerprint_devices.live_scan')">
+    
         <PageHeader
             :title="t('fingerprint_devices.live_scan')"
             :description="t('fingerprint_devices.live_scan_description')"
@@ -191,5 +203,4 @@ function punchVariant(type) {
                 </li>
             </ul>
         </Card>
-    </AppLayout>
-</template>
+    </template>

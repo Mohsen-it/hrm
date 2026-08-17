@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { ref, computed } from 'vue';
 import { router } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import IdleGapControl from '@/Components/UserActivity/IdleGapControl.vue';
 import { Avatar, Badge, Button, Card, FormDatepicker, FormSelect, PageHeader, StatCard, EmptyState } from '@/Components/ui';
 import DashboardChart from '@/Components/dashboard/DashboardChart.vue';
@@ -141,10 +150,13 @@ function pageLabel(url) {
         return url;
     }
 }
+
+
+usePageTitle(t('useractivity.title'));
 </script>
 
 <template>
-    <AppLayout :title="t('useractivity.title')">
+    
         <div class="space-y-5">
             <PageHeader :title="t('useractivity.title')" :description="t('useractivity.subtitle')" :dir="direction">
                 <template #actions>
@@ -313,5 +325,4 @@ function pageLabel(url) {
                 <EmptyState icon="fas fa-hourglass-half" :title="t('useractivity.no_activity')" :description="t('useractivity.no_activity_in_range')" />
             </Card>
         </div>
-    </AppLayout>
-</template>
+    </template>

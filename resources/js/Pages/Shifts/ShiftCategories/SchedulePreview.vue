@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { ref, computed } from 'vue';
 import { Head, Link } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import { PageHeader, Button, Card, Badge } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
@@ -106,10 +115,13 @@ const chunkedDays = computed(() => {
     }
     return chunks;
 });
+
+
+usePageTitle(t('shifts.schedule_preview', { name: category.name }));
 </script>
 
 <template>
-    <AppLayout :title="t('shifts.schedule_preview', { name: category.name })">
+    
         <PageHeader
             :title="t('shifts.schedule_preview', { name: category.name })"
             :description="t('shifts.schedule_preview_description')"
@@ -279,5 +291,4 @@ const chunkedDays = computed(() => {
                 </div>
             </div>
         </Card>
-    </AppLayout>
-</template>
+    </template>

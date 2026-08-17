@@ -1,5 +1,5 @@
 <template>
-  <AppLayout>
+  
     <PageHeader :title="t('actions.create') + ' ' + t('attendance.attendance_shift')">
       <Button variant="secondary" :href="route('attendance.shifts.index')">
         {{ t('actions.back') }}
@@ -103,12 +103,18 @@
         :saving="form.processing"
       />
     </form>
-  </AppLayout>
-</template>
+  </template>
+
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
 
 <script setup>
 import { useForm } from '@inertiajs/vue3'
-import AppLayout from '@/Layouts/AppLayout.vue'
 import { PageHeader, Button, Card, FormInput, FormSelect, FormSwitch, FormSection, FormActions, ErrorSummary } from '@/Components/ui'
 import { useTranslations } from '@/composables/useTranslations'
 

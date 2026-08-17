@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { reactive, ref, computed } from 'vue';
 import { router } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import { PageHeader, Button, Card, FormInput, FormTextarea, FormSelect, FormCheckbox, FormSection, FormActions, ErrorSummary } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
@@ -53,10 +62,13 @@ function submit() {
         onFinish: () => { processing.value = false; },
     });
 }
+
+
+usePageTitle(t('branches.add_new'));
 </script>
 
 <template>
-    <AppLayout :title="t('branches.add_new')">
+    
         <PageHeader
             :title="t('branches.add_new')"
             :description="t('branches.create_description')"
@@ -219,5 +231,4 @@ function submit() {
                 :saving="processing"
             />
         </form>
-    </AppLayout>
-</template>
+    </template>

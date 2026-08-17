@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { reactive, ref, computed } from 'vue';
 import { router } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import { PageHeader, Button, Card, FormInput, FormTextarea, FormSelect, FormSection, FormActions, ErrorSummary } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
@@ -62,10 +71,13 @@ function submit() {
         onFinish: () => { processing.value = false; },
     });
 }
+
+
+usePageTitle(t('departments.add_new'));
 </script>
 
 <template>
-    <AppLayout :title="t('departments.add_new')">
+    
         <PageHeader
             :title="t('departments.add_new')"
             :description="t('departments.create_description')"
@@ -196,5 +208,4 @@ function submit() {
                 :saving="processing"
             />
         </form>
-    </AppLayout>
-</template>
+    </template>

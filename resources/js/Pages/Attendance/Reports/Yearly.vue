@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { ref, computed } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import { PageHeader, Button, Card, StatCard, FormInput, Alert, DataTable } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
@@ -59,10 +68,13 @@ const deptColumns = [
 const monthlyData = computed(() => ({ data: props.months, links: [] }));
 const userData = computed(() => ({ data: props.users, links: [] }));
 const deptData = computed(() => ({ data: props.departments, links: [] }));
+
+
+usePageTitle(t('attendance.yearly_page.title'));
 </script>
 
 <template>
-    <AppLayout :title="t('attendance.yearly_page.title')">
+    
         <PageHeader
             :title="t('attendance.yearly_page.title')"
             :description="t('attendance.yearly_page.description')"
@@ -161,5 +173,4 @@ const deptData = computed(() => ({ data: props.departments, links: [] }));
                 />
             </Card>
         </div>
-    </AppLayout>
-</template>
+    </template>

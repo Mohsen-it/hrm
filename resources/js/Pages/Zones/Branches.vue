@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { reactive, ref, computed } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import { PageHeader, Button, Card, FormSelect, FormInput, Badge, Alert, DataTable, IconButton, ConfirmDialog } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
@@ -67,10 +76,13 @@ const columns = computed(() => [
     { key: 'pivot_is_primary', label: t('zones.is_primary'), cellClass: 'text-center' },
     { key: 'actions', label: t('common.actions'), cellClass: 'text-center w-[80px]' },
 ]);
+
+
+usePageTitle(t('zones.manage_branches'));
 </script>
 
 <template>
-    <AppLayout :title="t('zones.manage_branches')">
+    
         <PageHeader :title="`${t('zones.manage_branches')} · ${displayName}`" :description="zone.code">
             <template #actions>
                 <Button variant="secondary" :href="route('zones.show', zone.id)">{{ t('zones.back_to_zone') }}</Button>
@@ -148,5 +160,4 @@ const columns = computed(() => [
             icon="fas fa-unlink"
             @confirm="performDetachBranch"
         />
-    </AppLayout>
-</template>
+    </template>

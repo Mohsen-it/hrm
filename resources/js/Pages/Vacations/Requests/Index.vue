@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { ref, computed } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import { PageHeader, DataTable, Badge, Button, IconButton, Alert, ConfirmDialog } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
@@ -75,10 +84,13 @@ function deleteRequest() {
 }
 
 const flashSuccess = computed(() => page.props.flash?.success);
+
+
+usePageTitle(t('vacations.vacation_requests'));
 </script>
 
 <template>
-    <AppLayout :title="t('vacations.vacation_requests')">
+    
         <PageHeader :title="t('vacations.vacation_requests')" :description="t('vacations.requests_description')">
             <template #actions>
                 <Button variant="primary" icon="fas fa-plus" :href="route('vacations.requests.create')">
@@ -146,5 +158,4 @@ const flashSuccess = computed(() => page.props.flash?.success);
             confirm-variant="danger"
             @confirm="deleteRequest"
         />
-    </AppLayout>
-</template>
+    </template>

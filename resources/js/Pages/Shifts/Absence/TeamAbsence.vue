@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { ref, computed } from 'vue'
 import { router } from '@inertiajs/vue3'
-import AppLayout from '@/Layouts/AppLayout.vue'
 import PageHeader from '@/Components/ui/PageHeader.vue'
 import Card from '@/Components/ui/Card.vue'
 import DataTable from '@/Components/ui/DataTable.vue'
@@ -50,10 +59,13 @@ function statusVariant(status) {
     }
     return map[status] || 'inactive'
 }
+
+
+usePageTitle(t('shifts.team_absence'));
 </script>
 
 <template>
-    <AppLayout :title="t('shifts.team_absence')">
+    
         <PageHeader :title="t('shifts.team_absence')" />
 
         <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
@@ -124,5 +136,4 @@ function statusVariant(status) {
                 />
             </template>
         </DataTable>
-    </AppLayout>
-</template>
+    </template>

@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { ref, computed } from 'vue'
 import { router } from '@inertiajs/vue3'
-import AppLayout from '@/Layouts/AppLayout.vue'
 import PageHeader from '@/Components/ui/PageHeader.vue'
 import Card from '@/Components/ui/Card.vue'
 import Button from '@/Components/ui/Button.vue'
@@ -88,10 +97,13 @@ const monthNames = computed(() => [
 ])
 
 const monthLabel = computed(() => `${monthNames.value[selectedMonth.value - 1]} ${selectedYear.value}`)
+
+
+usePageTitle(t('shifts.my_absence'));
 </script>
 
 <template>
-    <AppLayout :title="t('shifts.my_absence')">
+    
         <PageHeader :title="t('shifts.my_absence')" />
 
         <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
@@ -149,5 +161,4 @@ const monthLabel = computed(() => `${monthNames.value[selectedMonth.value - 1]} 
                 />
             </template>
         </DataTable>
-    </AppLayout>
-</template>
+    </template>

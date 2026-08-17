@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { ref, computed } from 'vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import { PageHeader, Button, Card, Badge, DataTable, LoadingSpinner, FormInput, FormModal, ConfirmDialog, Alert } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
@@ -228,10 +237,13 @@ function performDeleteGroup() {
         preserveScroll: true,
     });
 }
+
+
+usePageTitle(t('shifts.rotation_details') + ': ' + rotation.name);
 </script>
 
 <template>
-    <AppLayout :title="t('shifts.rotation_details') + ': ' + rotation.name">
+    
         <PageHeader
             :title="t('shifts.rotation_details') + ': ' + rotation.name"
             :description="rotation.description || ''"
@@ -496,5 +508,4 @@ function performDeleteGroup() {
                 </div>
             </div>
         </Card>
-    </AppLayout>
-</template>
+    </template>

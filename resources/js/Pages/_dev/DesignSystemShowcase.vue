@@ -1,6 +1,15 @@
-<script setup>
-import { ref, inject } from 'vue';
+<script>
 import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
+<script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
+import { ref, inject } from 'vue';
 import { Button, Card, IconButton, FormInput, FormTextarea, FormSelect, FormDatepicker, FormCheckbox, FormRadio, FormSwitch, FormGroup, Badge, Alert, StatCard, Tabs, Pagination, Breadcrumb, Avatar, DataTable, EmptyState, LoadingSpinner } from '@/Components/ui';
 
 const dir = inject('dir', ref('rtl'));
@@ -28,10 +37,13 @@ const sampleData = {
     to: 3,
     total: 15,
 };
+
+
+usePageTitle('نظام التصميم - Mistral');
 </script>
 
 <template>
-    <AppLayout title="نظام التصميم - Mistral">
+    
         <div class="space-y-8 max-w-6xl">
             <header>
                 <h1 class="text-[28px] font-semibold text-mistral-ink mb-2">نظام التصميم المُستوحى من Mistral AI</h1>
@@ -220,5 +232,4 @@ const sampleData = {
                 </Card>
             </section>
         </div>
-    </AppLayout>
-</template>
+    </template>

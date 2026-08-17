@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { ref, computed } from 'vue';
 import { router, usePage, Link } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import { PageHeader, Button, Card, StatCard, FormInput, Alert, DataTable } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
@@ -55,10 +64,13 @@ const topLateColumns = [
 
 const deptData = computed(() => ({ data: props.departmentComparison, links: [] }));
 const topLateData = computed(() => ({ data: props.topLate, links: [] }));
+
+
+usePageTitle(t('attendance.reports_page.title'));
 </script>
 
 <template>
-    <AppLayout :title="t('attendance.reports_page.title')">
+    
         <PageHeader
             :title="t('attendance.reports_page.title')"
             :description="t('attendance.reports_page.index_description')"
@@ -190,5 +202,4 @@ const topLateData = computed(() => ({ data: props.topLate, links: [] }));
                 </DataTable>
             </Card>
         </div>
-    </AppLayout>
-</template>
+    </template>

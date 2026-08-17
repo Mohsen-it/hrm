@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { reactive, ref, computed, watch } from 'vue';
 import { router } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import { PageHeader, Button, Card, FormInput, FormSelect, FormTextarea, FormSwitch, FormSection, FormActions, ErrorSummary } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
@@ -116,10 +125,13 @@ function submit() {
         },
     });
 }
+
+
+usePageTitle(t('shifts.edit_shift'));
 </script>
 
 <template>
-    <AppLayout :title="t('shifts.edit_shift')">
+    
         <PageHeader
             :title="t('shifts.edit_shift')"
             :description="shift.shift_name"
@@ -268,5 +280,4 @@ function submit() {
                 :saving="processing"
             />
         </form>
-    </AppLayout>
-</template>
+    </template>

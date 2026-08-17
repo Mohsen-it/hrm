@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { reactive, ref, computed } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import { PageHeader, Button, Card, FormInput, FormSelect, FormTextarea, Alert, EmptyState, ErrorSummary, FormSection, FormActions } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
@@ -44,10 +53,13 @@ function saveAll() {
         onFinish: () => { processing.value = false; },
     });
 }
+
+
+usePageTitle(t('settings.attendance_settings'));
 </script>
 
 <template>
-    <AppLayout :title="t('settings.attendance_settings')">
+    
         <PageHeader :title="t('settings.attendance_settings')" :description="t('settings.index_description')">
             <template #actions>
                 <Button variant="secondary" :href="route('settings.index')">{{ t('common.back') }}</Button>
@@ -117,5 +129,4 @@ function saveAll() {
                 :saving="processing"
             />
         </form>
-    </AppLayout>
-</template>
+    </template>

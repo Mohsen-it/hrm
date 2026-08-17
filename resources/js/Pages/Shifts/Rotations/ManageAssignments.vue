@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { ref, reactive, computed, watch } from 'vue';
 import { router, Head } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import { PageHeader, Button, Card, FormInput, FormSelect, Badge, DataTable, EmptyState, ErrorSummary, FormModal } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
@@ -369,11 +378,14 @@ const submitQuickTransfer = async () => {
 if (props.preselected_rotation_id) {
     fetchEmployees();
 }
+
+
+usePageTitle(t('shifts.manage_assignments'));
 </script>
 
 <template>
     <Head :title="t('shifts.manage_assignments')" />
-    <AppLayout :title="t('shifts.manage_assignments')">
+    
         <PageHeader
             :title="t('shifts.manage_assignments')"
             :description="t('shifts.manage_assignments_description')"
@@ -685,5 +697,4 @@ if (props.preselected_rotation_id) {
                 </Button>
             </template>
         </FormModal>
-    </AppLayout>
-</template>
+    </template>

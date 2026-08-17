@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { reactive, computed, ref } from 'vue';
 import { router } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import { PageHeader, Button, FormInput, FormSelect, FormSection, FormActions, ErrorSummary } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
@@ -54,10 +63,13 @@ function submit() {
         onFinish: () => { processing.value = false; },
     });
 }
+
+
+usePageTitle(t('attendance.actions.edit'));
 </script>
 
 <template>
-    <AppLayout :title="t('attendance.actions.edit')">
+    
         <PageHeader :title="t('attendance.actions.edit') + ' #' + session.id" :description="t('attendance.show_description')">
             <template #actions>
                 <Button variant="secondary" icon="fas fa-arrow-right rtl-flip" :href="route('attendance.sessions.show', session.id)">
@@ -137,5 +149,4 @@ function submit() {
 
             <FormActions :save-label="t('common.update')" :cancel-label="t('common.cancel')" :cancel-href="route('attendance.sessions.show', session.id)" :saving="processing" />
         </form>
-    </AppLayout>
-</template>
+    </template>

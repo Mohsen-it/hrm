@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { Head } from '@inertiajs/vue3';
 import { useForm } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import { PageHeader, Button, Card, FormInput, FormSelect, FormSection, FormActions, ErrorSummary } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
@@ -23,11 +32,14 @@ const form = useForm({
 const submit = () => {
     form.put(route('attendance.group-schedules.update', props.schedule.id));
 };
+
+
+usePageTitle(t('attendance.edit_group_schedule', 'تعديل جدول فئة'));
 </script>
 
 <template>
     <Head :title="t('attendance.edit_group_schedule', 'تعديل جدول فئة')" />
-    <AppLayout :title="t('attendance.edit_group_schedule', 'تعديل جدول فئة')">
+    
         <PageHeader
             :title="t('attendance.edit_group_schedule', 'تعديل جدول فئة')"
             :description="t('attendance.group_schedule_description', 'تعديل بيانات جدول الفئة')"
@@ -86,5 +98,4 @@ const submit = () => {
                 :saving="form.processing"
             />
         </form>
-    </AppLayout>
-</template>
+    </template>

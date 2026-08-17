@@ -1,5 +1,5 @@
 <template>
-  <AppLayout>
+  
     <PageHeader :title="shift.alias">
       <template #subtitle>{{ formatCycleUnit(shift.cycle_unit) }} - {{ shift.shift_cycle }}</template>
       <div class="flex gap-2">
@@ -58,13 +58,19 @@
         </DataTable>
       </Card>
     </div>
-  </AppLayout>
-</template>
+  </template>
+
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
 
 <script setup>
 import { computed } from 'vue'
 import { usePage } from '@inertiajs/vue3'
-import AppLayout from '@/layouts/AppLayout.vue'
 import { PageHeader, Button, Card, DataTable, Badge, Alert } from '@/Components/ui'
 import { useTranslations } from '@/composables/useTranslations'
 

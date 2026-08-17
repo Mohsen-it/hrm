@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { ref, computed } from 'vue';
 import { router, Link, usePage } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import { PageHeader, Button, DataTable, ConfirmDialog, Badge, IconButton, Alert } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
@@ -47,10 +56,13 @@ function performDelete() {
 }
 
 const flashSuccess = computed(() => page.props.flash?.success);
+
+
+usePageTitle(t('fingerprint_devices.device_types'));
 </script>
 
 <template>
-    <AppLayout :title="t('fingerprint_devices.device_types')">
+    
         <PageHeader
             :title="t('fingerprint_devices.device_types')"
             :description="t('fingerprint_devices.types_description')"
@@ -101,5 +113,4 @@ const flashSuccess = computed(() => page.props.flash?.success);
             confirm-variant="danger"
             @confirm="performDelete"
         />
-    </AppLayout>
-</template>
+    </template>

@@ -1,6 +1,15 @@
-<script setup>
-import { computed } from 'vue';
+<script>
 import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
+<script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
+import { computed } from 'vue';
 import { PageHeader, Button, Card, Badge } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
@@ -26,10 +35,13 @@ const fields = computed(() => [
     { label: t('branches.address2'), value: props.branch.address2 || '—' },
     { label: t('branches.description'), value: props.branch.description || '—' },
 ]);
+
+
+usePageTitle(t('branches.view_branch'));
 </script>
 
 <template>
-    <AppLayout :title="t('branches.view_branch')">
+    
         <PageHeader
             :title="t('branches.view_branch')"
             :description="branch.branch_name"
@@ -79,5 +91,4 @@ const fields = computed(() => [
                 </dl>
             </div>
         </Card>
-    </AppLayout>
-</template>
+    </template>

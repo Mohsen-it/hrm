@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { computed } from 'vue';
 import { usePage } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import { PageHeader, Button, Card, Badge, Alert } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
@@ -44,10 +53,13 @@ const fields = computed(() => [
     { label: t('attendance.fields.calculated_at'), value: props.summary.calculated_at || '—' },
     { label: t('attendance.fields.notes'), value: props.summary.notes || '—' },
 ]);
+
+
+usePageTitle(t('attendance.daily_summary'));
 </script>
 
 <template>
-    <AppLayout :title="t('attendance.daily_summary')">
+    
         <PageHeader
             :title="t('attendance.daily_summary') + ' #' + summary.id"
             :description="t('attendance.show_description')"
@@ -109,5 +121,4 @@ const fields = computed(() => [
                 </div>
             </Card>
         </div>
-    </AppLayout>
-</template>
+    </template>

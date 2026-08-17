@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { reactive, ref } from 'vue';
 import { router, Head } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import { PageHeader, Button, Card, FormInput, FormSwitch, FormSection, FormActions, IconButton, ErrorSummary } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
@@ -66,11 +75,14 @@ function submit() {
         },
     });
 }
+
+
+usePageTitle(t('shifts.edit_schedule'));
 </script>
 
 <template>
     <Head :title="t('shifts.edit_schedule')" />
-    <AppLayout :title="t('shifts.edit_schedule')">
+    
         <PageHeader
             :title="t('shifts.edit_schedule')"
             :description="schedule.name"
@@ -223,5 +235,4 @@ function submit() {
                 :saving="processing"
             />
         </form>
-    </AppLayout>
-</template>
+    </template>

@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { ref, computed } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import { PageHeader, DataTable, ConfirmDialog, Badge, Button, IconButton, Alert } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
@@ -55,10 +64,13 @@ function formatSalary(value) {
 
 const flashSuccess = computed(() => page.props.flash?.success);
 const flashError = computed(() => page.props.flash?.error);
+
+
+usePageTitle(t('positions.title'));
 </script>
 
 <template>
-    <AppLayout :title="t('positions.title')">
+    
         <PageHeader :title="t('positions.title')" :description="t('positions.index_description')">
             <template #actions>
                 <Button variant="primary" icon="fas fa-plus" :href="route('positions.create')">
@@ -119,5 +131,4 @@ const flashError = computed(() => page.props.flash?.error);
             confirm-variant="danger"
             @confirm="performDelete"
         />
-    </AppLayout>
-</template>
+    </template>

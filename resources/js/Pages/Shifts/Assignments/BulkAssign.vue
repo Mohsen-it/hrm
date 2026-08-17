@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { ref, reactive, computed, watch } from 'vue';
 import { router, Head } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import { PageHeader, Button, Card, FormInput, FormSelect, FormDatepicker, EmptyState, ErrorSummary, FormSection, FormActions } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
@@ -111,11 +120,14 @@ function submit() {
 }
 
 watch(employeeSearch, searchEmployees);
+
+
+usePageTitle(t('shifts.bulk_assign'));
 </script>
 
 <template>
     <Head :title="t('shifts.bulk_assign')" />
-    <AppLayout :title="t('shifts.bulk_assign')">
+    
         <PageHeader
             :title="t('shifts.bulk_assign')"
             :description="t('shifts.bulk_assign_description')"
@@ -256,5 +268,4 @@ watch(employeeSearch, searchEmployees);
                 :saving="processing"
             />
         </form>
-    </AppLayout>
-</template>
+    </template>

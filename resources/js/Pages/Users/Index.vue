@@ -1,8 +1,17 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { ref, computed } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import { PageHeader, DataTable, SearchInput, ConfirmDialog, Badge, Button, Card, IconButton, FormSelect, Alert, Avatar, FormModal } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
@@ -164,10 +173,13 @@ async function fetchFingerprintLogs(page = 1) {
 
 const flashSuccess = computed(() => page.props.flash?.success);
 const flashError = computed(() => page.props.flash?.error);
+
+
+usePageTitle(t('users.title'));
 </script>
 
 <template>
-    <AppLayout :title="t('users.title')">
+    
         <PageHeader
             :title="t('users.title')"
             :description="t('users.index_description')"
@@ -406,5 +418,4 @@ const flashError = computed(() => page.props.flash?.error);
                 </div>
             </template>
         </FormModal>
-    </AppLayout>
-</template>
+    </template>

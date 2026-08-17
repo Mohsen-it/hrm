@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { ref, computed } from 'vue'
 import { router } from '@inertiajs/vue3'
-import AppLayout from '@/Layouts/AppLayout.vue'
 import { PageHeader, Card, Button } from '@/Components/ui'
 import CalendarLegend from '@/Pages/Shifts/Partials/CalendarLegend.vue'
 import { useTranslations } from '@/composables/useTranslations'
@@ -82,10 +91,13 @@ const dayNames = computed(() => [
     t('shifts.saturday'), t('shifts.sunday'), t('shifts.monday'),
     t('shifts.tuesday'), t('shifts.wednesday'), t('shifts.thursday'), t('shifts.friday'),
 ])
+
+
+usePageTitle(t('shifts.employee_calendar'));
 </script>
 
 <template>
-    <AppLayout :title="t('shifts.employee_calendar')">
+    
         <PageHeader :title="t('shifts.employee_calendar')" />
 
         <Card variant="base" padding="none" class="mb-6">
@@ -131,5 +143,4 @@ const dayNames = computed(() => [
                 </div>
             </div>
         </Card>
-    </AppLayout>
-</template>
+    </template>

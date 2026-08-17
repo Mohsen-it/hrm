@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { ref, computed } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import { PageHeader, DataTable, ConfirmDialog, Badge, Button, IconButton, Alert } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
@@ -49,10 +58,13 @@ function performDelete() {
 
 const flashSuccess = computed(() => page.props.flash?.success);
 const flashError = computed(() => page.props.flash?.error);
+
+
+usePageTitle(t('branches.title'));
 </script>
 
 <template>
-    <AppLayout :title="t('branches.title')">
+    
         <PageHeader :title="t('branches.title')" :description="t('branches.index_description')">
             <template #actions>
                 <Button variant="primary" icon="fas fa-plus" :href="route('branches.create')">
@@ -106,5 +118,4 @@ const flashError = computed(() => page.props.flash?.error);
             confirm-variant="danger"
             @confirm="performDelete"
         />
-    </AppLayout>
-</template>
+    </template>

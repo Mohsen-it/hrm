@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { reactive, ref, computed, watch } from 'vue';
 import { router, Link } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import { PageHeader, Button, Card, FormInput, FormTextarea, FormSelect, FormCheckbox, FormSection, FormActions, ErrorSummary } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
@@ -135,10 +144,13 @@ function submit() {
         },
     });
 }
+
+
+usePageTitle(t('fingerprint_devices.add_device'));
 </script>
 
 <template>
-    <AppLayout :title="t('fingerprint_devices.add_device')">
+    
         <PageHeader
             :title="t('fingerprint_devices.add_device')"
             :description="t('fingerprint_devices.create_description')"
@@ -310,5 +322,4 @@ function submit() {
 
             <FormActions :save-label="t('common.save')" :cancel-label="t('common.cancel')" :cancel-href="route('fingerprint-devices.index')" :saving="processing" />
         </form>
-    </AppLayout>
-</template>
+    </template>

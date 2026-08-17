@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { ref, computed } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import { PageHeader, DataTable, Badge, Button, IconButton, Card, Alert } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
@@ -46,10 +55,13 @@ function onFilterChange(key, value) {
 }
 
 const flashSuccess = computed(() => page.props.flash?.success);
+
+
+usePageTitle(t('vacations.my_vacations'));
 </script>
 
 <template>
-    <AppLayout :title="t('vacations.my_vacations')">
+    
         <PageHeader :title="t('vacations.my_vacations')" :description="t('vacations.my_description')">
             <template #actions>
                 <Button variant="primary" icon="fas fa-plus" :href="route('vacations.my.create')">
@@ -95,5 +107,4 @@ const flashSuccess = computed(() => page.props.flash?.success);
                 </div>
             </template>
         </DataTable>
-    </AppLayout>
-</template>
+    </template>

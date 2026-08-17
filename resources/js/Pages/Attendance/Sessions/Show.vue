@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { computed } from 'vue';
 import { usePage } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import { PageHeader, Button, Card, Badge, Alert } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
@@ -51,10 +60,13 @@ const fields = computed(() => [
     { label: t('attendance.fields.source'), value: t(`attendance.source.${props.session.source}`, props.session.source) },
     { label: t('attendance.fields.notes'), value: props.session.notes || '—' },
 ]);
+
+
+usePageTitle(t('attendance.session'));
 </script>
 
 <template>
-    <AppLayout :title="t('attendance.session')">
+    
         <PageHeader
             :title="t('attendance.session') + ' #' + session.id"
             :description="t('attendance.show_description')"
@@ -147,5 +159,4 @@ const fields = computed(() => [
                 </div>
             </Card>
         </div>
-    </AppLayout>
-</template>
+    </template>

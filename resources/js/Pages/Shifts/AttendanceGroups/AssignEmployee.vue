@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { Head } from '@inertiajs/vue3';
 import { useForm } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import { PageHeader, Button, Card, FormSelect, FormSwitch, ErrorSummary, FormSection, FormActions } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
@@ -24,11 +33,14 @@ const form = useForm({
 const submit = () => {
     form.post(route('attendance.groups.assign-employee', props.groupId));
 };
+
+
+usePageTitle(t('attendance.actions.assign_employee', 'تعيين موظف'));
 </script>
 
 <template>
     <Head :title="t('attendance.actions.assign_employee', 'تعيين موظف')" />
-    <AppLayout :title="t('attendance.actions.assign_employee', 'تعيين موظف')">
+    
         <PageHeader
             :title="t('attendance.actions.assign_employee', 'تعيين موظف')"
             :description="t('attendance.assign_employee_description', 'إضافة موظف لفئة الحضور')"
@@ -85,5 +97,4 @@ const submit = () => {
                 :saving="form.processing"
             />
         </form>
-    </AppLayout>
-</template>
+    </template>

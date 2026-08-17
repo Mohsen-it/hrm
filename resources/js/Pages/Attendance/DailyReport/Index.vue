@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { ref, computed } from 'vue';
 import { router } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import { PageHeader, Button, Card, StatCard, FormInput, FormSelect, DataTable, Badge } from '@/Components/ui';
 
 const props = defineProps({
@@ -36,10 +45,13 @@ function filterParams() { return { date: date.value, cutoff_time: cutoffTime.val
 function applyFilters() { router.get(route('attendance.daily-summaries.daily-report'), filterParams(), { preserveState: true, replace: true }); }
 function exportReport() { window.location.href = route('attendance.daily-summaries.daily-report.export', filterParams()); }
 function badgeVariant(status) { return ({ present: 'active', late: 'warning', absent: 'absent', leave: 'info', mission: 'primary', incomplete: 'warning', no_fingerprint: 'neutral', rest: 'neutral', holiday: 'neutral' }[status] || 'neutral'); }
+
+
+usePageTitle('التقرير اليومي');
 </script>
 
 <template>
-    <AppLayout title="التقرير اليومي">
+    
         <PageHeader title="التقرير اليومي" description="ملخص الحضور والغياب والإجازات والمهمات وحالات البصمة حسب اليوم المحدد">
             <template #actions><Button variant="primary" icon="fas fa-file-word" @click="exportReport">تصدير Word</Button></template>
         </PageHeader>
@@ -77,5 +89,4 @@ function badgeVariant(status) { return ({ present: 'active', late: 'warning', ab
                 <template #cell-notes="{ row }"><span class="text-[12px] text-mistral-steel">{{ row.notes || '—' }}</span></template>
             </DataTable>
         </Card>
-    </AppLayout>
-</template>
+    </template>

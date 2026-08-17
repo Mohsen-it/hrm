@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { Head, useForm } from '@inertiajs/vue3'
 import { ref } from 'vue'
-import AppLayout from '@/Layouts/AppLayout.vue'
 import { PageHeader, Button, Card, FormInput, FormSelect, EmptyState, DataTable } from '@/Components/ui'
 import { useTranslations } from '@/composables/useTranslations'
 
@@ -44,10 +53,13 @@ function onDetachChange(event, permName) {
     const role = event.target.value
     if (role) detach(role, permName)
 }
+
+
+usePageTitle(t('permissions.title'));
 </script>
 
 <template>
-    <AppLayout :title="t('permissions.title')">
+    
         <Head :title="t('permissions.title')" />
 
         <PageHeader
@@ -146,5 +158,4 @@ function onDetachChange(event, permName) {
                 />
             </Card>
         </div>
-    </AppLayout>
-</template>
+    </template>

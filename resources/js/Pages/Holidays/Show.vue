@@ -1,6 +1,15 @@
-<script setup>
-import { computed } from 'vue';
+<script>
 import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
+<script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
+import { computed } from 'vue';
 import { PageHeader, Button, Card, Badge } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
@@ -41,10 +50,13 @@ const fields = computed(() => [
     { label: t('common.status'), value: props.holiday.is_active ? t('common.active') : t('common.inactive') },
     { label: t('holidays.description'), value: props.holiday.description || '—' },
 ]);
+
+
+usePageTitle(t('holidays.view_holiday'));
 </script>
 
 <template>
-    <AppLayout :title="t('holidays.view_holiday')">
+    
         <PageHeader :title="t('holidays.view_holiday')" :description="displayName">
             <template #actions>
                 <Button variant="secondary" icon="fas fa-arrow-right rtl-flip" :href="route('holidays.index')">
@@ -90,5 +102,4 @@ const fields = computed(() => [
                 </dl>
             </div>
         </Card>
-    </AppLayout>
-</template>
+    </template>

@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { computed, watch } from 'vue';
 import { useForm } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import { PageHeader, Button, Card, FormInput, FormTextarea, FormSelect, FormCheckbox, FormFileUpload, FormSection, FormActions, ErrorSummary } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
@@ -139,10 +148,13 @@ function submit() {
         preserveScroll: true,
     });
 }
+
+
+usePageTitle(t('users.add_new'));
 </script>
 
 <template>
-    <AppLayout :title="t('users.add_new')">
+    
         <PageHeader
             :title="t('users.add_new')"
             :description="t('users.create_description')"
@@ -566,5 +578,4 @@ function submit() {
                 :saving="form.processing"
             />
         </form>
-    </AppLayout>
-</template>
+    </template>

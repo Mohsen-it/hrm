@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { reactive, ref } from 'vue';
 import { router, Head } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import { PageHeader, Button, Card, FormInput, FormActions, ErrorSummary } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
@@ -38,11 +47,14 @@ function submit() {
         },
     });
 }
+
+
+usePageTitle(t('shifts.edit_group'));
 </script>
 
 <template>
     <Head :title="t('shifts.edit_group')" />
-    <AppLayout :title="t('shifts.edit_group')">
+    
         <PageHeader
             :title="t('shifts.edit_group') + ': ' + group.name"
             :description="group.rotation?.name ? t('shifts.rotation') + ': ' + group.rotation.name : ''"
@@ -82,5 +94,4 @@ function submit() {
                 :saving="processing"
             />
         </form>
-    </AppLayout>
-</template>
+    </template>

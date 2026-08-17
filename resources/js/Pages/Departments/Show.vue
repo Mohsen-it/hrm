@@ -1,6 +1,15 @@
-<script setup>
-import { computed } from 'vue';
+<script>
 import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
+<script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
+import { computed } from 'vue';
 import PageHeader from '@/Components/ui/PageHeader.vue';
 import Button from '@/Components/ui/Button.vue';
 import Card from '@/Components/ui/Card.vue';
@@ -39,10 +48,13 @@ const employeesCount = computed(() => {
     }
     return 0;
 });
+
+
+usePageTitle(t('departments.view_department'));
 </script>
 
 <template>
-    <AppLayout :title="t('departments.view_department')">
+    
         <PageHeader
             :title="t('departments.view_department')"
             :description="department.department_name"
@@ -93,5 +105,4 @@ const employeesCount = computed(() => {
                 </dl>
             </div>
         </Card>
-    </AppLayout>
-</template>
+    </template>

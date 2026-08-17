@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import { PageHeader, Button, Card, StatCard, Badge, FormInput, Alert, DataTable } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
@@ -127,10 +136,13 @@ onUnmounted(() => {
     window.EventBus?.off('attendance:punch-received', addLivePunch);
     window.Echo?.connector?.pusher?.connection?.unbind('state_change', syncRealtimeConnectionState);
 });
+
+
+usePageTitle(t('attendance.live_page.title'));
 </script>
 
 <template>
-    <AppLayout :title="t('attendance.live_page.title')">
+    
         <PageHeader
             :title="t('attendance.live_page.title')"
             :description="t('attendance.live_page.description')"
@@ -334,5 +346,4 @@ onUnmounted(() => {
                 </div>
             </Card>
         </div>
-    </AppLayout>
-</template>
+    </template>

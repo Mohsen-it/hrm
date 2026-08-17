@@ -1,7 +1,14 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
 import { ref, computed, watch } from 'vue';
 import { Head, Link, router } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import { PageHeader, Button, Card, Badge, StatCard, SearchInput, FormSelect, FormInput, FormModal, ErrorSummary, Alert } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
@@ -261,7 +268,7 @@ const submitQuickTransfer = async () => {
 </script>
 
 <template>
-    <AppLayout>
+    
         <Head :title="t('shifts.rotation_timeline')" />
 
         <PageHeader :title="t('shifts.rotation_timeline')">
@@ -596,5 +603,4 @@ const submitQuickTransfer = async () => {
                 </Button>
             </template>
         </FormModal>
-    </AppLayout>
-</template>
+    </template>

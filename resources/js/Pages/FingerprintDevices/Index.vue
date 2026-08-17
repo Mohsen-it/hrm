@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { ref, computed } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import { PageHeader, DataTable, ConfirmDialog, FormModal, Badge, Button, Card, IconButton, Alert } from '@/Components/ui';
 import QuickPushModal from '@/Components/FingerprintDevices/QuickPushModal.vue';
 import { useTranslations } from '@/composables/useTranslations';
@@ -156,10 +165,13 @@ async function syncAllDevices() {
         syncingAll.value = false;
     }
 }
+
+
+usePageTitle(t('fingerprint_devices.title'));
 </script>
 
 <template>
-    <AppLayout :title="t('fingerprint_devices.title')">
+    
         <PageHeader
             :title="t('fingerprint_devices.title')"
             :description="t('fingerprint_devices.index_description')"
@@ -326,5 +338,4 @@ async function syncAllDevices() {
                 </Button>
             </template>
         </FormModal>
-    </AppLayout>
-</template>
+    </template>

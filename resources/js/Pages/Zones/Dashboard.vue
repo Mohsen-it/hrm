@@ -1,7 +1,16 @@
+<script>
+import AppLayout from '@/Layouts/AppLayout.vue';
+
+export default {
+    layout: AppLayout,
+};
+</script>
+
 <script setup>
+import { usePageTitle } from '@/composables/usePageTitle';
+
 import { computed } from 'vue';
 import { Link } from '@inertiajs/vue3';
-import AppLayout from '@/Layouts/AppLayout.vue';
 import { PageHeader, Button, Card, Badge, StatCard, DataTable, IconButton } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
@@ -35,10 +44,13 @@ const columns = computed(() => [
     { key: 'devices_count', label: t('zones.devices_count'), cellClass: 'text-center' },
     { key: 'actions', label: t('common.actions'), cellClass: 'text-center w-[80px]' },
 ]);
+
+
+usePageTitle(`${t('zones.title')} · Dashboard`);
 </script>
 
 <template>
-    <AppLayout :title="`${t('zones.title')} · Dashboard`">
+    
         <PageHeader :title="`${t('zones.title')} · Dashboard`" :description="t('zones.dashboard_description')">
             <template #actions>
                 <Button variant="secondary" icon="fas fa-list" :href="route('zones.index')">{{ t('zones.title') }}</Button>
@@ -96,5 +108,4 @@ const columns = computed(() => [
                 </DataTable>
             </div>
         </Card>
-    </AppLayout>
-</template>
+    </template>

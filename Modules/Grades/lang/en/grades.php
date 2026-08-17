@@ -22,4 +22,5 @@ return [
     'deleted_successfully' => 'Grade deleted successfully',
     'select_company' => 'Select Company',
     'employees_count' => 'Employees',
+    'basic_info' => 'Basic Information',
 ];

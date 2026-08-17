@@ -257,4 +257,10 @@ return [
     'unregistered_count_label' => 'employees without fingerprint',
     'no_unregistered_title' => 'All registered',
     'no_unregistered_description' => 'All employees have fingerprint templates registered in the system',
+
+    // ===== Misc UI labels =====
+    'capabilities' => 'Capabilities',
+    'created_at' => 'Created At',
+    'device_info' => 'Device Information',
+    'type_info' => 'Type Information',
 ];

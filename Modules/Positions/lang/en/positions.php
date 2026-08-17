@@ -27,4 +27,6 @@ return [
     'select_department' => 'No Department',
     'no_department' => '— No Department —',
     'employees_count' => 'Employees',
+    'basic_info' => 'Basic Information',
+    'details' => 'Details',
 ];

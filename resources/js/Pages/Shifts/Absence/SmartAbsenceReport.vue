@@ -4,14 +4,14 @@ import { router } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import {
     PageHeader, Card, Button, DataTable, FormInput, FormSelect, FormMultiSelect,
-    StatCard, Badge, EmptyState,
+    StatCard, Badge, EmptyState, SearchInput,
 } from '@/Components/ui'
 import { useTranslations } from '@/composables/useTranslations'
 
 const { t } = useTranslations()
 
 const props = defineProps({
-    dailyData: { type: Object, default: () => ({ expected: [], absent: { data: [] }, total_expected: 0, total_absent: 0, attendance_rate: 100, date: '' }) },
+    dailyData: { type: Object, default: () => ({ expected: [], absent: { data: [] }, total_expected: 0, total_absent: 0, attendance_rate: 100, date: '', status_counts: {}, unassigned: [] }) },
     monthlyData: { type: Array, default: () => [] },
     monthlyReportData: { type: Object, default: () => ({ employees: { data: [], links: [] }, total_expected_days: 0, total_absent_days: 0, total_present_days: 0, attendance_rate: 100, from_date: '', to_date: '' }) },
     rotations: { type: Array, default: () => [] },
@@ -107,10 +107,30 @@ const hasActiveFilters = computed(() =>
 const summary = computed(() => {
     const totalExpected = props.dailyData?.total_expected || 0
     const totalAbsent = props.dailyData?.total_absent || 0
+    const statusCounts = props.dailyData?.status_counts || {}
+    // Real present count comes from the backend status breakdown; fall back to
+    // the old heuristic only when the payload predates it.
+    const totalPresent = statusCounts.present ?? Math.max(totalExpected - totalAbsent, 0)
     const rate = totalExpected > 0
         ? Math.round(((totalExpected - totalAbsent) / totalExpected) * 100)
         : 100
-    return { totalExpected, totalAbsent, rate }
+    return { totalExpected, totalAbsent, totalPresent, rate }
+})
+
+// Breakdown chips: every expected employee is accounted for with a status, so
+// the report is verifiable at a glance (e.g. an approved vacation explains why
+// someone expected today is not listed as absent).
+const statusChips = computed(() => {
+    const s = props.dailyData?.status_counts || {}
+    return [
+        { key: 'present', label: t('shifts.present'), value: s.present ?? 0, icon: 'fas fa-user-check', cls: 'bg-mistral-success/10 text-mistral-success' },
+        { key: 'absent', label: t('shifts.absent_short'), value: s.absent ?? 0, icon: 'fas fa-user-xmark', cls: 'bg-mistral-danger/10 text-mistral-danger' },
+        { key: 'on_vacation', label: t('shifts.on_vacation'), value: s.on_vacation ?? 0, icon: 'fas fa-plane', cls: 'bg-mistral-info/10 text-mistral-info' },
+        { key: 'on_exception', label: t('shifts.on_exception'), value: s.on_exception ?? 0, icon: 'fas fa-circle-info', cls: 'bg-mistral-primary/10 text-mistral-primary' },
+        { key: 'incomplete', label: t('shifts.incomplete'), value: s.incomplete ?? 0, icon: 'fas fa-door-open', cls: 'bg-mistral-warning/10 text-mistral-warning' },
+        { key: 'holiday', label: t('shifts.official_holiday'), value: s.holiday ?? 0, icon: 'fas fa-calendar-day', cls: 'bg-mistral-surface text-mistral-steel' },
+        { key: 'awaiting_arrival', label: t('shifts.awaiting_arrival'), value: s.awaiting_arrival ?? 0, icon: 'fas fa-hourglass-half', cls: 'bg-mistral-steel/10 text-mistral-steel' },
+    ].filter((c) => c.value > 0)
 })
 
 const monthlySummary = computed(() => {
@@ -186,6 +206,79 @@ function clearFilters() {
     selectedDepartmentId.value = null
     selectedRotationIds.value = []
     selectedRotationGroupIds.value = []
+}
+
+// ---- Unassigned section: local search + activity filter (client-side only) ----
+const unassignedSearch = ref('')
+const unassignedActivity = ref('all')
+
+// Whole days elapsed since the employee's last punch (Infinity = never).
+function unassignedDaysAgo(u) {
+    if (!u.last_punch_at) return Infinity
+    const t = new Date(u.last_punch_at.replace(' ', 'T')).getTime()
+    if (Number.isNaN(t)) return Infinity
+    return Math.floor((Date.now() - t) / 86400000)
+}
+
+// Bucket used by the activity filter:
+// today | week | month | inactive | all
+function unassignedActivityKey(u) {
+    if (u.punched_today) return 'today'
+    const days = unassignedDaysAgo(u)
+    if (days <= 7) return 'week'
+    if (days <= 30) return 'month'
+    return 'inactive'
+}
+
+function unassignedActivityLabel(u) {
+    const keys = {
+        today: 'shifts.smart_absence_unassigned_activity_today',
+        week: 'shifts.smart_absence_unassigned_activity_week',
+        month: 'shifts.smart_absence_unassigned_activity_month',
+        inactive: 'shifts.smart_absence_unassigned_activity_inactive',
+    }
+    return t(keys[unassignedActivityKey(u)])
+}
+
+// Human-friendly "last punch" line: today / yesterday / N days ago / never.
+function formatLastPunch(u) {
+    if (!u.last_punch_at) return t('shifts.smart_absence_unassigned_no_punch')
+    const days = unassignedDaysAgo(u)
+    let rel
+    if (u.punched_today) rel = t('shifts.today')
+    else if (days < 1) rel = t('shifts.smart_absence_unassigned_punched_yesterday')
+    else rel = t('shifts.smart_absence_unassigned_punched_days_ago', { days })
+    return t('shifts.smart_absence_unassigned_last_punch', { time: rel })
+}
+
+const unassignedActivityOptions = computed(() => [
+    { value: 'all', label: t('shifts.smart_absence_unassigned_activity_all') },
+    { value: 'today', label: t('shifts.smart_absence_unassigned_activity_today') },
+    { value: 'week', label: t('shifts.smart_absence_unassigned_activity_week') },
+    { value: 'month', label: t('shifts.smart_absence_unassigned_activity_month') },
+    { value: 'inactive', label: t('shifts.smart_absence_unassigned_activity_inactive') },
+])
+
+const unassignedFiltered = computed(() => {
+    const q = unassignedSearch.value.trim().toLowerCase()
+    return (props.dailyData?.unassigned || []).filter((u) => {
+        if (q) {
+            const haystack = `${u.name || ''} ${u.employee_code || ''}`.toLowerCase()
+            if (!haystack.includes(q)) return false
+        }
+        if (unassignedActivity.value !== 'all' && unassignedActivityKey(u) !== unassignedActivity.value) return false
+        return true
+    })
+})
+
+const unassignedHasLocalFilters = computed(() =>
+    unassignedSearch.value.trim() !== ''
+    || unassignedActivity.value !== 'all'
+)
+
+function clearUnassignedFilters() {
+    unassignedSearch.value = ''
+    unassignedActivity.value = 'all'
 }
 
 function buildExportParams() {
@@ -397,7 +490,7 @@ const filterPills = computed(() => {
                 />
                 <StatCard
                     :label="t('shifts.present')"
-                    :value="summary.totalExpected - summary.totalAbsent"
+                    :value="summary.totalPresent"
                     icon="fas fa-user-check"
                     color="success"
                 />
@@ -408,6 +501,25 @@ const filterPills = computed(() => {
                     :color="summary.rate >= 90 ? 'success' : summary.rate >= 70 ? 'warning' : 'danger'"
                 />
             </div>
+
+            <!-- Status breakdown: every expected employee is accounted for -->
+            <Card v-if="statusChips.length" variant="base" padding="none" class="mb-4">
+                <div class="px-5 py-3 flex items-center gap-2 flex-wrap">
+                    <span class="text-[12px] font-semibold text-mistral-steel">
+                        <i class="fas fa-layer-group text-[10px] ms-1"></i>
+                        {{ t('shifts.daily_status_breakdown') }}:
+                    </span>
+                    <span
+                        v-for="chip in statusChips"
+                        :key="chip.key"
+                        class="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[12px] font-medium"
+                        :class="chip.cls"
+                    >
+                        <i :class="chip.icon" class="text-[10px]"></i>
+                        {{ chip.label }}: {{ chip.value }}
+                    </span>
+                </div>
+            </Card>
 
             <!-- Filter bar -->
             <Card variant="base" padding="none" class="mb-4">
@@ -582,6 +694,120 @@ const filterPills = computed(() => {
                         />
                     </template>
                 </DataTable>
+            </Card>
+
+            <!-- Unassigned employees: active staff with no rotation are
+                 invisible to every absence calculation — surface them so HR
+                 can assign rotations instead of losing track of them. -->
+            <Card
+                v-if="(dailyData.unassigned || []).length"
+                variant="base"
+                padding="none"
+                class="overflow-hidden mt-5"
+            >
+                <div class="px-5 py-4 border-b border-mistral-hairline-soft flex items-center justify-between gap-3 flex-wrap">
+                    <div>
+                        <h3 class="text-[15px] font-bold text-mistral-ink flex items-center gap-2">
+                            <i class="fas fa-user-slash text-mistral-warning text-[14px]"></i>
+                            {{ t('shifts.smart_absence_unassigned_title') }}
+                        </h3>
+                        <p class="text-[12px] text-mistral-steel mt-0.5">
+                            {{ t('shifts.smart_absence_unassigned_description') }}
+                        </p>
+                    </div>
+                    <Badge
+                        :text="dailyData.unassigned.length + ' / ' + summary.totalExpected"
+                        variant="warning"
+                        dot
+                        size="lg"
+                    />
+                </div>
+
+                <!-- Local search + filters (client-side only) -->
+                <div class="px-5 py-4 border-b border-mistral-hairline-soft flex flex-col gap-3">
+                    <div class="flex items-start sm:items-end gap-3 flex-wrap">
+                        <SearchInput
+                            v-model="unassignedSearch"
+                            :placeholder="t('shifts.smart_absence_unassigned_search_placeholder')"
+                        />
+                        <div class="w-full sm:w-56">
+                            <FormSelect
+                                v-model="unassignedActivity"
+                                :label="t('shifts.smart_absence_unassigned_activity')"
+                                name="unassigned_activity"
+                                :options="unassignedActivityOptions"
+                            />
+                        </div>
+                        <Button
+                            v-if="unassignedHasLocalFilters"
+                            variant="secondary"
+                            size="sm"
+                            icon="fas fa-filter-circle-xmark"
+                            @click="clearUnassignedFilters"
+                        >
+                            {{ t('shifts.clear_filters') }}
+                        </Button>
+                    </div>
+                    <div class="flex items-center justify-between gap-2 flex-wrap">
+                        <span class="text-[12px] text-mistral-steel font-medium">
+                            <i class="fas fa-list-check text-[10px] ms-1"></i>
+                            {{ t('shifts.smart_absence_unassigned_showing', { count: unassignedFiltered.length, total: dailyData.unassigned.length }) }}
+                        </span>
+                    </div>
+                </div>
+
+                <div v-if="unassignedFiltered.length" class="divide-y divide-mistral-hairline-soft">
+                    <div
+                        v-for="u in unassignedFiltered"
+                        :key="u.id"
+                        class="px-5 py-3 flex items-center gap-3 flex-wrap"
+                    >
+                        <div class="w-8 h-8 rounded-full bg-mistral-warning/10 text-mistral-warning flex items-center justify-center text-[12px] font-bold shrink-0">
+                            {{ (u.name || '?').charAt(0) }}
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <div class="text-[14px] font-semibold text-mistral-ink truncate">
+                                {{ u.name }}
+                            </div>
+                            <div class="text-[11px] text-mistral-steel truncate">
+                                <span dir="ltr" class="font-mono">{{ u.employee_code || '—' }}</span>
+                                <span v-if="u.department_name" class="ms-2">{{ u.department_name }}</span>
+                            </div>
+                            <div class="text-[11px] mt-0.5 flex items-center gap-1.5 flex-wrap">
+                                <span
+                                    class="inline-flex items-center gap-1"
+                                    :class="u.punched_today ? 'text-mistral-success' : 'text-mistral-steel'"
+                                >
+                                    <i class="fas fa-clock text-[9px]"></i>
+                                    {{ formatLastPunch(u) }}
+                                </span>
+                                <span class="text-[10px] text-mistral-muted" dir="ltr">
+                                    {{ u.last_punch_at ? u.last_punch_at.replace('T', ' ').slice(0, 16) : '' }}
+                                </span>
+                            </div>
+                        </div>
+                        <span
+                            v-if="u.punched_today"
+                            class="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[12px] font-medium bg-mistral-success/10 text-mistral-success"
+                        >
+                            <i class="fas fa-fingerprint text-[10px]"></i>
+                            {{ t('shifts.punched_today') }}
+                        </span>
+                        <span
+                            class="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[12px] font-medium bg-mistral-warning/10 text-mistral-warning"
+                        >
+                            <i class="fas fa-triangle-exclamation text-[10px]"></i>
+                            {{ t('shifts.smart_absence_unassigned_alert') }}
+                        </span>
+                    </div>
+                </div>
+
+                <EmptyState
+                    v-else
+                    icon="fas fa-user-slash"
+                    :title="t('shifts.smart_absence_unassigned_no_match')"
+                    :description="t('shifts.smart_absence_unassigned_no_match_description')"
+                />
             </Card>
         </div>
 

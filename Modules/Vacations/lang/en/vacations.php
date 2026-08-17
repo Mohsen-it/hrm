@@ -104,4 +104,9 @@ return [
     'balances_report_description' => 'Year: :year — per employee and vacation type',
     'employees_count' => 'Employees Count',
     'types_count' => 'Vacation Types Count',
+    'additional' => 'Additional',
+    'quotas' => 'Quotas',
+    'request_info' => 'Request Information',
+    'settings' => 'Settings',
+    'type_info' => 'Type Information',
 ];

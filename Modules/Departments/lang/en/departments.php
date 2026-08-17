@@ -30,4 +30,7 @@ return [
     'no_manager' => '— Not assigned —',
     'children_count' => 'Sub-departments',
     'employees_count' => 'Employees',
+    'basic_info' => 'Basic Information',
+    'contact_info' => 'Contact Information',
+    'department' => 'Department',
 ];

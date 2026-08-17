@@ -29,4 +29,11 @@ return [
     'updated_successfully' => 'Branch updated successfully',
     'deleted_successfully' => 'Branch deleted successfully',
     'select_company' => 'Select Company',
+    'additional' => 'Additional',
+    'basic_info' => 'Basic Information',
+    'branch' => 'Branch',
+    'branch_code' => 'Branch Code',
+    'branch_name' => 'Branch Name',
+    'contact_info' => 'Contact Information',
+    'location' => 'Location',
 ];

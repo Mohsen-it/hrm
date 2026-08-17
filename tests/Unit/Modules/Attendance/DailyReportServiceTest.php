@@ -250,6 +250,34 @@ class DailyReportServiceTest extends TestCase
     }
 
     /**
+     * An exit deadline that falls BEFORE the session's own check-in cannot
+     * belong to that shift. An overnight rotation without a time schedule
+     * whose next-morning exit window (07:30-09:30) is read as same-day would
+     * "end" at 09:30 on the duty day — before the employee even arrived in
+     * the evening. Such an employee must never be flagged as a missed exit.
+     */
+    public function test_incomplete_punch_not_flagged_when_exit_window_ends_before_check_in(): void
+    {
+        $this->travelTo('2026-08-10 12:00:00');
+
+        $user = $this->makeEmployee('EMP40017');
+        $this->assignOpenWorkEveryDay($user);
+        RotationAssignment::where('employee_id', $user->id)->first()->rotation->update([
+            'out_ahead_margin' => '07:30:00',
+            'out_above_margin' => '09:30:00', // morning window, read on the duty day itself
+        ]);
+        // Evening shift: the employee arrived (17:11) long after the 09:30
+        // "deadline" — the window cannot be about this shift.
+        $this->makeOpenSession($user, '2026-08-09 17:11:00');
+
+        $report = $this->service->build('2026-08-10', '09:00');
+        $row = $report['rows']->firstWhere('id', $user->id);
+
+        $this->assertFalse($row['has_incomplete_punch']);
+        $this->assertNotSame('incomplete', $row['status']);
+    }
+
+    /**
      * A real check-out punch anywhere on the duty day proves the employee
      * left — even when an earlier session is still open (e.g. a stray
      * mid-night punch before the real shift). The report must never turn a

@@ -30,4 +30,7 @@ return [
     'no_manager' => '— غير محدد —',
     'children_count' => 'عدد الأقسام الفرعية',
     'employees_count' => 'عدد الموظفين',
+    'basic_info' => 'معلومات أساسية',
+    'contact_info' => 'معلومات الاتصال',
+    'department' => 'القسم',
 ];

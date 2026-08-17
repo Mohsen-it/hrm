@@ -27,4 +27,6 @@ return [
     'select_department' => 'بدون قسم',
     'no_department' => '— بدون قسم —',
     'employees_count' => 'عدد الموظفين',
+    'basic_info' => 'معلومات أساسية',
+    'details' => 'التفاصيل',
 ];

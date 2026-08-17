@@ -29,4 +29,11 @@ return [
     'updated_successfully' => 'تم تحديث الفرع بنجاح',
     'deleted_successfully' => 'تم حذف الفرع بنجاح',
     'select_company' => 'اختر الشركة',
+    'additional' => 'إضافي',
+    'basic_info' => 'معلومات أساسية',
+    'branch' => 'الفرع',
+    'branch_code' => 'رمز الفرع',
+    'branch_name' => 'اسم الفرع',
+    'contact_info' => 'معلومات الاتصال',
+    'location' => 'الموقع',
 ];

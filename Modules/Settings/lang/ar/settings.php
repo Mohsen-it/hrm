@@ -42,4 +42,5 @@ return [
     'true_value' => 'صحيح',
     'false_value' => 'خطأ',
     'no_data' => 'لا توجد بيانات',
+    'json_placeholder' => 'أدخل قيمة JSON صالحة',
 ];

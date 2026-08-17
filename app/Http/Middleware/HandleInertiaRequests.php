@@ -78,7 +78,10 @@ class HandleInertiaRequests extends Middleware
      */
     protected function loadTranslations(string $locale): array
     {
-        $cacheKey = "inertia:translations:{$locale}";
+        // The cache key embeds a fingerprint of all translation files so that
+        // newly added or edited keys are picked up immediately instead of
+        // serving a stale snapshot until the 1-hour TTL expires.
+        $cacheKey = "inertia:translations:{$locale}:".$this->translationsFingerprint($locale);
 
         try {
             return Cache::remember($cacheKey, 3600, function () use ($locale) {
@@ -94,6 +97,31 @@ class HandleInertiaRequests extends Middleware
 
             return $this->buildTranslations($locale);
         }
+    }
+
+    /**
+     * Fingerprint of every translation file for the given locale.
+     *
+     * Any add/edit/delete of a root or module lang file changes the digest and
+     * therefore invalidates the cached translation payload automatically.
+     */
+    protected function translationsFingerprint(string $locale): string
+    {
+        $paths = [lang_path($locale)];
+
+        foreach (Module::allEnabled() as $module) {
+            $paths[] = $module->getPath()."/lang/{$locale}";
+        }
+
+        $mtimes = [];
+
+        foreach ($paths as $path) {
+            foreach ((array) glob($path.'/*.php') as $file) {
+                $mtimes[] = (int) @filemtime($file);
+            }
+        }
+
+        return md5(implode(',', $mtimes));
     }
 
     /**

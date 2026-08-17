@@ -113,7 +113,13 @@ class DailyReportDocxExport
     {
         return collect($this->report['rows'])
             ->filter(fn (array $row) => match ($status) {
-                'no_fingerprint' => (bool) ($row['has_no_fingerprint'] ?? false) && ($row['status'] === 'absent'),
+                // "عدم تسجيل البصمة على الجهاز" lists every employee in the
+                // report scope whose fingerprint is not enrolled on the device
+                // — mirroring the "Unregistered Employees" page, the web
+                // report filter and the stats counter. Restricting it to
+                // absentees made the table silently omit unregistered
+                // employees who were on a rest day, on leave, etc.
+                'no_fingerprint' => (bool) ($row['has_no_fingerprint'] ?? false),
                 'incomplete' => (bool) ($row['has_incomplete_punch'] ?? false),
                 default => ($row['status'] ?? null) === $status,
             })

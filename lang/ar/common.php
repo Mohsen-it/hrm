@@ -90,4 +90,8 @@ return [
     'errors_many' => 'يوجد :count أخطاء',
     'to_save' => 'للحفظ',
     'view_all' => 'عرض الكل',
+    'apply' => 'تطبيق',
+    'close' => 'إغلاق',
+    'notes' => 'ملاحظات',
+    'total' => 'الإجمالي',
 ];

@@ -61,11 +61,16 @@ class ShiftException extends Model
 
     /**
      * Scope: only rows whose date range overlaps the supplied date.
+     *
+     * whereDate() keeps the comparison correct on every driver: SQLite stores
+     * date columns with a time component ("2026-08-06 00:00:00"), so a bare
+     * string comparison against "Y-m-d" silently drops same-day matches (the
+     * start day of an exception). On MySQL DATE columns it is a no-op.
      */
     public function scopeOverlapping(Builder $query, string $date): Builder
     {
-        return $query->where('from_date', '<=', $date)
-            ->where('to_date', '>=', $date);
+        return $query->whereDate('from_date', '<=', $date)
+            ->whereDate('to_date', '>=', $date);
     }
 
     public function scopeActive(Builder $query): Builder

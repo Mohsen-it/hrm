@@ -22,4 +22,5 @@ return [
     'deleted_successfully' => 'تم حذف الدرجة بنجاح',
     'select_company' => 'اختر الشركة',
     'employees_count' => 'عدد الموظفين',
+    'basic_info' => 'معلومات أساسية',
 ];

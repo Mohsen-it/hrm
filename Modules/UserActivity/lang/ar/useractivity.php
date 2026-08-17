@@ -133,6 +133,7 @@ return [
         'rotations.assign' => 'إسناد الدوريات',
         'rotations.groups' => 'مجموعات الدوريات',
         'rotations.employees' => 'موظفو الدوريات',
+        'rotations.unassigned-employees' => 'الموظفون غير المسندين لدورية',
         'rotations.timeline' => 'الخط الزمني للدوريات',
         'rotation-groups' => 'مجموعات الدوريات',
         'shift-assignments' => 'إسناد النوبات',

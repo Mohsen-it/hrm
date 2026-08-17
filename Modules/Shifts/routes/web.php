@@ -7,6 +7,7 @@ use Modules\Shifts\Http\Controllers\SchedulesController;
 use Modules\Shifts\Http\Controllers\ShiftCategoriesController;
 use Modules\Shifts\Http\Controllers\ShiftCategoryAssignmentController;
 use Modules\Shifts\Http\Controllers\ShiftsController;
+use Modules\Shifts\Http\Controllers\UnassignedRotationEmployeesController;
 use Modules\Shifts\Http\Controllers\SmartAbsenceController;
 use Modules\Shifts\Http\Controllers\TimeSchedulesController;
 
@@ -153,6 +154,13 @@ Route::middleware(['auth', 'permission:view-rotations'])
 
         Route::get('rotations', [RotationsController::class, 'index'])
             ->name('rotations.index');
+
+        // Employees not assigned to any rotation (report + Excel export)
+        Route::get('rotations/unassigned-employees', [UnassignedRotationEmployeesController::class, 'index'])
+            ->name('rotations.unassigned-employees');
+        Route::get('rotations/unassigned-employees/export', [UnassignedRotationEmployeesController::class, 'export'])
+            ->name('rotations.unassigned-employees.export');
+
         Route::get('rotations/{id}/preview', [RotationsController::class, 'preview'])
             ->name('rotations.preview');
         Route::get('rotations/{id}/timeline', [RotationsController::class, 'timeline'])

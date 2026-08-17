@@ -17,6 +17,8 @@ class DailyReportDocxExportTest extends TestCase
                 ['status' => 'late', 'name' => 'موظف تأخر', 'department_name' => 'القسم', 'rotation' => 'دورية الأمن (أ)', 'check_in' => '09:15', 'notes' => 'عدد مرات التأخر خلال الشهر: ‏٤'],
                 ['status' => 'leave', 'name' => 'موظف إجازة', 'department_name' => 'القسم', 'notes' => 'عدد أيام الإجازة خلال الشهر: ‏٥'],
                 ['status' => 'absent', 'name' => 'موظف بلا بصمة', 'department_name' => 'القسم', 'has_no_fingerprint' => true, 'notes' => 'الموظف غير مسجل في جهاز البصمة'],
+                ['status' => 'rest', 'name' => 'موظف راحة بلا بصمة', 'department_name' => 'القسم', 'has_no_fingerprint' => true, 'notes' => 'الموظف غير مسجل في جهاز البصمة'],
+                ['status' => 'absent', 'name' => 'موظف غياب مسجل بالبصمة', 'department_name' => 'القسم', 'has_no_fingerprint' => false],
                 ['status' => 'present', 'name' => 'موظف دخول دون خروج', 'department_name' => 'القسم', 'rotation' => 'دورية النقل (ب)', 'check_in' => '08:30', 'has_incomplete_punch' => true, 'expected_check_in' => '08:00', 'expected_check_out' => '08:00', 'expected_check_out_next_day' => true, 'notes' => 'لم يسجل بصمة الخروج حتى نهاية نافذة الخروج 10:00'],
             ],
         ]);
@@ -38,6 +40,7 @@ class DailyReportDocxExportTest extends TestCase
         $this->assertStringContainsString('عدد مرات التأخر خلال الشهر: ‏٤', $xml);
         $this->assertStringContainsString('عدد أيام الإجازة خلال الشهر: ‏٥', $xml);
         $this->assertStringContainsString('موظف بلا بصمة', $xml);
+        $this->assertStringContainsString('موظف راحة بلا بصمة', $xml);
         $this->assertStringContainsString('موظف دخول دون خروج', $xml);
         $this->assertStringContainsString('موظف تأخر', $xml);
         $this->assertStringContainsString('دورية الأمن (أ)', $xml);
@@ -59,6 +62,15 @@ class DailyReportDocxExportTest extends TestCase
         $xpath->registerNamespace('w', 'http://schemas.openxmlformats.org/wordprocessingml/2006/main');
         $tables = $xpath->query('//w:tbl');
         $this->assertSame(6, $tables->length);
+
+        // The "عدم تسجيل البصمة على الجهاز" table (index 4) lists every
+        // employee without a fingerprint template — including rest-day
+        // employees — and never a registered absent employee.
+        $noFingerprint = $tables->item(4);
+        $this->assertInstanceOf(\DOMElement::class, $noFingerprint);
+        $this->assertSame(3, $xpath->query('./w:tr', $noFingerprint)->length); // header + 2 unregistered employees
+        $this->assertStringContainsString('موظف راحة بلا بصمة', $noFingerprint->textContent);
+        $this->assertStringNotContainsString('موظف غياب مسجل بالبصمة', $noFingerprint->textContent);
 
         // The lateness table keeps its six columns; the missing-checkout table
         // gains the expected-exit column (seven columns).

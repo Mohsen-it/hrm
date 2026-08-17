@@ -48,4 +48,7 @@ return [
     'recurring_month_invalid' => 'Month must be between 1 and 12',
     'recurring_day_invalid' => 'Day must be between 1 and 31',
     'duration_must_be_positive' => 'Duration must be at least 1 day',
+    'basic_info' => 'Basic Information',
+    'schedule' => 'Schedule',
+    'settings' => 'Settings',
 ];

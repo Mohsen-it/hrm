@@ -33,4 +33,9 @@ return [
     'created_successfully' => 'Company created successfully',
     'updated_successfully' => 'Company updated successfully',
     'deleted_successfully' => 'Company deleted successfully',
+    'additional' => 'Additional',
+    'basic_info' => 'Basic Information',
+    'company_name' => 'Company Name',
+    'legal_info' => 'Legal Information',
+    'location' => 'Location',
 ];

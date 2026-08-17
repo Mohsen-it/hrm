@@ -45,6 +45,7 @@ return [
     'rotations' => 'الدوريات',
     'rotation_assignments' => 'إسناد الدوريات',
     'rotation_groups' => 'مجموعات الدوريات',
+    'rotation_unassigned_employees' => 'الموظفون غير المسندين لدورية',
     'time_schedules' => 'جداول الوقت',
     'unregistered_employees' => 'الموظفون غير المسجلين للبصمة',
     'role_assignments' => 'إسناد أدوار الموظفين',

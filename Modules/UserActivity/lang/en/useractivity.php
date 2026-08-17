@@ -133,6 +133,7 @@ return [
         'rotations.assign' => 'Rotation assignments',
         'rotations.groups' => 'Rotation groups',
         'rotations.employees' => 'Rotation employees',
+        'rotations.unassigned-employees' => 'Employees without rotation',
         'rotations.timeline' => 'Rotation timeline',
         'rotation-groups' => 'Rotation groups',
         'shift-assignments' => 'Shift assignments',

@@ -51,6 +51,11 @@ export function useNavSidebar() {
     if (typeof window !== 'undefined' && typeof window.route === 'function') {
       try {
         href = window.route(routeName);
+        // Ziggy returns absolute URLs (e.g. http://host/vacations/requests);
+        // keep only the path so it can be compared against page.url.
+        if (typeof href === 'string' && href.startsWith('http')) {
+          href = new URL(href).pathname;
+        }
       } catch {
         href = '#';
       }
@@ -89,20 +94,35 @@ export function useNavSidebar() {
       .filter(Boolean);
   });
 
-  // Active route matching
+  // Active route matching. The most specific (longest) URL prefix wins, so
+  // nested pages like /rotations/unassigned-employees highlight their own
+  // menu item instead of the first matching parent (/rotations).
   const activeRoute = computed(() => {
     const url = page.url || '/';
-    return url.replace(/^\//, '').split('?')[0];
+    return url.replace(/^\//, '').split('?')[0].replace(/\/+$/, '');
   });
 
   const activeItemId = computed(() => {
     const route = activeRoute.value;
+    let best = null;
+    let bestLength = -1;
+
     for (const item of allVisibleItems.value) {
       const itemUrl = resolveRoute(item.route);
-      if (itemUrl === '/' && (route === '/' || route === 'dashboard')) return item.id;
-      if (itemUrl && route.startsWith(itemUrl.replace(/^\//, ''))) return item.id;
+      if (itemUrl === '#' || itemUrl === '/') {
+        if (itemUrl === '/' && (route === '' || route === '/' || route === 'dashboard')) return item.id;
+        continue;
+      }
+
+      const normalized = itemUrl.replace(/^\//, '').replace(/\/+$/, '');
+      if (route === normalized) return item.id; // exact match always wins
+      if (route.startsWith(normalized + '/') && normalized.length > bestLength) {
+        best = item.id;
+        bestLength = normalized.length;
+      }
     }
-    return null;
+
+    return best;
   });
 
   const activeGroupKey = computed(() => {

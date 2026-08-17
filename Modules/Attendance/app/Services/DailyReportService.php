@@ -464,6 +464,12 @@ class DailyReportService
             $end = Carbon::parse($date.' '.substr((string) $windowEndTime, 0, 8));
             if ($this->isAssignmentOvernight($assignment)) {
                 $end = $this->moveWindowToDepartureDay($date, $end, $assignment);
+            } elseif ($rotation?->out_ahead_margin
+                && Carbon::parse($date.' '.substr((string) $rotation->out_ahead_margin, 0, 5))->gt($end)) {
+                // An inverted window (end time earlier than the start time)
+                // wraps past midnight: the exit is due on the next morning,
+                // never on the duty day itself.
+                $end = $end->addDay();
             }
 
             return $end;
@@ -624,6 +630,16 @@ class DailyReportService
         if ($windowEnd === null) {
             // Without a resolvable deadline yesterday's duty is a violation.
             return true;
+        }
+
+        // An exit deadline that falls BEFORE the session's own check-in cannot
+        // belong to that shift: the rotation's window is being read on the
+        // wrong calendar day (e.g. a next-morning 07:30-09:30 exit window of an
+        // overnight rotation that has no time schedule is treated as same-day,
+        // so it "ends" before an afternoon/evening arrival). Never claim a
+        // missed exit the employee could not have missed yet.
+        if ($session?->check_in_at && $windowEnd->lt($session->check_in_at)) {
+            return false;
         }
 
         return now()->gte($windowEnd);

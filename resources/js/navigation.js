@@ -187,6 +187,13 @@ export const navigationGroups = [
         permissions: ['view-rotations'],
       },
       {
+        id: 'shifts.unassigned-rotation-employees',
+        label: 'menu.rotation_unassigned_employees',
+        route: 'rotations.unassigned-employees',
+        icon: 'fa-solid fa-user-slash',
+        permissions: ['view-rotations'],
+      },
+      {
         id: 'shifts.time-schedules',
         label: 'menu.time_schedules',
         route: 'time-schedules.index',

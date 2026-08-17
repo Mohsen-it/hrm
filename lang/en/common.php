@@ -90,4 +90,8 @@ return [
     'errors_many' => ':count errors found',
     'to_save' => 'to save',
     'view_all' => 'View All',
+    'apply' => 'Apply',
+    'close' => 'Close',
+    'notes' => 'Notes',
+    'total' => 'Total',
 ];

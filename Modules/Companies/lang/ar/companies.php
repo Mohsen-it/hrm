@@ -33,4 +33,9 @@ return [
     'created_successfully' => 'تم إنشاء الشركة بنجاح',
     'updated_successfully' => 'تم تحديث الشركة بنجاح',
     'deleted_successfully' => 'تم حذف الشركة بنجاح',
+    'additional' => 'إضافي',
+    'basic_info' => 'معلومات أساسية',
+    'company_name' => 'اسم الشركة',
+    'legal_info' => 'البيانات القانونية',
+    'location' => 'الموقع',
 ];

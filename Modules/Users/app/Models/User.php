@@ -18,6 +18,7 @@ use Modules\Departments\Models\Department;
 use Modules\FingerprintDevices\Models\UserFingerprint;
 use Modules\Grades\Models\Grade;
 use Modules\Positions\Models\Position;
+use Modules\Shifts\Models\RotationAssignment;
 use Modules\Shifts\Models\Shift;
 use Modules\Subordinations\Models\Subordination;
 use Modules\Vacations\Models\UserVacationBalance;
@@ -181,6 +182,16 @@ class User extends Authenticatable
     public function shift(): BelongsTo
     {
         return $this->belongsTo(Shift::class, 'shift_id');
+    }
+
+    /**
+     * Get the rotation assignments of the user (as an employee).
+     *
+     * @return HasMany<RotationAssignment, $this>
+     */
+    public function rotationAssignments(): HasMany
+    {
+        return $this->hasMany(RotationAssignment::class, 'employee_id');
     }
 
     /**

@@ -196,4 +196,5 @@ return [
     'roles_section' => 'الأدوار',
     'permissions_section' => 'الصلاحيات المباشرة',
     'inherited_permissions' => 'الصلاحيات الموروثة من الأدوار',
+    'fingerprint_history' => 'سجل البصمات',
 ];

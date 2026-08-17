@@ -42,4 +42,5 @@ return [
     'true_value' => 'True',
     'false_value' => 'False',
     'no_data' => 'No data available',
+    'json_placeholder' => 'Enter a valid JSON value',
 ];

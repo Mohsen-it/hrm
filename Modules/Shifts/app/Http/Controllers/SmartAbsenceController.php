@@ -10,6 +10,8 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
+use Modules\Attendance\Models\AttendanceSession;
+use Modules\Attendance\Models\RawAttendanceLog;
 use Modules\Shifts\Exports\SmartAbsenceDailyExport;
 use Modules\Shifts\Exports\SmartAbsenceMonthlyExport;
 use Modules\Shifts\Repositories\RotationAssignmentRepository;
@@ -41,6 +43,10 @@ class SmartAbsenceController extends Controller
         $rotationGroupIds = $this->parseIdList($request->input('rotation_group_ids', $request->input('rotation_group_id')));
 
         $report = $this->buildDailyReport($date, $dateStr, $departmentId, $rotationIds, $rotationGroupIds);
+
+        $unassigned = $this->buildUnassignedDetails($date, $dateStr);
+
+        $statusCounts = $this->absenceService->getDailyStatusBreakdown($date, $departmentId, $rotationIds, $rotationGroupIds);
 
         $rotations = $this->buildRotationOptions();
         $departments = $this->buildDepartmentOptions();
@@ -77,6 +83,8 @@ class SmartAbsenceController extends Controller
                 'total_expected' => $totalExpected,
                 'total_absent' => $totalAbsent,
                 'attendance_rate' => $attendanceRate,
+                'status_counts' => $statusCounts,
+                'unassigned' => $unassigned,
             ],
             'rotations' => $rotations,
             'departments' => $departments,
@@ -444,6 +452,98 @@ class SmartAbsenceController extends Controller
             'absent' => $absent,
             'absentDetails' => $absentDetails,
         ];
+    }
+
+    /**
+     * Active employees with no rotation assignment, enriched for display.
+     *
+     * They are invisible to the absence calculation (never expected, never
+     * absent), so the report surfaces them — flagging who actually punched
+     * that day — for HR to assign rotations instead of losing track of them.
+     *
+     * @return array<int, array{id: int, name: string, employee_code: string, department_name: ?string, branch_name: ?string, position_name: ?string, punched_today: bool, last_punch_at: ?string}>
+     */
+    private function buildUnassignedDetails(Carbon $date, string $dateStr): array
+    {
+        $ids = $this->absenceService->getUnassignedEmployeeIds($date);
+
+        if ($ids->isEmpty()) {
+            return [];
+        }
+
+        $details = DB::table('users')
+            ->whereIn('users.id', $ids->toArray())
+            ->leftJoin('departments', 'users.department_id', '=', 'departments.id')
+            ->leftJoin('branches', 'users.branch_id', '=', 'branches.id')
+            ->leftJoin('positions', 'users.position_id', '=', 'positions.id')
+            ->get([
+                'users.id',
+                'users.name',
+                'users.employee_code',
+                'users.department_id',
+                'users.branch_id',
+                'users.position_id',
+                'departments.department_name',
+                'branches.branch_name',
+                'positions.position_name',
+            ]);
+
+        $utcBounds = [
+            $date->copy()->startOfDay()->setTimezone('UTC')->format('Y-m-d H:i:s'),
+            $date->copy()->endOfDay()->setTimezone('UTC')->format('Y-m-d H:i:s'),
+        ];
+        $punchedIds = AttendanceSession::onDate($dateStr)
+            ->whereIn('user_id', $ids->toArray())
+            ->distinct()
+            ->pluck('user_id')
+            ->merge(
+                RawAttendanceLog::query()
+                    ->whereIn('user_id', $ids->toArray())
+                    ->whereBetween('punch_time', $utcBounds)
+                    ->distinct()
+                    ->pluck('user_id')
+            )
+            ->unique();
+
+        // Most recent punch per employee across raw logs and sessions, so HR
+        // can track who is still active versus who has gone quiet.
+        $lastPunchAt = collect();
+        $punchSources = [
+            RawAttendanceLog::query()
+                ->whereIn('user_id', $ids->toArray())
+                ->selectRaw('user_id, MAX(punch_time) AS last_punch')
+                ->groupBy('user_id')
+                ->pluck('last_punch', 'user_id'),
+            AttendanceSession::query()
+                ->whereIn('user_id', $ids->toArray())
+                ->selectRaw('user_id, MAX(COALESCE(check_in_at, check_out_at)) AS last_punch')
+                ->groupBy('user_id')
+                ->pluck('last_punch', 'user_id'),
+        ];
+        foreach ($punchSources as $source) {
+            foreach ($source as $userId => $ts) {
+                $userId = (int) $userId;
+                if (! isset($lastPunchAt[$userId]) || $ts > $lastPunchAt[$userId]) {
+                    $lastPunchAt[$userId] = $ts;
+                }
+            }
+        }
+
+        return $details
+            ->map(fn ($row) => [
+                'id' => (int) $row->id,
+                'name' => $row->name,
+                'employee_code' => $row->employee_code,
+                'department_name' => $row->department_name,
+                'branch_name' => $row->branch_name,
+                'position_name' => $row->position_name,
+                'punched_today' => $punchedIds->contains((int) $row->id),
+                'last_punch_at' => $lastPunchAt[(int) $row->id] ?? null,
+            ])
+            ->sortBy('name')
+            ->sortByDesc(fn ($row) => $row['last_punch_at'] ?? '')
+            ->values()
+            ->all();
     }
 
     /**

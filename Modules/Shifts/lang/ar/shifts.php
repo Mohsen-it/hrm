@@ -114,7 +114,7 @@ return [
     'expected_today' => 'متوقع اليوم',
     'no_data' => 'لا توجد بيانات',
     'no_active_company' => 'لا توجد شركة نشطة لتعيين الجدول إليها',
-
+    
     // Time Schedules page
     'time_schedules_title' => 'جداول الوقت',
     'time_schedules_description' => 'إدارة جداول الوقت (أوقات الحضور والانصراف والاستراحات)',
@@ -384,6 +384,13 @@ return [
     'select_employee_from_table' => 'اختر الموظف',
     'select_employees_from_table' => 'اختر الموظفين من الجدول',
 
+    // Unassigned employees report
+    'unassigned_rotation_employees' => 'الموظفون غير المسندين لدورية',
+    'unassigned_rotation_employees_description' => 'عرض الموظفين النشطين الذين لم يُسندوا لأي دورية',
+    'unassigned_count_label' => 'موظف غير مسند',
+    'no_unassigned_title' => 'لا يوجد موظفون غير مسندين',
+    'no_unassigned_description' => 'جميع الموظفين النشطين مسندون لدورية',
+
     // My Calendar page
     'my_schedule' => 'جدول دوامي',
     'prev_month' => 'السابق',
@@ -450,6 +457,26 @@ return [
     'no_absent_employees_description' => 'جميع الموظفين المتوقعين سجلوا حضورهم',
     'absent_list_title' => 'قائمة الغائبين',
     'absent_list_subtitle' => 'الموظفون المتوقعون الذين لم يسجلوا حضوراً',
+    'daily_status_breakdown' => 'تفصيل حالات اليوم',
+    'awaiting_arrival' => 'منتظر الوصول',
+    'smart_absence_unassigned_title' => 'موظفون نشطون بدون توزيع دوام',
+    'smart_absence_unassigned_description' => 'هؤلاء لا يظهرون في تقرير الغياب إطلاقاً لأنهم بلا دورية: من يبصم منهم يعمل دون متابعة غياب، ومن لا يبصم لا يُسجَّل غيابه. قم بإسنادهم لدورية ليُتابعوا تلقائياً.',
+    'smart_absence_unassigned_alert' => 'غير مُتابَع للغياب',
+    'smart_absence_unassigned_search_placeholder' => 'ابحث بالاسم أو رمز الموظف...',
+    'smart_absence_unassigned_activity' => 'نشاط البصمة',
+    'smart_absence_unassigned_activity_all' => 'الجميع',
+    'smart_absence_unassigned_activity_today' => 'بصم اليوم',
+    'smart_absence_unassigned_activity_week' => 'آخر 7 أيام',
+    'smart_absence_unassigned_activity_month' => 'آخر 30 يوماً',
+    'smart_absence_unassigned_activity_inactive' => 'غير نشط (أكثر من 30 يوماً)',
+    'smart_absence_unassigned_last_punch' => 'آخر بصمة: :time',
+    'smart_absence_unassigned_no_punch' => 'لا بصمات مسجلة',
+    'smart_absence_unassigned_punched_yesterday' => 'أمس',
+    'smart_absence_unassigned_punched_days_ago' => 'منذ :days أيام',
+    'smart_absence_unassigned_showing' => 'عرض :count من :total',
+    'smart_absence_unassigned_no_match' => 'لا يوجد موظفون مطابقون',
+    'smart_absence_unassigned_no_match_description' => 'جرّب تعديل البحث أو الفلاتر لعرض نتائج أخرى',
+    'punched_today' => 'بصم اليوم',
     'clear_filters' => 'مسح الفلاتر',
     'selected_rotations' => 'الدوريات المختارة',
     'selected_groups' => 'المجموعات المختارة',
@@ -482,4 +509,17 @@ return [
     'date_range' => 'النطاق الزمني',
     'rotation_schedule' => 'جدول الدورية',
     'employee_rotation_assignment_conflict' => 'هذا الموظف مسند مسبقًا إلى الدورية :rotation والمجموعة :group ضمن التواريخ المحددة.',
+
+    // تسميات مفقودة
+    'additional' => 'إضافي',
+    'break_duration' => 'مدة الاستراحة',
+    'department_calendar' => 'تقويم القسم',
+    'employee_calendar' => 'تقويم الموظف',
+    'groups' => 'المجموعات',
+    'not_expected' => 'غير متوقع',
+    'number_of_groups' => 'عدد المجموعات',
+    'schedule' => 'الجدول',
+    'search_employees_placeholder' => 'ابحث عن موظف بالاسم أو الرمز...',
+    'team_calendar' => 'تقويم الفريق',
+    'view_employees' => 'عرض الموظفين',
 ];

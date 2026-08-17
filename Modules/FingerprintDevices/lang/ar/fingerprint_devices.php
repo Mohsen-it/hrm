@@ -258,4 +258,10 @@ return [
     'unregistered_count_label' => 'موظف بدون بصمة',
     'no_unregistered_title' => 'جميع المسجلين',
     'no_unregistered_description' => 'جميع الموظفين لديهم بصمات مسجلة في النظام',
+
+    // ===== تسميات واجهة متنوعة =====
+    'capabilities' => 'الإمكانيات',
+    'created_at' => 'تاريخ الإنشاء',
+    'device_info' => 'معلومات الجهاز',
+    'type_info' => 'معلومات النوع',
 ];

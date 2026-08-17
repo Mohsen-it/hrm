@@ -196,4 +196,5 @@ return [
     'roles_section' => 'Roles',
     'permissions_section' => 'Direct Permissions',
     'inherited_permissions' => 'Permissions inherited from roles',
+    'fingerprint_history' => 'Fingerprint History',
 ];

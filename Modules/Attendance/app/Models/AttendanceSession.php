@@ -141,7 +141,12 @@ class AttendanceSession extends Model
      */
     public function scopeBetweenDates(Builder $query, string $from, string $to): Builder
     {
-        return $query->whereBetween('attendance_date', [$from, $to]);
+        // whereDate() keeps the range inclusive on every driver: SQLite stores
+        // date columns with a time component ("2026-08-09 00:00:00"), so a bare
+        // whereBetween against "Y-m-d" silently drops the range's last day. On
+        // MySQL DATE columns it is a no-op.
+        return $query->whereDate('attendance_date', '>=', $from)
+            ->whereDate('attendance_date', '<=', $to);
     }
 
     /**

@@ -46,6 +46,7 @@ return [
     'rotations' => 'Rotations',
     'rotation_assignments' => 'Rotation Assignments',
     'rotation_groups' => 'Rotation Groups',
+    'rotation_unassigned_employees' => 'Employees Without Rotation',
     'time_schedules' => 'Time Schedules',
     'unregistered_employees' => 'Unregistered Employees',
     'activity_log' => 'User Activity Log',

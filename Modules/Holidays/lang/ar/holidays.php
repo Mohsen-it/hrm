@@ -48,4 +48,7 @@ return [
     'recurring_month_invalid' => 'الشهر يجب أن يكون بين 1 و 12',
     'recurring_day_invalid' => 'اليوم يجب أن يكون بين 1 و 31',
     'duration_must_be_positive' => 'المدة يجب أن تكون يوماً واحداً على الأقل',
+    'basic_info' => 'معلومات أساسية',
+    'schedule' => 'الجدول',
+    'settings' => 'الإعدادات',
 ];

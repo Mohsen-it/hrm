@@ -255,6 +255,13 @@ export const navigationGroups = [
         permissions: ['view-fingerprint-devices'],
       },
       {
+        id: 'devices.face-sync',
+        label: 'menu.face_sync_dashboard',
+        route: 'fingerprint-devices.face-sync',
+        icon: 'fa-solid fa-face-smile',
+        permissions: ['view-fingerprint-devices'],
+      },
+      {
         id: 'devices.devices',
         label: 'menu.devices',
         route: 'fingerprint-devices.index',

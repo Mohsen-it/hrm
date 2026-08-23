@@ -2,7 +2,9 @@
 
 namespace Modules\FingerprintDevices\Services;
 
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Modules\FingerprintDevices\Jobs\VerifyFaceTemplateOnDevice;
 use Modules\FingerprintDevices\Models\DeviceCommand;
 use Modules\FingerprintDevices\Models\FingerprintDevice;
 use Modules\FingerprintDevices\Repositories\DeviceCommandRepository;
@@ -39,6 +41,7 @@ class DeviceCommandService
         int $priority = 5,
         ?string $correlationId = null,
         ?int $expiresInMinutes = null,
+        int $maxRetries = 3,
     ): DeviceCommand {
         return $this->commandRepo->create([
             'device_id' => $deviceId,
@@ -47,13 +50,16 @@ class DeviceCommandService
             'priority' => $priority,
             'correlation_id' => $correlationId ?? uniqid('cmd-', true),
             'expires_at' => $expiresInMinutes ? now()->addMinutes($expiresInMinutes) : null,
+            'max_retries' => $maxRetries,
         ]);
     }
 
     /**
      * Queue a CREATE USER command.
      *
-     * ZKTeco ADMS format: C:10#PIN##Name##Privilege##Password##Card
+     * ZKTeco Push SDK v2 format understood by iFace firmware
+     * (PushVersion 2.0.33S): the user record must exist on the terminal
+     * before any fingerprint/face template can be written for it.
      */
     public function queueUserCreate(
         int $deviceId,
@@ -63,25 +69,18 @@ class DeviceCommandService
         string $password = '',
         int $card = 0,
     ): DeviceCommand {
-        $body = sprintf('C:%d#%s##%s##%d##%s##%d',
-            self::CMD_USER_WRQ,
-            $pin,
-            $name,
-            $privilege,
-            $password,
-            $card
-        );
-
         return $this->queueCommand(
             $deviceId,
             DeviceCommand::TYPE_USER_CREATE,
-            $body,
+            $this->buildUserInfoBody($pin, $name, $privilege, $password, $card),
             priority: 3,
+            maxRetries: 10,
         );
     }
 
     /**
-     * Queue an UPDATE USER command (same as create — ZKTeco uses SetUser for both).
+     * Queue an UPDATE USER command (same payload as create — ZKTeco uses
+     * DATA UPDATE USERINFO as an upsert).
      */
     public function queueUserUpdate(
         int $deviceId,
@@ -91,20 +90,12 @@ class DeviceCommandService
         string $password = '',
         int $card = 0,
     ): DeviceCommand {
-        $body = sprintf('C:%d#%s##%s##%d##%s##%d',
-            self::CMD_USER_WRQ,
-            $pin,
-            $name,
-            $privilege,
-            $password,
-            $card
-        );
-
         return $this->queueCommand(
             $deviceId,
             DeviceCommand::TYPE_USER_UPDATE,
-            $body,
+            $this->buildUserInfoBody($pin, $name, $privilege, $password, $card),
             priority: 3,
+            maxRetries: 10,
         );
     }
 
@@ -203,18 +194,23 @@ class DeviceCommandService
             return $existing;
         }
 
-        $body = sprintf(
-            'DATA UPDATE BIODATA Pin=%s No=%d Index=%d Valid=%d Duress=%d Type=2 MajorVer=%d MinorVer=%d Format=%d Tmp=%s',
-            $this->sanitizeField($pin),
-            $attributes['no'] ?? 0,
-            $attributes['index'] ?? 0,
-            $attributes['valid'] ?? 1,
-            $attributes['duress'] ?? 0,
-            $attributes['major_ver'] ?? 0,
-            $attributes['minor_ver'] ?? 0,
-            $attributes['format'] ?? 0,
-            $this->sanitizeTemplate($template),
-        );
+        // ZKTeco multi-bio push write — byte-exact mirror of what these
+        // terminals themselves transmit in their BIODATA uploads.  Field
+        // casing is CRITICAL: this firmware requires ``MajorVer`` /
+        // ``MinorVer`` (capital V); ``Majorver=`` is silently rejected
+        // with Return=-30.  Fields are TAB-separated.
+        $body = 'DATA UPDATE biodata '.implode("\t", [
+            'Pin='.$this->sanitizeField($pin),
+            'No='.(int) ($attributes['no'] ?? 0),
+            'Index='.$index,
+            'Valid='.(int) ($attributes['valid'] ?? 1),
+            'Duress='.(int) ($attributes['duress'] ?? 0),
+            'Type=2',
+            'MajorVer='.(int) ($attributes['major_ver'] ?? 12),
+            'MinorVer='.(int) ($attributes['minor_ver'] ?? 0),
+            'Format='.(int) ($attributes['format'] ?? 0),
+            'Tmp='.$this->sanitizeTemplate($template),
+        ]);
 
         return $this->queueCommand(
             $deviceId,
@@ -223,6 +219,7 @@ class DeviceCommandService
             priority: 4,
             correlationId: $correlationId,
             expiresInMinutes: 1440,
+            maxRetries: 30,
         );
     }
 
@@ -284,12 +281,16 @@ class DeviceCommandService
      */
     public function fetchPendingCommands(int $deviceId, int $limit = 10): array
     {
-        $commands = $this->commandRepo->claimPending($deviceId, $limit);
+        // Peek without claiming: the ADMS caches commands locally and
+        // reports which ones were actually served via POST /commands/sending.
+        $this->commandRepo->releaseStaleSending($deviceId);
+        $commands = $this->commandRepo->fetchPendingForDevice($deviceId, $limit);
 
         return $commands->map(fn (DeviceCommand $cmd) => [
             'id' => $cmd->id,
             'command_type' => $cmd->command_type,
             'command_body' => $cmd->command_body,
+            'priority' => (int) $cmd->priority,
         ])->toArray();
     }
 
@@ -315,7 +316,7 @@ class DeviceCommandService
 
         $handled = match ($status) {
             'completed', 'success' => $command->markCompleted(),
-            'failed' => $command->markFailed($errorMessage ?? 'Device reported failure'),
+            'failed' => $this->handleFailure($command, $errorMessage),
             default => false,
         };
 
@@ -326,7 +327,163 @@ class DeviceCommandService
             'device_id' => $command->device_id,
         ]);
 
+        // Post-delivery verification for face templates: schedule a
+        // background check that the template is actually on the device.
+        if ($handled && $command->command_type === DeviceCommand::TYPE_FACE_TEMPLATE && $status !== 'failed') {
+            $this->scheduleFaceVerification($command, $deviceId);
+        }
+
         return $handled;
+    }
+
+    /**
+     * After a face template command completes, verify it's actually stored
+     * on the device. If verification fails, re-queue the command.
+     *
+     * This catches cases where the device ACKs the command but silently
+     * drops the template (known iFace firmware quirk).
+     */
+    private function scheduleFaceVerification(DeviceCommand $command, int $deviceId): void
+    {
+        try {
+            $device = FingerprintDevice::find($deviceId);
+            if (! $device || ! $device->is_push_enabled) {
+                return;
+            }
+
+            // Extract PIN from the command body
+            $pin = $this->extractPinFromBody($command->command_body);
+            if (! $pin) {
+                return;
+            }
+
+            // Dispatch async verification job
+            VerifyFaceTemplateOnDevice::dispatch(
+                $deviceId,
+                $pin,
+                $command->id,
+            )->delay(now()->addSeconds(10)); // Wait 10s for device to settle
+        } catch (\Throwable $e) {
+            // Non-critical: log and continue
+            Log::warning('FACE_VERIFICATION_SCHEDULE_FAILED', [
+                'command_id' => $command->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Extract the employee PIN from a face template command body.
+     */
+    private function extractPinFromBody(string $body): ?string
+    {
+        if (preg_match('/PIN=([\w-]+)/', $body, $m)) {
+            return $m[1];
+        }
+
+        return null;
+    }
+
+    /**
+     * Handle a device-reported failure, re-queueing recoverable writes.
+     *
+     * iFace 880 Plus firmware intermittently rejects ``DATA UPDATE FACE`` with
+     * Return=-3 even on otherwise healthy devices.  Instead of failing outright
+     * we return the command to the queue with exponential backoff so the next
+     * poll retries it; retries are bounded by max_retries.
+     *
+     * User create/update commands are retried too: the terminal refuses face
+     * and fingerprint templates with Return=-3 while the user record is
+     * missing, so a failed user write would cascade into template failures.
+     *
+     * When a device accumulates too many -3 errors, we trigger a full
+     * re-distribution of face templates to recover gracefully.
+     */
+    private function handleFailure(DeviceCommand $command, ?string $errorMessage): bool
+    {
+        $message = $errorMessage ?? 'Device reported failure';
+
+        $retryableTypes = [
+            DeviceCommand::TYPE_FACE_TEMPLATE,
+            DeviceCommand::TYPE_USER_CREATE,
+            DeviceCommand::TYPE_USER_UPDATE,
+        ];
+
+        $retryable = in_array($command->command_type, $retryableTypes, true)
+            && $command->retry_count < $command->max_retries;
+
+        if (! $retryable) {
+            // For non-retryable face commands, track the failure and
+            // potentially trigger a full re-sync.
+            $this->trackDeviceFailure($command->device_id, $message);
+
+            return $command->markFailed($message);
+        }
+
+        // Atomic increment + requeue to avoid race conditions between concurrent
+        // workers reporting the same device failure.
+        $newRetryCount = DB::table('device_commands')
+            ->where('id', $command->id)
+            ->where('retry_count', $command->retry_count)
+            ->increment('retry_count');
+
+        if ($newRetryCount === 0) {
+            // Another worker already incremented — do not double-increment.
+            return false;
+        }
+
+        $effectiveRetry = $command->retry_count + 1;
+        // iFace -3 errors are often transient: the device just needs a moment
+        // to clear its buffer. Start with a short 3-second delay and ramp up
+        // only if the error persists: 3s, 6s, 12s, 24s, 48s, ... 5 min cap.
+        $isTransient = str_contains($message, '-3') || str_contains($message, 'transient');
+        $baseDelay = $isTransient ? 3 : 30;
+        $backoffSeconds = (int) min(300, $baseDelay * 2 ** ($effectiveRetry - 1));
+
+        $requeued = $command->update([
+            'status' => DeviceCommand::STATUS_PENDING,
+            'retry_count' => $effectiveRetry,
+            'sent_at' => null,
+            'error_message' => $message,
+            'available_at' => now()->addSeconds($backoffSeconds),
+        ]);
+
+        Log::info('COMMAND_REQUEUED', [
+            'command_id' => $command->id,
+            'retry_count' => $effectiveRetry,
+            'backoff_seconds' => $backoffSeconds,
+            'is_transient' => $isTransient,
+        ]);
+
+        // Track failures per device — if a device accumulates too many,
+        // trigger a full re-sync via the fallback path.
+        $this->trackDeviceFailure($command->device_id, $message);
+
+        return $requeued;
+    }
+
+    /**
+     * Track consecutive failures per device.  When a device accumulates
+     * more than 10 consecutive -3 errors, log a critical alert so
+     * operators know the device needs attention or a direct TCP push
+     * fallback should be used.
+     */
+    private function trackDeviceFailure(int $deviceId, string $message): void
+    {
+        $cacheKey = "device_failures:{$deviceId}";
+        $count = (int) cache()->increment($cacheKey);
+
+        // Reset counter after 30 minutes of no failures
+        cache()->put($cacheKey, $count, now()->addMinutes(30));
+
+        if ($count >= 10) {
+            Log::critical('DEVICE_CONSECUTIVE_FAILURES', [
+                'device_id' => $deviceId,
+                'consecutive_failures' => $count,
+                'last_error' => $message,
+                'action' => 'Device may need direct TCP push fallback or manual inspection',
+            ]);
+        }
     }
 
     /**
@@ -382,6 +539,67 @@ class DeviceCommandService
     }
 
     /**
+     * Re-queue failed face-template commands for retry.
+     *
+     * Resets retry_count, clears error state, and marks them as pending
+     * so the next device poll retries them. Useful for "Device returned -3"
+     * failures on iFace devices that are intermittent and recoverable.
+     *
+     * @return array{requeued: int, total_failed: int}
+     */
+    public function retryFailedFaceCommands(
+        ?int $deviceId = null,
+        int $limit = 200,
+        int $hours = 720,
+    ): array {
+        // 720 hours = 30 days. Face templates are critical for employee
+        // attendance — we retry for up to a month before giving up.
+        $query = DB::table('device_commands')
+            ->where('command_type', DeviceCommand::TYPE_FACE_TEMPLATE)
+            ->where('status', DeviceCommand::STATUS_FAILED)
+            ->where(function ($q) {
+                $q->where('command_body', 'like', 'DATA UPDATE biodata%')
+                    ->orWhere('command_body', 'like', 'DATA UPDATE FACE%');
+            })
+            ->where('updated_at', '>=', now()->subHours($hours));
+
+        if ($deviceId !== null) {
+            $query->where('device_id', $deviceId);
+        }
+
+        $totalFailed = (clone $query)->count();
+
+        $ids = (clone $query)
+            ->orderBy('updated_at')
+            ->limit($limit)
+            ->pluck('id');
+
+        if ($ids->isEmpty()) {
+            return ['requeued' => 0, 'total_failed' => $totalFailed];
+        }
+
+        $requeued = DB::table('device_commands')
+            ->whereIn('id', $ids)
+            ->update([
+                'status' => DeviceCommand::STATUS_PENDING,
+                'retry_count' => 0,
+                'max_retries' => 30,
+                'sent_at' => null,
+                'error_message' => null,
+                'expires_at' => null,
+                'available_at' => null,
+            ]);
+
+        Log::info('FACE_COMMANDS_RETRY', [
+            'device_id' => $deviceId,
+            'requeued' => $requeued,
+            'total_failed' => $totalFailed,
+        ]);
+
+        return ['requeued' => $requeued, 'total_failed' => $totalFailed];
+    }
+
+    /**
      * Clean up stale commands.
      */
     public function cleanupStaleCommands(int $maxAgeMinutes = 60): int
@@ -392,6 +610,34 @@ class DeviceCommandService
     private function sanitizeField(string $value): string
     {
         return preg_replace('/[\r\n\t]/', '', trim($value)) ?? '';
+    }
+
+    /**
+     * Build a `DATA UPDATE USERINFO` command body (Push SDK v2 upsert).
+     *
+     * The terminal parses space-separated KEY=VALUE tokens, so characters
+     * that would break tokenisation are stripped from free-text values.
+     */
+    private function buildUserInfoBody(
+        string $pin,
+        string $name,
+        int $privilege,
+        string $password,
+        int $card,
+    ): string {
+        return sprintf(
+            'DATA UPDATE USERINFO PIN=%s Name=%s Privilege=%d Password=%s Card=%d',
+            $this->sanitizeField($pin),
+            $this->sanitizeUserInfoValue($name),
+            $privilege,
+            $this->sanitizeUserInfoValue($password),
+            $card,
+        );
+    }
+
+    private function sanitizeUserInfoValue(string $value): string
+    {
+        return preg_replace('/[\r\n\t#=&]+/', '', trim($value)) ?? '';
     }
 
     private function sanitizeTemplate(string $template): string

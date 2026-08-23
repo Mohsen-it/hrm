@@ -27,27 +27,34 @@ class AdmsCommandProtocolTest(unittest.TestCase):
         self.assertEqual("completed", result["status"])
         self.assertIsNone(result["error_message"])
 
-    def test_user_update_keeps_set_user_command_and_does_not_become_delete(self):
+    def test_user_update_uses_tracked_envelope_and_does_not_become_delete(self):
         response = build_get_request_response(
             [{
                 "id": 44,
                 "command_type": "user_update",
-                "command_body": "C:10#NEW-EMP##Employee Name##0####0",
+                "command_body": "DATA UPDATE USERINFO PIN=NEW-EMP Name=Employee Name Privilege=0 Password= Card=0",
             }]
         )
 
-        self.assertEqual("CMD 44 C:10#NEW-EMP##Employee Name##0####0\r\n", response)
+        self.assertEqual(
+            "C:44:DATA UPDATE USERINFO PIN=NEW-EMP Name=Employee Name Privilege=0 Password= Card=0\r\n",
+            response,
+        )
         self.assertNotIn("C:11", response)
+        # The legacy bare CMD form is not part of the push protocol and is
+        # silently ignored by terminals.
+        self.assertNotIn("CMD ", response)
 
-    def test_user_update_rejects_a_delete_command(self):
-        with self.assertRaises(ValueError):
-            build_get_request_response(
-                [{
-                    "id": 45,
-                    "command_type": "user_update",
-                    "command_body": "C:11#OLD-EMP",
-                }]
-            )
+    def test_legacy_user_body_is_nested_inside_tracked_envelope(self):
+        response = build_get_request_response(
+            [{
+                "id": 46,
+                "command_type": "user_delete",
+                "command_body": "C:11#OLD-EMP",
+            }]
+        )
+
+        self.assertEqual("C:46:C:11#OLD-EMP\r\n", response)
 
     def test_failed_device_acknowledgement(self):
         result = parse_command_result("ID=43&Return=-1&CMD=DATA%20UPDATE")

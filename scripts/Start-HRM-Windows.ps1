@@ -213,6 +213,9 @@ try {
     $services.Add((Start-HrmProcess -Job $job -Name 'ADMS' -WorkingDirectory (Join-Path $Root 'zkteco-service') -Command "`"$Python`" adms_server.py --host 0.0.0.0 --port $AdmsPort --laravel http://127.0.0.1:$LaravelPort" -LogPath (Join-Path $Root 'zkteco-service\logs\adms-launcher.log')))
     Wait-HrmPort -Port $AdmsPort -Name 'ADMS'
 
+    $services.Add((Start-HrmProcess -Job $job -Name 'Scheduler' -WorkingDirectory $Root -Command 'php artisan schedule:work --verbose --no-interaction' -LogPath (Join-Path $Root 'storage\logs\hrm-scheduler.log')))
+
+
     if (-not $NoBridge) {
         $bridgeCommand = "set `"ZKTECO_PYTHON_SERVICE_HOST=0.0.0.0`" && set `"ZKTECO_PYTHON_SERVICE_PORT=$BridgePort`" && `"$Python`" app.py"
         $services.Add((Start-HrmProcess -Job $job -Name 'ZKTeco bridge' -WorkingDirectory (Join-Path $Root 'zkteco-service') -Command $bridgeCommand -LogPath (Join-Path $Root 'zkteco-service\logs\bridge.log')))
@@ -221,10 +224,11 @@ try {
 
     Write-Host ''
     Write-Host '[OK] HRM services are running:' -ForegroundColor Green
-    Write-Host "     Laravel: http://${ServerIp}:$LaravelPort"
-    Write-Host "     Reverb:  ws://${ServerIp}:$ReverbPort"
-    Write-Host "     ADMS:    http://${ServerIp}:$AdmsPort"
-    if (-not $NoBridge) { Write-Host "     Bridge:  http://${ServerIp}:$BridgePort" }
+    Write-Host "     Laravel:  http://${ServerIp}:$LaravelPort"
+    Write-Host "     Reverb:   ws://${ServerIp}:$ReverbPort"
+    Write-Host "     ADMS:     http://${ServerIp}:$AdmsPort"
+    Write-Host "     Scheduler: running (every minute)"
+    if (-not $NoBridge) { Write-Host "     Bridge:   http://${ServerIp}:$BridgePort" }
     Write-Host ''
     Write-Host 'Close this CMD window to stop and clean up every HRM process.' -ForegroundColor Cyan
     Write-Host 'Press Q to stop the services cleanly.' -ForegroundColor Cyan

@@ -15,7 +15,7 @@ class FaceTemplateDistributionServiceTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_queues_historical_face_template_with_original_adms_metadata(): void
+    public function test_queues_historical_face_template_with_correct_body_format(): void
     {
         [$source, $target] = $this->makeDevices();
         $user = $this->makeUser('EMP-100');
@@ -30,10 +30,12 @@ class FaceTemplateDistributionServiceTest extends TestCase
 
         $command = DeviceCommand::query()->sole();
         $this->assertSame(DeviceCommand::TYPE_FACE_TEMPLATE, $command->command_type);
-        $this->assertStringContainsString('DATA UPDATE BIODATA Pin=EMP-100', $command->command_body);
-        $this->assertStringContainsString('No=1 Index=2 Valid=1 Duress=0', $command->command_body);
-        $this->assertStringContainsString('Type=2 MajorVer=12 MinorVer=0 Format=0', $command->command_body);
-        $this->assertStringEndsWith('Tmp=face-template-one', $command->command_body);
+        $this->assertStringStartsWith('DATA UPDATE FACE', $command->command_body);
+        $this->assertStringContainsString('PIN=EMP-100', $command->command_body);
+        $this->assertStringContainsString('FID=2', $command->command_body);
+        $this->assertStringContainsString('Size=', $command->command_body);
+        $this->assertStringContainsString('Valid=1', $command->command_body);
+        $this->assertStringContainsString('TMP=face-template-one', $command->command_body);
         $this->assertSame(
             'face-'.substr(hash('sha256', $target->id.':EMP-100:2:'.$template->template_hash), 0, 56),
             $command->correlation_id,
@@ -56,7 +58,7 @@ class FaceTemplateDistributionServiceTest extends TestCase
 
         $this->assertSame(1, $result['queued_face_templates']);
         $command = DeviceCommand::query()->sole();
-        $this->assertStringEndsWith('Tmp='.$current->template_data, $command->command_body);
+        $this->assertStringEndsWith('TMP=current-template', $command->command_body);
     }
 
     public function test_excludes_source_device_and_deduplicates_active_target_commands(): void

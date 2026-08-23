@@ -239,7 +239,7 @@ function performDeleteGroup() {
 }
 
 
-usePageTitle(t('shifts.rotation_details') + ': ' + rotation.name);
+usePageTitle(t('shifts.rotation_details') + ': ' + props.rotation.name);
 </script>
 
 <template>

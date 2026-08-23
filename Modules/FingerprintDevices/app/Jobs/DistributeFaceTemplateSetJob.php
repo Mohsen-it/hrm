@@ -21,9 +21,9 @@ class DistributeFaceTemplateSetJob implements ShouldQueue
     use Queueable;
     use SerializesModels;
 
-    public int $tries = 3;
+    public int $tries = 5;
 
-    public int $backoff = 30;
+    public int $backoff = 10;
 
     public function __construct(
         public int $userId,
@@ -49,27 +49,40 @@ class DistributeFaceTemplateSetJob implements ShouldQueue
             ->filter(fn (FingerprintDevice $device) => $device->getDriverName() === 'zkteco');
 
         foreach ($targets as $target) {
-            // ADMS processes lower priorities first: ensure the employee is present before BIODATA.
-            $commandService->queueUserUpdate(
-                $target->id,
-                (string) $user->employee_code,
-                (string) ($user->name ?: $user->full_name_ar ?: $user->employee_code),
-            );
+            try {
+                // Ensure the employee exists on the target device before BIODATA.
+                // The terminal rejects face data for unknown PINs with -3.
+                $commandService->queueUserUpdate(
+                    $target->id,
+                    (string) $user->employee_code,
+                    (string) ($user->name ?: $user->full_name_ar ?: $user->employee_code),
+                );
 
-            $result = $distributionService->queueSetForDevice(
-                $target,
-                $user->id,
-                $this->sourceSerial,
-                $this->setId,
-            );
+                // Queue all face templates for this enrollment set.
+                $result = $distributionService->queueSetForDevice(
+                    $target,
+                    $user->id,
+                    $this->sourceSerial,
+                    $this->setId,
+                );
 
-            Log::info('FACE_TEMPLATE_SET_AUTO_DISTRIBUTION_QUEUED', [
-                'user_id' => $user->id,
-                'source_device_id' => $this->sourceDeviceId,
-                'target_device_id' => $target->id,
-                'set_id' => $this->setId,
-                ...$result,
-            ]);
+                Log::info('FACE_TEMPLATE_SET_AUTO_DISTRIBUTION_QUEUED', [
+                    'user_id' => $user->id,
+                    'source_device_id' => $this->sourceDeviceId,
+                    'target_device_id' => $target->id,
+                    'set_id' => $this->setId,
+                    ...$result,
+                ]);
+            } catch (\Throwable $e) {
+                Log::error('FACE_TEMPLATE_SET_DISTRIBUTION_FAILED', [
+                    'user_id' => $user->id,
+                    'target_device_id' => $target->id,
+                    'set_id' => $this->setId,
+                    'error' => $e->getMessage(),
+                ]);
+                // Re-throw to trigger job retry
+                throw $e;
+            }
         }
     }
 }

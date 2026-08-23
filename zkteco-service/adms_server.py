@@ -14,6 +14,7 @@ import re
 import sqlite3
 import threading
 import time
+import urllib.error
 import uuid
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -26,6 +27,8 @@ os.makedirs(LOG_DIR, exist_ok=True)
 
 LARAVEL_URL = os.environ.get("LARAVEL_URL", "http://127.0.0.1:8000").rstrip("/")
 SAVE_RAW = os.environ.get("ADMS_SAVE_RAW", "0").strip().lower() in {"1", "true", "yes"}
+if os.environ.get("ADMS_SAVE_RAW", "") == "":
+    SAVE_RAW = True  # TEMP DEBUG: capture handshake until face sync verified
 VERBOSE_LOG = os.environ.get("ADMS_VERBOSE_LOG", "0").strip().lower() in {"1", "true", "yes"}
 OUTBOX_PATH = os.environ.get("ADMS_OUTBOX_PATH", os.path.join(LOG_DIR, "adms-outbox.sqlite3"))
 FORWARD_WORKERS = max(1, int(os.environ.get("ADMS_FORWARD_WORKERS", "4")))
@@ -33,6 +36,12 @@ REQUEST_WORKERS = max(1, int(os.environ.get("ADMS_REQUEST_WORKERS", "32")))
 HTTP_TIMEOUT = max(1, int(os.environ.get("ADMS_LARAVEL_TIMEOUT", "10")))
 MAX_REQUEST_BYTES = max(1024, int(os.environ.get("ADMS_MAX_REQUEST_BYTES", str(8 * 1024 * 1024))))
 COMMAND_REFRESH_SECONDS = max(1, int(os.environ.get("ADMS_COMMAND_REFRESH_SECONDS", "2")))
+MARK_SENDING_COALESCE_SECONDS = max(1, int(os.environ.get("ADMS_MARK_SENDING_COALESCE_SECONDS", "5")))
+COMMAND_CACHE_TTL_SECONDS = max(600, int(os.environ.get("ADMS_COMMAND_CACHE_TTL_SECONDS", "2400")))
+FACE_SERIAL_COOLDOWN_SECONDS = max(2, int(os.environ.get("ADMS_FACE_SERIAL_COOLDOWN_SECONDS", "5")))
+MAX_OUTBOX_ATTEMPTS = max(5, int(os.environ.get("ADMS_MAX_OUTBOX_ATTEMPTS", "30")))
+USER_COMMAND_TYPES = {"user_create", "user_update", "user_delete"}
+NO_ACK_COMMAND_TYPES = {"restart", "refresh_config"}
 
 logging.basicConfig(
     level=logging.INFO,
@@ -102,6 +111,12 @@ def _endpoint_for(table_type: str) -> str:
 
 def laravel_request(method: str, endpoint: str, data: dict | None = None) -> dict | None:
     """Run only in an outbox worker; never from a device request handler."""
+    result, _status = laravel_request_raw(method, endpoint, data)
+    return result
+
+
+def laravel_request_raw(method: str, endpoint: str, data: dict | None = None) -> tuple[dict | None, int]:
+    """Like laravel_request but also returns the HTTP status (0 on transport error)."""
     try:
         body = json.dumps(data).encode("utf-8") if data is not None else None
         request = Request(f"{LARAVEL_URL}{endpoint}", data=body, method=method)
@@ -111,10 +126,13 @@ def laravel_request(method: str, endpoint: str, data: dict | None = None) -> dic
             if response.status >= 400:
                 raise RuntimeError(f"Laravel returned HTTP {response.status}")
             raw = response.read().decode("utf-8")
-            return json.loads(raw) if raw else {}
+            return (json.loads(raw) if raw else {}), response.status
     except Exception as exc:
+        status = 0
+        if isinstance(exc, urllib.error.HTTPError):
+            status = exc.code
         logger.warning("Laravel %s %s failed: %s", method, endpoint, str(exc)[:300])
-        return None
+        return None, status
 
 
 class PersistentOutbox:
@@ -187,13 +205,9 @@ class PersistentOutbox:
 
     def save_commands(self, serial: str, commands: list) -> None:
         now = time.time()
-        # Laravel claims commands when fetched. Keep commands in the local
-        # cache until the device acknowledges them; an empty/partial Laravel
-        # response must never make an unacknowledged command disappear.
-        existing = self.cached_commands(serial)
-        merged = {item.get("id"): item for item in existing if item.get("id") is not None}
-        merged.update({item.get("id"): item for item in commands if item.get("id") is not None})
-        commands = list(merged.values())
+        # Replace cache entirely with fresh Laravel response. Old merge logic
+        # kept phantom commands that were already deleted/completed in Laravel,
+        # causing the ADMS to serve non-existent commands to devices.
         with self._connect() as connection:
             connection.execute(
                 "INSERT INTO command_cache(serial, commands, refreshed_at, requested_at) VALUES (?, ?, ?, ?) "
@@ -247,11 +261,20 @@ class PersistentOutbox:
                 payload = json.loads(job["payload"])
                 if self._deliver(job["kind"], payload):
                     self.complete(job["id"])
+                elif job["attempts"] + 1 >= MAX_OUTBOX_ATTEMPTS:
+                    logger.error(
+                        "Outbox job %s (%s) dropped after %d attempts: %s",
+                        job["id"], job["kind"], job["attempts"] + 1, job["last_error"],
+                    )
+                    self.complete(job["id"])
                 else:
                     self.retry(job["id"], job["attempts"] + 1, "Laravel did not acknowledge request")
             except Exception as exc:
                 logger.exception("Outbox worker %d failed job %s", worker_number, job["id"])
-                self.retry(job["id"], job["attempts"] + 1, str(exc))
+                if job["attempts"] + 1 >= MAX_OUTBOX_ATTEMPTS:
+                    self.complete(job["id"])
+                else:
+                    self.retry(job["id"], job["attempts"] + 1, str(exc))
 
     def _deliver(self, kind: str, payload: dict) -> bool:
         if kind == "forward":
@@ -260,7 +283,17 @@ class PersistentOutbox:
         if kind == "heartbeat":
             return laravel_request("POST", "/api/adms/heartbeat", payload) is not None
         if kind == "command_result":
-            return laravel_request("POST", "/api/adms/commands/result", payload) is not None
+            result, status = laravel_request_raw("POST", "/api/adms/commands/result", payload)
+            # Laravel ACKs unknown/stale results with HTTP 404 semantics in the
+            # body; anything >= 400 that is not a permanent rejection is retried.
+            if result is not None:
+                return True
+            return status in (404, 410)
+        if kind == "mark_sending":
+            result, status = laravel_request_raw("POST", "/api/adms/commands/sending", payload)
+            if result is not None:
+                return True
+            return status in (404, 410)
         if kind == "fetch_commands":
             serial = payload["serial"]
             result = laravel_request("GET", f"/api/adms/commands?SN={serial}")
@@ -288,33 +321,62 @@ OUTBOX: PersistentOutbox | None = None
 
 
 def build_get_option_response(sn: str) -> str:
-    return (f"GET OPTION FROM: {sn}\r\nATTLOGStamp=None\r\nOPERLOGStamp=None\r\nATTPHOTOStamp=None\r\n"
-            "ErrorDelay=60\r\nDelay=30\r\nTransTimes=00:00;23:59\r\nTransInterval=1\r\n"
-            "TransFlag=1111111111\r\nTimeZone=3\r\nRealtime=1\r\nEncrypt=0\r\n")
+    """Terminal registration options.
+
+    Mirrors the option set announced by proven multi-bio ADMS servers
+    (thai_zkt / ZKBio-style): ServerVer + PushProtVer 3.x plus
+    MultiBioDataSupport tells hybrid firmware (iFace 880 Plus, Push
+    2.0.33S) that this server accepts ``DATA UPDATE biodata`` records.
+    Without it the terminal runs strict legacy mode and rejects every
+    biodata write with Return=-30, making face distribution impossible.
+    """
+    return "\r\n".join([
+        f"GET OPTION FROM: {sn}",
+        "ATTLOGStamp=None",
+        "OPERLOGStamp=None",
+        "ATTPHOTOStamp=None",
+        "ErrorDelay=60",
+        "Delay=10",
+        "TransTimes=00:00;23:59",
+        "TransInterval=1",
+        "TransFlag=1111111111",
+        "TimeZone=3",
+        "Realtime=1",
+        "Encrypt=0",
+        "ServerVer=3.1.2",
+        "PushProtVer=3.1.2",
+        "SupportPing=1",
+        "PushOptionsFlag=1",
+        "MaxPostSize=1048576",
+        "MultiBioDataSupport=0:1:1:0:0:0:0:0:1:0",
+        "MultiBioPhotoSupport=0:0:0:0:0:0:0:0:0:0",
+        "BioDataFun=1",
+        "BioPhotoFun=1",
+        "Stamp=0",
+        "OpStamp=0",
+        "PhotoStamp=0",
+        "",
+    ])
 
 
 def _format_device_command(command: dict) -> str:
-    """Format one ADMS command without changing the terminal PIN semantics.
+    """Format one ADMS command using the tracked ``C:{id}:`` envelope.
 
-    A ``user_update`` is deliberately sent as the device's SetUser (C:10)
-    command.  It is not translated to C:11 (delete) followed by create: a
-    delete would discard templates, face data and the stored user photo.
+    Every command type is wrapped as ``C:{id}:{body}`` so the terminal
+    acknowledges it via ``POST /iclock/devicecmd`` with ``ID={id}``.
+    The legacy bare ``CMD {id} {body}`` form is NOT part of the push
+    protocol: terminals silently ignore those lines, the command never
+    gets acknowledged, and user records never reach the device (which
+    then rejects every face/fingerprint template with Return=-3).
+
+    Legacy bodies that already start with a nested op-code (e.g.
+    ``C:11#PIN`` deletes or ``C:18#...`` time syncs) keep working because
+    terminals accept one level of nesting inside the envelope.
     """
     command_id = command.get("id", 0)
-    command_type = command.get("command_type", "")
     body = str(command.get("command_body", "")).replace("\r", "").replace("\n", "").strip()
 
-    if command_type == "face_template":
-        return f"C:{command_id}:{body}"
-
-    if command_type == "user_update":
-        # C:10 is SetUser.  C:11 deletes the user and therefore removes the
-        # data bound to it (fingerprints, face templates and user photo).
-        # Fail closed if the queue accidentally contains a non-update command.
-        if not re.match(r"^C:10(?:#|$)", body, re.IGNORECASE):
-            raise ValueError("A user_update must use SetUser (C:10), never delete-user (C:11)")
-
-    return f"CMD {command_id} {body}"
+    return f"C:{command_id}:{body}"
 
 
 def build_get_request_response(commands: list) -> str:
@@ -333,6 +395,225 @@ def parse_command_result(body: str) -> dict | None:
     success = returned.strip().lower() in {"0", "ok", "success"}
     return {"command_id": command_id, "status": "completed" if success else "failed", "return_code": returned,
             "error_message": None if success else f"Device returned {returned or 'unknown'}"}
+
+
+# ---------------------------------------------------------------------------
+# Command delivery tracking and face pacing
+# ---------------------------------------------------------------------------
+
+class CommandDeliveryTracker:
+    """In-memory, per-serial state about what has actually been served."""
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._first_served_at = {}
+        self._marked = {}
+        self._last_mark_enqueue = {}
+
+    def note_served(self, serial: str, command_id: int, now: float | None = None) -> float:
+        now = time.time() if now is None else now
+        with self._lock:
+            first = self._first_served_at.setdefault((serial, command_id), now)
+            return first
+
+    def prune(self, serial: str, commands: list, now: float | None = None) -> list:
+        if not commands:
+            return commands
+        now = time.time() if now is None else now
+        with self._lock:
+            kept = []
+            marked = self._marked.get(serial)
+            for command in commands:
+                cid = command.get("id")
+                first = self._first_served_at.get((serial, cid)) if cid is not None else None
+                if first is not None and now - first >= COMMAND_CACHE_TTL_SECONDS:
+                    self._first_served_at.pop((serial, cid), None)
+                    if marked:
+                        marked.discard(cid)
+                    continue
+                kept.append(command)
+        return kept
+
+    def ids_to_mark(self, serial: str, served_ids: list) -> list:
+        now = time.time()
+        with self._lock:
+            marked = self._marked.setdefault(serial, set())
+            unmarked = [cid for cid in served_ids if cid not in marked]
+            if not unmarked:
+                return []
+            # Mark immediately: gating marks behind a time window left the
+            # first delivery of every batch unmarked, so Laravel kept the
+            # command 'pending' and the same command was re-served on the
+            # next poll (duplicate writes, wasted device buffer).
+            self._last_mark_enqueue[serial] = now
+            marked.update(unmarked)
+            return unmarked
+
+    def clear(self, serial: str, command_id: int) -> None:
+        with self._lock:
+            self._first_served_at.pop((serial, command_id), None)
+            marked = self._marked.get(serial)
+            if marked:
+                marked.discard(command_id)
+
+
+OUTBOX: PersistentOutbox | None = None
+DELIVERY = CommandDeliveryTracker()
+
+
+def _command_sort_key(command: dict):
+    return (int(command.get("priority", 99)), int(command.get("id", 0)))
+
+
+def _extract_user_pin(body: str) -> str | None:
+    match = re.search(r"C:1[01]#([^#\r\n]+)", body)
+    if match:
+        return match.group(1).strip()
+    match = re.search(r"(?:^|\s)PIN=([^\s\r\n]+)", body, re.IGNORECASE)
+    return match.group(1).strip() if match else None
+
+
+def _extract_face_pin(body: str) -> str | None:
+    match = re.search(r"(?:^|\s)Pin=([^\s\r\n]+)", body, re.IGNORECASE)
+    return match.group(1).strip() if match else None
+
+
+def resolve_command_id(serial: str, device_command_id: int) -> int | None:
+    """Resolve the correct Laravel command_id from a device acknowledgement.
+
+    Returns None when the acknowledgement cannot be attributed to any
+    command we recently served for this serial.  Guessing (oldest served,
+    single face command, ...) misattributed results across unrelated
+    commands, so unknown ids are dropped instead: Laravel ignores them
+    gracefully and the outbox never retries them.
+    """
+    assert OUTBOX is not None
+    cached = OUTBOX.cached_commands(serial)
+    for cmd in cached:
+        if cmd.get("id") == device_command_id:
+            return device_command_id
+
+    with DELIVERY._lock:
+        if DELIVERY._first_served_at.get((serial, device_command_id)) is not None:
+            return device_command_id
+
+    logger.info(
+        "Dropping unresolvable DEVICECMD ack ID=%d for SN=%s (not served recently)",
+        device_command_id,
+        serial,
+    )
+    return None
+
+
+def _pace_face_delivery(serial: str, commands: list, now: float | None = None) -> list:
+    now = time.time() if now is None else now
+    pending_faces = [c for c in commands if c.get("command_type") == "face_template"]
+    if not pending_faces:
+        return commands
+    with DELIVERY._lock:
+        for command in pending_faces:
+            cid = command.get("id")
+            if cid is None:
+                continue
+            first = DELIVERY._first_served_at.get((serial, cid))
+            if first is not None and now - first < FACE_SERIAL_COOLDOWN_SECONDS:
+                return [c for c in commands if c.get("command_type") != "face_template"]
+    return commands
+
+
+def _cap_face_commands(commands: list) -> list:
+    """Allow up to 5 face commands per device poll for faster distribution.
+
+    The original limit of 1 face command per poll caused distribution of
+    thousands of templates to take hours.  5 commands per poll keeps the
+    device buffer manageable while being ~5x faster.
+    """
+    deliverable = []
+    face_count = 0
+    MAX_FACE_PER_POLL = 5
+    for command in commands:
+        if command.get("command_type") == "face_template":
+            face_count += 1
+            if face_count > MAX_FACE_PER_POLL:
+                break
+        deliverable.append(command)
+    return deliverable
+
+
+USER_COMMAND_HOLD_SECONDS = max(60, int(os.environ.get("ADMS_USER_COMMAND_HOLD_SECONDS", "900")))
+
+
+def apply_delivery_guards(serial: str, commands: list) -> list:
+    now = time.time()
+    commands = sorted(commands, key=_command_sort_key)
+    commands = _pace_face_delivery(serial, commands, now)
+
+    # Record first-serve time for every delivered command: the tracker uses
+    # it for TTL pruning and to attribute device acknowledgements.
+    for command in commands:
+        cid = command.get("id")
+        if cid is not None:
+            DELIVERY.note_served(serial, cid, now)
+
+    # Terminals reject face/fingerprint templates with Return=-3 while the
+    # user record does not exist yet, so hold templates for a PIN until its
+    # user create/update command has been acknowledged (or the hold times
+    # out as a safety valve — retries cover a failed user write anyway).
+    held_user_pins: set[str] = set()
+    for command in commands:
+        if command.get("command_type") not in USER_COMMAND_TYPES:
+            continue
+        pin = _extract_user_pin(str(command.get("command_body", "")))
+        if not pin:
+            continue
+        cid = command.get("id")
+        first_served = DELIVERY._first_served_at.get((serial, cid)) if cid is not None else None
+        if first_served is None or now - first_served < USER_COMMAND_HOLD_SECONDS:
+            held_user_pins.add(pin)
+
+    if not held_user_pins:
+        return _cap_face_commands(commands)
+
+    deliverable = []
+    for command in commands:
+        if command.get("command_type") == "face_template":
+            pin = _extract_face_pin(str(command.get("command_body", "")))
+            if pin and pin in held_user_pins:
+                continue
+        deliverable.append(command)
+    return _cap_face_commands(deliverable)
+
+
+def enqueue_mark_sending(serial: str, served_ids: list) -> None:
+    ids = DELIVERY.ids_to_mark(serial, served_ids)
+    if not ids:
+        return
+    OUTBOX.enqueue("mark_sending", {"SN": serial, "command_ids": ids})
+
+
+def _serve_commands(serial: str) -> str:
+    assert OUTBOX is not None
+    commands = DELIVERY.prune(serial, OUTBOX.cached_commands(serial))
+    deliverable = apply_delivery_guards(serial, commands)
+    served = [c.get("id") for c in deliverable if c.get("id") is not None]
+    if served:
+        logger.info("SERVING %s for SN=%s: %s", len(served), serial, served)
+    enqueue_mark_sending(serial, served)
+
+    for command in deliverable:
+        if command.get("command_type") not in NO_ACK_COMMAND_TYPES:
+            continue
+        cid = command.get("id")
+        if cid is None:
+            continue
+        OUTBOX.remove_cached_command(serial, cid)
+        DELIVERY.clear(serial, cid)
+        OUTBOX.enqueue("command_result", {
+            "SN": serial, "command_id": cid, "status": "completed",
+            "return_code": "0", "error_message": None, "result": {"return_code": "0"},
+        })
+
+    return build_get_request_response(deliverable)
 
 
 class BoundedThreadingHTTPServer(ThreadingHTTPServer):
@@ -394,7 +675,7 @@ class ADMSHandler(BaseHTTPRequestHandler):
         params = extract_query_params(self.path)
         if "/iclock/getrequest" in path:
             OUTBOX.request_command_refresh(serial)
-            response = build_get_request_response(OUTBOX.cached_commands(serial))
+            response = _serve_commands(serial)
             info = _parse_device_info(str(params.get("INFO", "")))
             if info:
                 self._queue_heartbeat(serial, info)
@@ -428,8 +709,12 @@ class ADMSHandler(BaseHTTPRequestHandler):
         if is_command_result:
             result = parse_command_result(body)
             if result:
-                OUTBOX.remove_cached_command(serial, result["command_id"])
-                OUTBOX.enqueue("command_result", {"SN": serial, **result, "result": {"return_code": result["return_code"]}})
+                resolved_id = resolve_command_id(serial, result["command_id"])
+                if resolved_id is not None:
+                    result["command_id"] = resolved_id
+                    OUTBOX.remove_cached_command(serial, resolved_id)
+                    DELIVERY.clear(serial, resolved_id)
+                    OUTBOX.enqueue("command_result", {"SN": serial, **result, "result": {"return_code": result["return_code"]}})
             else:
                 logger.warning("[%s] Invalid DEVICECMD acknowledgement from SN=%s", correlation_id, serial)
             response = "OK"
@@ -438,7 +723,7 @@ class ADMSHandler(BaseHTTPRequestHandler):
             response = "PONG\r\n"
         elif "/iclock/getrequest" in path:
             OUTBOX.request_command_refresh(serial)
-            response = build_get_request_response(OUTBOX.cached_commands(serial))
+            response = _serve_commands(serial)
         else:
             if body.strip():
                 table = classify_payload(body, extract_table(self.path), self.path)

@@ -51,6 +51,9 @@ Route::prefix('api/adms')->group(function () {
     Route::post('commands/result', [AdmsCommandController::class, 'reportResult'])
         ->name('adms.commands.result');
 
+    Route::post('commands/sending', [AdmsCommandController::class, 'markSending'])
+        ->name('adms.commands.sending');
+
     Route::post('heartbeat', [AdmsCommandController::class, 'heartbeat'])
         ->name('adms.heartbeat');
 });

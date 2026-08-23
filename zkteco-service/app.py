@@ -153,61 +153,25 @@ class ZKTecoService:
             
             # Decode base64 template
             template_bytes = base64.b64decode(template_data)
-            is_face = int(finger_id) >= 50
             
-            logger.info(f"Exporting {'Face' if is_face else 'Fingerprint'} template: UID={uid}, FID={finger_id}, Size={len(template_bytes)}")
-
-            if is_face:
-                # Use BioData protocol for Faces (Command 1101)
-                return self._export_face_biodata(uid, finger_id, template_bytes)
-            else:
-                # Use standard protocol for Fingerprints
-                return self._export_fingerprint_template(uid, finger_id, template_bytes)
+            logger.info(f"Exporting template via pyzk: UID={uid}, FID={finger_id}, Size={len(template_bytes)}")
+            return self._export_fingerprint_template(uid, finger_id, template_bytes)
 
         except Exception as e:
             logger.error(f"Template export failed: {str(e)}")
             return {'success': False, 'error': str(e)}
 
     def _export_face_biodata(self, uid, finger_id, template_bytes):
-        """Low-level implementation for saving Face BioData (Command 1101)"""
-        try:
-            # Prepare payload for Command 1101 (CMD_DB_WRQ)
-            # Format usually: [Type:1][Index:1][UID:2][Size:2][Data...]
-            # Type 2 = Face
-            from zk.const import CMD_DB_WRQ
-            
-            logger.info(f"Using BioData WRQ (1101) for UID {uid}")
-            
-            # Many ZK devices expect the face template without the 6-byte header 
-            # if it's already included in the BioData packet.
-            # But pyzk might handle this differently. 
-            # We'll try the most compatible way for iFace.
-            
-            try:
-                # Try via pyzk's set_bio_data if it exists (some forks have it)
-                if hasattr(self.conn, 'set_bio_data'):
-                    self.conn.set_bio_data(type=2, uid=uid, fid=finger_id, data=template_bytes)
-                    return {'success': True, 'method': 'set_bio_data'}
-            except:
-                pass
+        """Deprecated face path.
 
-            # Fallback to direct command injection
-            # [Type 2][FID][UID (2 bytes)][Size (2 bytes)][Template...]
-            payload = struct.pack("<BBHH", 2, int(finger_id), int(uid), len(template_bytes)) + template_bytes
-            
-            # CMD_DB_WRQ = 1101
-            response = self.conn._send_command(1101, payload)
-            
-            # Check response (ACK_OK = 2000)
-            if response:
-                logger.info(f"✅ Face BioData saved successfully for UID {uid}")
-                return {'success': True, 'method': 'direct_cmd_1101'}
-            
-            return {'success': False, 'error': 'No response from device for command 1101'}
-
-        except Exception as e:
-            logger.error(f"Face BioData export error: {e}")
-            return {'success': False, 'error': str(e)}
+        The previous implementation imported ``CMD_DB_WRQ`` from
+        ``zk.const`` which does not exist in this pyzk version, so every
+        face export crashed with an ImportError before reaching the
+        device.  Face templates are stored through the exact same pyzk
+        write as fingerprints (slot = fid, faces live at fid >= 50);
+        that is the mechanism proven to work on the iFace880 Plus fleet.
+        """
+        return self._export_fingerprint_template(uid, finger_id, template_bytes)
 
     def _export_fingerprint_template(self, uid, finger_id, template_bytes):
         """Standard Fingerprint Export using pyzk's save_user_template"""

@@ -60,6 +60,7 @@ class DeviceCommand extends Model
         'sent_at',
         'completed_at',
         'expires_at',
+        'available_at',
     ];
 
     protected $casts = [

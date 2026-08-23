@@ -186,8 +186,8 @@ body {
 
 /* Scrollbar — RTL aware */
 [dir='rtl'] ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    width: 8px;
+    height: 8px;
 }
 
 [dir='rtl'] ::-webkit-scrollbar-track {
@@ -205,8 +205,8 @@ body {
 
 /* LTR scrollbar */
 [dir='ltr'] ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    width: 8px;
+    height: 8px;
 }
 
 [dir='ltr'] ::-webkit-scrollbar-track {

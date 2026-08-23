@@ -110,14 +110,17 @@ class DevicePushService
             }
 
             if (! empty($options['push_face_photos'])) {
-                $this->emitProgress($onProgress, 'push_face_photos', 'running', 'جاري دفع صور الوجوه...', 88);
+                $this->emitProgress($onProgress, 'push_face_photos', 'running', 'جاري دفع الوجوه...', 88);
                 $result = $this->pushFacePhotos($device, $adapter, $userIds, $syncLog, $options);
                 $totals = array_merge($totals, $result['totals']);
                 $errors = array_merge($errors, $result['errors']);
-                if (($result['totals']['failed_face_photos'] ?? 0) > 0) {
+                if (
+                    ($result['totals']['failed_face_photos'] ?? 0) > 0
+                    || ($result['totals']['failed_face_templates'] ?? 0) > 0
+                ) {
                     $hasFailure = true;
                 }
-                $this->emitProgress($onProgress, 'push_face_photos', 'ok', 'تم دفع صور الوجوه', 95, $result['totals']);
+                $this->emitProgress($onProgress, 'push_face_photos', 'ok', 'تم دفع الوجوه', 95, $result['totals']);
             }
 
             $device->update(['last_pushed_at' => now()]);
@@ -486,7 +489,9 @@ class DevicePushService
     }
 
     /**
-     * Push face photos (JPEG images) to a device.
+     * Push face data to a device — handles both face biodata templates
+     * (finger_id 50-54, pushed via BioData protocol) and JPEG face photos
+     * (pushed as image blobs).
      *
      * @return array{totals: array<string, int>, errors: array<int, string>}
      */
@@ -496,29 +501,33 @@ class DevicePushService
             'pushed_face_photos' => 0,
             'failed_face_photos' => 0,
             'skipped_face_photos' => 0,
+            'pushed_face_templates' => 0,
+            'failed_face_templates' => 0,
+            'skipped_face_templates' => 0,
         ];
         $errors = [];
         $rows = [];
 
-        // Get face photos (face_photo_path) and face templates (finger_id 50-54)
-        $faceRecords = UserFingerprint::query()
+        // Get face biodata templates (finger_id 50-54 with template_data)
+        $faceTemplates = UserFingerprint::query()
             ->whereIn('user_id', $userIds)
-            ->where(function ($q) {
-                $q->where(function ($q2) {
-                    $q2->whereBetween('finger_id', [50, 54])
-                        ->whereNotNull('template_data')
-                        ->where('template_data', '!=', '');
-                })->orWhere(function ($q2) {
-                    $q2->where('template_format', 'face_photo')
-                        ->whereNotNull('face_photo_path')
-                        ->where('face_photo_path', '!=', '');
-                });
-            })
+            ->whereBetween('finger_id', [50, 54])
+            ->whereNotNull('template_data')
+            ->where('template_data', '!=', '')
             ->orderBy('user_id')
             ->orderBy('finger_id')
             ->get();
 
-        if ($faceRecords->isEmpty()) {
+        // Get face photo records from user_fingerprints (template_format = 'face_photo')
+        $facePhotoRecords = UserFingerprint::query()
+            ->whereIn('user_id', $userIds)
+            ->where('template_format', 'face_photo')
+            ->whereNotNull('face_photo_path')
+            ->where('face_photo_path', '!=', '')
+            ->orderBy('user_id')
+            ->get();
+
+        if ($faceTemplates->isEmpty() && $facePhotoRecords->isEmpty()) {
             $errors[] = 'No face records found for the selected users.';
 
             return ['totals' => $totals, 'errors' => $errors];
@@ -529,12 +538,13 @@ class DevicePushService
         $isZk = str_contains($driver, 'zkteco') || str_contains($driver, 'zk');
 
         if (! $isZk) {
-            $errors[] = 'Face photo push is only supported for ZKTeco devices.';
+            $errors[] = 'Face push is only supported for ZKTeco devices.';
 
             return ['totals' => $totals, 'errors' => $errors];
         }
 
         // Build employee_code -> device_uid map
+        $allUserIds = $faceTemplates->pluck('user_id')->merge($facePhotoRecords->pluck('user_id'))->unique()->toArray();
         $deviceUsers = $adapter->getUsers(
             $device->ip_address,
             $device->port,
@@ -547,66 +557,146 @@ class DevicePushService
         }
 
         $empCodeByDbId = User::query()
-            ->whereIn('id', $faceRecords->pluck('user_id')->unique())
+            ->whereIn('id', $allUserIds)
             ->pluck('employee_code', 'id');
 
-        // Collect face photos to push via Python bridge
+        // ── 1) Push face biodata templates (finger_id 50-54) via Python bridge ──
+        if ($faceTemplates->isNotEmpty()) {
+            $templatePayload = [];
+            foreach ($faceTemplates as $ft) {
+                $empCode = (string) ($empCodeByDbId[$ft->user_id] ?? '');
+                $uid = $userIdToUid[strtolower($empCode)] ?? null;
+
+                if (! $uid) {
+                    $totals['skipped_face_templates']++;
+                    $rows[] = $this->buildResultRow($syncLog->id, $device->id, 'face_photo', $ft->user_id, $ft->finger_id, 'skipped', 'user not on device (template)');
+
+                    continue;
+                }
+
+                $templatePayload[] = [
+                    'uid' => $uid,
+                    'finger_id' => (int) $ft->finger_id,
+                    'template_data' => (string) $ft->template_data,
+                ];
+            }
+
+            if (! empty($templatePayload)) {
+                $chunks = array_chunk($templatePayload, 50);
+                foreach ($chunks as $chunk) {
+                    try {
+                        $result = $this->zktecoBridge->pushFaceTemplatesBatch(
+                            $device->ip_address,
+                            (int) $device->port,
+                            (int) $device->comm_key,
+                            $chunk,
+                        );
+
+                        if ($result['success'] ?? false) {
+                            $totals['pushed_face_templates'] += (int) ($result['success_count'] ?? 0);
+                            $totals['failed_face_templates'] += (int) ($result['failed_count'] ?? 0);
+                            $rows[] = $this->buildResultRow($syncLog->id, $device->id, 'face_photo', null, null, 'success', 'Pushed '.($result['success_count'] ?? 0).' face templates (batch)');
+
+                            if (! empty($result['errors'])) {
+                                foreach ($result['errors'] as $err) {
+                                    $errors[] = 'Face template: '.$err;
+                                }
+                            }
+                        } else {
+                            $totals['failed_face_templates'] += count($chunk);
+                            $errors[] = $result['error'] ?? 'Python bridge returned failure for face templates';
+                            $rows[] = $this->buildResultRow($syncLog->id, $device->id, 'face_photo', null, null, 'failed', $result['error'] ?? 'Face template push failed');
+                        }
+                    } catch (\Throwable $e) {
+                        $totals['failed_face_templates'] += count($chunk);
+                        $errors[] = 'Face template batch push failed: '.$e->getMessage();
+                        $rows[] = $this->buildResultRow($syncLog->id, $device->id, 'face_photo', null, null, 'failed', $e->getMessage());
+                    }
+                }
+            }
+        }
+
+        // ── 2) Push JPEG face photos ──
         $photoPayload = [];
-        foreach ($faceRecords as $fp) {
+
+        // 2a) From user_fingerprints face_photo records
+        foreach ($facePhotoRecords as $fp) {
             $empCode = (string) ($empCodeByDbId[$fp->user_id] ?? '');
             $uid = $userIdToUid[strtolower($empCode)] ?? null;
 
             if (! $uid) {
                 $totals['skipped_face_photos']++;
-                $rows[] = $this->buildResultRow($syncLog->id, $device->id, 'face_photo', $fp->user_id, $fp->finger_id, 'skipped', 'user not on device');
+                $rows[] = $this->buildResultRow($syncLog->id, $device->id, 'face_photo', $fp->user_id, $fp->finger_id, 'skipped', 'user not on device (photo)');
 
                 continue;
             }
 
-            // Face photo from filesystem
-            if ($fp->template_format === 'face_photo' && $fp->face_photo_path) {
-                $photoPath = storage_path('app/'.$fp->face_photo_path);
-                if (file_exists($photoPath)) {
-                    $photoBase64 = base64_encode(file_get_contents($photoPath));
-                    $photoPayload[] = [
-                        'uid' => $uid,
-                        'photo_base64' => $photoBase64,
-                    ];
-                } else {
-                    $totals['skipped_face_photos']++;
-                    $rows[] = $this->buildResultRow($syncLog->id, $device->id, 'face_photo', $fp->user_id, $fp->finger_id, 'skipped', 'photo file not found');
+            $photoPath = storage_path('app/'.$fp->face_photo_path);
+            if (file_exists($photoPath)) {
+                $photoBase64 = base64_encode(file_get_contents($photoPath));
+                $photoPayload[] = [
+                    'uid' => $uid,
+                    'photo_base64' => $photoBase64,
+                ];
+            } else {
+                $totals['skipped_face_photos']++;
+                $rows[] = $this->buildResultRow($syncLog->id, $device->id, 'face_photo', $fp->user_id, $fp->finger_id, 'skipped', 'photo file not found');
+            }
+        }
+
+        // 2b) From users.face_photo_path (fallback: JPEG photos stored on the User model)
+        $pushedUids = array_map(fn ($p) => $p['uid'], $photoPayload);
+        $usersWithFaces = User::query()
+            ->whereIn('id', $allUserIds)
+            ->whereNotNull('face_photo_path')
+            ->where('face_photo_path', '!=', '')
+            ->get();
+
+        foreach ($usersWithFaces as $user) {
+            $empCode = (string) ($user->employee_code ?? '');
+            $uid = $userIdToUid[strtolower($empCode)] ?? null;
+
+            if (! $uid || in_array($uid, $pushedUids, true)) {
+                continue;
+            }
+
+            $photoPath = storage_path('app/'.$user->face_photo_path);
+            if (file_exists($photoPath)) {
+                $photoBase64 = base64_encode(file_get_contents($photoPath));
+                $photoPayload[] = [
+                    'uid' => $uid,
+                    'photo_base64' => $photoBase64,
+                ];
+                $pushedUids[] = $uid;
+            }
+        }
+
+        if (! empty($photoPayload)) {
+            $chunks = array_chunk($photoPayload, 20);
+            foreach ($chunks as $chunk) {
+                try {
+                    $result = $this->zktecoBridge->pushFacePhotosBatch(
+                        $device->ip_address,
+                        (int) $device->port,
+                        (int) $device->comm_key,
+                        $chunk,
+                    );
+
+                    if ($result['success'] ?? false) {
+                        $totals['pushed_face_photos'] += (int) ($result['success_count'] ?? 0);
+                        $totals['failed_face_photos'] += (int) ($result['fail_count'] ?? 0);
+                        $rows[] = $this->buildResultRow($syncLog->id, $device->id, 'face_photo', null, null, 'success', 'Pushed '.($result['success_count'] ?? 0).' face photos (batch)');
+                    } else {
+                        $totals['failed_face_photos'] += count($chunk);
+                        $errors[] = $result['error'] ?? 'Python bridge returned failure for face photos';
+                        $rows[] = $this->buildResultRow($syncLog->id, $device->id, 'face_photo', null, null, 'failed', $result['error'] ?? 'Face photo push failed');
+                    }
+                } catch (\Throwable $e) {
+                    $totals['failed_face_photos'] += count($chunk);
+                    $errors[] = 'Face photo batch push failed: '.$e->getMessage();
+                    $rows[] = $this->buildResultRow($syncLog->id, $device->id, 'face_photo', null, null, 'failed', $e->getMessage());
                 }
             }
-        }
-
-        if (empty($photoPayload)) {
-            $this->resultRepository->createMany($rows);
-
-            return ['totals' => $totals, 'errors' => $errors];
-        }
-
-        // Push via Python bridge batch endpoint
-        try {
-            $result = $this->zktecoBridge->pushFacePhotosBatch(
-                $device->ip_address,
-                (int) $device->port,
-                (string) $device->comm_key,
-                $photoPayload,
-            );
-
-            if ($result['success'] ?? false) {
-                $totals['pushed_face_photos'] = $result['success_count'] ?? 0;
-                $totals['failed_face_photos'] = $result['fail_count'] ?? 0;
-                $rows[] = $this->buildResultRow($syncLog->id, $device->id, 'face_photo', null, null, 'success', "Pushed {$totals['pushed_face_photos']} face photos");
-            } else {
-                $totals['failed_face_photos'] = count($photoPayload);
-                $errors[] = $result['error'] ?? 'Python bridge returned failure';
-                $rows[] = $this->buildResultRow($syncLog->id, $device->id, 'face_photo', null, null, 'failed', $result['error'] ?? 'Unknown error');
-            }
-        } catch (\Throwable $e) {
-            $totals['failed_face_photos'] = count($photoPayload);
-            $errors[] = $e->getMessage();
-            $rows[] = $this->buildResultRow($syncLog->id, $device->id, 'face_photo', null, null, 'failed', $e->getMessage());
         }
 
         $this->resultRepository->createMany($rows);

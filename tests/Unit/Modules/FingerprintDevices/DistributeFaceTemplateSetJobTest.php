@@ -48,6 +48,9 @@ class DistributeFaceTemplateSetJobTest extends TestCase
             ]);
         }
 
+        // Clear any commands queued by the EmployeeAdmsObserver during User creation
+        DeviceCommand::query()->where('device_id', $target->id)->delete();
+
         $job = new DistributeFaceTemplateSetJob(
             $user->id,
             $source->id,

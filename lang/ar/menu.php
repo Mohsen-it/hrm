@@ -29,6 +29,7 @@ return [
     'devices' => 'أجهزة البصمة',
     'device_types' => 'أنواع الأجهزة',
     'device_dashboard' => 'لوحة تحكم الأجهزة',
+    'face_sync_dashboard' => 'مراقبة مزامنة الوجوه',
     'device_monitoring' => 'مراقبة الأجهزة',
     'device_live_scan' => 'المسح المباشر',
     'device_sync' => 'مزامنة الأجهزة',

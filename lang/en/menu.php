@@ -29,6 +29,7 @@ return [
     'devices' => 'Fingerprint Devices',
     'device_types' => 'Device Types',
     'device_dashboard' => 'Device Dashboard',
+    'face_sync_dashboard' => 'Face Sync Dashboard',
     'device_monitoring' => 'Device Monitoring',
     'device_live_scan' => 'Live Scan',
     'device_sync' => 'Device Sync',

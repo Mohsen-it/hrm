@@ -53,6 +53,32 @@ class AdmsCommandController extends Controller
      *
      * Called by the Python ADMS server to report command execution results.
      */
+    /**
+     * POST /api/adms/commands/sending
+     *
+     * Called by the Python ADMS server when commands are actually served to a device.
+     */
+    public function markSending(Request $request): JsonResponse
+    {
+        $request->validate([
+            'SN' => 'required|string',
+            'command_ids' => 'required|array',
+            'command_ids.*' => 'integer',
+        ]);
+
+        $serial = $request->input('SN');
+        $ids = $request->input('command_ids', []);
+
+        $device = $this->findDeviceBySerial($serial);
+        if (! $device) {
+            return response()->json(['success' => false, 'error' => 'Device not found'], 404);
+        }
+
+        $marked = $this->commandRepo->markSendingForDevice($device->id, $ids);
+
+        return response()->json(['success' => true, 'marked' => $marked]);
+    }
+
     public function reportResult(Request $request): JsonResponse
     {
         $request->validate([
@@ -80,8 +106,22 @@ class AdmsCommandController extends Controller
             $errorMessage,
         );
 
+        // Unknown/stale command results (e.g. commands deleted after a queue
+        // reset, or acknowledgements for a previous table lifecycle) must be
+        // ACKed positively: the ADMS outbox retries every non-2xx response
+        // forever, so a 404 here would poison the result pipeline.
         if (! $reported) {
-            return response()->json(['success' => false, 'error' => 'Command not found for device'], 404);
+            Log::warning('ADMS_COMMAND_RESULT_IGNORED', [
+                'SN' => $serial,
+                'command_id' => $commandId,
+                'status' => $status,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'ignored' => true,
+                'reason' => 'Command not found for device',
+            ]);
         }
 
         Log::info('ADMS_COMMAND_RESULT', [

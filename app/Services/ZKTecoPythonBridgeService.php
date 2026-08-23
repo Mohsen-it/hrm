@@ -300,6 +300,25 @@ class ZKTecoPythonBridgeService
     }
 
     /**
+     * Push a batch of face biodata templates to a device.
+     *
+     * Face templates use finger_id >= 50 and are pushed via the
+     * BioData protocol (Command 1101) on the Python side.
+     *
+     * @param  array<int, array<string, mixed>>  $templates
+     * @return array<string, mixed>
+     */
+    public function pushFaceTemplatesBatch(string $ip, int $port, int $password, array $templates): array
+    {
+        return $this->post('/device/push-face-templates-batch', [
+            'ip' => $ip,
+            'port' => $port,
+            'password' => $password,
+            'templates' => $templates,
+        ]);
+    }
+
+    /**
      * Best-effort post that gracefully returns an error payload on failure.
      *
      * @param  array<string, mixed>  $payload

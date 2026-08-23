@@ -9,6 +9,7 @@ use Modules\FingerprintDevices\Http\Controllers\FingerprintDevicesController;
 use Modules\FingerprintDevices\Http\Controllers\FingerprintDeviceTypesController;
 use Modules\FingerprintDevices\Http\Controllers\FingerprintTemplateController;
 use Modules\FingerprintDevices\Http\Controllers\LiveScanController;
+use Modules\FingerprintDevices\Http\Controllers\FaceSyncDashboardController;
 use Modules\FingerprintDevices\Http\Controllers\UnregisteredEmployeesController;
 
 Route::middleware(['auth'])->group(function () {
@@ -21,6 +22,12 @@ Route::middleware(['auth'])->group(function () {
 
         Route::get('dashboard', FingerprintDashboardController::class)
             ->name('fingerprint-devices.dashboard');
+
+        Route::get('face-sync', FaceSyncDashboardController::class)
+            ->name('fingerprint-devices.face-sync');
+
+        Route::post('face-sync/retry-failed', [FaceSyncDashboardController::class, 'retryFailedFaceCommands'])
+            ->name('fingerprint-devices.face-sync.retry-failed');
 
         Route::get('monitoring', DeviceMonitoringController::class)
             ->name('fingerprint-devices.monitoring');

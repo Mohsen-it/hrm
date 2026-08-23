@@ -56,6 +56,10 @@ class DeviceCommandRepository
                 $q->whereNull('expires_at')
                     ->orWhere('expires_at', '>', now());
             })
+            ->where(function ($q) {
+                $q->whereNull('available_at')
+                    ->orWhere('available_at', '<=', now());
+            })
             ->orderBy('priority')
             ->orderBy('created_at')
             ->limit($limit)
@@ -74,6 +78,10 @@ class DeviceCommandRepository
                 $q->whereNull('expires_at')
                     ->orWhere('expires_at', '>', now());
             })
+            ->where(function ($q) {
+                $q->whereNull('available_at')
+                    ->orWhere('available_at', '<=', now());
+            })
             ->orderBy('priority')
             ->orderBy('created_at')
             ->first();
@@ -85,6 +93,25 @@ class DeviceCommandRepository
      * Uses SELECT ... FOR UPDATE SKIP LOCKED to avoid race conditions
      * between concurrent device polls.
      */
+    /**
+     * Mark commands as in-flight, but only if they are still pending.
+     */
+    public function markSendingForDevice(int $deviceId, array $ids): int
+    {
+        if (empty($ids)) {
+            return 0;
+        }
+
+        return $this->model
+            ->where('device_id', $deviceId)
+            ->whereIn('id', $ids)
+            ->where('status', DeviceCommand::STATUS_PENDING)
+            ->update([
+                'status' => DeviceCommand::STATUS_SENDING,
+                'sent_at' => now(),
+            ]);
+    }
+
     public function claimPending(int $deviceId, int $limit = 1): Collection
     {
         $this->releaseStaleSending($deviceId);
@@ -136,12 +163,28 @@ class DeviceCommandRepository
                 'error_message' => 'Device did not acknowledge the command before the retry limit.',
             ]);
 
-        return (clone $stale)
+        // Re-queue with exponential backoff to prevent rapid re-sending.
+        $pending = (clone $stale)
             ->whereColumn('retry_count', '<', 'max_retries')
-            ->increment('retry_count', 1, [
+            ->get();
+
+        $updated = 0;
+        foreach ($pending as $command) {
+            $newRetryCount = $command->retry_count + 1;
+            $backoffSeconds = $command->command_type === DeviceCommand::TYPE_FACE_TEMPLATE
+                ? min(300, 30 * pow(2, $newRetryCount - 1))  // 30s, 60s, 120s, 240s, 300s cap
+                : min(60, 10 * pow(2, $newRetryCount - 1));   // 10s, 20s, 40s, 60s cap
+
+            $command->update([
                 'status' => DeviceCommand::STATUS_PENDING,
                 'sent_at' => null,
+                'retry_count' => $newRetryCount,
+                'available_at' => now()->addSeconds($backoffSeconds),
             ]);
+            $updated++;
+        }
+
+        return $updated;
     }
 
     /**

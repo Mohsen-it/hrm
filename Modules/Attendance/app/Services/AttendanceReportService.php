@@ -87,32 +87,431 @@ class AttendanceReportService
     /**
      * Compute the overtime analysis for a single user inside a date range.
      *
-     * @return array{user_id: int, from: string, to: string, overtime_minutes: int, overtime_sessions: int, by_day: array<string, int>}
+     * Uses accurate overtime calculation based on scheduled shift hours:
+     * overtime = actual_work_minutes - expected_work_minutes (if positive)
+     *
+     * @return array{user_id: int, from: string, to: string, overtime_minutes: int, overtime_sessions: int, by_day: array<string, int>, daily_details: array<int, array<string, mixed>>}
      */
     public function getUserOvertimeReport(int $userId, string $from, string $to): array
     {
-        $cacheKey = $this->cache->key('user_overtime', [$userId, $from, $to]);
+        $cacheKey = $this->cache->key('user_overtime_v2', [$userId, $from, $to]);
 
         return $this->cache->remember($cacheKey, function () use ($userId, $from, $to): array {
             $rows = DailyAttendanceSummary::forUser($userId)
                 ->betweenDates($from, $to)
-                ->where('total_overtime_minutes', '>', 0)
                 ->orderBy('summary_date')
-                ->get(['summary_date', 'total_overtime_minutes']);
+                ->get();
 
-            $byDay = $rows->mapWithKeys(fn ($r) => [
-                $r->summary_date->format('Y-m-d') => (int) $r->total_overtime_minutes,
-            ])->all();
+            $totalOvertime = 0;
+            $overtimeDays = 0;
+            $dailyDetails = [];
+
+            foreach ($rows as $row) {
+                $expectedWorkMinutes = $this->calculateExpectedWorkMinutes($row);
+                $actualWorkMinutes = (int) $row->total_work_minutes;
+                $overtimeMinutes = max(0, $actualWorkMinutes - $expectedWorkMinutes);
+
+                $date = $row->summary_date->format('Y-m-d');
+                $dailyDetails[] = [
+                    'date' => $date,
+                    'day_name' => $row->summary_date->locale(config('app.locale'))->translatedFormat('l'),
+                    'expected_check_in' => $row->expected_check_in,
+                    'expected_check_out' => $row->expected_check_out,
+                    'actual_check_in' => $row->first_check_in_at?->format('H:i'),
+                    'actual_check_out' => $row->last_check_out_at?->format('H:i'),
+                    'work_minutes' => $actualWorkMinutes,
+                    'expected_work_minutes' => $expectedWorkMinutes,
+                    'overtime_minutes' => $overtimeMinutes,
+                    'status' => $row->status,
+                ];
+
+                if ($overtimeMinutes > 0) {
+                    $totalOvertime += $overtimeMinutes;
+                    $overtimeDays++;
+                }
+            }
 
             return [
                 'user_id' => $userId,
                 'from' => $from,
                 'to' => $to,
-                'overtime_minutes' => (int) $rows->sum('total_overtime_minutes'),
-                'overtime_sessions' => $rows->count(),
-                'by_day' => $byDay,
+                'overtime_minutes' => $totalOvertime,
+                'overtime_sessions' => $overtimeDays,
+                'by_day' => collect($dailyDetails)
+                    ->filter(fn ($d) => $d['overtime_minutes'] > 0)
+                    ->mapWithKeys(fn ($d) => [$d['date'] => $d['overtime_minutes']])
+                    ->all(),
+                'daily_details' => $dailyDetails,
             ];
         });
+    }
+
+    /**
+     * Calculate expected work minutes based on shift schedule.
+     */
+    private function calculateExpectedWorkMinutes(DailyAttendanceSummary $row): int
+    {
+        if (! $row->expected_check_in || ! $row->expected_check_out) {
+            return 0;
+        }
+
+        $checkIn = $this->parseTimeToMinutes($row->expected_check_in);
+        $checkOut = $this->parseTimeToMinutes($row->expected_check_out);
+
+        if ($checkIn === null || $checkOut === null) {
+            return 0;
+        }
+
+        $expectedMinutes = $checkOut - $checkIn;
+
+        // Handle overnight shifts (e.g., check-in 22:00, check-out 06:00)
+        if ($expectedMinutes < 0) {
+            $expectedMinutes += 24 * 60;
+        }
+
+        // Subtract scheduled break time if available
+        $breakMinutes = (int) $row->total_break_minutes;
+        if ($breakMinutes > 0) {
+            $expectedMinutes = max(0, $expectedMinutes - $breakMinutes);
+        }
+
+        return $expectedMinutes;
+    }
+
+    /**
+     * Parse a time string (HH:MM or HH:MM:SS) to minutes since midnight.
+     */
+    private function parseTimeToMinutes(?string $time): ?int
+    {
+        if (! $time) {
+            return null;
+        }
+
+        $parts = explode(':', $time);
+        if (count($parts) < 2) {
+            return null;
+        }
+
+        $hours = (int) $parts[0];
+        $minutes = (int) $parts[1];
+
+        return $hours * 60 + $minutes;
+    }
+
+    /**
+     * Compute overtime from monthly log data (same source as monthly log table).
+     *
+     * Improved accuracy:
+     * - Work days: overtime = actual checkout - expected checkout (ignoring late arrival).
+     *   Handles overnight shifts, applies a minimal grace (5 min) to avoid noise.
+     * - Rest / non-work days: any work counts as overtime (span from first to last punch).
+     * - Break time is subtracted from expected duration for the "expected work" display,
+     *   while overtime via checkout diff is break-independent.
+     * - Falls back to span-based (actual - expected) when checkout times are missing.
+     *
+     * @param  array<int, array<string, mixed>>  $monthlyLog  Monthly log data from MonthlyEmployeeAttendanceLogService
+     * @return array{user_id: int, from: string, to: string, overtime_minutes: int, overtime_sessions: int, by_day: array<string, int>, daily_details: array<int, array<string, mixed>>}
+     */
+    public function getUserOvertimeReportFromMonthlyLog(int $userId, string $from, string $to, array $monthlyLog): array
+    {
+        // Cross-reference with DailyAttendanceSummary — secondary source for display fallback.
+        $summaries = DailyAttendanceSummary::forUser($userId)
+            ->betweenDates($from, $to)
+            ->get()
+            ->keyBy(fn ($s) => $s->summary_date->format('Y-m-d'));
+
+        // Minimal grace to filter biometric noise — deliberately smaller than the 60m
+        // session-level grace so the report is accurate to the minute. 5 min avoids
+        // counting 1-2 min clock drift as overtime while still reporting real overtime.
+        $reportGrace = 5;
+
+        $totalOvertime = 0;
+        $overtimeDays = 0;
+        $dailyDetails = [];
+
+        foreach ($monthlyLog as $day) {
+            $date = $day['date'];
+            $summary = $summaries->get($date);
+            $isWorkDay = (bool) ($day['is_work_day'] ?? false);
+            $summaryWorkMinutes = (int) ($summary->total_work_minutes ?? 0);
+            $breakMinutes = (int) ($summary->total_break_minutes ?? 0);
+
+            $expectedCheckIn = $day['expected_check_in'] ?? $summary?->expected_check_in;
+            $expectedCheckOut = $day['expected_check_out'] ?? $summary?->expected_check_out;
+            $expectedWorkMinutes = $this->calculateExpectedWorkMinutesFromTimes($expectedCheckIn, $expectedCheckOut);
+            // Subtract scheduled break for the displayed expected duration.
+            if ($breakMinutes > 0 && $expectedWorkMinutes > 0) {
+                $expectedWorkMinutes = max(0, $expectedWorkMinutes - $breakMinutes);
+            }
+
+            // Monthly log is the strict source of truth for punches: only punches
+            // inside configured windows. Summary's first/last is polluted by
+            // duplicate/phantom sessions (always 15:23) — never fallback to it.
+            $actualCheckInRaw = $day['first_check_in_at'];
+            $actualCheckOutRaw = $day['last_check_out_at'];
+            $actualCheckInDisplay = $this->formatTimeForDisplay($actualCheckInRaw);
+            $actualCheckOutDisplay = $this->formatTimeForDisplay($actualCheckOutRaw);
+
+            // Actual work is the span between the window-filtered punches from
+            // the monthly log (accurate). Summary total_work is polluted by
+            // overlapping duplicate sessions (e.g. 6460m vs 370m real) — ignore it
+            // when a valid span exists.
+            $actualSpanMinutes = $this->calculateActualWorkMinutes($actualCheckInRaw, $actualCheckOutRaw);
+            $workMinutes = $actualSpanMinutes;
+            if ($workMinutes === 0 && $summaryWorkMinutes > 0) {
+                // No valid window punches but summary has data (rare): use summary as fallback.
+                $workMinutes = $summaryWorkMinutes;
+            }
+
+            $overtimeMinutes = 0;
+
+            if (! $isWorkDay) {
+                // Rest / leave / unassigned: any work is overtime.
+                if ($actualCheckInRaw && $actualCheckOutRaw) {
+                    $overtimeMinutes = $this->calculateActualWorkMinutes($actualCheckInRaw, $actualCheckOutRaw);
+                    // Subtract break if it falls on a rest-day work.
+                    if ($breakMinutes > 0) {
+                        $overtimeMinutes = max(0, $overtimeMinutes - $breakMinutes);
+                    }
+                } elseif ($summaryWorkMinutes > 0) {
+                    $overtimeMinutes = $summaryWorkMinutes;
+                }
+                // No grace on rest days — every minute counts.
+            } else {
+                // Work day: overtime needs a valid checkout (window-filtered). Check-in
+                // may be missing (نسيت بصمة دخول) — still count overtime via checkout diff
+                // so those days reappear in the report as requested.
+                if (! $actualCheckOutRaw) {
+                    $overtimeMinutes = 0;
+                } else {
+                    $checkoutOvertime = $this->calculateCheckoutOvertime($date, $expectedCheckIn, $expectedCheckOut, $actualCheckOutRaw);
+                    if ($checkoutOvertime !== null) {
+                        $overtimeMinutes = $checkoutOvertime > $reportGrace ? $checkoutOvertime : 0;
+                    } else {
+                        // Fallback: span-based only when checkout parsing truly fails.
+                        $overtimeMinutes = max(0, $workMinutes - $expectedWorkMinutes);
+                        if ($overtimeMinutes <= $reportGrace) {
+                            $overtimeMinutes = 0;
+                        }
+                    }
+                }
+            }
+
+            // Do not fallback to summary's total_overtime_minutes: it is polluted
+            // by duplicate sessions and aggregates (e.g. always 0 or 6460m) and
+            // would diverge from the monthly log table the user compares against.
+
+            $dailyDetails[] = [
+                'date' => $date,
+                'day_name' => $day['day_name'] ?? '',
+                'expected_check_in' => $expectedCheckIn ? substr($expectedCheckIn, 0, 5) : null,
+                'expected_check_out' => $expectedCheckOut ? substr($expectedCheckOut, 0, 5) : null,
+                'actual_check_in' => $actualCheckInDisplay,
+                'actual_check_out' => $actualCheckOutDisplay,
+                'expected_work_minutes' => $expectedWorkMinutes,
+                'work_minutes' => $workMinutes,
+                'overtime_minutes' => $overtimeMinutes,
+                'overtime_human' => $this->formatMinutesHuman($overtimeMinutes),
+                'status' => $day['schedule_status'] ?? ($isWorkDay ? 'work' : 'rest'),
+            ];
+
+            if ($overtimeMinutes > 0) {
+                $totalOvertime += $overtimeMinutes;
+                $overtimeDays++;
+            }
+        }
+
+        return [
+            'user_id' => $userId,
+            'from' => $from,
+            'to' => $to,
+            'overtime_minutes' => $totalOvertime,
+            'overtime_human' => $this->formatMinutesHuman($totalOvertime),
+            'overtime_sessions' => $overtimeDays,
+            'by_day' => collect($dailyDetails)
+                ->filter(fn ($d) => $d['overtime_minutes'] > 0)
+                ->mapWithKeys(fn ($d) => [$d['date'] => $d['overtime_minutes']])
+                ->all(),
+            'daily_details' => $dailyDetails,
+        ];
+    }
+
+    /**
+     * Overtime as minutes past expected checkout.
+     *
+     * Handles overnight shifts where checkout is next calendar day.
+     *
+     * @return int|null null when parsing fails
+     */
+    private function calculateCheckoutOvertime(string $date, ?string $expectedIn, ?string $expectedOut, ?string $actualOut): ?int
+    {
+        if (! $expectedOut || ! $actualOut) {
+            return null;
+        }
+
+        $expectedDt = $this->buildExpectedDateTime($date, $expectedIn, $expectedOut);
+        $actualDt = $this->parseDateTime($actualOut);
+
+        if (! $expectedDt || ! $actualDt) {
+            return null;
+        }
+
+        $diff = (int) round(($actualDt->getTimestamp() - $expectedDt->getTimestamp()) / 60);
+
+        if ($diff < 0) {
+            return 0;
+        }
+
+        // Guard against phantom next-day punches wrongly linked to this date
+        // (e.g. summary last_check_out = next day 15:00). For non-overnight
+        // schedules a diff > 12h is almost certainly a data error — cap to 0
+        // so it does not inflate overtime. Overnight duties legitimately have
+        // checkout next morning, but their diff is < 12h (e.g. 22:00-06:00 = 8h).
+        if ($diff > 720) {
+            $isOvernight = false;
+            if ($expectedIn) {
+                $inMin = $this->parseTimeToMinutes($expectedIn);
+                $outMin = $this->parseTimeToMinutes($expectedOut);
+                if ($inMin !== null && $outMin !== null && $outMin < $inMin) {
+                    $isOvernight = true;
+                }
+            }
+            if (! $isOvernight) {
+                return 0;
+            }
+            // For overnight, cap diff at 12h as well — anything larger is data error.
+            if ($diff > 720) {
+                return 0;
+            }
+        }
+
+        return $diff;
+    }
+
+    /**
+     * Build expected checkout datetime, handling overnight (out < in => next day).
+     */
+    private function buildExpectedDateTime(string $date, ?string $expectedIn, string $expectedOut): ?\DateTimeImmutable
+    {
+        $out = $this->parseTimeToMinutes($expectedOut);
+        if ($out === null) {
+            return null;
+        }
+        $outStr = substr($expectedOut, 0, 5);
+        $dt = \DateTimeImmutable::createFromFormat('Y-m-d H:i', $date.' '.$outStr);
+        if (! $dt) {
+            $dt = \DateTimeImmutable::createFromFormat('Y-m-d H:i:s', $date.' '.$outStr.':00');
+        }
+        if (! $dt) {
+            return null;
+        }
+        // Overnight detection: checkout earlier than check-in.
+        if ($expectedIn) {
+            $in = $this->parseTimeToMinutes($expectedIn);
+            if ($in !== null && $out < $in) {
+                $dt = $dt->modify('+1 day');
+            }
+        }
+
+        return $dt;
+    }
+
+    /**
+     * Parse a datetime string (Y-m-d H:i[:s] or H:i) to DateTimeImmutable.
+     */
+    private function parseDateTime(?string $value): ?\DateTimeImmutable
+    {
+        if (! $value) {
+            return null;
+        }
+        $dt = \DateTimeImmutable::createFromFormat('Y-m-d H:i:s', $value)
+            ?: \DateTimeImmutable::createFromFormat('Y-m-d H:i', $value)
+            ?: null;
+        if ($dt) {
+            return $dt;
+        }
+        // Fallback via strtotime parsing.
+        $ts = strtotime($value);
+        if ($ts === false) {
+            return null;
+        }
+
+        return (new \DateTimeImmutable)->setTimestamp($ts);
+    }
+
+    /**
+     * Format minutes as hours decimal (e.g. 90 => "1.50").
+     */
+    private function formatMinutesHuman(int $minutes): string
+    {
+        return number_format(max(0, $minutes) / 60, 2, '.', '');
+    }
+
+    /**
+     * Calculate expected work minutes from check-in and check-out times.
+     */
+    private function calculateExpectedWorkMinutesFromTimes(?string $checkIn, ?string $checkOut): int
+    {
+        if (! $checkIn || ! $checkOut) {
+            return 0;
+        }
+
+        $inMinutes = $this->parseTimeToMinutes($checkIn);
+        $outMinutes = $this->parseTimeToMinutes($checkOut);
+
+        if ($inMinutes === null || $outMinutes === null) {
+            return 0;
+        }
+
+        $expectedMinutes = $outMinutes - $inMinutes;
+
+        // Handle overnight shifts (e.g., check-in 22:00, check-out 06:00)
+        if ($expectedMinutes < 0) {
+            $expectedMinutes += 24 * 60;
+        }
+
+        return $expectedMinutes;
+    }
+
+    /**
+     * Calculate actual work minutes from actual check-in and check-out datetimes.
+     */
+    private function calculateActualWorkMinutes(?string $checkIn, ?string $checkOut): int
+    {
+        if (! $checkIn || ! $checkOut) {
+            return 0;
+        }
+
+        $inTime = strtotime($checkIn);
+        $outTime = strtotime($checkOut);
+
+        if ($inTime === false || $outTime === false) {
+            return 0;
+        }
+
+        $diffMinutes = (int) round(($outTime - $inTime) / 60);
+
+        return max(0, $diffMinutes);
+    }
+
+    /**
+     * Extract an H:i display string from a datetime string.
+     *
+     * Handles both full datetime strings ("2026-07-01 08:00") and
+     * already-formatted time strings ("08:00").
+     */
+    private function formatTimeForDisplay(?string $value): ?string
+    {
+        if (! $value) {
+            return null;
+        }
+
+        // Extract H:i from "Y-m-d H:i:s" or "Y-m-d H:i" datetime strings.
+        if (preg_match('/(\d{2}:\d{2})/', $value, $m)) {
+            return $m[1];
+        }
+
+        return null;
     }
 
     // ------------------------------------------------------------------

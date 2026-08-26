@@ -88,6 +88,33 @@ class PunchWindowService
             return ['type' => $type, 'has_configured_window' => true];
         }
 
+        // بصمة بعد منتصف الليل (00:00-05:00) بعد يوم عمل تُحتسب كخروج إضافي
+        // لليوم السابق بدل دخول لليوم التالي — تحل مشكلة 20010 يوم 10/08
+        $hour = (int) $punchAt->format('H');
+        if ($hour < 5) {
+            $prevDate = $punchAt->subDay()->toDateString();
+            $prevSchedule = $this->schedule($employeeId, $prevDate);
+            if (($prevSchedule['is_work_day'] ?? false) && ($prevSchedule['expected_check_out'] ?? null)) {
+                $expectedOutStr = substr($prevSchedule['expected_check_out'], 0, 5);
+                $expectedOut = CarbonImmutable::parse($prevDate.' '.$expectedOutStr);
+                if (($prevSchedule['is_overnight'] ?? false) && $expectedOut) {
+                    $expectedOut = $expectedOut->addDay();
+                }
+                if ($expectedOut && $punchAt->greaterThan($expectedOut) && $punchAt->lessThan($expectedOut->addHours(14))) {
+                    // تأكد أن البصمة ليست داخل نافذة دخول اليوم التالي
+                    $nextInStart = $this->schedule($employeeId, $punchAt->toDateString())['in_ahead_margin'] ?? null;
+                    $isInNextWindow = false;
+                    if ($nextInStart) {
+                        $nextWindowStart = CarbonImmutable::parse($punchAt->toDateString().' '.substr($nextInStart, 0, 5));
+                        $isInNextWindow = $punchAt->greaterThanOrEqualTo($nextWindowStart);
+                    }
+                    if (! $isInNextWindow) {
+                        return ['type' => 'check_out', 'has_configured_window' => true];
+                    }
+                }
+            }
+        }
+
         return ['type' => null, 'has_configured_window' => $hasConfiguredWindow];
     }
 

@@ -1,0 +1,7 @@
+Reason: No record contained a valid Pin field.
+Device: ZK_FACE_001
+Correlation ID: 80489dc7-3017-445a-9493-431dad42028a
+
+BIODATA
+Type=2
+Tmp=CORRUPTED_WITHOUT_PIN

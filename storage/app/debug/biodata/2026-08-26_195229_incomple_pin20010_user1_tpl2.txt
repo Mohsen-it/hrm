@@ -1,0 +1,13 @@
+=== BIODATA DEBUG SNAPSHOT ===
+Timestamp: 2026-08-26T19:52:29+03:00
+Correlation ID: incomplete-face-set
+Device: SOURCE-20010 (192.168.40.10)
+User: 1 (20010) - Employee 20010
+Template ID: 2
+Type: face (2)
+Version: 12.0
+Format: 0
+Template Length: 16 chars
+
+=== RAW BIODATA ===
+BIODATA Pin=20010 Index=1

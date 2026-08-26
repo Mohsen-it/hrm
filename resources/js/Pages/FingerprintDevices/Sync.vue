@@ -39,6 +39,7 @@ const options = ref({
     face_photos: true,
     attendance: true,
     clear_local_cache: false,
+    auto_create_users: false,
     // Push (new)
     push_users: true,
     push_fingerprints: true,
@@ -666,10 +667,18 @@ usePageTitle(t('fingerprint_devices.sync_title'));
                         </div>
                     </div>
 
-                    <label class="flex items-center gap-2 text-[12px] text-mistral-steel mb-4">
+                    <label class="flex items-center gap-2 text-[12px] text-mistral-steel mb-2">
                         <FormCheckbox v-model="options.clear_local_cache" :disabled="isRunning" />
                         <span>{{ t('fingerprint_devices.sync_clear_local') }}</span>
                     </label>
+                    <label class="flex items-center gap-2 text-[12px] text-mistral-danger mb-4">
+                        <FormCheckbox v-model="options.auto_create_users" :disabled="isRunning" />
+                        <span>{{ t('fingerprint_devices.sync_auto_create_users') || 'إنشاء مستخدمين جدد تلقائياً (يعطل حماية ADMS)' }}</span>
+                    </label>
+                    <div v-if="!options.auto_create_users" class="mb-4 p-2 bg-mistral-info/10 rounded-lg text-[11px] text-mistral-info">
+                        <i class="fas fa-shield-alt me-1"></i>
+                        {{ t('fingerprint_devices.sync_adms_protected') || 'الحماية مفعلة: لن يتم إنشاء مستخدمين بأسماء مشوهة. سحب البصمات المعلقة عبر ADMS فقط.' }}
+                    </div>
 
                     <div class="space-y-2">
                         <Button

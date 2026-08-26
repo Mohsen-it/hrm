@@ -36,7 +36,10 @@ class DevicePushService
         private DeviceAdapterResolver $adapterResolver,
         private FaceTemplateDistributionService $faceTemplateDistribution,
         private ZKTecoPythonBridgeService $zktecoBridge,
-    ) {}
+        private ?DeviceCommandService $commandService = null,
+    ) {
+        $this->commandService ??= app(DeviceCommandService::class);
+    }
 
     /**
      * Push the requested artefact types to a single device.
@@ -161,6 +164,9 @@ class DevicePushService
     /**
      * Push a list of users to a device.
      *
+     * ADMS unification: when `fingerprintdevices.push_user_via === 'adms'`
+     * users are queued as ADMS commands (no TCP burst).
+     *
      * @return array{totals: array<string, int>, errors: array<int, string>}
      */
     public function pushUsers(FingerprintDevice $device, DeviceAdapterInterface $adapter, array $userIds, DeviceSyncLog $syncLog, array $options = []): array
@@ -172,6 +178,41 @@ class DevicePushService
         ];
         $errors = [];
         $rows = [];
+
+        // ADMS-only push (user request): queue via device_commands
+        $via = config('fingerprintdevices.push_user_via', 'adms');
+        if ($via === 'adms' && $device->getDriverName() === 'zkteco') {
+            $usersAdms = User::query()
+                ->whereIn('id', $userIds)
+                ->whereNotNull('employee_code')
+                ->get(['id', 'employee_code', 'name', 'full_name_ar']);
+
+            if ($usersAdms->isEmpty()) {
+                $errors[] = 'No users with valid employee_code to push.';
+
+                return ['totals' => $totals, 'errors' => $errors];
+            }
+
+            foreach ($usersAdms as $u) {
+                try {
+                    $name = $u->full_name_ar ?? $u->name ?? $u->employee_code;
+                    $this->commandService->queueUserCreate(
+                        $device->id,
+                        (string) $u->employee_code,
+                        (string) $name,
+                    );
+                    $totals['pushed_users']++;
+                    $rows[] = $this->buildResultRow($syncLog->id, $device->id, 'user', $u->id, null, 'success', 'queued via ADMS', null);
+                } catch (\Throwable $e) {
+                    $totals['failed_users']++;
+                    $errors[] = "User {$u->employee_code}: ".$e->getMessage();
+                    $rows[] = $this->buildResultRow($syncLog->id, $device->id, 'user', $u->id, null, 'failed', $e->getMessage());
+                }
+            }
+            $this->resultRepository->createMany($rows);
+
+            return ['totals' => $totals, 'errors' => $errors];
+        }
 
         $users = User::query()
             ->whereIn('id', $userIds)

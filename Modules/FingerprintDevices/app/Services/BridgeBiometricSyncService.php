@@ -36,7 +36,7 @@ class BridgeBiometricSyncService
                 $uid = $this->nextFreeUid($device);
             }
 
-            $response = Http::timeout(120)->post($this->bridgeUrl().'/device/add-user', [
+            $response = Http::timeout(15)->post($this->bridgeUrl().'/device/add-user', [
                 'ip' => $device->ip_address,
                 'port' => (int) $device->port,
                 'password' => (int) $device->comm_key,
@@ -160,7 +160,7 @@ class BridgeBiometricSyncService
     public function resolveUid(FingerprintDevice $device, string $pin): ?int
     {
         try {
-            $response = Http::timeout(120)->post($this->bridgeUrl().'/device/get-users', [
+            $response = Http::timeout(10)->post($this->bridgeUrl().'/device/get-users', [
                 'ip' => $device->ip_address,
                 'port' => (int) $device->port,
                 'password' => (int) $device->comm_key,
@@ -185,7 +185,7 @@ class BridgeBiometricSyncService
     private function nextFreeUid(FingerprintDevice $device): int
     {
         try {
-            $response = Http::timeout(120)->post($this->bridgeUrl().'/device/get-users', [
+            $response = Http::timeout(10)->post($this->bridgeUrl().'/device/get-users', [
                 'ip' => $device->ip_address,
                 'port' => (int) $device->port,
                 'password' => (int) $device->comm_key,

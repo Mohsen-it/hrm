@@ -98,6 +98,7 @@ class DeviceFullSyncController extends Controller
             'options.face_photos' => ['nullable', 'boolean'],
             'options.attendance' => ['nullable', 'boolean'],
             'options.clear_local_cache' => ['nullable', 'boolean'],
+            'options.auto_create_users' => ['nullable', 'boolean'],
         ]);
 
         $device = $this->deviceService->getDeviceById((int) $data['device_id']);
@@ -137,6 +138,7 @@ class DeviceFullSyncController extends Controller
             'options.face_photos' => ['nullable', 'boolean'],
             'options.attendance' => ['nullable', 'boolean'],
             'options.clear_local_cache' => ['nullable', 'boolean'],
+            'options.auto_create_users' => ['nullable', 'boolean'],
         ]);
 
         $device = $this->deviceService->getDeviceById((int) $data['device_id']);
@@ -205,8 +207,10 @@ class DeviceFullSyncController extends Controller
                     'info' => false,
                     'users' => true,
                     'fingerprints' => false,
+                    'face_photos' => false,
                     'attendance' => true,
                     'clear_local_cache' => false,
+                    'auto_create_users' => false,
                 ]);
 
                 $results[] = [

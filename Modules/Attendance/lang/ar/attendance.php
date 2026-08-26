@@ -402,6 +402,13 @@ return [
         ],
     ],
 
+    'overtime_report' => [
+        'title' => 'تقرير العمل الإضافي',
+        'subtitle' => 'الموظف: :employee | من: :from إلى :to',
+        'expected_work' => 'الوقت المتوقع',
+        'total_overtime' => 'إجمالي ساعات العمل الإضافي',
+    ],
+
     'violations' => [
         'title' => 'انتهاكات الحضور',
         'late_check_ins' => 'المتأخرون عن تسجيل الدخول',

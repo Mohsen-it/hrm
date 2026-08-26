@@ -48,6 +48,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('export/excel', [ReportsController::class, 'export'])->name('export');
         Route::get('user', [ReportsController::class, 'userReportIndex'])->name('user.index');
         Route::get('user/{user}/monthly-log/export', [ReportsController::class, 'exportMonthlyLog'])->name('user.monthly-log.export');
+        Route::get('user/{user}/overtime/export', [ReportsController::class, 'exportOvertimeReport'])->name('user.overtime.export');
         Route::get('user/{user}', [ReportsController::class, 'userReport'])->name('user');
         Route::get('monthly', [MonthlyReportController::class, 'index'])->name('monthly');
         Route::get('yearly', [YearlyReportController::class, 'index'])->name('yearly');

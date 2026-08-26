@@ -9,6 +9,7 @@ use Inertia\Inertia;
 use Inertia\Response;
 use Modules\Attendance\Exports\AttendanceReportExport;
 use Modules\Attendance\Exports\MonthlyEmployeeAttendanceLogExport;
+use Modules\Attendance\Exports\OvertimeReportExport;
 use Modules\Attendance\Http\Requests\MonthlyEmployeeAttendanceLogRequest;
 use Modules\Attendance\Services\AttendanceReportService;
 use Modules\Attendance\Services\MonthlyEmployeeAttendanceLogService;
@@ -67,11 +68,14 @@ class ReportsController extends Controller
         $to = (string) $request->input('to', now()->toDateString());
 
         $report = $this->reportService->getUserReport($userId, $from, $to);
-        $overtime = $this->reportService->getUserOvertimeReport($userId, $from, $to);
         $year = (int) $request->input('year', now()->year);
         $month = (int) $request->input('month', now()->month);
         $monthlyLog = $this->monthlyEmployeeLogService->getMonthlyLog($userId, $year, $month);
         $employee = $this->userService->getUserById($userId);
+
+        // Get monthly log data for the entire from/to range for overtime calculation
+        $overtimeMonthlyLog = $this->getMonthlyLogForDateRange($userId, $from, $to);
+        $overtime = $this->reportService->getUserOvertimeReportFromMonthlyLog($userId, $from, $to, $overtimeMonthlyLog);
 
         return Inertia::render('Attendance/Reports/User', [
             'userId' => fn () => $userId,
@@ -82,6 +86,33 @@ class ReportsController extends Controller
             'monthlyLog' => fn () => $monthlyLog,
             'monthlyLogFilters' => fn () => ['year' => $year, 'month' => $month],
         ]);
+    }
+
+    /**
+     * Get monthly log data for a date range (may span multiple months).
+     */
+    private function getMonthlyLogForDateRange(int $userId, string $from, string $to): array
+    {
+        $fromDate = \Carbon\Carbon::parse($from)->startOfMonth();
+        $toDate = \Carbon\Carbon::parse($to)->startOfMonth();
+
+        $allRows = [];
+        $current = $fromDate->copy();
+
+        while ($current->lte($toDate)) {
+            $rows = $this->monthlyEmployeeLogService->getMonthlyLog($userId, $current->year, $current->month);
+
+            // Filter rows to only include dates within the from/to range
+            foreach ($rows as $row) {
+                if ($row['date'] >= $from && $row['date'] <= $to) {
+                    $allRows[] = $row;
+                }
+            }
+
+            $current->addMonth();
+        }
+
+        return $allRows;
     }
 
     /**
@@ -151,6 +182,41 @@ class ReportsController extends Controller
         return response($this->excelExporter->toBinary($export->build()), 200, [
             'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             'Content-Disposition' => 'attachment; filename="attendance-report-'.$from.'_'.$to.'.xlsx"',
+            'Cache-Control' => 'max-age=0',
+        ]);
+    }
+
+    /**
+     * Download the employee's overtime report as Excel.
+     */
+    public function exportOvertimeReport(MonthlyEmployeeAttendanceLogRequest $request, int $userId)
+    {
+        $this->authorize('view-attendance');
+
+        $from = (string) $request->input('from', now()->subDays(30)->toDateString());
+        $to = (string) $request->input('to', now()->toDateString());
+        $employee = $this->userService->getUserById($userId);
+
+        // Get monthly log data for the entire from/to range
+        $overtimeMonthlyLog = $this->getMonthlyLogForDateRange($userId, $from, $to);
+        $overtime = $this->reportService->getUserOvertimeReportFromMonthlyLog($userId, $from, $to, $overtimeMonthlyLog);
+
+        // Filter only days with overtime
+        $overtimeDetails = array_values(array_filter(
+            $overtime['daily_details'] ?? [],
+            fn ($row) => ($row['overtime_minutes'] ?? 0) > 0,
+        ));
+
+        $export = new OvertimeReportExport(
+            $this->excelExporter,
+            $employee?->name ?? (string) $userId,
+            $from . ' → ' . $to,
+            $overtimeDetails,
+        );
+
+        return response($this->excelExporter->toBinary($export->build()), 200, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Content-Disposition' => 'attachment; filename="overtime-report-'.$userId.'-'.$from.'_'.$to.'.xlsx"',
             'Cache-Control' => 'max-age=0',
         ]);
     }

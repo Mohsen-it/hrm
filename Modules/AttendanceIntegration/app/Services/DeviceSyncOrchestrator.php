@@ -34,6 +34,7 @@ class DeviceSyncOrchestrator
             'users' => true,
             'fingerprints' => true,
             'attendance' => true,
+            'auto_create_users' => false,
         ], $options);
 
         $startedAt = microtime(true);
@@ -64,7 +65,7 @@ class DeviceSyncOrchestrator
             }
 
             $this->emitProgress($onProgress, 'users', 'running', 'Syncing users...', 25);
-            $usersResult = $this->stepUsers($device, $adapter, $options['users']);
+            $usersResult = $this->stepUsers($device, $adapter, $options['users'], (bool) ($options['auto_create_users'] ?? false));
             $steps[] = $usersResult['step'];
             $matched = $usersResult['matched'] ?? [];
             $unmatchedUsers = $usersResult['unmatched'] ?? [];
@@ -173,7 +174,7 @@ class DeviceSyncOrchestrator
         }
     }
 
-    private function stepUsers(AttendanceDeviceInterface $device, DeviceAdapterInterface $adapter, bool $enabled): array
+    private function stepUsers(AttendanceDeviceInterface $device, DeviceAdapterInterface $adapter, bool $enabled, bool $autoCreate = false): array
     {
         $step = ['name' => 'users', 'status' => 'skipped', 'message' => null];
 
@@ -210,7 +211,18 @@ class DeviceSyncOrchestrator
                 }
 
                 if (! $user) {
-                    $autoName = ! empty($du['name']) ? $du['name'] : 'User '.$externalId;
+                    if (! $autoCreate) {
+                        $unmatched[] = [
+                            'uid' => (int) ($du['uid'] ?? 0),
+                            'user_id' => $externalId,
+                            'name' => (string) ($du['name'] ?? ''),
+                            'reason' => 'no matching user (auto_create disabled)',
+                        ];
+                        continue;
+                    }
+                    $rawName = (string) ($du['name'] ?? '');
+                    $safeName = $this->normalizeName($rawName);
+                    $autoName = $safeName !== '' ? $safeName : 'User '.$externalId;
 
                     $emailBase = 'device_'.strtolower($externalId).'@hrm.local';
                     $email = $emailBase;
@@ -250,7 +262,7 @@ class DeviceSyncOrchestrator
                 $matched[] = [
                     'uid' => (int) ($du['uid'] ?? 0),
                     'user_id' => $externalId,
-                    'name' => (string) ($du['name'] ?? ''),
+                    'name' => $this->normalizeName((string) ($du['name'] ?? '')),
                     'user_pk' => (int) $user->id,
                 ];
             }
@@ -488,5 +500,22 @@ class DeviceSyncOrchestrator
         }
 
         return null;
+    }
+
+    private function normalizeName(string $raw): string
+    {
+        $raw = trim($raw);
+        if ($raw === '') {
+            return '';
+        }
+        if (! mb_check_encoding($raw, 'UTF-8')) {
+            $converted = @iconv('Windows-1256', 'UTF-8//IGNORE', $raw);
+            if ($converted !== false && $converted !== '') {
+                $raw = $converted;
+            }
+        }
+        $raw = preg_replace('/[\x00-\x1F\x7F]/u', '', $raw) ?? $raw;
+
+        return trim(mb_substr($raw, 0, 100));
     }
 }

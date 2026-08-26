@@ -653,7 +653,14 @@ class ADMSHandler(BaseHTTPRequestHandler):
         routine_logger.debug("%s - %s", self.client_address[0], format % args)
 
     def _respond(self, body: str, status: int = 200) -> None:
-        encoded = body.encode("utf-8", errors="ignore")
+        # iFace firmware Name field parsing: with tab-separated USERINFO the
+        # firmware correctly extracts Name=... but garbles CP1256 bytes (^^^^).
+        # Try raw UTF-8 — the firmware may interpret the multi-byte sequences
+        # correctly when the field is properly parsed.
+        try:
+            encoded = body.encode("utf-8", errors="ignore")
+        except Exception:
+            encoded = body.encode("utf-8", errors="ignore")
         self.send_response(status)
         self.send_header("Content-Type", "text/plain")
         self.send_header("Content-Length", str(len(encoded)))

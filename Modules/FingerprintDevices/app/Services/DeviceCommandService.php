@@ -69,10 +69,24 @@ class DeviceCommandService
         string $password = '',
         int $card = 0,
     ): DeviceCommand {
+        $existing = $this->findPendingUserCommand($deviceId, $pin);
+        if ($existing) {
+            return $existing;
+        }
+
+        $hasArabic = (bool) preg_match('/\p{Arabic}/u', $name);
+        // Arabic names: send directly via buildUserInfoBodyAllowArabic.
+        // adms_server.py encodes the response as CP1256 automatically.
+        // Single command only — iFace firmware does NOT upsert on ADMS,
+        // so a second UPDATE would create a duplicate user entry.
+        $body = $hasArabic
+            ? $this->buildUserInfoBodyAllowArabic($pin, $name, $privilege, $password, $card)
+            : $this->buildUserInfoBody($pin, $name, $privilege, $password, $card);
+
         return $this->queueCommand(
             $deviceId,
             DeviceCommand::TYPE_USER_CREATE,
-            $this->buildUserInfoBody($pin, $name, $privilege, $password, $card),
+            $body,
             priority: 3,
             maxRetries: 10,
         );
@@ -90,13 +104,36 @@ class DeviceCommandService
         string $password = '',
         int $card = 0,
     ): DeviceCommand {
+        $hasArabic = (bool) preg_match('/\p{Arabic}/u', $name);
+        $body = $hasArabic
+            ? $this->buildUserInfoBodyAllowArabic($pin, $name, $privilege, $password, $card)
+            : $this->buildUserInfoBody($pin, $name, $privilege, $password, $card);
+
+        $existing = $this->findPendingUserCommand($deviceId, $pin);
+        if ($existing) {
+            $existing->update(['command_body' => $body]);
+
+            return $existing->fresh();
+        }
+
         return $this->queueCommand(
             $deviceId,
             DeviceCommand::TYPE_USER_UPDATE,
-            $this->buildUserInfoBody($pin, $name, $privilege, $password, $card),
+            $body,
             priority: 3,
             maxRetries: 10,
         );
+    }
+
+    private function findPendingUserCommand(int $deviceId, string $pin): ?DeviceCommand
+    {
+        $pin = $this->sanitizeField($pin);
+
+        return DeviceCommand::where('device_id', $deviceId)
+            ->whereIn('status', [DeviceCommand::STATUS_PENDING, DeviceCommand::STATUS_SENDING])
+            ->whereIn('command_type', [DeviceCommand::TYPE_USER_CREATE, DeviceCommand::TYPE_USER_UPDATE])
+            ->where('command_body', 'like', "%PIN={$pin}\t%")
+            ->first();
     }
 
     /**
@@ -667,8 +704,9 @@ class DeviceCommandService
     /**
      * Build a `DATA UPDATE USERINFO` command body (Push SDK v2 upsert).
      *
-     * The terminal parses space-separated KEY=VALUE tokens, so characters
-     * that would break tokenisation are stripped from free-text values.
+     * iFace firmware requires TAB-separated KEY=VALUE tokens for USERINFO
+     * (same as BIODATA). Space-separated format is NOT parsed — the firmware
+     * treats the entire text as the raw name value.
      */
     private function buildUserInfoBody(
         string $pin,
@@ -677,14 +715,53 @@ class DeviceCommandService
         string $password,
         int $card,
     ): string {
-        return sprintf(
-            'DATA UPDATE USERINFO PIN=%s Name=%s Privilege=%d Password=%s Card=%d',
-            $this->sanitizeField($pin),
-            $this->sanitizeUserInfoValue($name),
-            $privilege,
-            $this->sanitizeUserInfoValue($password),
-            $card,
-        );
+        return 'DATA UPDATE USERINFO '.implode("\t", [
+            'PIN='.$this->sanitizeField($pin),
+            'Name='.$this->sanitizeUserInfoValue($this->safeNameForDevice($name, $pin)),
+            'Privilege='.(int) $privilege,
+            'Password='.$this->sanitizeUserInfoValue($password),
+            'Card='.(int) $card,
+        ]);
+    }
+
+    /**
+     * Sanitize a user name for ADMS USERINFO on iFace firmware.
+     *
+     * Arabic names are handled separately via buildUserInfoBodyAllowArabic()
+     * which sends them with CP1256 encoding (applied by adms_server.py).
+     * This method is only called for ASCII/Latin names.
+     */
+    private function safeNameForDevice(string $name, string $pin): string
+    {
+        $name = trim($name);
+        if ($name === '') {
+            return $pin;
+        }
+        $name = str_replace([' ', "\t"], '_', $name);
+        $name = preg_replace('/[^\w\-\.]/u', '', $name) ?? $pin;
+
+        return $name !== '' ? $name : $pin;
+    }
+
+    private function buildUserInfoBodyAllowArabic(
+        string $pin,
+        string $name,
+        int $privilege,
+        string $password,
+        int $card,
+    ): string {
+        $name = trim($name);
+        $name = str_replace([' ', "\t"], '_', $name);
+        $name = preg_replace('/[\r\n#=&]+/u', '', $name) ?? $pin;
+        $name = mb_substr($name, 0, 30);
+
+        return 'DATA UPDATE USERINFO '.implode("\t", [
+            'PIN='.$this->sanitizeField($pin),
+            'Name='.$this->sanitizeUserInfoValue($name),
+            'Privilege='.(int) $privilege,
+            'Password='.$this->sanitizeUserInfoValue($password),
+            'Card='.(int) $card,
+        ]);
     }
 
     private function sanitizeUserInfoValue(string $value): string

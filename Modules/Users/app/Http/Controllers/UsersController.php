@@ -83,11 +83,10 @@ class UsersController extends Controller
                 ->map(fn ($c) => ['id' => $c->id, 'company_name' => $c->company_name]),
             'branches' => fn () => $this->branchService->getActiveBranches()
                 ->map(fn ($b) => ['id' => $b->id, 'branch_name' => $b->branch_name, 'company_id' => $b->company_id]),
-            'departments' => fn () => $this->departmentService->getAllDepartments([])
+            'departments' => fn () => $this->departmentService->getAllDepartments([], 'all')
                 ->getCollection()
                 ->map(fn ($d) => ['id' => $d->id, 'department_name' => $d->department_name, 'branch_id' => $d->branch_id]),
-            'positions' => fn () => $this->positionService->getAllPositions([])
-                ->getCollection()
+            'positions' => fn () => $this->positionService->getActivePositions()
                 ->map(fn ($p) => ['id' => $p->id, 'position_name' => $p->position_name]),
             'grades' => fn () => $this->gradeService->getActiveGrades()
                 ->map(fn ($g) => ['id' => $g->id, 'grade_name' => $g->grade_name]),
@@ -494,11 +493,10 @@ class UsersController extends Controller
                 ->map(fn ($c) => ['id' => $c->id, 'company_name' => $c->company_name]),
             'branches' => fn () => $this->branchService->getActiveBranches()
                 ->map(fn ($b) => ['id' => $b->id, 'branch_name' => $b->branch_name, 'company_id' => $b->company_id]),
-            'departments' => fn () => $this->departmentService->getAllDepartments([])
+            'departments' => fn () => $this->departmentService->getAllDepartments([], 'all')
                 ->getCollection()
                 ->map(fn ($d) => ['id' => $d->id, 'department_name' => $d->department_name, 'branch_id' => $d->branch_id]),
-            'positions' => fn () => $this->positionService->getAllPositions([])
-                ->getCollection()
+            'positions' => fn () => $this->positionService->getActivePositions()
                 ->map(fn ($p) => ['id' => $p->id, 'position_name' => $p->position_name]),
             'grades' => fn () => $this->gradeService->getActiveGrades()
                 ->map(fn ($g) => ['id' => $g->id, 'grade_name' => $g->grade_name]),

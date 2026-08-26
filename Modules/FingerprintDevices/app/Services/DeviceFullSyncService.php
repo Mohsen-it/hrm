@@ -75,6 +75,9 @@ class DeviceFullSyncService
             'face_photos' => true,
             'attendance' => true,
             'clear_local_cache' => false,
+            // ADMS unification: never auto-create users unless explicitly requested
+            // to avoid garbled-name pollution from device encodings.
+            'auto_create_users' => false,
         ], $options);
 
         $startedAt = microtime(true);
@@ -132,7 +135,7 @@ class DeviceFullSyncService
             $notifyProgress('info', end($result['steps'])['status'] ?? 'ok', end($result['steps'])['message'] ?? '');
 
             $this->emitProgress($onProgress, 'users', 'running', 'جاري مزامنة الموظفين...', 25);
-            $matched = $this->stepUsers($device, $result, (bool) $options['users'], $adapter);
+            $matched = $this->stepUsers($device, $result, (bool) $options['users'], $adapter, (bool) ($options['auto_create_users'] ?? false));
             $notifyProgress('users', end($result['steps'])['status'] ?? 'ok', end($result['steps'])['message'] ?? '');
 
             $this->emitProgress($onProgress, 'fingerprints', 'running', 'جاري سحب البصمات...', 50);
@@ -268,10 +271,14 @@ class DeviceFullSyncService
      * — the system relies on operators pre-loading employees with their
      * `employee_code` set to the same value.
      *
+     * ADMS unification: auto-creation is OFF by default. When disabled,
+     * unknown device users are reported as unmatched and never create
+     * HRM records (prevents garbled-name pollution from encoding mismatches).
+     *
      * @param  array<string, mixed>  $result
      * @return array<int, array{uid:int,user_id:string,name:string,user_pk:?int}>
      */
-    protected function stepUsers(FingerprintDevice $device, array &$result, bool $enabled, DeviceAdapterInterface $adapter): array
+    protected function stepUsers(FingerprintDevice $device, array &$result, bool $enabled, DeviceAdapterInterface $adapter, bool $autoCreate = false): array
     {
         $step = ['name' => 'users', 'status' => 'skipped', 'message' => null];
 
@@ -351,7 +358,31 @@ class DeviceFullSyncService
                 }
 
                 if (! $user) {
-                    $autoName = $name !== '' ? $name : 'User '.$externalId;
+                    if (! $autoCreate) {
+                        // ADMS-safe: do not create polluted users; report as unmatched
+                        $unmatched[] = [
+                            'uid' => $uid,
+                            'user_id' => $externalId,
+                            'name' => $this->normalizeDeviceName($name),
+                            'reason' => 'no matching user (auto_create disabled)',
+                        ];
+                        continue;
+                    }
+
+                    // Auto-create is explicitly enabled: sanitize name to avoid mojibake
+                    $safeName = $this->normalizeDeviceName($name);
+                    $autoName = $safeName !== '' ? $safeName : 'User '.$externalId;
+
+                    // Extra guard: reject names that look like garbled encoding
+                    if ($this->isGarbledName($autoName)) {
+                        Log::warning('DeviceFullSync: garbled name rejected, using fallback', [
+                            'device_id' => $device->id,
+                            'external_id' => $externalId,
+                            'raw_name' => $name,
+                            'safe_name' => $autoName,
+                        ]);
+                        $autoName = 'User '.$externalId;
+                    }
 
                     $emailBase = 'device_'.strtolower($externalId).'@hrm.local';
                     $email = $emailBase;
@@ -391,7 +422,7 @@ class DeviceFullSyncService
                 $matched[] = [
                     'uid' => $uid,
                     'user_id' => $externalId,
-                    'name' => $name,
+                    'name' => $this->normalizeDeviceName($name),
                     'user_pk' => (int) $user->id,
                 ];
             }
@@ -445,6 +476,19 @@ class DeviceFullSyncService
             'status' => $enabled ? 'running' : 'skipped',
             'message' => null,
         ];
+
+        // ADMS unification: when configured to pull via ADMS, bridge fingerprint pull
+        // is skipped (pending biometrics arrive via BIODATA push → user_fingerprints).
+        $pullVia = config('fingerprintdevices.pull_fingerprints_via', 'adms');
+        if ($pullVia === 'adms') {
+            $pendingCount = UserFingerprint::query()->where('device_id', $device->id)->count();
+            $step['status'] = 'skipped';
+            $step['message'] = 'تم التخطي — سحب البصمات الآن عبر ADMS فقط (Biodata push). البصمات المعلقة محفوظة في النظام: '.$pendingCount;
+            $step['data'] = ['mode' => 'adms', 'pending_in_db' => $pendingCount];
+            $result['steps'][] = $step;
+
+            return;
+        }
 
         if (! $enabled || empty($matched)) {
             $step['status'] = $enabled ? 'ok' : 'skipped';
@@ -596,6 +640,17 @@ class DeviceFullSyncService
             'status' => $enabled ? 'running' : 'skipped',
             'message' => null,
         ];
+
+        $pullViaFace = config('fingerprintdevices.pull_fingerprints_via', 'adms');
+        if ($pullViaFace === 'adms') {
+            $pendingFace = UserFingerprint::query()->where('device_id', $device->id)->where('finger_id', '>=', 50)->count();
+            $step['status'] = 'skipped';
+            $step['message'] = 'تم التخطي — صور الوجوه عبر ADMS فقط. المعلقة: '.$pendingFace;
+            $step['data'] = ['mode' => 'adms', 'pending_face' => $pendingFace];
+            $result['steps'][] = $step;
+
+            return;
+        }
 
         if (! $enabled) {
             $step['message'] = 'skipped';
@@ -1004,5 +1059,57 @@ class DeviceFullSyncService
         } catch (\Throwable) {
             return null;
         }
+    }
+
+    /**
+     * Normalize device name: fix encoding, strip control chars, limit length.
+     * Handles CP1256 / GBK mojibake without throwing.
+     */
+    private function normalizeDeviceName(string $raw): string
+    {
+        $raw = trim($raw);
+        if ($raw === '') {
+            return '';
+        }
+
+        // If not valid UTF-8, try CP1256 (Arabic) then UTF-8 fallback
+        if (! mb_check_encoding($raw, 'UTF-8')) {
+            $converted = @iconv('Windows-1256', 'UTF-8//IGNORE', $raw);
+            if ($converted !== false && $converted !== '') {
+                $raw = $converted;
+            } else {
+                $converted = @iconv('GBK', 'UTF-8//IGNORE', $raw);
+                if ($converted !== false && $converted !== '') {
+                    $raw = $converted;
+                }
+            }
+        }
+
+        // Strip control chars and excess whitespace
+        $raw = preg_replace('/[\x00-\x1F\x7F]/u', '', $raw) ?? $raw;
+        $raw = preg_replace('/\s+/u', ' ', $raw) ?? $raw;
+
+        return trim(mb_substr($raw, 0, 100));
+    }
+
+    /**
+     * Heuristic to detect garbled names (mojibake / truncated multibyte).
+     */
+    private function isGarbledName(string $name): bool
+    {
+        if ($name === '') {
+            return false;
+        }
+        // Contains replacement character
+        if (str_contains($name, '�')) {
+            return true;
+        }
+        // High ratio of non-letter symbols (excluding Arabic/Latin/digits/space/-_)
+        $clean = preg_replace('/[\p{L}\p{N}\s\-_\.]/u', '', $name) ?? '';
+        if (mb_strlen($clean) > mb_strlen($name) * 0.4) {
+            return true;
+        }
+
+        return false;
     }
 }

@@ -31,4 +31,27 @@ return [
     'connection_rate_limit' => (int) env('ZKTECO_RATE_LIMIT', 10),
 
     'connection_rate_decay' => (int) env('ZKTECO_RATE_DECAY', 1),
+
+    /*
+    |--------------------------------------------------------------------------
+    | ADMS Unification — Pull & Push Channels
+    |--------------------------------------------------------------------------
+    |
+    | pull_fingerprints_via: how pending biometrics are obtained.
+    |   - adms   : only via ADMS push (BiodataParser → user_fingerprints). Bridge
+    |              pull (getAllTemplates) is skipped unless explicitly forced.
+    |   - bridge : classic TCP pull via pyzk.
+    |   - both   : try ADMS first, bridge as fallback (legacy).
+    |
+    | push_user_via: how new users are sent to devices.
+    |   - adms   : queue DATA UPDATE USERINFO via device_commands (ADMS poll).
+    |   - bridge : direct TCP via pyzk bridge.
+    |   - both   : ADMS first + bridge verification (highest reliability).
+    |
+    | These defaults enforce the user's request: ADMS everywhere.
+    |
+    */
+    'pull_fingerprints_via' => env('PULL_FINGERPRINTS_VIA', 'adms'),
+
+    'push_user_via' => env('PUSH_USER_VIA', 'adms'),
 ];

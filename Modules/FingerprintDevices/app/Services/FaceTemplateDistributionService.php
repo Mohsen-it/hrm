@@ -79,19 +79,44 @@ class FaceTemplateDistributionService
             }
 
             // Freshest captured template per index across all source devices.
+            // Handles NULL template_index (legacy rows stored via finger_id 50) via COALESCE.
             $rows = DB::select(
-                'SELECT uf.template_index, uf.template_data, uf.template_metadata, uf.template_version
+                'SELECT uf.template_index, uf.finger_id, uf.template_data, uf.template_metadata, uf.template_version
                  FROM user_fingerprints uf
                  JOIN users u ON u.id = uf.user_id
                  WHERE u.employee_code = ? AND uf.template_type = "face"
                    AND uf.captured_at = (
                        SELECT MAX(c2.captured_at) FROM user_fingerprints c2
                        JOIN users u3 ON u3.id = c2.user_id
-                       WHERE u3.employee_code = ? AND c2.template_index = uf.template_index
+                       WHERE u3.employee_code = ?
+                         AND COALESCE(c2.template_index, -1) = COALESCE(uf.template_index, -1)
                    )
                  ORDER BY uf.template_index',
                 [$pin, $pin],
             );
+
+            // Fallback for legacy single-row inserts where MAX grouping returns nothing (e.g., SQLite NULL handling)
+            if (empty($rows)) {
+                $rows = DB::select(
+                    'SELECT uf.template_index, uf.finger_id, uf.template_data, uf.template_metadata, uf.template_version
+                     FROM user_fingerprints uf
+                     JOIN users u ON u.id = uf.user_id
+                     WHERE u.employee_code = ? AND uf.template_type = "face"
+                     ORDER BY uf.captured_at DESC',
+                    [$pin],
+                );
+                // Keep only freshest per index
+                $seen = [];
+                $deduped = [];
+                foreach ($rows as $r) {
+                    $idx = $r->template_index ?? ($r->finger_id >= 50 ? $r->finger_id - 50 : 0);
+                    if (! isset($seen[$idx])) {
+                        $seen[$idx] = true;
+                        $deduped[] = $r;
+                    }
+                }
+                $rows = $deduped;
+            }
 
             if (empty($rows)) {
                 $totals['skipped_face_templates']++;
@@ -108,7 +133,8 @@ class FaceTemplateDistributionService
 
                 try {
                     $metadata = json_decode((string) $row->template_metadata, true) ?: [];
-                    $index = (int) ($metadata['Index'] ?? $row->template_index);
+                    $rawIndex = $row->template_index ?? ($row->finger_id >= 50 ? $row->finger_id - 50 : null);
+                    $index = (int) ($metadata['Index'] ?? $rawIndex ?? 0);
                     $version = (int) $row->template_version;
 
                     $attributes = [

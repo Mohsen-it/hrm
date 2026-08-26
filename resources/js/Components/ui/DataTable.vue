@@ -458,6 +458,9 @@ const lastVisibleColIndex = computed(() => {
                                 </tr>
                             </template>
                         </tbody>
+                            <tfoot v-if="$slots.footer" class="bg-mistral-surface/40 border-t border-mistral-hairline-soft">
+                                <slot name="footer" />
+                            </tfoot>
                     </table>
                 </div>
             </div>

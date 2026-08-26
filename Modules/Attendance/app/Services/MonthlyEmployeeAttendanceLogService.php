@@ -61,6 +61,16 @@ class MonthlyEmployeeAttendanceLogService
             ? $this->punchesWithinWindow($punches, $date, $schedule['out_ahead_margin'] ?? null, $schedule['out_above_margin'] ?? null)
             : collect();
 
+        // عالج بصمة الخروج بعد منتصف الليل كـ overtime لليوم السابق
+        // نافذة الخروج الحالية 14:50-23:59 تخسر بصمة 00:10 التالية، فيجب التقاطها
+        // كـ checkout لليوم السابق إذا كانت بعد expected_check_out
+        if ($isWorkDay && $schedule['expected_check_out']) {
+            $earlyNextDay = $this->overtimePunchesNextMorning($punches, $date, $schedule['expected_check_out']);
+            if ($earlyNextDay->isNotEmpty()) {
+                $checkOutPunches = $checkOutPunches->merge($earlyNextDay);
+            }
+        }
+
         $firstCheckIn = $checkInPunches->sortBy('punch_time')->first()?->punch_time;
         $lastCheckOut = $checkOutPunches->sortByDesc('punch_time')->first()?->punch_time;
 
@@ -96,6 +106,45 @@ class MonthlyEmployeeAttendanceLogService
         }
 
         return $punches->filter(fn ($punch) => $punch->punch_time->betweenIncluded($windowStart, $windowEnd));
+    }
+
+    /**
+     * بصمات بعد منتصف الليل (00:00-05:00 اليوم التالي) تُحتسب كخروج إضافي لليوم السابق
+     * إذا كانت بعد وقت الانصراف المتوقع.
+     */
+    private function overtimePunchesNextMorning(Collection $punches, CarbonImmutable $date, string $expectedOut): Collection
+    {
+        $nextDay = $date->addDay();
+        $windowStart = $nextDay->startOfDay();
+        $windowEnd = $nextDay->startOfDay()->addHours(5);
+        $expected = $this->atDate($date, $expectedOut);
+        // للمناوبات الليلية expected يكون اليوم التالي
+        $expectedMin = $this->parseTimeToMinutes($expectedOut);
+        $inMin = null; // نحتاج لمعرفة إن كانت ليلية
+
+        // ببساطة: إذا كان 00:10 بعد الانصراف المتوقع (سواء نفس اليوم أو +1)
+        return $punches->filter(function ($punch) use ($windowStart, $windowEnd, $expected) {
+            $pt = $punch->punch_time;
+            if (! $pt->betweenIncluded($windowStart, $windowEnd)) {
+                return false;
+            }
+
+            // يجب أن تكون بعد الانصراف المتوقع
+            return $pt->greaterThan($expected);
+        });
+    }
+
+    private function parseTimeToMinutes(?string $time): ?int
+    {
+        if (! $time) {
+            return null;
+        }
+        $parts = explode(':', $time);
+        if (count($parts) < 2) {
+            return null;
+        }
+
+        return (int) $parts[0] * 60 + (int) $parts[1];
     }
 
     /**

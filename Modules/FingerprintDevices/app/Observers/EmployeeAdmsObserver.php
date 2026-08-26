@@ -4,15 +4,20 @@ namespace Modules\FingerprintDevices\Observers;
 
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
+use Modules\FingerprintDevices\Jobs\SyncUserToDeviceViaBridgeJob;
 use Modules\FingerprintDevices\Models\FingerprintDevice;
 use Modules\FingerprintDevices\Services\BridgeBiometricSyncService;
+use Modules\FingerprintDevices\Services\DeviceCommandService;
 use Modules\Users\Models\User;
 
 class EmployeeAdmsObserver
 {
     public function __construct(
         private BridgeBiometricSyncService $bridgeSync,
-    ) {}
+        private ?DeviceCommandService $commandService = null,
+    ) {
+        $this->commandService ??= app(DeviceCommandService::class);
+    }
 
     /**
      * Handle the User "created" event.
@@ -33,6 +38,9 @@ class EmployeeAdmsObserver
      *
      * Queues DATA UPDATE USER command for all ADMS-enabled ZKTeco devices
      * when relevant fields change (employee_code, name, privilege).
+     *
+     * When employee_code (PIN) changes, the OLD PIN is deleted from all
+     * devices first, then the new PIN is created — preventing ghost entries.
      */
     public function updated(User $user): void
     {
@@ -46,6 +54,17 @@ class EmployeeAdmsObserver
 
         if (empty($changed)) {
             return;
+        }
+
+        // When employee_code (PIN) changes, delete the old PIN from all devices
+        // before creating the new one — prevents duplicate/ghost entries.
+        if (in_array('employee_code', $changed, true)) {
+            $oldPin = (string) $user->getOriginal('employee_code');
+            $newPin = (string) $user->employee_code;
+
+            if ($oldPin !== '' && $oldPin !== $newPin) {
+                $this->deleteOldPin($user, $oldPin);
+            }
         }
 
         $this->queueUserCommands($user, 'updated');
@@ -103,35 +122,60 @@ class EmployeeAdmsObserver
     }
 
     /**
-     * Queue DATA UPDATE USER commands for all eligible devices.
+     * Queue user creation/update via the configured channel (ADMS unification).
+     *
+     * Channel is controlled by `fingerprintdevices.push_user_via`:
+     *  - adms  : queue ADMS command only (requested by user, no TCP burst)
+     *  - bridge: direct TCP via pyzk (legacy)
+     *  - both  : ADMS + bridge (max reliability)
      */
     private function queueUserCommands(User $user, string $action): void
     {
         $pin = (string) $user->employee_code;
         $name = $this->getDisplayName($user);
-        $privilege = $user->isSuperAdmin() ? 14 : 0; // Super admin gets full privilege
+        $privilege = $user->isSuperAdmin() ? 14 : 0;
 
         $devices = $this->zktecoDevices();
+        $via = config('fingerprintdevices.push_user_via', 'adms');
 
         foreach ($devices as $device) {
             try {
-                // Terminals reject user/biometric WRITE commands served over
-                // the ADMS push channel (Return=-3/-30/-1xx), while the pyzk
-                // bridge write is proven across this fleet. Idempotent.
-                $ok = $this->bridgeSync->syncUser($device, $pin, $name, $privilege);
+                $admsQueued = false;
+                $bridgeOk = null;
 
-                Log::info('ADMS_USER_'.strtoupper($action).'_'.($ok ? 'SYNCED' : 'FAILED'), [
+                if (in_array($via, ['adms', 'both'], true)) {
+                    // ADMS is the canonical path per user request
+                    $this->commandService->queueUserCreate(
+                        $device->id,
+                        $pin,
+                        $name,
+                        $privilege,
+                    );
+                    $admsQueued = true;
+                }
+
+                if (in_array($via, ['bridge', 'both'], true)) {
+                    // Bridge must be async: otherwise a powered-off device blocks the HTTP request for minutes
+                    SyncUserToDeviceViaBridgeJob::dispatch($device->id, $pin, $name, $privilege);
+                    $bridgeOk = 'queued';
+                }
+
+                Log::info('ADMS_USER_'.strtoupper($action), [
                     'user_id' => $user->id,
                     'employee_code' => $pin,
                     'name' => $name,
                     'device_id' => $device->id,
                     'device_serial' => $device->serial_number,
+                    'via' => $via,
+                    'adms_queued' => $admsQueued,
+                    'bridge_queued' => $bridgeOk === 'queued',
                 ]);
             } catch (\Throwable $e) {
                 Log::error('ADMS_USER_'.strtoupper($action).'_QUEUE_FAILED', [
                     'user_id' => $user->id,
                     'employee_code' => $pin,
                     'device_id' => $device->id,
+                    'via' => $via ?? 'unknown',
                     'error' => $e->getMessage(),
                 ]);
             }
@@ -186,5 +230,39 @@ class EmployeeAdmsObserver
             ?? $user->full_name_en
             ?? $user->name
             ?? $user->employee_code;
+    }
+
+    /**
+     * Delete the old PIN from all ADMS-enabled devices.
+     *
+     * Called when employee_code changes to prevent ghost entries on terminals.
+     */
+    private function deleteOldPin(User $user, string $oldPin): void
+    {
+        $devices = $this->zktecoDevices();
+        $via = config('fingerprintdevices.push_user_via', 'adms');
+
+        foreach ($devices as $device) {
+            try {
+                if (in_array($via, ['adms', 'both'], true)) {
+                    $this->commandService->queueUserDelete($device->id, $oldPin);
+                }
+
+                Log::info('ADMS_USER_OLD_PIN_DELETED', [
+                    'user_id' => $user->id,
+                    'old_pin' => $oldPin,
+                    'new_pin' => $user->employee_code,
+                    'device_id' => $device->id,
+                    'device_serial' => $device->serial_number,
+                ]);
+            } catch (\Throwable $e) {
+                Log::error('ADMS_USER_OLD_PIN_DELETE_FAILED', [
+                    'user_id' => $user->id,
+                    'old_pin' => $oldPin,
+                    'device_id' => $device->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
     }
 }

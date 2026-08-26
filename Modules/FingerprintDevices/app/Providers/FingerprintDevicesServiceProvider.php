@@ -36,6 +36,12 @@ class FingerprintDevicesServiceProvider extends ServiceProvider
         $this->registerConfig();
         $this->registerViews();
         $this->loadMigrationsFrom(module_path($this->name, 'database/migrations'));
+        $this->registerObservers();
+    }
+
+    protected function registerObservers(): void
+    {
+        \Modules\Users\Models\User::observe(\Modules\FingerprintDevices\Observers\EmployeeAdmsObserver::class);
     }
 
     public function register(): void

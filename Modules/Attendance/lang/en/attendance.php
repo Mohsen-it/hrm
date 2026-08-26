@@ -402,6 +402,13 @@ return [
         ],
     ],
 
+    'overtime_report' => [
+        'title' => 'Overtime Report',
+        'subtitle' => 'Employee: :employee | From: :from to :to',
+        'expected_work' => 'Expected Work',
+        'total_overtime' => 'Total Overtime Hours',
+    ],
+
     'violations' => [
         'title' => 'Attendance Violations',
         'late_check_ins' => 'Late Check-ins',

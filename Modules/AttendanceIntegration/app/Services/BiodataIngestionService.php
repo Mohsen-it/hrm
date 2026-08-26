@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Modules\AttendanceIntegration\Parsers\BiodataParser;
 use Modules\FingerprintDevices\Jobs\DistributeFaceTemplateSetJob;
+use Modules\FingerprintDevices\Jobs\DistributeFingerprintJob;
 use Modules\FingerprintDevices\Models\FingerprintDevice;
 use Modules\FingerprintDevices\Models\UserFingerprint;
 use Modules\FingerprintDevices\Repositories\UserFingerprintRepository;
@@ -40,11 +41,11 @@ class BiodataIngestionService
             'errors' => [],
         ];
 
-        $faceRecords = array_filter($records, fn (array $r) => (int) ($r['type'] ?? 0) === BiodataParser::TYPE_FACE && (string) ($r['tmp'] ?? '') !== '');
-        $uniquePins = array_unique(array_map(fn (array $r) => (string) $r['pin'], $faceRecords));
+        $bioRecords = array_filter($records, fn (array $r) => in_array((int) ($r['type'] ?? 0), [BiodataParser::TYPE_FACE, BiodataParser::TYPE_FINGERPRINT], true) && (string) ($r['tmp'] ?? '') !== '');
+        $uniquePins = array_unique(array_map(fn (array $r) => (string) $r['pin'], $bioRecords));
 
         $userMap = $this->resolveUsersBatch($uniquePins);
-        $existingHashMap = $this->findExistingTemplatesBatch($userMap, $device, $faceRecords);
+        $existingHashMap = $this->findExistingTemplatesBatch($userMap, $device, $bioRecords);
         $existingFaceIdsMap = $this->getExistingFaceIdsBatch($userMap, $device);
 
         foreach ($records as $record) {
@@ -198,6 +199,24 @@ class BiodataIngestionService
             return 'skipped';
         }
 
+        // Fingerprints are stored and auto-distributed exactly like faces
+        // (push write verified Return=0 with Type=1 / MajorVer=10 / Format=ZK).
+        if ($type === BiodataParser::TYPE_FINGERPRINT) {
+            $user = $userMap[$pin] ?? null;
+
+            if (! $user) {
+                Log::channel('biodata')->warning('FINGERPRINT_EMPLOYEE_NOT_FOUND', [
+                    'correlation_id' => $correlationId,
+                    'device_serial' => $device?->serial_number,
+                    'pin' => $pin,
+                ]);
+
+                return 'skipped';
+            }
+
+            return $this->ingestFingerprint($device, $record, $correlationId, $user, $existingHashMap);
+        }
+
         if ($type !== BiodataParser::TYPE_FACE) {
             return 'skipped';
         }
@@ -281,6 +300,78 @@ class BiodataIngestionService
             'user_id' => $user->id,
             'template_length' => strlen($tmpData),
         ]);
+
+        return 'saved';
+    }
+
+    /**
+     * Store a captured fingerprint template and queue auto-distribution.
+     */
+    private function ingestFingerprint(
+        ?FingerprintDevice $device,
+        array $record,
+        string $correlationId,
+        $user,
+        array $existingHashMap,
+    ): string {
+        $pin = (string) $record['pin'];
+        $tmpData = (string) $record['tmp'];
+        $hash = hash('sha256', $tmpData);
+        $existingKey = "{$user->id}:{$hash}";
+
+        if (isset($existingHashMap[$existingKey])) {
+            Log::channel('biodata')->info('FINGERPRINT_DUPLICATE_IGNORED', [
+                'correlation_id' => $correlationId,
+                'device_serial' => $device?->serial_number,
+                'pin' => $pin,
+            ]);
+
+            return 'duplicates';
+        }
+
+        $extra = array_merge($record['extra_fields'] ?? [], [
+            'MajorVer' => $record['major_ver'],
+            'MinorVer' => $record['minor_ver'],
+        ]);
+        $templateIndex = isset($extra['Index']) && is_numeric($extra['Index'])
+            ? max(0, min(9, (int) $extra['Index']))
+            : 0;
+
+        UserFingerprint::create([
+            'user_id' => $user->id,
+            'device_id' => $device?->id,
+            'finger_id' => $templateIndex,
+            'template_data' => $tmpData,
+            'template_format' => 'zkteco-fp-push',
+            'template_type' => 'fingerprint',
+            'template_index' => $templateIndex,
+            'device_serial' => $device?->serial_number ?? 'unknown',
+            'template_hash' => $hash,
+            'template_metadata' => $extra,
+            'template_version' => (int) "{$record['major_ver']}{$record['minor_ver']}",
+            'captured_at' => now(),
+        ]);
+
+        Log::channel('biodata')->info('FINGERPRINT_STORED_FOR_DISTRIBUTION', [
+            'correlation_id' => $correlationId,
+            'device_serial' => $device?->serial_number,
+            'pin' => $pin,
+            'finger_id' => $templateIndex,
+        ]);
+
+        DistributeFingerprintJob::dispatch(
+            $pin,
+            (int) $device?->id,
+            $templateIndex,
+            $tmpData,
+            [
+                'no' => (int) ($extra['No'] ?? 0),
+                'valid' => (int) ($extra['Valid'] ?? 1),
+                'duress' => (int) ($extra['Duress'] ?? 0),
+                'major_ver' => (int) $record['major_ver'],
+                'minor_ver' => (int) $record['minor_ver'],
+            ],
+        );
 
         return 'saved';
     }

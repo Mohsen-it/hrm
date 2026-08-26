@@ -168,7 +168,7 @@ const monthlyLogColumns = [
 ];
 
 
-usePageTitle(t('attendance.user_report') + ' #' + userId);
+usePageTitle(t('attendance.user_report') + ' #' + props.userId);
 </script>
 
 <template>

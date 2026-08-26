@@ -223,6 +223,58 @@ class DeviceCommandService
         );
     }
 
+    /**
+     * Queue a ZKTeco multi-bio push FINGERPRINT template write.
+     *
+     * Byte-exact mirror of the terminals' own Type=1 BIODATA uploads
+     * (verified Return=0 on this fleet): ``Format=ZK`` and
+     * ``MajorVer=10`` are what these terminals emit for fingerprints.
+     *
+     * @param  array<string, int|string>  $attributes
+     */
+    public function queueFingerprintTemplate(
+        int $deviceId,
+        string $pin,
+        string $template,
+        array $attributes,
+        string $templateHash,
+    ): DeviceCommand {
+        $index = max(0, min(9, (int) ($attributes['index'] ?? 0)));
+        $correlationId = 'fp-'.substr(
+            hash('sha256', $deviceId.':'.$pin.':'.$index.':'.$templateHash),
+            0,
+            56,
+        );
+        $existing = $this->commandRepo->findActiveByCorrelation($deviceId, $correlationId);
+
+        if ($existing) {
+            return $existing;
+        }
+
+        $body = 'DATA UPDATE biodata '.implode("\t", [
+            'Pin='.$this->sanitizeField($pin),
+            'No='.(int) ($attributes['no'] ?? 0),
+            'Index='.$index,
+            'Valid='.(int) ($attributes['valid'] ?? 1),
+            'Duress='.(int) ($attributes['duress'] ?? 0),
+            'Type=1',
+            'MajorVer='.(int) ($attributes['major_ver'] ?? 10),
+            'MinorVer='.(int) ($attributes['minor_ver'] ?? 0),
+            'Format=ZK',
+            'Tmp='.$this->sanitizeTemplate($template),
+        ]);
+
+        return $this->queueCommand(
+            $deviceId,
+            DeviceCommand::TYPE_FP_TEMPLATE,
+            $body,
+            priority: 4,
+            correlationId: $correlationId,
+            expiresInMinutes: 1440,
+            maxRetries: 30,
+        );
+    }
+
     // -----------------------------------------------------------------------
     // Batch operations
     // -----------------------------------------------------------------------

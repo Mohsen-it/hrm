@@ -20,6 +20,7 @@ use Modules\AttendanceIntegration\Parsers\UserinfoParser;
 use Modules\AttendanceIntegration\Parsers\UserpicParser;
 use Modules\AttendanceIntegration\Services\AuditLogger;
 use Modules\AttendanceIntegration\Services\BiodataDebugPayloadService;
+use Modules\AttendanceIntegration\Services\BiodataIngestionService;
 use Modules\AttendanceIntegration\Services\DeviceAdapterResolver;
 use Modules\FingerprintDevices\Models\FingerprintDevice;
 
@@ -30,6 +31,7 @@ class DevicePushController extends Controller
         private DeviceAdapterResolver $adapterResolver,
         private AuditLogger $auditLogger,
         private BiodataDebugPayloadService $debugPayloadService,
+        private BiodataIngestionService $biodataIngestionService,
     ) {}
 
     public function handle(StoreDevicePunchRequest $request): JsonResponse
@@ -380,6 +382,28 @@ class DevicePushController extends Controller
         }
 
         $records = OperlogParser::parse($body);
+
+        // Realtime fingerprint enrollments ride inside OPERLOG as
+        // ``FP Pin=.. FID=.. Size=.. Valid=.. TMP=..`` records. Store them
+        // and queue distribution to every other terminal.
+        if (preg_match_all('/^FP\s+Pin=(\S+)\s+FID=(\d+)\s+Size=\d+\s+Valid=(\d+)\s+TMP=(\S+)/mi', $body, $fpMatches, PREG_SET_ORDER)) {
+            // Push-channel device model is DeviceAdapter; fingerprint
+            // storage/distribution keys on FingerprintDevices.id.
+            $fingerprintDeviceId = $serialNumber
+                ? FingerprintDevice::query()->where('serial_number', $serialNumber)->value('id')
+                : null;
+
+            foreach ($fpMatches as $fp) {
+                $this->biodataIngestionService->ingestOperlogFingerprint(
+                    $fingerprintDeviceId ? (int) $fingerprintDeviceId : null,
+                    $serialNumber,
+                    (string) $fp[1],
+                    (int) $fp[2],
+                    (int) $fp[3],
+                    (string) $fp[4],
+                );
+            }
+        }
 
         Log::info('OPERLOG_RECEIVED', [
             'correlation_id' => $correlationId,

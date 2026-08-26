@@ -6,6 +6,7 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Modules\FingerprintDevices\Models\FingerprintDevice;
+use Modules\FingerprintDevices\Services\BridgeBiometricSyncService;
 use Modules\FingerprintDevices\Services\DeviceCommandService;
 use Modules\FingerprintDevices\Services\FaceTemplateDistributionService;
 use Modules\Users\Models\User;
@@ -22,6 +23,7 @@ class DistributeMissingFaceSets extends Command
 
     public function handle(
         DeviceCommandService $commandService,
+        BridgeBiometricSyncService $bridgeSync,
         FaceTemplateDistributionService $distributionService,
     ): int {
         $devices = $this->targetDevices();
@@ -93,10 +95,10 @@ class DistributeMissingFaceSets extends Command
                 }
 
                 try {
-                    // Ensure the employee exists on the target before any face
-                    // template: the terminal rejects BIODATA for unknown PINs.
-                    $commandService->queueUserUpdate(
-                        $device->id,
+                    // Ensure the employee exists on the target via the bridge
+                    // (push USERINFO corrupts Arabic names on this firmware).
+                    $bridgeSync->syncUser(
+                        $device,
                         $pin,
                         (string) ($user->full_name_ar ?: $user->name ?: $pin),
                     );

@@ -117,6 +117,7 @@ class DistributeAllFaces extends Command
                     })
                     ->count();
                 $this->line("    → Would queue: <info>{$wouldQueue}</info> face template commands");
+
                 continue;
             }
 
@@ -165,7 +166,7 @@ class DistributeAllFaces extends Command
                         $allErrors[] = "{$device->name}: {$err}";
                     }
                     if (count($result['errors']) > 5) {
-                        $this->warn('    ... and ' . (count($result['errors']) - 5) . ' more errors');
+                        $this->warn('    ... and '.(count($result['errors']) - 5).' more errors');
                     }
                 }
             } catch (\Throwable $e) {

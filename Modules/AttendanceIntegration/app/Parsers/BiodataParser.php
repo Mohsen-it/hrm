@@ -31,7 +31,7 @@ class BiodataParser
      * deliberately skipped by the face pipeline. Every other type is kept as
      * `unknown_type_{value}` in logs and is skipped rather than guessed.
      */
-    public const TYPE_FINGERPRINT = 0;
+    public const TYPE_FINGERPRINT = 1;
 
     public const TYPE_FACE = 2;
 

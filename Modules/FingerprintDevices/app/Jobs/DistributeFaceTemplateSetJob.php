@@ -9,7 +9,6 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 use Modules\FingerprintDevices\Models\FingerprintDevice;
-use Modules\FingerprintDevices\Services\DeviceCommandService;
 use Modules\FingerprintDevices\Services\FaceTemplateDistributionService;
 use Modules\Users\Models\User;
 
@@ -34,7 +33,6 @@ class DistributeFaceTemplateSetJob implements ShouldQueue
 
     public function handle(
         FaceTemplateDistributionService $distributionService,
-        DeviceCommandService $commandService,
     ): void {
         $user = User::find($this->userId);
         if (! $user) {
@@ -50,14 +48,8 @@ class DistributeFaceTemplateSetJob implements ShouldQueue
 
         foreach ($targets as $target) {
             try {
-                // Ensure the employee exists on the target device before BIODATA.
-                // The terminal rejects face data for unknown PINs with -3.
-                $commandService->queueUserUpdate(
-                    $target->id,
-                    (string) $user->employee_code,
-                    (string) ($user->name ?: $user->full_name_ar ?: $user->employee_code),
-                );
-
+                // Identity is handled by EmployeeAdmsObserver (bridge write —
+                // push USERINFO corrupts Arabic names on this firmware).
                 // Queue all face templates for this enrollment set.
                 $result = $distributionService->queueSetForDevice(
                     $target,

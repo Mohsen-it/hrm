@@ -27,8 +27,6 @@ os.makedirs(LOG_DIR, exist_ok=True)
 
 LARAVEL_URL = os.environ.get("LARAVEL_URL", "http://127.0.0.1:8000").rstrip("/")
 SAVE_RAW = os.environ.get("ADMS_SAVE_RAW", "0").strip().lower() in {"1", "true", "yes"}
-if os.environ.get("ADMS_SAVE_RAW", "") == "":
-    SAVE_RAW = True  # TEMP DEBUG
 VERBOSE_LOG = os.environ.get("ADMS_VERBOSE_LOG", "0").strip().lower() in {"1", "true", "yes"}
 OUTBOX_PATH = os.environ.get("ADMS_OUTBOX_PATH", os.path.join(LOG_DIR, "adms-outbox.sqlite3"))
 FORWARD_WORKERS = max(1, int(os.environ.get("ADMS_FORWARD_WORKERS", "4")))

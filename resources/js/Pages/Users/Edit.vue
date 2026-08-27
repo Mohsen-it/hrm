@@ -119,6 +119,7 @@ const attendanceExemptionOptions = [
     { value: 'resignation', label: t('users.attendance_exemption_resignation') },
     { value: 'external_transfer', label: t('users.attendance_exemption_external_transfer') },
     { value: 'suspension', label: t('users.attendance_exemption_suspension') },
+    { value: 'retirement', label: t('users.attendance_exemption_retirement') },
 ];
 
 const filteredBranches = computed(() => {

@@ -139,11 +139,14 @@ class DeviceCommandService
     /**
      * Queue a DELETE USER command.
      *
-     * ZKTeco ADMS format: C:11#PIN
+     * iFace firmware rejects legacy C:11#PIN (returns -1002).
+     * Use DATA DELETE USERINFO with tab-separated fields instead.
      */
     public function queueUserDelete(int $deviceId, string $pin): DeviceCommand
     {
-        $body = sprintf('C:%d#%s', self::CMD_DEL_USER, $pin);
+        $body = 'DATA DELETE USERINFO '.implode("\t", [
+            'PIN='.$this->sanitizeField($pin),
+        ]);
 
         return $this->queueCommand(
             $deviceId,

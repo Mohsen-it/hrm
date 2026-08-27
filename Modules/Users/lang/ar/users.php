@@ -36,6 +36,7 @@ return [
     'attendance_exemption_resignation' => 'استقالة',
     'attendance_exemption_external_transfer' => 'انتقال خارج الشركة',
     'attendance_exemption_suspension' => 'كف يد',
+    'attendance_exemption_retirement' => 'تقاعد',
     'select_attendance_exemption' => 'اختر الحالة (إن وجدت)',
     'employment_type' => 'نوع التوظيف',
     'employment_full_time' => 'دوام كامل',

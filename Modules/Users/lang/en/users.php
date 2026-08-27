@@ -36,6 +36,7 @@ return [
     'attendance_exemption_resignation' => 'Resignation',
     'attendance_exemption_external_transfer' => 'External Transfer',
     'attendance_exemption_suspension' => 'Suspension',
+    'attendance_exemption_retirement' => 'Retirement',
     'select_attendance_exemption' => 'Select a status (if applicable)',
     'employment_type' => 'Employment Type',
     'employment_full_time' => 'Full Time',

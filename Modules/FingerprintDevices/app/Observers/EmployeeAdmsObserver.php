@@ -3,6 +3,7 @@
 namespace Modules\FingerprintDevices\Observers;
 
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Modules\FingerprintDevices\Jobs\SyncUserToDeviceViaBridgeJob;
 use Modules\FingerprintDevices\Models\FingerprintDevice;
@@ -39,8 +40,11 @@ class EmployeeAdmsObserver
      * Queues DATA UPDATE USER command for all ADMS-enabled ZKTeco devices
      * when relevant fields change (employee_code, name, privilege).
      *
-     * When employee_code (PIN) changes, the OLD PIN is deleted from all
-     * devices first, then the new PIN is created — preventing ghost entries.
+     * When employee_code (PIN) changes:
+     *  1. Renames biometrics in DB (old PIN → new PIN)
+     *  2. Creates new user on devices with new PIN
+     *  3. Pushes all templates to devices with new PIN
+     *  The old user stays on the device (user can manually delete later).
      */
     public function updated(User $user): void
     {
@@ -56,14 +60,13 @@ class EmployeeAdmsObserver
             return;
         }
 
-        // When employee_code (PIN) changes, delete the old PIN from all devices
-        // before creating the new one — prevents duplicate/ghost entries.
+        // When employee_code (PIN) changes: copy biometrics to new PIN
         if (in_array('employee_code', $changed, true)) {
             $oldPin = (string) $user->getOriginal('employee_code');
             $newPin = (string) $user->employee_code;
 
             if ($oldPin !== '' && $oldPin !== $newPin) {
-                $this->deleteOldPin($user, $oldPin);
+                $this->copyBiometricsToNewPin($user, $oldPin, $newPin);
             }
         }
 
@@ -233,36 +236,110 @@ class EmployeeAdmsObserver
     }
 
     /**
-     * Delete the old PIN from all ADMS-enabled devices.
+     * Copy biometrics from old PIN to new PIN.
      *
-     * Called when employee_code changes to prevent ghost entries on terminals.
+     * When employee_code changes:
+     *  1. Renames biometrics in DB (old PIN → new PIN)
+     *  2. Pushes all templates to all devices with the new PIN
+     *  The old user stays on the device (not deleted).
      */
-    private function deleteOldPin(User $user, string $oldPin): void
+    private function copyBiometricsToNewPin(User $user, string $oldPin, string $newPin): void
     {
         $devices = $this->zktecoDevices();
         $via = config('fingerprintdevices.push_user_via', 'adms');
 
-        foreach ($devices as $device) {
-            try {
-                if (in_array($via, ['adms', 'both'], true)) {
-                    $this->commandService->queueUserDelete($device->id, $oldPin);
-                }
+        // Step 1: Rename biometrics in DB
+        $renamed = DB::table('biometrics')
+            ->where('employee_pin', $oldPin)
+            ->whereNull('deleted_at')
+            ->update(['employee_pin' => $newPin]);
 
-                Log::info('ADMS_USER_OLD_PIN_DELETED', [
-                    'user_id' => $user->id,
-                    'old_pin' => $oldPin,
-                    'new_pin' => $user->employee_code,
-                    'device_id' => $device->id,
-                    'device_serial' => $device->serial_number,
-                ]);
-            } catch (\Throwable $e) {
-                Log::error('ADMS_USER_OLD_PIN_DELETE_FAILED', [
-                    'user_id' => $user->id,
-                    'old_pin' => $oldPin,
-                    'device_id' => $device->id,
-                    'error' => $e->getMessage(),
-                ]);
+        Log::info('BIOMETRICS_PIN_RENAMED', [
+            'user_id' => $user->id,
+            'old_pin' => $oldPin,
+            'new_pin' => $newPin,
+            'templates_renamed' => $renamed,
+        ]);
+
+        // Step 2: Push all templates to devices with the new PIN
+        $templates = DB::table('biometrics')
+            ->where('employee_pin', $newPin)
+            ->whereNull('deleted_at')
+            ->get();
+
+        if ($templates->isEmpty()) {
+            Log::info('BIOMETRICS_PIN_COPY_NO_TEMPLATES', [
+                'user_id' => $user->id,
+                'new_pin' => $newPin,
+            ]);
+
+            return;
+        }
+
+        foreach ($devices as $device) {
+            foreach ($templates as $template) {
+                try {
+                    $attributes = [
+                        'no' => 0,
+                        'index' => $template->finger_index ?? 0,
+                        'valid' => $template->valid ?? 1,
+                        'duress' => 0,
+                        'major_ver' => $template->major_ver ?? 0,
+                        'minor_ver' => $template->minor_ver ?? 0,
+                        'format' => $template->format ?? 0,
+                    ];
+
+                    if ((int) $template->bio_type === 1) {
+                        // Fingerprint
+                        if (in_array($via, ['adms', 'both'], true)) {
+                            $this->commandService->queueFingerprintTemplate(
+                                $device->id,
+                                $newPin,
+                                $template->template_data,
+                                $attributes,
+                                $template->template_hash,
+                            );
+                        }
+                    } else {
+                        // Face template (bio_type=9 or 2)
+                        if (in_array($via, ['adms', 'both'], true)) {
+                            $this->commandService->queueFaceTemplate(
+                                $device->id,
+                                $newPin,
+                                $template->template_data,
+                                $attributes,
+                                $template->template_hash,
+                            );
+                        }
+                    }
+
+                    Log::info('BIOMETRICS_TEMPLATE_QUEUED', [
+                        'user_id' => $user->id,
+                        'new_pin' => $newPin,
+                        'bio_type' => $template->bio_type,
+                        'finger_index' => $template->finger_index,
+                        'device_id' => $device->id,
+                        'device_serial' => $device->serial_number,
+                    ]);
+                } catch (\Throwable $e) {
+                    Log::error('BIOMETRICS_TEMPLATE_QUEUE_FAILED', [
+                        'user_id' => $user->id,
+                        'new_pin' => $newPin,
+                        'bio_type' => $template->bio_type,
+                        'finger_index' => $template->finger_index,
+                        'device_id' => $device->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
             }
         }
+
+        Log::info('BIOMETRICS_PIN_COPY_COMPLETE', [
+            'user_id' => $user->id,
+            'old_pin' => $oldPin,
+            'new_pin' => $newPin,
+            'templates_count' => $templates->count(),
+            'devices_count' => $devices->count(),
+        ]);
     }
 }

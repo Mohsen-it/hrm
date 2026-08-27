@@ -2,15 +2,13 @@
 
 require __DIR__.'/vendor/autoload.php';
 $app = require __DIR__.'/bootstrap/app.php';
-$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+$app->make(Kernel::class)->bootstrap();
 
-use Modules\Attendance\Services\DailyReportService;
-use Modules\Attendance\Services\AbsenceCalculationService;
-use Modules\Attendance\Models\DailyAttendanceSummary;
-use Modules\Attendance\Models\AttendanceSession;
-use Modules\Shifts\Repositories\RotationAssignmentRepository;
-use Modules\Users\Models\User;
+use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Carbon;
+use Modules\Attendance\Models\DailyAttendanceSummary;
+use Modules\Attendance\Services\AbsenceCalculationService;
+use Modules\Attendance\Services\DailyReportService;
 
 $date = '2026-08-16';
 $day = Carbon::parse($date)->startOfDay();
@@ -29,10 +27,15 @@ echo "=== REST-with-session vs daily_attendance_summaries ($date) ===\n";
 $counts = ['present' => 0, 'absent' => 0, 'late' => 0, 'incomplete' => 0, 'rest' => 0, 'no_summary' => 0, 'other' => 0];
 foreach ($restWithSession as $r) {
     $s = $summaries->get($r['id']);
-    if (!$s) { $counts['no_summary']++; }
-    else {
+    if (! $s) {
+        $counts['no_summary']++;
+    } else {
         $st = $s->status;
-        if (isset($counts[$st])) $counts[$st]++; else $counts['other']++;
+        if (isset($counts[$st])) {
+            $counts[$st]++;
+        } else {
+            $counts['other']++;
+        }
     }
 }
 print_r($counts);
@@ -50,10 +53,14 @@ $allSum = DailyAttendanceSummary::whereIn('user_id', $allIds)->whereDate('summar
 $mismatch = 0;
 foreach ($result['rows'] as $r) {
     $s = $allSum->get($r['id']);
-    if (!$s) continue;
-    if ($s->status === 'present' && !in_array($r['status'], ['present', 'late'], true)) {
+    if (! $s) {
+        continue;
+    }
+    if ($s->status === 'present' && ! in_array($r['status'], ['present', 'late'], true)) {
         $mismatch++;
-        if ($mismatch <= 12) echo "  {$r['name']} | report={$r['status']} ({$r['check_in']}) | summary=present\n";
+        if ($mismatch <= 12) {
+            echo "  {$r['name']} | report={$r['status']} ({$r['check_in']}) | summary=present\n";
+        }
     }
 }
 echo "total mismatches (summary=present, report!=present/late): $mismatch\n";

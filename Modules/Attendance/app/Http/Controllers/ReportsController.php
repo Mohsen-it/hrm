@@ -4,6 +4,7 @@ namespace Modules\Attendance\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Services\ExcelExportService;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -93,8 +94,8 @@ class ReportsController extends Controller
      */
     private function getMonthlyLogForDateRange(int $userId, string $from, string $to): array
     {
-        $fromDate = \Carbon\Carbon::parse($from)->startOfMonth();
-        $toDate = \Carbon\Carbon::parse($to)->startOfMonth();
+        $fromDate = Carbon::parse($from)->startOfMonth();
+        $toDate = Carbon::parse($to)->startOfMonth();
 
         $allRows = [];
         $current = $fromDate->copy();
@@ -210,7 +211,7 @@ class ReportsController extends Controller
         $export = new OvertimeReportExport(
             $this->excelExporter,
             $employee?->name ?? (string) $userId,
-            $from . ' → ' . $to,
+            $from.' → '.$to,
             $overtimeDetails,
         );
 

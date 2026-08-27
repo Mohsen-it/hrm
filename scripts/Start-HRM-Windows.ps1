@@ -2,6 +2,7 @@
 param(
     [switch] $SkipBuild,
     [switch] $NoBridge,
+    [switch] $NoClean,
     [switch] $Help
 )
 
@@ -17,7 +18,10 @@ $BridgePort = 5000
 $Python = Join-Path $Root 'zkteco-service\venv\Scripts\python.exe'
 
 if ($Help) {
-    Write-Host 'Usage: Start-HRM-Windows.bat [-SkipBuild] [-NoBridge]'
+    Write-Host 'Usage: Start-HRM-Windows.bat [-SkipBuild] [-NoBridge] [-NoClean]'
+    Write-Host '  -SkipBuild : skip npm run build'
+    Write-Host '  -NoBridge  : do not start ZKTeco bridge (port 5000)'
+    Write-Host '  -NoClean   : do not kill old services before start (default: clean)'
     exit 0
 }
 
@@ -99,6 +103,69 @@ function Get-HrmPortListener {
     return $null
 }
 
+function Stop-HrmOldServices {
+    Write-Host 'Cleaning old HRM services (killing orphans)...' -ForegroundColor Yellow
+
+    # 1) Kill anything listening on HRM ports
+    foreach ($port in @($script:LaravelPort, $script:ReverbPort, $script:AdmsPort, $script:BridgePort)) {
+        $listenerPid = Get-HrmPortListener -Port $port
+        if ($listenerPid) {
+            try {
+                $proc = Get-CimInstance Win32_Process -Filter "ProcessId=$listenerPid" -ErrorAction SilentlyContinue
+                $name = if ($proc) { $proc.Name } else { "PID $listenerPid" }
+                Write-Host "  Killing $name (PID $listenerPid) on port $port..." -ForegroundColor DarkYellow
+                & taskkill.exe /PID $listenerPid /F 2>&1 | Out-Null
+            } catch {}
+        }
+    }
+
+    # 2) Kill known HRM process patterns (orphans not holding ports)
+    $patterns = @(
+        'adms_server\.py',
+        'queue:work',
+        'reverb:start',
+        'schedule:work',
+        'artisan serve'
+    )
+    foreach ($pat in $patterns) {
+        try {
+            $procs = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match $pat }
+            foreach ($p in $procs) {
+                # Don't kill ourselves
+                if ($p.ProcessId -eq $PID) { continue }
+                Write-Host "  Killing orphan $($p.Name) (PID $($p.ProcessId)) [$pat]..." -ForegroundColor DarkYellow
+                & taskkill.exe /PID $p.ProcessId /F 2>&1 | Out-Null
+            }
+        } catch {}
+    }
+
+    # 3) Extra: kill stray python app.py (bridge) that may not match above due to path
+    try {
+        $bridges = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.Name -eq 'python.exe' -and $_.CommandLine -match 'app\.py' }
+        foreach ($p in $bridges) {
+            if ($p.ProcessId -eq $PID) { continue }
+            Write-Host "  Killing orphan bridge python (PID $($p.ProcessId))..." -ForegroundColor DarkYellow
+            & taskkill.exe /PID $p.ProcessId /F 2>&1 | Out-Null
+        }
+    } catch {}
+
+    Start-Sleep -Seconds 3
+
+    # 4) Verify ports are free (warn, don't throw — we just cleaned)
+    foreach ($port in @($script:LaravelPort, $script:ReverbPort, $script:AdmsPort)) {
+        $still = Get-HrmPortListener -Port $port
+        if ($still) {
+            Write-Host "  WARNING: port $port still in use by PID $still after cleanup." -ForegroundColor Red
+        }
+    }
+    if (-not $script:NoBridge) {
+        $still = Get-HrmPortListener -Port $script:BridgePort
+        if ($still) { Write-Host "  WARNING: bridge port $($script:BridgePort) still in use by PID $still." -ForegroundColor Red }
+    }
+
+    Write-Host '  Cleanup done.' -ForegroundColor Green
+}
+
 function New-HrmJob {
     $job = [HrmJob]::CreateJobObject([IntPtr]::Zero, $null)
     if ($job -eq [IntPtr]::Zero) {
@@ -161,6 +228,13 @@ Write-Host ''
 Write-Host '=== HRM service preflight ==='
 Write-Host "Root: $Root"
 
+# --- CLEAN FIRST: kill any old HRM services so we start on a clean slate ---
+if (-not $NoClean) {
+    Stop-HrmOldServices
+} else {
+    Write-Host 'Skipping cleanup (--NoClean).' -ForegroundColor DarkGray
+}
+
 foreach ($path in @(
     (Join-Path $Root '.env'),
     (Join-Path $Root 'vendor\autoload.php'),
@@ -205,7 +279,8 @@ try {
     $services.Add((Start-HrmProcess -Job $job -Name 'Laravel' -WorkingDirectory $Root -Command "php artisan serve --host=0.0.0.0 --port=$LaravelPort" -LogPath (Join-Path $Root 'storage\logs\hrm-laravel-server.log')))
     Wait-HrmPort -Port $LaravelPort -Name 'Laravel'
 
-    $services.Add((Start-HrmProcess -Job $job -Name 'Queue worker' -WorkingDirectory $Root -Command 'php artisan queue:work --queue=default --tries=3 --timeout=90 --sleep=1 --memory=512' -LogPath (Join-Path $Root 'storage\logs\hrm-queue.log')))
+    $services.Add((Start-HrmProcess -Job $job -Name 'Queue worker (default)' -WorkingDirectory $Root -Command 'php artisan queue:work --queue=default --tries=3 --timeout=180 --sleep=1 --memory=512 --max-jobs=1000 --max-time=3600 --backoff=10' -LogPath (Join-Path $Root 'storage\logs\hrm-queue.log')))
+    $services.Add((Start-HrmProcess -Job $job -Name 'Queue worker (attendance)' -WorkingDirectory $Root -Command 'php artisan queue:work --queue=attendance,notifications --tries=3 --timeout=60 --sleep=1 --memory=512 --max-jobs=1000 --max-time=3600 --backoff=10' -LogPath (Join-Path $Root 'storage\logs\hrm-queue-attendance.log')))
 
     $services.Add((Start-HrmProcess -Job $job -Name 'Reverb' -WorkingDirectory $Root -Command "php artisan reverb:start --host=0.0.0.0 --port=$ReverbPort" -LogPath (Join-Path $Root 'storage\logs\hrm-reverb.log')))
     Wait-HrmPort -Port $ReverbPort -Name 'Reverb'

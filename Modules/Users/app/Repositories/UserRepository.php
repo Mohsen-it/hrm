@@ -287,16 +287,22 @@ class UserRepository
         $query->withoutSuperAdmin();
 
         $query->when($filters['search'] ?? null, function (Builder $q, string $search): void {
+            $search = trim($search);
+            if (mb_strlen($search) < 2) {
+                return;
+            }
             $q->where(function (Builder $sub) use ($search): void {
-                $sub->where('name', 'like', "%{$search}%")
+                // Indexed columns: use prefix search (can use idx_users_employee_code, etc.)
+                $sub->where('employee_code', 'like', $search.'%')
+                    ->orWhere('email', 'like', $search.'%')
+                    ->orWhere('phone', 'like', $search.'%')
+                    ->orWhere('national_id', 'like', $search.'%')
+                    // Name columns: contains search (no index, but limited by pagination)
+                    ->orWhere('name', 'like', "%{$search}%")
                     ->orWhere('first_name', 'like', "%{$search}%")
                     ->orWhere('last_name', 'like', "%{$search}%")
                     ->orWhere('full_name_ar', 'like', "%{$search}%")
-                    ->orWhere('full_name_en', 'like', "%{$search}%")
-                    ->orWhere('email', 'like', "%{$search}%")
-                    ->orWhere('employee_code', 'like', "%{$search}%")
-                    ->orWhere('phone', 'like', "%{$search}%")
-                    ->orWhere('national_id', 'like', "%{$search}%");
+                    ->orWhere('full_name_en', 'like', "%{$search}%");
             });
         });
 

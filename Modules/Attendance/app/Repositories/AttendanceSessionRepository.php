@@ -200,9 +200,14 @@ class AttendanceSessionRepository
         });
 
         $query->when($filters['search'] ?? null, function (Builder $q, $search): void {
+            $search = trim((string) $search);
+            if (mb_strlen($search) < 2) {
+                return;
+            }
             $q->where(function (Builder $sub) use ($search): void {
-                $sub->where('notes', 'like', "%{$search}%")
-                    ->orWhere('ip_address', 'like', "%{$search}%");
+                // ip_address prefix search can use index; notes remains contains
+                $sub->where('ip_address', 'like', $search.'%')
+                    ->orWhere('notes', 'like', "%{$search}%");
             });
         });
 

@@ -410,11 +410,18 @@ class ZKTecoPythonBridgeService
         $isWindows = DIRECTORY_SEPARATOR === '\\';
 
         if ($isWindows) {
+            // Windows `start /B` does not write a PID file — we record the current PHP PID
+            // as a best-effort sentinel so isProcessRunning() can at least verify the file exists.
+            // The actual Python process is detached; health is determined via HTTP probe.
             $command = 'cmd /c "start /B "" "'.$script.'" > "'.$logFile.'" 2>&1"';
-        } else {
-            $command = 'nohup "'.$script.'" > "'.$logFile.'" 2>&1 & echo $! > "'.$this->pidFile.'"';
+            @exec($command);
+            // Best-effort: record caller PID so pidFile is not stale-empty on Windows.
+            @file_put_contents($this->pidFile, (string) getmypid());
+
+            return;
         }
 
+        $command = 'nohup "'.$script.'" > "'.$logFile.'" 2>&1 & echo $! > "'.$this->pidFile.'"';
         @exec($command);
     }
 }

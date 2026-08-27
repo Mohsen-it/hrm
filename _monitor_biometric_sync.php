@@ -3,10 +3,12 @@
 require __DIR__.'/vendor/autoload.php';
 
 $app = require_once __DIR__.'/bootstrap/app.php';
-$kernel = $app->make(Illuminate\Contracts\Console\Kernel::class);
+$kernel = $app->make(Kernel::class);
 $kernel->bootstrap();
 
+use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Facades\DB;
+use Modules\FingerprintDevices\Services\DeviceCommandService;
 
 echo "=== DEVICE STATUS ===\n";
 $devices = DB::table('fingerprint_devices')
@@ -69,7 +71,7 @@ foreach ($coverage as $c) {
 }
 
 echo "\n=== RE-QUEUING FAILED FACE COMMANDS ===\n";
-$result = \Modules\FingerprintDevices\Services\DeviceCommandService::class;
+$result = DeviceCommandService::class;
 $service = app($result);
 $retryResult = $service->retryFailedFaceCommands(limit: 500);
 echo "  Requeued: {$retryResult['requeued']} | Total failed: {$retryResult['total_failed']}\n";

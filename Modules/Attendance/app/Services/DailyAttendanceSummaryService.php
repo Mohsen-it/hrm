@@ -2,6 +2,7 @@
 
 namespace Modules\Attendance\Services;
 
+use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
@@ -280,7 +281,7 @@ class DailyAttendanceSummaryService
      */
     private function localDayUtcBounds(string $date): array
     {
-        $day = \Carbon\Carbon::parse($date);
+        $day = Carbon::parse($date);
 
         return [
             $day->copy()->startOfDay()->setTimezone('UTC')->format('Y-m-d H:i:s'),

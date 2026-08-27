@@ -110,21 +110,29 @@ class Setting extends Model
 
     /**
      * Drop the cache entry for every key in the supplied group.
+     *
+     * With redis (TaggableStore) this flushes the whole `settings` tag in O(1).
+     * Fallback (database/file) iterates known keys so stale data does not linger.
      */
     public static function forgetGroup(string $group): void
     {
-        $prefix = self::cacheKey($group.':').'%';
-        // We don't have a direct way to scan the cache store; the
-        // pragmatic workaround is to flush the whole settings tag.
         $store = Cache::getStore();
         if ($store instanceof TaggableStore) {
             Cache::tags(['settings'])->flush();
 
             return;
         }
-        // No tagging support → expire a sentinel key as a no-op.
+
+        // Fallback: forget each key belonging to the group individually.
+        try {
+            $keys = static::query()->where('group', $group)->pluck('key');
+            foreach ($keys as $key) {
+                Cache::forget(self::cacheKey($key));
+            }
+        } catch (\Throwable) {
+            // If DB is unavailable, at least expire the sentinel.
+        }
         Cache::forget('settings:group:'.$group);
-        unset($prefix);
     }
 
     /**

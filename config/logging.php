@@ -131,6 +131,22 @@ return [
             'replace_placeholders' => true,
         ],
 
+        'attendance_push' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/attendance-push.log'),
+            'level' => env('ATTENDANCE_PUSH_LOG_LEVEL', 'warning'),
+            'days' => env('ATTENDANCE_PUSH_LOG_DAYS', 14),
+            'replace_placeholders' => true,
+        ],
+
+        'hrm_server' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/hrm-laravel-server.log'),
+            'level' => env('LOG_LEVEL', 'warning'),
+            'days' => env('LOG_DAILY_DAYS', 14),
+            'replace_placeholders' => true,
+        ],
+
         'emergency' => [
             'path' => storage_path('logs/laravel.log'),
         ],

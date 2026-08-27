@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CSV/Excel to VCF Converter</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+      min-height: 100vh;
+      color: #e0e0e0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 30px 15px;
+    }
+
+    h1 {
+      font-size: 2.2rem;
+      margin-bottom: 8px;
+      background: linear-gradient(90deg, #00d2ff, #3a7bd5, #b721ff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      text-align: center;
+    }
+
+    .subtitle {
+      color: #aaa;
+      margin-bottom: 30px;
+      font-size: 1rem;
+      text-align: center;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 960px;
+    }
+
+    /* ── Drop Zone ── */
+    .drop-zone {
+      border: 3px dashed #555;
+      border-radius: 16px;
+      padding: 50px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: all .3s;
+      background: rgba(255,255,255,.04);
+    }
+    .drop-zone:hover, .drop-zone.dragover {
+      border-color: #3a7bd5;
+      background: rgba(58,123,213,.1);
+    }
+    .drop-zone .icon { font-size: 3rem; margin-bottom: 12px; }
+    .drop-zone p { font-size: 1.1rem; color: #bbb; }
+    .drop-zone small { color: #777; display: block; margin-top: 8px; }
+    .drop-zone input { display: none; }
+
+    /* ── Mapping Panel ── */
+    .panel {
+      background: rgba(255,255,255,.06);
+      border: 1px solid rgba(255,255,255,.1);
+      border-radius: 14px;
+      padding: 24px;
+      margin-top: 24px;
+      display: none;
+    }
+    .panel.visible { display: block; }
+
+    .panel h2 {
+      font-size: 1.2rem;
+      margin-bottom: 16px;
+      color: #ccc;
+    }
+
+    .mapping-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 14px;
+    }
+
+    .mapping-item label {
+      display: block;
+      font-size: .82rem;
+      color: #aaa;
+      margin-bottom: 4px;
+    }
+
+    .mapping-item select {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid #555;
+      background: #1e1e2e;
+      color: #e0e0e0;
+      font-size: .95rem;
+      cursor: pointer;
+      transition: border-color .2s;
+    }
+    .mapping-item select:focus {
+      outline: none;
+      border-color: #3a7bd5;
+    }
+
+    /* ── Table ── */
+    .table-wrap {
+      overflow-x: auto;
+      margin-top: 16px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,.08);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: .88rem;
+    }
+
+    thead th {
+      background: rgba(58,123,213,.25);
+      padding: 10px 14px;
+      text-align: left;
+      white-space: nowrap;
+      position: sticky;
+      top: 0;
+    }
+
+    tbody td {
+      padding: 9px 14px;
+      border-top: 1px solid rgba(255,255,255,.06);
+      white-space: nowrap;
+      max-width: 200px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    tbody tr:hover { background: rgba(255,255,255,.04); }
+
+    .row-count {
+      margin-top: 10px;
+      font-size: .85rem;
+      color: #888;
+    }
+
+    /* ── Buttons ── */
+    .btn-row {
+      display: flex;
+      gap: 12px;
+      margin-top: 22px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      padding: 12px 28px;
+      border: none;
+      border-radius: 10px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform .15s, box-shadow .2s;
+    }
+    .btn:active { transform: scale(.97); }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #3a7bd5, #b721ff);
+      color: #fff;
+      box-shadow: 0 4px 20px rgba(58,123,213,.35);
+    }
+    .btn-primary:hover { box-shadow: 0 6px 28px rgba(58,123,213,.5); }
+
+    .btn-secondary {
+      background: rgba(255,255,255,.1);
+      color: #ccc;
+    }
+    .btn-secondary:hover { background: rgba(255,255,255,.15); }
+
+    /* ── Toast ── */
+    .toast {
+      position: fixed;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      background: #1e1e2e;
+      border: 1px solid #3a7bd5;
+      color: #e0e0e0;
+      padding: 14px 28px;
+      border-radius: 10px;
+      font-size: .95rem;
+      opacity: 0;
+      transition: all .4s;
+      z-index: 999;
+      pointer-events: none;
+    }
+    .toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 600px) {
+      h1 { font-size: 1.5rem; }
+      .mapping-grid { grid-template-columns: 1fr; }
+      .btn { width: 100%; text-align: center; }
+    }
+  </style>
+</head>
+<body>
+
+  <h1>📇 CSV / Excel → VCF</h1>
+  <p class="subtitle">ارفع ملف CSV أو Excel وحوّله إلى جهات اتصال VCF</p>
+
+  <div class="container">
+
+    <!-- Drop Zone -->
+    <div class="drop-zone" id="dropZone">
+      <div class="icon">📂</div>
+      <p>اسحب الملف هنا أو اضغط للاختيار</p>
+      <small>يدعم ملفات: .csv, .xlsx, .xls</small>
+      <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" />
+    </div>
+
+    <!-- Mapping Panel -->
+    <div class="panel" id="mappingPanel">
+      <h2>🗺️ اختر العمود لكل حقل vCard</h2>
+      <div class="mapping-grid" id="mappingGrid"></div>
+
+      <!-- Preview Table -->
+      <h2 style="margin-top:20px;">👁️ معاينة البيانات</h2>
+      <div class="table-wrap" id="tableWrap"></div>
+      <p class="row-count" id="rowCount"></p>
+
+      <div class="btn-row">
+        <button class="btn btn-primary" id="downloadBtn">⬇️ تحميل VCF</button>
+        <button class="btn btn-secondary" id="resetBtn">🔄 إعادة ضبط</button>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    // ── State ──
+    let headers = [];
+    let rows = [];
+
+    const vcardFields = [
+      { key: 'fullName',   label: 'الاسم الكامل (Full Name)' },
+      { key: 'firstName',  label: 'الاسم الأول (First Name)' },
+      { key: 'lastName',   label: 'اسم العائلة (Last Name)' },
+      { key: 'organization', label: 'الشركة (Organization)' },
+      { key: 'title',      label: 'المسمى الوظيفي (Title)' },
+      { key: 'phone',      label: 'الهاتف (Phone)' },
+      { key: 'mobile',     label: 'الجوال (Mobile)' },
+      { key: 'email',      label: 'البريد الإلكتروني (Email)' },
+      { key: 'website',    label: 'الموقع الإلكتروني (Website)' },
+      { key: 'address',    label: 'العنوان (Address)' },
+      { key: 'city',       label: 'المدينة (City)' },
+      { key: 'country',    label: 'الدولة (Country)' },
+      { key: 'notes',      label: 'ملاحظات (Notes)' },
+    ];
+
+    // Auto-detect mapping from header names
+    const autoMap = {
+      firstname: 'firstName', first: 'firstName', fname: 'firstName', first_name: 'firstName', 'first name': 'firstName',
+      lastname: 'lastName', last: 'lastName', lname: 'lastName', last_name: 'lastName', 'last name': 'lastName', family: 'lastName', surname: 'lastName',
+      company: 'organization', org: 'organization', organization: 'organization', employer: 'organization',
+      title: 'title', job: 'title', position: 'title', 'job title': 'title',
+      phone: 'phone', telephone: 'phone', tel: 'phone', landline: 'phone',
+      mobile: 'mobile', cell: 'mobile', 'cell-phone': 'mobile', cellphone: 'mobile', 'mobile phone': 'mobile', جوال: 'mobile',
+      'full name': 'fullName', 'fullname': 'fullName', name: 'fullName', الاسم: 'fullName', اسم: 'fullName', namee: 'fullName',
+      email: 'email', 'e-mail': 'email', mail: 'email', بريد: 'email',
+      website: 'website', url: 'website', site: 'website', 'web site': 'website',
+      address: 'address', street: 'address', addr: 'address', العنوان: 'address',
+      city: 'city', town: 'city', مدينة: 'city',
+      country: 'country', state: 'country', nation: 'country', الدولة: 'country',
+      notes: 'notes', note: 'notes', comments: 'notes', ملاحظات: 'notes',
+    };
+
+    // ── DOM refs ──
+    const dropZone   = document.getElementById('dropZone');
+    const fileInput  = document.getElementById('fileInput');
+    const panel      = document.getElementById('mappingPanel');
+    const grid       = document.getElementById('mappingGrid');
+    const tableWrap  = document.getElementById('tableWrap');
+    const rowCount   = document.getElementById('rowCount');
+    const downloadBtn= document.getElementById('downloadBtn');
+    const resetBtn   = document.getElementById('resetBtn');
+    const toastEl    = document.getElementById('toast');
+
+    // ── Toast ──
+    function toast(msg) {
+      toastEl.textContent = msg;
+      toastEl.classList.add('show');
+      setTimeout(() => toastEl.classList.remove('show'), 2800);
+    }
+
+    // ── Drop zone events ──
+    dropZone.addEventListener('click', () => fileInput.click());
+    dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+    dropZone.addEventListener('drop', e => {
+      e.preventDefault();
+      dropZone.classList.remove('dragover');
+      if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+    });
+    fileInput.addEventListener('change', () => { if (fileInput.files.length) handleFile(fileInput.files[0]); });
+
+    // ── File handling ──
+    function handleFile(file) {
+      const ext = file.name.split('.').pop().toLowerCase();
+
+      if (ext === 'csv') {
+        const reader = new FileReader();
+        reader.onload = e => {
+          parseCSV(e.target.result);
+          setupUI(file.name);
+        };
+        reader.readAsText(file);
+      } else if (ext === 'xlsx' || ext === 'xls') {
+        const reader = new FileReader();
+        reader.onload = e => {
+          const wb = XLSX.read(e.target.result, { type: 'array' });
+          const ws = wb.Sheets[wb.SheetNames[0]];
+          const json = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+          if (json.length < 2) { toast('الملف فارغ أو لا يحتوي على بيانات'); return; }
+          headers = json[0].map(h => String(h).trim());
+          rows = json.slice(1).map(r => {
+            const obj = {};
+            headers.forEach((h, i) => obj[h] = String(r[i] ?? '').trim());
+            return obj;
+          });
+          setupUI(file.name);
+        };
+        reader.readAsArrayBuffer(file);
+      } else {
+        toast('صيغة الملف غير مدعومة');
+      }
+    }
+
+    function parseCSV(text) {
+      const lines = [];
+      let current = '';
+      let inQuotes = false;
+      for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+        if (inQuotes) {
+          if (ch === '"') {
+            if (text[i + 1] === '"') { current += '"'; i++; }
+            else inQuotes = false;
+          } else { current += ch; }
+        } else {
+          if (ch === '"') { inQuotes = true; }
+          else if (ch === ',') { lines.push(current); current = ''; }
+          else if (ch === '\n' || ch === '\r') {
+            if (ch === '\r' && text[i + 1] === '\n') i++;
+            lines.push(current); current = '';
+            if (lines.length > 0) { if (!window._csvRow) window._csvRow = []; window._csvRow.push([...lines]); lines.length = 0; }
+          } else { current += ch; }
+        }
+      }
+      lines.push(current);
+      if (!window._csvRow) window._csvRow = [];
+      window._csvRow.push([...lines]);
+
+      const parsed = window._csvRow;
+      delete window._csvRow;
+      if (parsed.length < 2) { toast('الملف فارغ'); return; }
+
+      headers = parsed[0].map(h => h.replace(/^"|"$/g, '').trim());
+      rows = parsed.slice(1).filter(r => r.some(c => c.trim())).map(r => {
+        const obj = {};
+        headers.forEach((h, i) => obj[h] = (r[i] ?? '').replace(/^"|"$/g, '').trim());
+        return obj;
+      });
+    }
+
+    // ── Build mapping UI + preview ──
+    function setupUI(fileName) {
+      panel.classList.add('visible');
+      dropZone.style.display = 'none';
+
+      // Mapping dropdowns
+      grid.innerHTML = '';
+      vcardFields.forEach(f => {
+        const div = document.createElement('div');
+        div.className = 'mapping-item';
+
+        const label = document.createElement('label');
+        label.textContent = f.label;
+
+        const sel = document.createElement('select');
+        sel.dataset.field = f.key;
+
+        const emptyOpt = document.createElement('option');
+        emptyOpt.value = '';
+        emptyOpt.textContent = '— لا شيء —';
+        sel.appendChild(emptyOpt);
+
+        headers.forEach(h => {
+          const opt = document.createElement('option');
+          opt.value = h;
+          opt.textContent = h;
+          sel.appendChild(opt);
+        });
+
+        // auto-select
+        const hNorm = f.key.toLowerCase();
+        if (autoMap[hNorm]) sel.value = autoMap[hNorm] && headers.find(h => h.toLowerCase() === autoMap[hNorm]) || '';
+        // try matching header name directly
+        const match = headers.find(h => h.toLowerCase().replace(/[\s_-]/g, '') === f.key.toLowerCase());
+        if (match) sel.value = match;
+
+        div.appendChild(label);
+        div.appendChild(sel);
+        grid.appendChild(div);
+      });
+
+      // Preview table
+      const maxPreview = Math.min(rows.length, 50);
+      let html = '<table><thead><tr>';
+      headers.forEach(h => html += `<th>${esc(h)}</th>`);
+      html += '</tr></thead><tbody>';
+      for (let i = 0; i < maxPreview; i++) {
+        html += '<tr>';
+        headers.forEach(h => html += `<td title="${esc(rows[i][h])}">${esc(rows[i][h])}</td>`);
+        html += '</tr>';
+      }
+      html += '</tbody></table>';
+      tableWrap.innerHTML = html;
+      rowCount.textContent = `إجمالي الصفوف: ${rows.length}` + (rows.length > 50 ? `  (عرض أول 50)` : '');
+
+      toast(`تم تحميل ${rows.length} جهة اتصال من ${fileName}`);
+    }
+
+    function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+    // ── Reset ──
+    resetBtn.addEventListener('click', () => {
+      panel.classList.remove('visible');
+      dropZone.style.display = '';
+      headers = []; rows = [];
+      fileInput.value = '';
+    });
+
+    // ── Generate VCF ──
+    downloadBtn.addEventListener('click', () => {
+      const mapping = {};
+      grid.querySelectorAll('select').forEach(sel => {
+        const field = sel.dataset.field;
+        const col = sel.value;
+        if (col) mapping[field] = col;
+      });
+
+      if (!mapping.fullName && !mapping.firstName && !mapping.lastName && !mapping.organization && !mapping.phone && !mapping.mobile && !mapping.email) {
+        toast('⚠️ اختر حقولاً واحداً على الأقل');
+        return;
+      }
+
+      let vcf = '';
+      rows.forEach(row => {
+        const lines = ['BEGIN:VCARD', 'VERSION:3.0'];
+
+        let firstName = row[mapping.firstName] || '';
+        let lastName = row[mapping.lastName] || '';
+        if (mapping.fullName) {
+          const fullName = row[mapping.fullName] || '';
+          if (!firstName && !lastName) {
+            const parts = fullName.split(/\s+/);
+            firstName = parts[0] || '';
+            lastName = parts.slice(1).join(' ') || '';
+          }
+        }
+        const fn = [firstName, lastName].filter(Boolean).join(' ');
+        const n = [lastName, firstName, '', '', ''].join(';');
+        if (fn) lines.push(`FN:${fn}`);
+        lines.push(`N:${n}`);
+
+        if (mapping.organization && row[mapping.organization]) lines.push(`ORG:${row[mapping.organization]}`);
+        if (mapping.title && row[mapping.title]) lines.push(`TITLE:${row[mapping.title]}`);
+
+        if (mapping.phone && row[mapping.phone]) lines.push(`TEL;TYPE=WORK:${row[mapping.phone]}`);
+        if (mapping.mobile && row[mapping.mobile]) lines.push(`TEL;TYPE=CELL:${row[mapping.mobile]}`);
+        if (mapping.email && row[mapping.email]) lines.push(`EMAIL:${row[mapping.email]}`);
+        if (mapping.website && row[mapping.website]) lines.push(`URL:${row[mapping.website]}`);
+
+        if (mapping.address || mapping.city || mapping.country) {
+          const addr = [row[mapping.address] || '', '', row[mapping.city] || '', '', row[mapping.country] || ''].join(';');
+          lines.push(`ADR;TYPE=WORK:${addr}`);
+        }
+
+        if (mapping.notes && row[mapping.notes]) lines.push(`NOTE:${row[mapping.notes].replace(/\n/g, '\\n')}`);
+
+        lines.push('END:VCARD');
+        vcf += lines.join('\r\n') + '\r\n';
+      });
+
+      const blob = new Blob([vcf], { type: 'text/vcard;charset=utf-8' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'contacts.vcf';
+      a.click();
+      URL.revokeObjectURL(a.href);
+
+      toast(`✅ تم تحميل ${rows.length} جهة اتصال`);
+    });
+  </script>
+
+</body>
+</html>

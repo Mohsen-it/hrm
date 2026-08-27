@@ -366,6 +366,7 @@ class DeviceFullSyncService
                             'name' => $this->normalizeDeviceName($name),
                             'reason' => 'no matching user (auto_create disabled)',
                         ];
+
                         continue;
                     }
 

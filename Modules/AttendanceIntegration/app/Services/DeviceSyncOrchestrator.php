@@ -218,6 +218,7 @@ class DeviceSyncOrchestrator
                             'name' => (string) ($du['name'] ?? ''),
                             'reason' => 'no matching user (auto_create disabled)',
                         ];
+
                         continue;
                     }
                     $rawName = (string) ($du['name'] ?? '');

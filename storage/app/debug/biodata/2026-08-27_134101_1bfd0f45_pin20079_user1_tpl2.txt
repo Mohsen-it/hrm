@@ -1,0 +1,18 @@
+=== BIODATA DEBUG SNAPSHOT ===
+Timestamp: 2026-08-27T13:41:01+03:00
+Correlation ID: 1bfd0f45-4387-49cc-a24f-65f4e58b011c
+Device: ZK_FACE_001 (192.168.1.100)
+User: 1 (20079) - Ahmed Mohammed
+Template ID: 2
+Type: face (2)
+Version: 12.1
+Format: 0
+Template Length: 5 chars
+
+=== RAW BIODATA ===
+Pin=20079
+Type=2
+MajorVer=12
+MinorVer=1
+Format=0
+Tmp=FACE2

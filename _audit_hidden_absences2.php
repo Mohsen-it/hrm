@@ -1,15 +1,19 @@
 <?php
 
-require __DIR__ . '/vendor/autoload.php';
-$app = require_once __DIR__ . '/bootstrap/app.php';
-$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+require __DIR__.'/vendor/autoload.php';
+$app = require_once __DIR__.'/bootstrap/app.php';
+$app->make(Kernel::class)->bootstrap();
 
 use Carbon\Carbon;
+use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Facades\DB;
 use Modules\Attendance\Models\AttendanceSession;
 use Modules\Attendance\Models\RawAttendanceLog;
 
-function line(string $s): void { echo $s . PHP_EOL; }
+function line(string $s): void
+{
+    echo $s.PHP_EOL;
+}
 
 $from = Carbon::today()->subDays(20)->startOfDay();
 $to = Carbon::today();
@@ -19,7 +23,7 @@ $nullSessions = AttendanceSession::whereBetween('attendance_date', [$from->toDat
     ->whereNull('check_in_at')
     ->orderByDesc('attendance_date')
     ->get(['id', 'user_id', 'attendance_date', 'check_in_at', 'check_out_at', 'created_at']);
-line('total=' . $nullSessions->count());
+line('total='.$nullSessions->count());
 foreach ($nullSessions->take(25) as $s) {
     $name = DB::table('users')->where('id', $s->user_id)->value('name');
     $code = DB::table('users')->where('id', $s->user_id)->value('employee_code');
@@ -42,7 +46,7 @@ foreach ($nullSessions as $s) {
         $noRaw[] = ['user_id' => $s->user_id, 'date' => $day, 'session_id' => $s->id];
     }
 }
-line('count=' . count($noRaw));
+line('count='.count($noRaw));
 foreach (array_slice($noRaw, 0, 30) as $r) {
     $name = DB::table('users')->where('id', $r['user_id'])->value('name');
     $code = DB::table('users')->where('id', $r['user_id'])->value('employee_code');
@@ -84,7 +88,9 @@ $unassignedIds = DB::table('users')
     ->pluck('id')
     ->diff(
         DB::table('att_rotation_assignments')
-            ->where(function ($q) use ($to) { $q->whereNull('end_date')->orWhere('end_date', '>=', $to->toDateString()); })
+            ->where(function ($q) use ($to) {
+                $q->whereNull('end_date')->orWhere('end_date', '>=', $to->toDateString());
+            })
             ->pluck('employee_id')
     );
 
@@ -99,7 +105,7 @@ $punchers = DB::table('raw_attendance_logs')
     ->orderByDesc('punches')
     ->get();
 
-line('unassigned_total=' . $unassignedIds->count() . '  with_punches_in_range=' . $punchers->count());
+line('unassigned_total='.$unassignedIds->count().'  with_punches_in_range='.$punchers->count());
 foreach ($punchers->take(40) as $p) {
     $name = DB::table('users')->where('id', $p->user_id)->value('name');
     $code = DB::table('users')->where('id', $p->user_id)->value('employee_code');

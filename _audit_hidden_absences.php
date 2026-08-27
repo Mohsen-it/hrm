@@ -8,21 +8,25 @@
  * Usage: php _audit_hidden_absences.php [daysBack]   (default 14)
  */
 
-require __DIR__ . '/vendor/autoload.php';
-$app = require_once __DIR__ . '/bootstrap/app.php';
-$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+require __DIR__.'/vendor/autoload.php';
+$app = require_once __DIR__.'/bootstrap/app.php';
+$app->make(Kernel::class)->bootstrap();
 
 use Carbon\Carbon;
+use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Facades\DB;
 use Modules\Attendance\Models\AttendanceSession;
 use Modules\Attendance\Models\RawAttendanceLog;
 use Modules\Holidays\Models\Holiday;
+use Modules\Shifts\Repositories\RotationAssignmentRepository;
 use Modules\Shifts\Services\AbsenceCalculationService;
 use Modules\Shifts\Services\RotationEngine;
-use Modules\Shifts\Repositories\RotationAssignmentRepository;
 use Modules\Vacations\Models\UserVacationRequest;
 
-function line(string $s): void { echo $s . PHP_EOL; }
+function line(string $s): void
+{
+    echo $s.PHP_EOL;
+}
 
 $daysBack = isset($argv[1]) ? max(1, (int) $argv[1]) : 14;
 $service = app(AbsenceCalculationService::class);
@@ -33,7 +37,7 @@ $from = Carbon::today()->subDays($daysBack - 1)->startOfDay();
 $to = Carbon::today();
 $timezone = config('app.timezone');
 
-line('AUDIT RANGE: ' . $from->toDateString() . ' .. ' . $to->toDateString() . '  (now=' . Carbon::now()->format('Y-m-d H:i:s') . ' ' . $timezone . ')');
+line('AUDIT RANGE: '.$from->toDateString().' .. '.$to->toDateString().'  (now='.Carbon::now()->format('Y-m-d H:i:s').' '.$timezone.')');
 line('');
 
 $hidden = [];        // employee_id => ['days' => [date => reason]]
@@ -86,7 +90,7 @@ while ($current->lte($to)) {
     line(sprintf('%-10s expected=%-4d sum=%-4d absent=%-4d %s', $day, $expected->count(), $sum, $absent->count(), $ok ? 'OK' : '*** RECONCILIATION FAIL ***'));
 
     if (! $ok) {
-        line('  breakdown=' . json_encode($breakdown, JSON_UNESCAPED_UNICODE));
+        line('  breakdown='.json_encode($breakdown, JSON_UNESCAPED_UNICODE));
     }
 
     // Bulk data for the day (same rules as the service).
@@ -127,11 +131,16 @@ while ($current->lte($to)) {
             if ($hasSession || $hasRaw) {
                 $detail = [];
                 $s = $sessionsDay->firstWhere('user_id', $employeeId);
-                if ($s) { $detail[] = 'session_in=' . ($s->check_in_at ?? 'NULL'); }
+                if ($s) {
+                    $detail[] = 'session_in='.($s->check_in_at ?? 'NULL');
+                }
                 $raw = $rawDay->whereNull('deleted_at')->filter(fn ($r) => (int) $r->user_id === $employeeId);
-                foreach ($raw as $r) { $detail[] = 'raw=' . substr($r->punch_time, 0, 16) . '(dev' . $r->device_id . ',' . $r->punch_type . ')'; }
+                foreach ($raw as $r) {
+                    $detail[] = 'raw='.substr($r->punch_time, 0, 16).'(dev'.$r->device_id.','.$r->punch_type.')';
+                }
                 $falseAbsent[$employeeId]['days'][$day] = implode(' | ', $detail);
             }
+
             continue;
         }
 
@@ -184,7 +193,9 @@ while ($current->lte($to)) {
 
         if ($deadlinePassed) {
             $reason = 'expected, no punch, no coverage, deadline passed';
-            if (! $expectedIn) { $reason .= ' [no time schedule -> EOD deadline]'; }
+            if (! $expectedIn) {
+                $reason .= ' [no time schedule -> EOD deadline]';
+            }
             $hidden[$employeeId]['days'][$day] = $reason;
         }
     }
@@ -206,7 +217,7 @@ if ($hidden === []) {
         $u = $names->get($id);
         line(sprintf('  [%s] %s (%s)', $id, $u?->name, $u?->employee_code));
         foreach ($info['days'] as $d => $reason) {
-            line('      ' . $d . ': ' . $reason);
+            line('      '.$d.': '.$reason);
         }
     }
 }
@@ -224,7 +235,7 @@ if ($falseAbsent === []) {
         $u = $names->get($id);
         line(sprintf('  [%s] %s (%s)', $id, $u?->name, $u?->employee_code));
         foreach ($info['days'] as $d => $detail) {
-            line('      ' . $d . ': ' . $detail);
+            line('      '.$d.': '.$detail);
         }
     }
 }
@@ -234,7 +245,7 @@ line('==================================================================');
 line('ACTIVE EMPLOYEES WITH NO ROTATION ASSIGNMENT (invisible to the');
 line('report — never expected, never absent)');
 line('==================================================================');
-line('  count=' . $unassigned->count());
+line('  count='.$unassigned->count());
 foreach ($unassigned->take(40) as $u) {
     line(sprintf('    [%s] %s (%s) dept=%s', $u->id, $u->name, $u->employee_code, $u->department_id));
 }
@@ -259,9 +270,9 @@ line('==================================================================');
 $nullSessions = AttendanceSession::whereBetween('attendance_date', [$from->toDateString(), $to->toDateString()])
     ->whereNull('check_in_at')
     ->count();
-line('  count=' . $nullSessions);
+line('  count='.$nullSessions);
 
 line('');
-line('SUMMARY: hidden=' . count($hidden) . ' falseAbsent=' . count($falseAbsent)
-    . ' unassigned=' . $unassigned->count() . ' multiAssign=' . $multiAssign->count()
-    . ' nullCheckInSessions=' . $nullSessions);
+line('SUMMARY: hidden='.count($hidden).' falseAbsent='.count($falseAbsent)
+    .' unassigned='.$unassigned->count().' multiAssign='.$multiAssign->count()
+    .' nullCheckInSessions='.$nullSessions);

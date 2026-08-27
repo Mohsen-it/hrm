@@ -1,9 +1,11 @@
 <?php
+
 require __DIR__.'/vendor/autoload.php';
 $app = require_once __DIR__.'/bootstrap/app.php';
-$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+$app->make(Kernel::class)->bootstrap();
 
 use Carbon\Carbon;
+use Illuminate\Contracts\Console\Kernel;
 use Modules\Attendance\Models\AttendanceSession;
 use Modules\Attendance\Models\RawAttendanceLog;
 use Modules\Attendance\Services\AttendanceSessionService;
@@ -38,6 +40,7 @@ foreach ($sessions as $s) {
     if ($class->value !== 'check_in') {
         // A check-out punch that was wrongly opened as a session.
         $toDelete[] = $s;
+
         continue;
     }
 
@@ -78,14 +81,14 @@ foreach ($toClose as [$s, $p]) {
         ]);
         $date = $s->check_in_at->toDateString();
         $affected[$s->user_id.'|'.$date] = [$s->user_id, $date];
-    } catch (\Throwable $e) {
+    } catch (Throwable $e) {
         echo '  close failed sess='.$s->id.': '.$e->getMessage().PHP_EOL;
     }
 }
 foreach ($affected as [$userId, $date]) {
     try {
         $summaryService->recalculateForUserAndDate($userId, $date);
-    } catch (\Throwable $e) {
+    } catch (Throwable $e) {
         echo '  summary recalc failed '.$userId.' '.$date.': '.$e->getMessage().PHP_EOL;
     }
 }

@@ -23,7 +23,7 @@ class RetryFailedFaceCommands extends Command
         $query = DB::table('device_commands')
             ->where('command_type', DeviceCommand::TYPE_FACE_TEMPLATE)
             ->where('status', DeviceCommand::STATUS_FAILED)
-->where('command_body', 'like', 'DATA UPDATE FACE%')
+            ->where('command_body', 'like', 'DATA UPDATE FACE%')
             ->where('updated_at', '>=', now()->subHours($hours));
 
         if ($device = $this->option('device')) {

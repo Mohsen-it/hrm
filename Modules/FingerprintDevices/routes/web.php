@@ -4,12 +4,12 @@ use Illuminate\Support\Facades\Route;
 use Modules\FingerprintDevices\Http\Controllers\DeprecatedPushController;
 use Modules\FingerprintDevices\Http\Controllers\DeviceFullSyncController;
 use Modules\FingerprintDevices\Http\Controllers\DeviceMonitoringController;
+use Modules\FingerprintDevices\Http\Controllers\FaceSyncDashboardController;
 use Modules\FingerprintDevices\Http\Controllers\FingerprintDashboardController;
 use Modules\FingerprintDevices\Http\Controllers\FingerprintDevicesController;
 use Modules\FingerprintDevices\Http\Controllers\FingerprintDeviceTypesController;
 use Modules\FingerprintDevices\Http\Controllers\FingerprintTemplateController;
 use Modules\FingerprintDevices\Http\Controllers\LiveScanController;
-use Modules\FingerprintDevices\Http\Controllers\FaceSyncDashboardController;
 use Modules\FingerprintDevices\Http\Controllers\UnregisteredEmployeesController;
 
 Route::middleware(['auth'])->group(function () {

@@ -7,9 +7,9 @@ use Modules\Shifts\Http\Controllers\SchedulesController;
 use Modules\Shifts\Http\Controllers\ShiftCategoriesController;
 use Modules\Shifts\Http\Controllers\ShiftCategoryAssignmentController;
 use Modules\Shifts\Http\Controllers\ShiftsController;
-use Modules\Shifts\Http\Controllers\UnassignedRotationEmployeesController;
 use Modules\Shifts\Http\Controllers\SmartAbsenceController;
 use Modules\Shifts\Http\Controllers\TimeSchedulesController;
+use Modules\Shifts\Http\Controllers\UnassignedRotationEmployeesController;
 
 Route::middleware(['auth', 'permission:view-shifts'])
     ->group(function () {

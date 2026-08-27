@@ -1,0 +1,18 @@
+=== BIODATA DEBUG SNAPSHOT ===
+Timestamp: 2026-08-27T13:37:24+03:00
+Correlation ID: 8aecc252-d941-4927-b166-3795ef94853c
+Device: ZK_FACE_001 (192.168.1.100)
+User: 2 (500) - Numeric User
+Template ID: 1
+Type: face (2)
+Version: 12.0
+Format: 0
+Template Length: 12 chars
+
+=== RAW BIODATA ===
+Pin=500
+Type=2
+MajorVer=12
+MinorVer=0
+Format=0
+Tmp=NUMERIC_FACE

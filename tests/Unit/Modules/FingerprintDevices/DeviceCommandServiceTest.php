@@ -182,7 +182,7 @@ class DeviceCommandServiceTest extends TestCase
                 'device_type_id' => $type->id,
                 'name' => "Test Device {$serial}",
                 'serial_number' => $serial,
-                'ip_address' => '192.168.10.' . ($index + 20),
+                'ip_address' => '192.168.10.'.($index + 20),
                 'port' => 4370,
                 'comm_key' => '0',
                 'timeout' => 30,

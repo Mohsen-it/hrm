@@ -1,10 +1,12 @@
 <?php
+
 require __DIR__.'/vendor/autoload.php';
 $app = require __DIR__.'/bootstrap/app.php';
-$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
-use Modules\Users\Models\User;
-use Modules\Attendance\Models\RawAttendanceLog;
+$app->make(Kernel::class)->bootstrap();
+use Illuminate\Contracts\Console\Kernel;
 use Modules\Attendance\Models\AttendanceSession;
+use Modules\Attendance\Models\RawAttendanceLog;
+use Modules\Users\Models\User;
 
 $u = User::where('name', 'وسيم احمد زيداني')->first();
 echo "=== RAW LOGS 08-01..08-16 ===\n";

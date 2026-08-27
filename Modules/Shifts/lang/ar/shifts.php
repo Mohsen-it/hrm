@@ -114,7 +114,7 @@ return [
     'expected_today' => 'متوقع اليوم',
     'no_data' => 'لا توجد بيانات',
     'no_active_company' => 'لا توجد شركة نشطة لتعيين الجدول إليها',
-    
+
     // Time Schedules page
     'time_schedules_title' => 'جداول الوقت',
     'time_schedules_description' => 'إدارة جداول الوقت (أوقات الحضور والانصراف والاستراحات)',

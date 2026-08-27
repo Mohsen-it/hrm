@@ -5,6 +5,7 @@ namespace Tests\Feature\Modules\FingerprintDevices;
 use Modules\FingerprintDevices\Models\DeviceCommand;
 use Modules\FingerprintDevices\Models\FingerprintDevice;
 use Modules\FingerprintDevices\Models\FingerprintDeviceType;
+use Modules\FingerprintDevices\Services\DeviceCommandService;
 use Tests\TestCase;
 
 class AdmsDeliveryOrderTest extends TestCase
@@ -124,7 +125,7 @@ class AdmsDeliveryOrderTest extends TestCase
     public function test_queued_user_commands_use_set_user_format(): void
     {
         $device = $this->makeDevice();
-        $service = app(\Modules\FingerprintDevices\Services\DeviceCommandService::class);
+        $service = app(DeviceCommandService::class);
 
         $created = $service->queueUserCreate($device->id, '29083', 'شادي ابراهيم محلا', 0);
         $updated = $service->queueUserUpdate($device->id, '29083', 'شادي ابراهيم محلا', 0);
@@ -140,7 +141,7 @@ class AdmsDeliveryOrderTest extends TestCase
     public function test_queued_face_template_uses_correct_face_format(): void
     {
         $device = $this->makeDevice();
-        $service = app(\Modules\FingerprintDevices\Services\DeviceCommandService::class);
+        $service = app(DeviceCommandService::class);
 
         $template = base64_encode(str_repeat('A', 2016));
         $command = $service->queueFaceTemplate(

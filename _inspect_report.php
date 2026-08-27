@@ -2,10 +2,10 @@
 
 require __DIR__.'/vendor/autoload.php';
 $app = require __DIR__.'/bootstrap/app.php';
-$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+$app->make(Kernel::class)->bootstrap();
 
+use Illuminate\Contracts\Console\Kernel;
 use Modules\Attendance\Services\DailyReportService;
-use Modules\Users\Models\User;
 
 $service = app(DailyReportService::class);
 
@@ -13,7 +13,7 @@ foreach (['2026-08-16', '2026-08-15', '2026-08-14'] as $date) {
     $result = $service->build($date, '08:30', 1);
     echo "===== DATE $date =====\n";
     echo 'STATS: '.json_encode($result['stats'], JSON_UNESCAPED_UNICODE)."\n";
-    echo "TOTAL ROWS: ".$result['rows']->count()."\n";
+    echo 'TOTAL ROWS: '.$result['rows']->count()."\n";
     $byStatus = $result['rows']->groupBy('status');
     foreach ($byStatus as $status => $group) {
         echo "--- $status ({$group->count()}) ---\n";

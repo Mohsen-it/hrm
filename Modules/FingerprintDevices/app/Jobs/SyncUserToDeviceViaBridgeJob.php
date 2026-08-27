@@ -16,7 +16,9 @@ class SyncUserToDeviceViaBridgeJob implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public int $tries = 1;
+
     public int $backoff = 5;
+
     public int $timeout = 35;
 
     public function __construct(
@@ -29,7 +31,7 @@ class SyncUserToDeviceViaBridgeJob implements ShouldQueue
     public function handle(BridgeBiometricSyncService $bridgeSync): void
     {
         $device = FingerprintDevice::find($this->deviceId);
-        if (!$device || !$device->is_push_enabled) {
+        if (! $device || ! $device->is_push_enabled) {
             return;
         }
         try {

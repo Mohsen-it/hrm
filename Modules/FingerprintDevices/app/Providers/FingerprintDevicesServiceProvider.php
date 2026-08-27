@@ -3,19 +3,21 @@
 namespace Modules\FingerprintDevices\Providers;
 
 use Illuminate\Support\Facades\Blade;
+use Illuminate\Support\Facades\Schedule;
 use Illuminate\Support\ServiceProvider;
 use Modules\FingerprintDevices\Console\Commands\BackfillDeviceOrgDefaults;
+use Modules\FingerprintDevices\Console\Commands\DistributeAllFaces;
+use Modules\FingerprintDevices\Console\Commands\DistributeMissingFaceSets;
 use Modules\FingerprintDevices\Console\Commands\ExportFacePhotosToUsb;
 use Modules\FingerprintDevices\Console\Commands\FullSyncAllDevices;
-use Modules\FingerprintDevices\Console\Commands\DistributeMissingFaceSets;
 use Modules\FingerprintDevices\Console\Commands\ImportFacePhotosFromUsb;
 use Modules\FingerprintDevices\Console\Commands\ImportHikvisionEmployees;
-use Modules\FingerprintDevices\Console\Commands\PushFacesAllDevices;
 use Modules\FingerprintDevices\Console\Commands\PullTemplatesDirect;
+use Modules\FingerprintDevices\Console\Commands\PushFacesAllDevices;
 use Modules\FingerprintDevices\Console\Commands\QueueUsersForAdms;
 use Modules\FingerprintDevices\Console\Commands\RetryFailedFaceCommands;
-use Modules\FingerprintDevices\Console\Commands\DistributeAllFaces;
-use Illuminate\Support\Facades\Schedule;
+use Modules\FingerprintDevices\Observers\EmployeeAdmsObserver;
+use Modules\Users\Models\User;
 use Nwidart\Modules\Traits\PathNamespace;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
@@ -41,7 +43,7 @@ class FingerprintDevicesServiceProvider extends ServiceProvider
 
     protected function registerObservers(): void
     {
-        \Modules\Users\Models\User::observe(\Modules\FingerprintDevices\Observers\EmployeeAdmsObserver::class);
+        User::observe(EmployeeAdmsObserver::class);
     }
 
     public function register(): void

@@ -7,6 +7,7 @@ use DateTimeImmutable;
 use Illuminate\Console\Command;
 use Modules\Attendance\Models\AttendanceSession;
 use Modules\Attendance\Services\AttendanceSessionService;
+use Modules\Shifts\Repositories\RotationAssignmentRepository;
 use Modules\Shifts\Services\ScheduleResolverService;
 
 /**
@@ -157,7 +158,7 @@ class CloseOpenSessionsCommand extends Command
         // read directly the way DailyReportService does — the resolver's
         // out_above_margin is an absolute window edge (e.g. "15:30"), not a
         // minute count, and must not be treated as a duration.
-        $assignment = app(\Modules\Shifts\Repositories\RotationAssignmentRepository::class)
+        $assignment = app(RotationAssignmentRepository::class)
             ->getAssignmentForDate($session->user_id, $session->attendance_date->toDateString());
         $grace = (int) ($assignment?->rotation?->timeSchedule?->out_above_margin ?? 0);
 

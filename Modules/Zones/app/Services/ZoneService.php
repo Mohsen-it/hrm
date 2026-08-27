@@ -175,6 +175,9 @@ class ZoneService
 
     /**
      * Drop every cached lookup keyed by the given zone id.
+     *
+     * With redis (TaggableStore) flushes the whole `zones` tag.
+     * Fallback keeps the two known keys deletion for database/file stores.
      */
     protected function forgetBranchCache(int $zoneId): void
     {
@@ -187,5 +190,8 @@ class ZoneService
 
         Cache::forget("zones:{$zoneId}:branches");
         Cache::forget("zones:{$zoneId}:primary_branch");
+        // Also clear any `zones:list:*` keys if they exist (best-effort).
+        Cache::forget('zones:list:all');
+        Cache::forget('zones:list:active');
     }
 }

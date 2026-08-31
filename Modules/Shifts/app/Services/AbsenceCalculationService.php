@@ -1097,6 +1097,260 @@ class AbsenceCalculationService
     }
 
     /**
+     * Calculate monthly attendance for a single employee with weighted absence factor.
+     *
+     * Weighted logic: غياب يوم عمل واحد = cycle_length / work_days_count أيام تقويمية.
+     * مثال: دورية 1 عمل / 3 راحة → cycle=4, work=1 → عامل الوزن 4 → غياب يوم واحد = 4 أيام وزناً.
+     * دورية 2 عمل / 2 راحة → cycle=4, work=2 → عامل 2 → غياب يوم = يومين وزناً.
+     * الأجازات المعتمدة تعتبر دوام (ليست غياب) وتُحتسب ضمن أيام العمل المنجزة.
+     *
+     * @return array{
+     *     employee_id: int,
+     *     month: int, year: int,
+     *     from: string, to: string,
+     *     rotation_id: ?int, rotation_name: ?string, rotation_group_name: ?string,
+     *     cycle_length: ?int, work_days_count: ?int, rest_days_count: ?int,
+     *     weight_factor: float,
+     *     expected_physical: int,
+     *     holiday_days: int,
+     *     effective_expected: int,
+     *     present_days: int,
+     *     vacation_days: int,
+     *     exception_days: int,
+     *     absent_physical: int,
+     *     absent_weighted: float,
+     *     worked_physical: int,
+     *     worked_weighted: float,
+     *     attendance_rate: int,
+     *     details: array<int, array{date:string, status:string, label:string, expected_time:?string, weight_factor:float, is_work_day:bool}>,
+     *     has_assignment: bool,
+     * }
+     */
+    public function getEmployeeMonthlyAttendance(int $employeeId, int $month, int $year): array
+    {
+        $start = Carbon::create($year, $month, 1)->startOfDay();
+        $end = $start->copy()->endOfMonth();
+        $fromStr = $start->toDateString();
+        $toStr = $end->toDateString();
+
+        $employee = DB::table('users')
+            ->where('id', $employeeId)
+            ->whereNull('deleted_at')
+            ->first(['id', 'name', 'employee_code', 'branch_id', 'department_id', 'attendance_exemption_type', 'attendance_exemption_from', 'attendance_exemption_to', 'termination_date', 'status', 'is_active_employee']);
+
+        if (! $employee) {
+            return [
+                'employee_id' => $employeeId, 'month' => $month, 'year' => $year,
+                'from' => $fromStr, 'to' => $toStr,
+                'rotation_id' => null, 'rotation_name' => null, 'rotation_group_name' => null,
+                'cycle_length' => null, 'work_days_count' => null, 'rest_days_count' => null,
+                'weight_factor' => 1,
+                'expected_physical' => 0, 'holiday_days' => 0, 'effective_expected' => 0,
+                'present_days' => 0, 'vacation_days' => 0, 'exception_days' => 0,
+                'absent_physical' => 0, 'absent_weighted' => 0,
+                'worked_physical' => 0, 'worked_weighted' => 0,
+                'attendance_rate' => 0, 'details' => [], 'has_assignment' => false,
+                'employee' => null,
+            ];
+        }
+
+        $holidays = Holiday::active()->get();
+        $details = [];
+        $expectedPhysical = 0;
+        $holidayDays = 0;
+        $presentDays = 0;
+        $vacationDays = 0;
+        $exceptionDays = 0;
+        $absentPhysical = 0;
+        $absentWeighted = 0.0;
+        $workedWeighted = 0.0;
+        $hasAssignment = false;
+        $primaryRotation = null;
+        $primaryGroup = null;
+
+        // Pre-fetch vacations and exceptions covering the month for this employee
+        $vacationRanges = UserVacationRequest::where('status', UserVacationRequest::STATUS_APPROVED)
+            ->where('user_id', $employeeId)
+            ->whereDate('start_date', '<=', $toStr)
+            ->whereDate('end_date', '>=', $fromStr)
+            ->get(['start_date', 'end_date'])
+            ->map(fn ($r) => ['from' => $this->dateKey($r->start_date), 'to' => $this->dateKey($r->end_date)])
+            ->all();
+
+        $exceptionRanges = ShiftException::active()
+            ->where('employee_id', $employeeId)
+            ->whereIn('exception_type', ['leave', 'mission', 'swap', 'training'])
+            ->whereDate('from_date', '<=', $toStr)
+            ->whereDate('to_date', '>=', $fromStr)
+            ->get(['from_date', 'to_date', 'exception_type'])
+            ->map(fn ($r) => ['from' => $this->dateKey($r->from_date), 'to' => $this->dateKey($r->to_date), 'type' => $r->exception_type])
+            ->all();
+
+        $current = $start->copy();
+        while ($current->lte($end)) {
+            $dateStr = $current->toDateString();
+
+            if ($this->isAttendanceExempt($employee, $dateStr)) {
+                $current->addDay();
+                continue;
+            }
+
+            $terminationDate = $employee->termination_date ? $this->dateKey($employee->termination_date) : null;
+            if ($terminationDate !== null && $terminationDate < $dateStr) {
+                $current->addDay();
+                continue;
+            }
+
+            $assignment = $this->rotationAssignmentRepository->getAssignmentForDate($employeeId, $dateStr);
+            if (! $assignment) {
+                $current->addDay();
+                continue;
+            }
+            $hasAssignment = true;
+            $rotation = $assignment->rotation;
+            $group = $assignment->rotationGroup;
+            if (! $primaryRotation && $rotation) {
+                $primaryRotation = $rotation;
+                $primaryGroup = $group;
+            }
+
+            if (! $this->rotationEngine->isWorkDay($rotation, $group, $current)) {
+                $current->addDay();
+                continue;
+            }
+
+            $expectedPhysical++;
+            $cycleLen = (int) ($rotation->cycle_length ?: 1);
+            $workCount = (int) ($rotation->work_days_count ?: 1);
+            $workCount = $workCount > 0 ? $workCount : 1;
+            $weightFactor = $cycleLen / $workCount;
+
+            $times = $this->rotationEngine->resolveTimes($assignment);
+            $expectedTime = $times['check_in'] ?? null;
+
+            $isHoliday = ! (bool) $rotation->work_on_holidays
+                && $this->hasApplicableHoliday($holidays, $dateStr, $employee);
+
+            if ($isHoliday) {
+                $holidayDays++;
+                $details[] = [
+                    'date' => $dateStr,
+                    'status' => 'holiday',
+                    'label' => __('shifts::shifts.official_holiday'),
+                    'expected_time' => $expectedTime,
+                    'weight_factor' => $weightFactor,
+                    'is_work_day' => true,
+                ];
+                $current->addDay();
+                continue;
+            }
+
+            $hasPunch = AttendanceSession::onDate($dateStr)->where('user_id', $employeeId)->exists();
+            if (! $hasPunch) {
+                $hasPunch = RawAttendanceLog::query()
+                    ->where('user_id', $employeeId)
+                    ->whereBetween('punch_time', $this->localDayUtcBounds($dateStr))
+                    ->exists();
+            }
+
+            $onVacation = false;
+            foreach ($vacationRanges as $range) {
+                if ($range['from'] <= $dateStr && $range['to'] >= $dateStr) { $onVacation = true; break; }
+            }
+            $onException = null;
+            foreach ($exceptionRanges as $range) {
+                if ($range['from'] <= $dateStr && $range['to'] >= $dateStr) { $onException = $range['type']; break; }
+            }
+
+            if ($onVacation) {
+                $vacationDays++;
+                $workedWeighted += $weightFactor;
+                $details[] = [
+                    'date' => $dateStr,
+                    'status' => 'vacation',
+                    'label' => __('shifts::shifts.on_vacation'),
+                    'expected_time' => $expectedTime,
+                    'weight_factor' => $weightFactor,
+                    'is_work_day' => true,
+                ];
+            } elseif ($onException !== null) {
+                $exceptionDays++;
+                $details[] = [
+                    'date' => $dateStr,
+                    'status' => 'exception',
+                    'label' => $this->exceptionLabel($onException),
+                    'expected_time' => $expectedTime,
+                    'weight_factor' => $weightFactor,
+                    'is_work_day' => true,
+                ];
+            } elseif ($hasPunch) {
+                $presentDays++;
+                $workedWeighted += $weightFactor;
+                $details[] = [
+                    'date' => $dateStr,
+                    'status' => 'present',
+                    'label' => __('shifts::shifts.present'),
+                    'expected_time' => $expectedTime,
+                    'weight_factor' => $weightFactor,
+                    'is_work_day' => true,
+                ];
+            } else {
+                $absentPhysical++;
+                $absentWeighted += $weightFactor;
+                $details[] = [
+                    'date' => $dateStr,
+                    'status' => 'absent',
+                    'label' => __('shifts::shifts.absent_short'),
+                    'expected_time' => $expectedTime,
+                    'weight_factor' => $weightFactor,
+                    'is_work_day' => true,
+                ];
+            }
+
+            $current->addDay();
+        }
+
+        $effectiveExpected = $expectedPhysical - $holidayDays;
+        $workedPhysical = $presentDays + $vacationDays;
+        $attendanceRate = $effectiveExpected > 0 ? (int) round(($workedPhysical / $effectiveExpected) * 100) : 100;
+        if ($attendanceRate > 100) $attendanceRate = 100;
+
+        $primaryCycle = $primaryRotation ? (int) $primaryRotation->cycle_length : null;
+        $primaryWork = $primaryRotation ? (int) $primaryRotation->work_days_count : null;
+        $primaryRest = $primaryRotation ? (int) $primaryRotation->rest_days_count : null;
+        $primaryWeight = ($primaryCycle && $primaryWork && $primaryWork > 0) ? round($primaryCycle / $primaryWork, 2) : 1;
+
+        return [
+            'employee_id' => $employeeId,
+            'employee' => $employee,
+            'month' => $month,
+            'year' => $year,
+            'from' => $fromStr,
+            'to' => $toStr,
+            'rotation_id' => $primaryRotation?->id,
+            'rotation_name' => $primaryRotation?->name,
+            'rotation_group_name' => $primaryGroup?->name,
+            'cycle_length' => $primaryCycle,
+            'work_days_count' => $primaryWork,
+            'rest_days_count' => $primaryRest,
+            'weight_factor' => $primaryWeight,
+            'expected_physical' => $expectedPhysical,
+            'holiday_days' => $holidayDays,
+            'effective_expected' => $effectiveExpected,
+            'present_days' => $presentDays,
+            'vacation_days' => $vacationDays,
+            'exception_days' => $exceptionDays,
+            'absent_physical' => $absentPhysical,
+            'absent_weighted' => round($absentWeighted, 2),
+            'worked_physical' => $workedPhysical,
+            'worked_weighted' => round($workedWeighted, 2),
+            'attendance_rate' => $attendanceRate,
+            'details' => $details,
+            'has_assignment' => $hasAssignment,
+        ];
+    }
+
+    /**
      * Determine whether a specific employee is expected to work on the given date.
      */
     public function isEmployeeExpectedToWork(int $employeeId, Carbon $date): bool

@@ -646,4 +646,70 @@ class SmartAbsenceController extends Controller
             'year' => (int) $year,
         ]);
     }
+
+    /**
+     * Employee monthly worked-days report (weighted).
+     * User selects any month + any employee → sees physical vs weighted attendance.
+     */
+    public function employeeAttendance(Request $request): Response
+    {
+        $this->authorize('view-attendance-by-schedule');
+
+        $month = $request->integer('month', now()->month);
+        $year = $request->integer('year', now()->year);
+        $employeeId = $request->integer('employee_id') ?: null;
+
+        // Clamp month/year
+        $month = max(1, min(12, $month));
+        $year = max(2020, min(2035, $year));
+
+        $report = null;
+        $employee = null;
+        if ($employeeId) {
+            $report = $this->absenceService->getEmployeeMonthlyAttendance($employeeId, $month, $year);
+            $employee = $report['employee'] ?? DB::table('users')->where('id', $employeeId)->first();
+        }
+
+        return Inertia::render('Shifts/Absence/EmployeeMonthlyAttendance', [
+            'report' => $report,
+            'employee' => $employee ? [
+                'id' => (int) $employee->id,
+                'name' => $employee->name ?? $employee->name ?? '',
+                'employee_code' => $employee->employee_code ?? null,
+            ] : null,
+            'filters' => [
+                'employee_id' => $employeeId,
+                'month' => $month,
+                'year' => $year,
+            ],
+        ]);
+    }
+
+    /**
+     * Lightweight employee search for the attendance selector.
+     */
+    public function searchEmployees(Request $request)
+    {
+        $this->authorize('view-attendance-by-schedule');
+
+        $search = trim((string) $request->input('q', $request->input('search', '')));
+        if (mb_strlen($search) < 2) {
+            return response()->json([]);
+        }
+
+        $employees = DB::table('users')
+            ->whereNull('deleted_at')
+            ->where('status', 1)
+            ->where('is_active_employee', true)
+            ->where(function ($q) use ($search): void {
+                $q->where('name', 'like', "%{$search}%")
+                    ->orWhere('employee_code', 'like', "%{$search}%")
+                    ->orWhere('phone', 'like', "%{$search}%");
+            })
+            ->orderBy('name')
+            ->limit(20)
+            ->get(['id', 'name', 'employee_code', 'department_id']);
+
+        return response()->json($employees);
+    }
 }

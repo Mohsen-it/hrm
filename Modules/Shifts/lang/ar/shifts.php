@@ -510,6 +510,16 @@ return [
     'rotation_schedule' => 'جدول الدورية',
     'employee_rotation_assignment_conflict' => 'هذا الموظف مسند مسبقًا إلى الدورية :rotation والمجموعة :group ضمن التواريخ المحددة.',
 
+    // تقرير دوام الموظف الشهري (موزون)
+    'employee_monthly_attendance' => 'دوام الموظف الشهري',
+    'employee_monthly_attendance_desc' => 'اختر موظفاً وشهراً لمعرفة كم يوم داوم فعلياً مع احتساب الغياب الموزون حسب الدورية والإجازات كدوام',
+    'select_employee_and_month' => 'اختر الموظف والشهر',
+    'select_employee_and_month_desc' => 'ابحث عن موظف بالاسم أو الرمز واختر الشهر والسنة ثم اضغط عرض',
+    'worked_days_weighted' => 'أيام الدوام (فعلي)',
+    'absent_weighted' => 'الغياب الموزون',
+    'worked_weighted' => 'الدوام الموزون',
+    'search_employee_placeholder' => 'ابحث عن موظف بالاسم أو الرمز...',
+
     // تسميات مفقودة
     'additional' => 'إضافي',
     'break_duration' => 'مدة الاستراحة',

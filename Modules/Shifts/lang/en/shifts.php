@@ -500,6 +500,16 @@ return [
     'date_range' => 'Date Range',
     'rotation_schedule' => 'Rotation Schedule',
 
+    // Employee Monthly Attendance (weighted)
+    'employee_monthly_attendance' => 'Employee Monthly Attendance',
+    'employee_monthly_attendance_desc' => 'Select an employee and a month to see worked days with weighted absence and vacations counted as present',
+    'select_employee_and_month' => 'Select employee and month',
+    'select_employee_and_month_desc' => 'Search for an employee by name or code, pick the month and year, then click Show',
+    'worked_days_weighted' => 'Worked Days (physical)',
+    'absent_weighted' => 'Weighted Absence',
+    'worked_weighted' => 'Weighted Worked',
+    'search_employee_placeholder' => 'Search employee by name or code...',
+
     // Missing UI labels
     'additional' => 'Additional',
     'break_duration' => 'Break Duration',

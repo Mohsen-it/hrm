@@ -110,6 +110,10 @@ Route::middleware(['auth', 'permission:view-attendance-by-schedule'])
             ->name('smart-absence.monthly.report');
         Route::get('smart-absence/monthly-report/export', [SmartAbsenceController::class, 'exportMonthly'])
             ->name('smart-absence.monthly.export');
+        Route::get('smart-absence/employee-attendance', [SmartAbsenceController::class, 'employeeAttendance'])
+            ->name('smart-absence.employee-attendance');
+        Route::get('smart-absence/search-employees', [SmartAbsenceController::class, 'searchEmployees'])
+            ->name('smart-absence.search-employees');
         Route::get('smart-absence/monthly/{employee}', [SmartAbsenceController::class, 'monthly'])
             ->name('smart-absence.monthly');
     });

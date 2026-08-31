@@ -40,6 +40,7 @@ return [
     'permissions' => 'الصلاحيات',
     'schedules' => 'الجداول الشهرية',
     'smart_absence' => 'الغياب الذكي',
+    'employee_monthly_attendance' => 'دوام الموظف الشهري',
     'attendance_groups' => 'فئات الحضور',
     'attendance_shifts' => 'مناوبات الحضور',
     'group_schedules' => 'جداول الفئات',

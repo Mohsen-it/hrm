@@ -156,6 +156,13 @@ export const navigationGroups = [
         icon: 'fa-solid fa-user-clock',
         permissions: ['view-attendance-by-schedule'],
       },
+      {
+        id: 'attendance.employee-monthly-attendance',
+        label: 'menu.employee_monthly_attendance',
+        route: 'smart-absence.employee-attendance',
+        icon: 'fa-solid fa-calendar-check',
+        permissions: ['view-attendance-by-schedule'],
+      },
     ],
   },
   {

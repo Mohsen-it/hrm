@@ -41,6 +41,7 @@ return [
     'permissions' => 'Permissions',
     'schedules' => 'Monthly Schedules',
     'smart_absence' => 'Smart Absence',
+    'employee_monthly_attendance' => 'Employee Monthly Attendance',
     'attendance_groups' => 'Attendance Groups',
     'attendance_shifts' => 'Attendance Shifts',
     'group_schedules' => 'Group Schedules',

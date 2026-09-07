@@ -30,3 +30,13 @@ zkteco-service/20260715132038.sql
 20260720142938.sql
 baseline_counts.json
 /zkbackup
+/public/photo
+/storage/framework/cache/data/
+/storage/framework/sessions/
+/storage/framework/views/
+/storage/logs/
+/storage/app/debug/
+*.sqlite3-shm
+*.sqlite3-wal
+*.sqlite3-journal
+/zkteco-service/logs/

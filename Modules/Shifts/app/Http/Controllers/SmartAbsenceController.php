@@ -48,9 +48,6 @@ class SmartAbsenceController extends Controller
 
         $statusCounts = $this->absenceService->getDailyStatusBreakdown($date, $departmentId, $rotationIds, $rotationGroupIds);
 
-        $rotations = $this->buildRotationOptions();
-        $departments = $this->buildDepartmentOptions();
-
         $totalExpected = $report['expected']->count();
         $totalAbsent = $report['absent']->count();
         $attendanceRate = $totalExpected > 0
@@ -86,8 +83,11 @@ class SmartAbsenceController extends Controller
                 'status_counts' => $statusCounts,
                 'unassigned' => $unassigned,
             ],
-            'rotations' => $rotations,
-            'departments' => $departments,
+            // True-lazy filter options: static lists evaluated only when the
+            // prop is actually requested, so partial `only: [...]` reloads
+            // skip these queries entirely. Same payload on full loads.
+            'rotations' => fn () => $this->buildRotationOptions(),
+            'departments' => fn () => $this->buildDepartmentOptions(),
             'monthlyData' => [],
             'monthlyReportData' => [],
             'filters' => [
@@ -157,8 +157,8 @@ class SmartAbsenceController extends Controller
                 'from_date' => $from->toDateString(),
                 'to_date' => $to->toDateString(),
             ],
-            'rotations' => $this->buildRotationOptions(),
-            'departments' => $this->buildDepartmentOptions(),
+            'rotations' => fn () => $this->buildRotationOptions(),
+            'departments' => fn () => $this->buildDepartmentOptions(),
             'filters' => [
                 'from_date' => $from->toDateString(),
                 'to_date' => $to->toDateString(),

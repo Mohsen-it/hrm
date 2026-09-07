@@ -27,7 +27,7 @@ class UserIndexResource extends JsonResource
             'branch_id' => $this->branch_id,
             'department_id' => $this->department_id,
             'subordination_id' => $this->subordination_id,
-            'shift_id' => $this->shift_id,
+            'position_id' => $this->position_id,
             'status' => $this->status,
 
             'company' => $this->whenLoaded('company', fn () => $this->company ? [
@@ -53,10 +53,18 @@ class UserIndexResource extends JsonResource
                 'display_name' => $this->subordination->display_name,
             ] : null),
 
-            'shift' => $this->whenLoaded('shift', fn () => $this->shift ? [
-                'id' => $this->shift->id,
-                'shift_name' => $this->shift->shift_name,
+            'position' => $this->whenLoaded('position', fn () => $this->position ? [
+                'id' => $this->position->id,
+                'position_name' => $this->position->position_name,
             ] : null),
+
+            'rotation' => $this->whenLoaded('rotationAssignments', function () {
+                $active = $this->rotationAssignments->first();
+                return $active?->rotation ? [
+                    'id' => $active->rotation->id,
+                    'rotation_name' => $active->rotation->name,
+                ] : null;
+            }),
         ];
     }
 }

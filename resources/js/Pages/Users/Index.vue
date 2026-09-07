@@ -52,7 +52,7 @@ const columns = computed(() => [
     { key: 'branch', label: t('users.branch') },
     { key: 'subordination', label: t('users.subordination') },
     { key: 'department', label: t('users.department') },
-    { key: 'shift', label: t('users.shift') },
+    { key: 'position', label: t('users.position') },
     { key: 'status', label: t('common.status'), cellClass: 'text-center' },
     { key: 'actions', label: t('common.actions'), cellClass: 'text-center w-[240px]' },
 ]);
@@ -302,8 +302,8 @@ usePageTitle(t('users.title'));
             <template #cell-department="{ row }">
                 <span>{{ row.department?.department_name || '—' }}</span>
             </template>
-            <template #cell-shift="{ row }">
-                <span>{{ row.shift?.shift_name || '—' }}</span>
+            <template #cell-position="{ row }">
+                <span>{{ row.position?.position_name || '—' }}</span>
             </template>
 
             <template #cell-status="{ row }">
@@ -320,7 +320,7 @@ usePageTitle(t('users.title'));
                     <IconButton icon="fas fa-eye" :aria-label="t('common.view')" variant="info" :href="route('users.show', row.id)" />
                     <IconButton icon="fas fa-pen" :aria-label="t('common.edit')" variant="primary" :href="route('users.edit', row.id)" />
                     <IconButton icon="fas fa-fingerprint" :aria-label="t('users.fingerprint_history')" variant="success" @click="openFingerprintHistory(row)" />
-                    <IconButton icon="fas fa-clock" :aria-label="t('users.manage_shifts')" variant="secondary" :href="route('users.shifts', row.id)" />
+                    <IconButton v-if="row.rotation" icon="fas fa-sync-alt" :aria-label="t('users.manage_shifts')" variant="secondary" :href="route('rotations.show', row.rotation.id)" />
                     <IconButton icon="fas fa-trash" :aria-label="t('common.delete')" variant="danger" @click="confirmDelete(row)" />
                 </div>
             </template>

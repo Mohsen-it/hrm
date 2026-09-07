@@ -9,11 +9,13 @@ export default {
 <script setup>
 import { usePageTitle } from '@/composables/usePageTitle';
 
-import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount, watch, defineAsyncComponent } from 'vue';
 import { Link } from '@inertiajs/vue3';
 import { Badge, Avatar, EmptyState, Button, FormDatepicker } from '@/Components/ui';
 import DashboardWidget from '@/Components/dashboard/DashboardWidget.vue';
-import DashboardChart from '@/Components/dashboard/DashboardChart.vue';
+// Heavy chart code (chart.js) loads in a separate chunk only when this page
+// renders — identical output, smaller initial bundle on every other page.
+const DashboardChart = defineAsyncComponent(() => import('@/Components/dashboard/DashboardChart.vue'));
 import LiveCounter from '@/Components/dashboard/LiveCounter.vue';
 import AttendanceHeatmap from '@/Components/dashboard/AttendanceHeatmap.vue';
 import { useTranslations } from '@/composables/useTranslations';

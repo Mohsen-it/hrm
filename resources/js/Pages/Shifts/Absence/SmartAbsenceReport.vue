@@ -193,12 +193,14 @@ watch([fromDate, toDate], () => {
 })
 
 function loadDaily() {
+    // Partial reload: rotations/departments filter options are static after
+    // the first load, so only the report data + filters are refreshed.
     router.get(route('smart-absence.daily'), {
         date: selectedDate.value,
         department_id: selectedDepartmentId.value || null,
         rotation_ids: selectedRotationIds.value,
         rotation_group_ids: selectedRotationGroupIds.value,
-    }, { preserveState: true, preserveScroll: true, replace: true })
+    }, { preserveState: true, preserveScroll: true, replace: true, only: ['dailyData', 'monthlyData', 'monthlyReportData', 'filters'] })
 }
 
 function loadMonthly() {
@@ -208,7 +210,7 @@ function loadMonthly() {
         department_id: selectedDepartmentId.value || null,
         rotation_ids: selectedRotationIds.value,
         rotation_group_ids: selectedRotationGroupIds.value,
-    }, { preserveState: true, preserveScroll: true, replace: true })
+    }, { preserveState: true, preserveScroll: true, replace: true, only: ['dailyData', 'monthlyData', 'monthlyReportData', 'filters'] })
 }
 
 function clearFilters() {

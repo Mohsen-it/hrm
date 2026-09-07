@@ -51,8 +51,11 @@ class VacationBalancesController extends Controller
                 'default_days_per_year' => (int) $type->default_days_per_year,
             ])->values(),
             'employees' => $matrix['employees'],
-            'departments' => $this->buildDepartmentOptions(),
-            'years' => $this->buildYearOptions(),
+            // True-lazy static options: the frontend refreshes with
+            // `only: ['employees', 'filters']`, so these are evaluated only
+            // on full page loads. Same payload, fewer queries per keystroke.
+            'departments' => fn () => $this->buildDepartmentOptions(),
+            'years' => fn () => $this->buildYearOptions(),
             'filters' => [
                 'year' => $year,
                 'department_id' => $departmentId,

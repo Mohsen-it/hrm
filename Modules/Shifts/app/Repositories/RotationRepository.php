@@ -22,13 +22,15 @@ class RotationRepository
 
     public function getAll(array $filters = [], int|string $perPage = 20): LengthAwarePaginator
     {
+        // Order by PK (indexed) — latest() would sort by created_at which has
+        // no index on this table. Same precedent as UserRepository::getAll.
         return $this->paginateOrAll(
             $this->applyFilters(
                 $this->query()
                     ->with($this->defaultWith)
                     ->withCount(['activeAssignments as active_employees_count']),
                 $filters
-            )->latest(),
+            )->orderBy('att_rotations.id', 'desc'),
             $perPage
         );
     }

@@ -79,6 +79,32 @@ class UserVacationBalanceRepository
     }
 
     /**
+     * Return every balance held by the supplied users in one indexed query.
+     *
+     * Batched counterpart of {@see getForUser()} — same ordering and eager
+     * loads, grouped by the caller. Replaces N× per-user queries.
+     *
+     * @param  array<int, int>  $userIds
+     * @return Collection<int, UserVacationBalance>
+     */
+    public function getForUsers(array $userIds): Collection
+    {
+        $ids = array_values(array_unique(array_map('intval', $userIds)));
+
+        if (empty($ids)) {
+            return new Collection;
+        }
+
+        return $this->query()
+            ->with('vacationType')
+            ->whereIn('user_id', $ids)
+            ->orderBy('user_id')
+            ->orderBy('year', 'desc')
+            ->orderBy('vacation_type_id')
+            ->get();
+    }
+
+    /**
      * Return every active balance for a year (used by year-end carry).
      *
      * @return Collection<int, UserVacationBalance>

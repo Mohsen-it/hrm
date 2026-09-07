@@ -54,6 +54,22 @@ class VacationBalanceService
     }
 
     /**
+     * Return balances for many users in one indexed query, grouped by user.
+     *
+     * Batched counterpart of {@see getBalancesForUser()} — identical models
+     * and ordering, keyed by user id so callers can map without N+1 queries.
+     *
+     * @param  array<int, int>  $userIds
+     * @return array<int, Collection<int, UserVacationBalance>>
+     */
+    public function getBalancesForUsers(array $userIds): array
+    {
+        return $this->balanceRepository->getForUsers($userIds)
+            ->groupBy('user_id')
+            ->all();
+    }
+
+    /**
      * Return the (user, type, year) balance, creating it on first use.
      */
     public function resolveBalance(int $userId, int $typeId, int $year): UserVacationBalance

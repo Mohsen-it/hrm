@@ -159,16 +159,6 @@ class UsersController extends Controller
 
         $currentRotationAssignment = $this->rotationService->getActiveAssignment($user->id);
 
-        $rotationsData = $this->rotationService->getAllList()
-            ->map(fn ($r) => [
-                'id' => $r->id ?? 0,
-                'name' => $r->name ?? 'Unnamed Rotation',
-                'groups' => ($r->groups ?? collect())->map(fn ($g) => [
-                    'id' => $g->id ?? 0,
-                    'name' => $g->name ?? 'Unnamed Group',
-                ])->values(),
-            ]);
-
         return Inertia::render('Users/Edit', array_merge(
             [
                 'user' => fn () => new UserResource($user),
@@ -181,7 +171,15 @@ class UsersController extends Controller
                     'start_date' => $currentRotationAssignment->start_date?->format('Y-m-d'),
                     'end_date' => $currentRotationAssignment->end_date?->format('Y-m-d'),
                 ] : null,
-                'rotations' => fn () => $rotationsData,
+                'rotations' => fn () => $this->rotationService->getAllList()
+                    ->map(fn ($r) => [
+                        'id' => $r->id ?? 0,
+                        'name' => $r->name ?? 'Unnamed Rotation',
+                        'groups' => ($r->groups ?? collect())->map(fn ($g) => [
+                            'id' => $g->id ?? 0,
+                            'name' => $g->name ?? 'Unnamed Group',
+                        ])->values(),
+                    ]),
             ],
             $this->formOptions()
         ));

@@ -65,11 +65,15 @@ class VacationController extends Controller
      */
     protected function getOnLeaveToday(string $date): array
     {
+        // Indexed range query: idx_vacation_req_status_start (status, start_date, end_date)
+        // covers this. whereDate() wraps the column in DATE() and prevents
+        // index use — direct comparison on the DATE columns is index-friendly
+        // and returns byte-identical rows since start_date/end_date are DATEs.
         return UserVacationRequest::query()
             ->with(['user:id,name,employee_code', 'type:id,code,name_ar,name_en,color'])
             ->where('status', 'approved')
-            ->whereDate('start_date', '<=', $date)
-            ->whereDate('end_date', '>=', $date)
+            ->where('start_date', '<=', $date)
+            ->where('end_date', '>=', $date)
             ->orderBy('start_date')
             ->get()
             ->map(fn (UserVacationRequest $r) => [
@@ -115,19 +119,26 @@ class VacationController extends Controller
     /**
      * Roll-up balances per user, per vacation type.
      *
+     * Single indexed `whereIn` query for all listed users instead of one
+     * query per user (N+1). Identical payload, same per-user ordering.
+     *
      * @return array<int, array<string, mixed>>
      */
     protected function getCompanyBalances(): array
     {
-        $rows = [];
         $users = User::query()
             ->where('is_active_employee', true)
             ->orderBy('name')
             ->limit(50)
             ->get(['id', 'name', 'employee_code']);
 
+        $byUser = $this->balanceService->getBalancesForUsers(
+            $users->pluck('id')->all()
+        );
+
+        $rows = [];
         foreach ($users as $user) {
-            $balances = $this->balanceService->getBalancesForUser($user->id);
+            $balances = $byUser[$user->id] ?? collect();
             $rows[] = [
                 'user_id' => $user->id,
                 'user_name' => $user->name,

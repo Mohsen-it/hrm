@@ -58,8 +58,14 @@ class HandleInertiaRequests extends Middleware
                     'avatar' => $user->avatar,
                     'avatar_url' => $user->avatar_url,
                 ] : null,
-                'permissions' => $user ? $user->getAllPermissions()->pluck('name')->all() : [],
-                'roles' => $user ? $user->getRoleNames()->all() : [],
+                // Shortest safe cache: 60s per authenticated user. Spatie has no
+                // built-in cache for getAllPermissions/getRoleNames, so every
+                // Inertia request would otherwise fire 2 extra queries. 60s is
+                // short enough that a freshly granted role appears within a
+                // minute, and the cache is per-user so no cross-user leakage.
+                // Identical output — only the source changes.
+                'permissions' => $user ? Cache::remember("auth:perms:{$user->id}", 60, fn () => $user->getAllPermissions()->pluck('name')->all()) : [],
+                'roles' => $user ? Cache::remember("auth:roles:{$user->id}", 60, fn () => $user->getRoleNames()->all()) : [],
             ],
             'locale' => $locale,
             'direction' => $direction,
@@ -114,24 +120,31 @@ class HandleInertiaRequests extends Middleware
      *
      * Any add/edit/delete of a root or module lang file changes the digest and
      * therefore invalidates the cached translation payload automatically.
+     *
+     * The fingerprint itself scans the filesystem (module list + glob +
+     * filemtime per file), so it is memoized for 60 seconds: the worst case
+     * is a newly added translation key appearing within a minute, while every
+     * other Inertia request in that window skips filesystem I/O entirely.
      */
     protected function translationsFingerprint(string $locale): string
     {
-        $paths = [lang_path($locale)];
+        return Cache::remember("inertia:translations-fingerprint:{$locale}", 60, function () use ($locale) {
+            $paths = [lang_path($locale)];
 
-        foreach (Module::allEnabled() as $module) {
-            $paths[] = $module->getPath()."/lang/{$locale}";
-        }
-
-        $mtimes = [];
-
-        foreach ($paths as $path) {
-            foreach ((array) glob($path.'/*.php') as $file) {
-                $mtimes[] = (int) @filemtime($file);
+            foreach (Module::allEnabled() as $module) {
+                $paths[] = $module->getPath()."/lang/{$locale}";
             }
-        }
 
-        return md5(implode(',', $mtimes));
+            $mtimes = [];
+
+            foreach ($paths as $path) {
+                foreach ((array) glob($path.'/*.php') as $file) {
+                    $mtimes[] = (int) @filemtime($file);
+                }
+            }
+
+            return md5(implode(',', $mtimes));
+        });
     }
 
     /**

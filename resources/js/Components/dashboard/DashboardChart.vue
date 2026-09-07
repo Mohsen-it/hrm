@@ -1,8 +1,48 @@
 <script setup>
 import { ref, onMounted, watch, onBeforeUnmount, shallowRef } from 'vue';
-import { Chart, registerables } from 'chart.js';
+// Subset registration instead of `registerables`: the app only renders
+// doughnut/pie/bar/line(+radar guard) charts, so shipping every controller,
+// scale and element (~all of chart.js) in the initial bundle is waste.
+// `Filler` is required (line datasets use `fill: true`), `Title` is kept so
+// any `options.plugins.title` payload keeps working exactly as before.
+import {
+    Chart,
+    DoughnutController,
+    PieController,
+    BarController,
+    LineController,
+    RadarController,
+    ArcElement,
+    BarElement,
+    PointElement,
+    LineElement,
+    CategoryScale,
+    LinearScale,
+    RadialLinearScale,
+    Tooltip,
+    Legend,
+    Title,
+    Filler,
+} from 'chart.js';
 
-Chart.register(...registerables);
+Chart.register(
+    DoughnutController,
+    PieController,
+    BarController,
+    LineController,
+    RadarController,
+    ArcElement,
+    BarElement,
+    PointElement,
+    LineElement,
+    CategoryScale,
+    LinearScale,
+    RadialLinearScale,
+    Tooltip,
+    Legend,
+    Title,
+    Filler,
+);
 
 const props = defineProps({
     type: { type: String, required: true },

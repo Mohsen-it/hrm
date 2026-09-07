@@ -53,6 +53,7 @@ class UserRepository
                         'grade:id,grade_name',
                         'subordination:id,code,name_ar,name_en',
                         'shift:id,shift_name',
+                        'rotationAssignments.rotation:id,name',
                     ]),
                 $filters
             )->orderBy('users.id', 'desc'),

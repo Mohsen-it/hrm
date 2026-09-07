@@ -33,6 +33,28 @@ export default defineConfig({
             '@': fileURLToPath(new URL('./resources/js', import.meta.url)),
         },
     },
+    build: {
+        // Split heavy third-party code into independent chunks so the initial
+        // page load only downloads what it needs. Page components are already
+        // code-split automatically by the import.meta.glob in app.js; these
+        // manual chunks keep big vendors out of every page chunk without
+        // changing any runtime behaviour (import graph untouched).
+        chunkSizeWarningLimit: 600,
+        rollupOptions: {
+            output: {
+                // Rolldown (Vite 8) accepts only the function form here.
+                manualChunks(id) {
+                    if (!id.includes('node_modules')) return undefined;
+                    if (id.includes('node_modules/chart.js')) return 'charts';
+                    if (id.includes('node_modules/@inertiajs') || id.includes('node_modules/ziggy-js')) return 'inertia-vendor';
+                    if (id.includes('node_modules/laravel-echo') || id.includes('node_modules/pusher-js')) return 'realtime';
+                    if (id.includes('node_modules/axios') || id.includes('node_modules/mitt')) return 'http';
+                    if (id.includes('node_modules/vue/')) return 'vue-vendor';
+                    return undefined;
+                },
+            },
+        },
+    },
     server: {
         watch: {
             // Runtime logs and the ADMS SQLite queue change continuously while

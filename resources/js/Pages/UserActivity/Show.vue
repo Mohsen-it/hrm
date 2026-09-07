@@ -9,11 +9,12 @@ export default {
 <script setup>
 import { usePageTitle } from '@/composables/usePageTitle';
 
-import { ref, computed } from 'vue';
+import { ref, computed, defineAsyncComponent } from 'vue';
 import { router } from '@inertiajs/vue3';
 import IdleGapControl from '@/Components/UserActivity/IdleGapControl.vue';
 import { Avatar, Badge, Button, Card, FormDatepicker, FormSelect, PageHeader, StatCard, EmptyState } from '@/Components/ui';
-import DashboardChart from '@/Components/dashboard/DashboardChart.vue';
+// Same lazy chart chunk as the Dashboard — identical output, downloaded once.
+const DashboardChart = defineAsyncComponent(() => import('@/Components/dashboard/DashboardChart.vue'));
 import DashboardWidget from '@/Components/dashboard/DashboardWidget.vue';
 import { usePeriodFilter } from '@/composables/usePeriodFilter';
 import { useTranslations } from '@/composables/useTranslations';

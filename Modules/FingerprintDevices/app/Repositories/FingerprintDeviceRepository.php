@@ -22,8 +22,10 @@ class FingerprintDeviceRepository
 
     public function getAll(array $filters = [], int|string $perPage = 20): LengthAwarePaginator
     {
+        // Order by PK (indexed) instead of latest()/created_at (unindexed).
+        // Same precedent as UserRepository::getAll (spec 008 §8.1).
         return $this->paginateOrAll(
-            $this->applyFilters($this->query()->with(['deviceType', 'branch']), $filters)->latest(),
+            $this->applyFilters($this->query()->with(['deviceType', 'branch']), $filters)->orderBy('fingerprint_devices.id', 'desc'),
             $perPage
         );
     }

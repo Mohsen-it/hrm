@@ -69,8 +69,6 @@ function open() {
 }
 
 function scheduleOpen(immediate = false) {
-    // Nothing to preview without a photo.
-    if (!props.src || previewFailed.value) return;
     clearTimers();
     if (immediate) {
         open();
@@ -117,7 +115,7 @@ onUnmounted(() => {
 
         <Teleport to="body">
             <div
-                v-if="src && isOpen && !previewFailed"
+                v-if="isOpen"
                 class="fixed z-[90]"
                 :style="{ left: anchor.x + 'px', top: anchor.y + 'px' }"
                 role="tooltip"
@@ -128,7 +126,7 @@ onUnmounted(() => {
                 >
                     <div class="bg-gradient-to-b from-mistral-primary/15 via-transparent to-transparent p-2.5 pb-2">
                         <img
-                            v-if="previewMounted"
+                            v-if="previewMounted && src && !previewFailed"
                             :src="src"
                             :alt="name"
                             class="h-64 w-[188px] rounded-xl object-cover ring-1 ring-black/10"

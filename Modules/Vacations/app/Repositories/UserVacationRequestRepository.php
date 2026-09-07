@@ -160,13 +160,19 @@ class UserVacationRequestRepository
             $q->where('start_date', '<=', $to);
         });
 
+        // Indexed lookup: range on start_date / end_date instead of YEAR(col),
+        // so idx_vacation_req_status_start / idx_vacation_req_user_dates can apply.
+        // Output identical to WHERE YEAR(start_date)=Y OR YEAR(end_date)=Y.
         $query->when($filters['year'] ?? null, function (Builder $q, $year): void {
+            $year = (int) $year;
             $q->where(function (Builder $sub) use ($year): void {
-                $sub->whereYear('start_date', (int) $year)
-                    ->orWhereYear('end_date', (int) $year);
+                $sub->whereBetween('start_date', ["{$year}-01-01", "{$year}-12-31"])
+                    ->orWhereBetween('end_date', ["{$year}-01-01", "{$year}-12-31"]);
             });
         });
 
+        // Free-text search: paginated, so the leading-wildcard LIKE on `reason`
+        // is bounded. Indexed filters above (status/user_id/dates) narrow first.
         $query->when($filters['search'] ?? null, function (Builder $q, $search): void {
             $q->where(function (Builder $sub) use ($search): void {
                 $sub->where('reason', 'like', "%{$search}%")

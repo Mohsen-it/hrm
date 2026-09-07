@@ -65,14 +65,19 @@ class RawAttendanceLogRepository
     /**
      * Get all unprocessed raw logs, optionally restricted to a punch window.
      *
+     * Indexed lookup: idx_raw_logs_processed_punch (processed, punch_time).
+     * Eager loads user/device to prevent N+1 (output unchanged).
+     *
      * @return Collection<int, RawAttendanceLog>
      */
     public function getUnprocessed(?string $fromTime = null, ?string $toTime = null, int $limit = 0): Collection
     {
         $query = $this->query()
+            ->with($this->defaultWith)
             ->unprocessed()
-            ->when($fromTime, fn (Builder $q, $from) => $q->where('punch_time', '>=', $from))
-            ->when($toTime, fn (Builder $q, $to) => $q->where('punch_time', '<=', $to))
+            ->when($fromTime && $toTime, fn (Builder $q) => $q->whereBetween('punch_time', [$fromTime, $toTime]))
+            ->when($fromTime && ! $toTime, fn (Builder $q) => $q->where('punch_time', '>=', $fromTime))
+            ->when(! $fromTime && $toTime, fn (Builder $q) => $q->where('punch_time', '<=', $toTime))
             ->orderBy('punch_time');
 
         return $limit > 0 ? $query->limit($limit)->get() : $query->get();
@@ -81,14 +86,18 @@ class RawAttendanceLogRepository
     /**
      * Get all raw logs for a specific user.
      *
+     * Indexed lookup: att_raw_logs_user_ts_idx (user_id, punch_time).
+     *
      * @return Collection<int, RawAttendanceLog>
      */
     public function getByUser(int $userId, ?string $fromTime = null, ?string $toTime = null): Collection
     {
         return $this->query()
+            ->with($this->defaultWith)
             ->forUser($userId)
-            ->when($fromTime, fn (Builder $q, $from) => $q->where('punch_time', '>=', $from))
-            ->when($toTime, fn (Builder $q, $to) => $q->where('punch_time', '<=', $to))
+            ->when($fromTime && $toTime, fn (Builder $q) => $q->whereBetween('punch_time', [$fromTime, $toTime]))
+            ->when($fromTime && ! $toTime, fn (Builder $q) => $q->where('punch_time', '>=', $fromTime))
+            ->when(! $fromTime && $toTime, fn (Builder $q) => $q->where('punch_time', '<=', $toTime))
             ->orderBy('punch_time')
             ->get();
     }
@@ -96,14 +105,18 @@ class RawAttendanceLogRepository
     /**
      * Get all raw logs for a specific device.
      *
+     * Indexed lookup: idx_raw_logs_dedup (device_id, device_user_id, punch_time) prefix.
+     *
      * @return Collection<int, RawAttendanceLog>
      */
     public function getByDevice(int $deviceId, ?string $fromTime = null, ?string $toTime = null): Collection
     {
         return $this->query()
+            ->with($this->defaultWith)
             ->forDevice($deviceId)
-            ->when($fromTime, fn (Builder $q, $from) => $q->where('punch_time', '>=', $from))
-            ->when($toTime, fn (Builder $q, $to) => $q->where('punch_time', '<=', $to))
+            ->when($fromTime && $toTime, fn (Builder $q) => $q->whereBetween('punch_time', [$fromTime, $toTime]))
+            ->when($fromTime && ! $toTime, fn (Builder $q) => $q->where('punch_time', '>=', $fromTime))
+            ->when(! $fromTime && $toTime, fn (Builder $q) => $q->where('punch_time', '<=', $toTime))
             ->orderBy('punch_time')
             ->get();
     }

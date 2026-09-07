@@ -11,7 +11,7 @@ import { usePageTitle } from '@/composables/usePageTitle';
 
 import { ref, computed } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
-import { PageHeader, DataTable, Badge, Button, Card, SearchInput, FormSelect, Alert, Avatar } from '@/Components/ui';
+import { PageHeader, DataTable, Badge, Button, Card, SearchInput, FormSelect, Alert, AvatarWithPreview } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
@@ -184,7 +184,7 @@ usePageTitle(t('fingerprint_devices.unregistered_employees'));
         >
             <template #cell-name="{ row }">
                 <div class="flex items-center gap-2">
-                    <Avatar :name="row.name" :src="row.avatar_url" size="sm" />
+                    <AvatarWithPreview :name="row.name" :src="row.avatar_url" :employee-code="row.employee_code" size="sm" />
                     <div>
                         <div class="font-semibold text-mistral-ink">
                             {{ row.name }}

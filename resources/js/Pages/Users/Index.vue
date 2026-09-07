@@ -12,7 +12,7 @@ import { usePageTitle } from '@/composables/usePageTitle';
 import { ref, computed } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
-import { PageHeader, DataTable, SearchInput, ConfirmDialog, Badge, Button, Card, IconButton, FormSelect, Alert, Avatar, FormModal } from '@/Components/ui';
+import { PageHeader, DataTable, SearchInput, ConfirmDialog, Badge, Button, Card, IconButton, FormSelect, Alert, AvatarWithPreview, FormModal } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
@@ -278,7 +278,7 @@ usePageTitle(t('users.title'));
         >
             <template #cell-name="{ row }">
                 <div class="flex items-center gap-2">
-                    <Avatar :name="row.name" :src="row.avatar_url" size="sm" />
+                    <AvatarWithPreview :name="row.name" :src="row.avatar_url" :employee-code="row.employee_code" :href="route('users.show', row.id)" size="sm" />
                     <div>
                         <div class="font-semibold text-mistral-ink">
                             {{ row.name }}

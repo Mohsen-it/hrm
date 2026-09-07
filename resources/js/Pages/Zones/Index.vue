@@ -55,11 +55,16 @@ const columns = computed(() => [
 ]);
 
 function onSearch(value) {
-    router.get(route('zones.index'), { ...props.filters, search: value }, { preserveState: true, preserveScroll: true, replace: true, only: ['zones'] });
+    router.get(route('zones.index'), { ...props.filters, search: value, page: 1 }, { preserveState: true, preserveScroll: true, replace: true, only: ['zones', 'filters'] });
+}
+
+function onExport() {
+    const live = Object.fromEntries(new URLSearchParams(window.location.search).entries());
+    window.location.href = route('zones.export', { ...props.filters, ...live });
 }
 
 function onFilterChange(filters) {
-    router.get(route('zones.index'), { ...props.filters, ...filters }, { preserveState: true, preserveScroll: true, replace: true, only: ['zones'] });
+    router.get(route('zones.index'), { ...props.filters, ...filters, page: 1 }, { preserveState: true, preserveScroll: true, replace: true, only: ['zones', 'filters'] });
 }
 
 function confirmDelete(zone) {
@@ -103,10 +108,11 @@ usePageTitle(t('zones.title'));
             :data="zones"
             :filters="filters"
             :route-name="'zones.index'"
-            :only="['zones']"
+            :only="['zones', 'filters']"
             storage-key="zones"
             @search="onSearch"
             @filter-change="onFilterChange"
+            @export="onExport"
         >
             <template #cell-name_ar="{ row }">
                 <a :href="route('zones.show', row.id)" class="font-medium text-mistral-primary hover:underline">

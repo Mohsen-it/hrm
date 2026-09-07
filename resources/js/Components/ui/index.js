@@ -1,5 +1,6 @@
 export { default as Alert } from './Alert.vue';
 export { default as Avatar } from './Avatar.vue';
+export { default as AvatarWithPreview } from './AvatarWithPreview.vue';
 export { default as Badge } from './Badge.vue';
 export { default as Breadcrumb } from './Breadcrumb.vue';
 export { default as Button } from './Button.vue';

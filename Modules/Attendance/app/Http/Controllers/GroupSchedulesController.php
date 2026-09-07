@@ -28,11 +28,11 @@ class GroupSchedulesController extends Controller
     {
         $this->authorize('view-group-schedules');
 
-        $filters = $request->only(['group_id', 'shift_id', 'date']);
+        $filters = $request->only(['search', 'group_id', 'shift_id', 'date']);
         $filters = array_filter($filters, fn ($v) => $v !== null && $v !== '');
 
         return Inertia::render('Shifts/GroupSchedules/Index', [
-            'schedules' => fn () => $this->scheduleService->getAllSchedules($filters, 20),
+            'schedules' => fn () => $this->scheduleService->getAllSchedules($filters, $request->input('per_page', 20)),
             'filters' => fn () => $filters,
         ]);
     }

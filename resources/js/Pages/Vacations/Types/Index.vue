@@ -36,7 +36,12 @@ const columns = computed(() => [
 ]);
 
 function onSearch(value) {
-    router.get(route('vacations.types.index'), { ...props.filters, search: value }, { preserveState: true, preserveScroll: true, replace: true, only: ['types'] });
+    router.get(route('vacations.types.index'), { ...props.filters, search: value, page: 1 }, { preserveState: true, preserveScroll: true, replace: true, only: ['types', 'filters'] });
+}
+
+function onExport() {
+    const live = Object.fromEntries(new URLSearchParams(window.location.search).entries());
+    window.location.href = route('vacations.types.export', { ...props.filters, ...live });
 }
 
 function confirmDelete(type) {
@@ -72,9 +77,10 @@ usePageTitle(t('vacations.vacation_types'));
             :data="types"
             :filters="filters"
             :route-name="'vacations.types.index'"
-            :only="['types']"
+            :only="['types', 'filters']"
             storage-key="vacation-types"
             @search="onSearch"
+            @export="onExport"
         >
             <template #cell-is_paid="{ row }">
                 <Badge v-if="row.is_paid" :text="t('common.yes')" variant="active" />

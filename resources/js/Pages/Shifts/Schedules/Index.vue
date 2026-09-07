@@ -109,7 +109,7 @@ function onFilterChange(filters) {
             next[key] = value;
         }
     }
-    router.get(route('schedules.index'), next, { preserveState: true, replace: true });
+    router.get(route('schedules.index'), next, { preserveState: true, preserveScroll: true, replace: true, only: ['periods', 'filters'] });
 }
 
 function confirmPublish(period) {
@@ -164,7 +164,7 @@ usePageTitle(t('shifts.schedules_title'));
             :data="periods"
             :filters="filters"
             :route-name="'schedules.index'"
-            :only="['periods']"
+            :only="['periods', 'filters']"
             storage-key="schedules"
             @filter-change="onFilterChange"
         >

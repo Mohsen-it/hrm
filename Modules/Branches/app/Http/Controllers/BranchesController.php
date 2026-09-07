@@ -32,10 +32,11 @@ class BranchesController extends Controller
         $this->authorize('view-branches');
 
         return Inertia::render('Branches/Index', [
-            'filters' => fn () => $request->only(['search', 'status', 'company_id', 'is_main']),
+            'filters' => fn () => $request->only(['search', 'status', 'company_id', 'is_main', 'city']),
             'branches' => fn () => BranchResource::collection(
                 $this->branchService->getAllBranches(
-                    $request->only(['search', 'status', 'company_id', 'is_main'])
+                    $request->only(['search', 'status', 'company_id', 'is_main', 'city']),
+                    $request->input('per_page', 20)
                 )
             ),
             'companies' => fn () => $this->companyService->getActiveCompanies()
@@ -149,7 +150,7 @@ class BranchesController extends Controller
         $this->authorize('view-branches');
 
         $branches = $this->branchService->getAllBranches(
-            $request->only(['search', 'status', 'company_id', 'is_main']),
+            $request->only(['search', 'status', 'company_id', 'is_main', 'city']),
             'all'
         );
 

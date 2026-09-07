@@ -49,8 +49,8 @@ function formatDays(days) {
 const columns = computed(() => [
     { key: 'shift_code', label: t('shifts.code'), sortable: true },
     { key: 'shift_name', label: t('shifts.name'), sortable: true },
-    { key: 'company', label: t('shifts.company'), filterable: true, filterType: 'select', filterOptions: [{ value: '', label: t('shifts.select_company') }, ...props.companies.map((c) => ({ value: c.id, label: c.company_name }))] },
-    { key: 'branch', label: t('shifts.branch'), filterable: true, filterType: 'select', filterOptions: [{ value: '', label: t('shifts.select_branch') }, ...props.branches.map((b) => ({ value: b.id, label: b.branch_name }))] },
+    { key: 'company', label: t('shifts.company'), filterable: true, filterType: 'select', filterKey: 'company_id', filterOptions: [{ value: '', label: t('shifts.select_company') }, ...props.companies.map((c) => ({ value: c.id, label: c.company_name }))] },
+    { key: 'branch', label: t('shifts.branch'), filterable: true, filterType: 'select', filterKey: 'branch_id', filterOptions: [{ value: '', label: t('shifts.select_branch') }, ...props.branches.map((b) => ({ value: b.id, label: b.branch_name }))] },
     { key: 'time_range', label: t('shifts.time_range') },
     { key: 'work_days', label: t('shifts.work_days') },
     { key: 'status', label: t('common.status'), cellClass: 'text-center', filterable: true, filterType: 'select', filterOptions: [{ value: '', label: t('common.all_statuses') }, { value: '1', label: t('common.active') }, { value: '0', label: t('common.inactive') }] },
@@ -60,22 +60,16 @@ const columns = computed(() => [
 function onSearch(value) {
     router.get(
         route('shifts.index'),
-        { ...props.filters, search: value },
-        { preserveState: true, preserveScroll: true, replace: true, only: ['shifts'] },
+        { ...props.filters, search: value, page: 1 },
+        { preserveState: true, preserveScroll: true, replace: true, only: ['shifts', 'filters'] },
     );
 }
 
-function onFilterChange(key, value) {
-    const next = { ...props.filters };
-    if (value === '' || value === null || value === undefined) {
-        delete next[key];
-    } else {
-        next[key] = value;
-    }
+function onFilterChange(filters) {
     router.get(
         route('shifts.index'),
-        next,
-        { preserveState: true, preserveScroll: true, replace: true, only: ['shifts'] },
+        { ...props.filters, ...filters, page: 1 },
+        { preserveState: true, preserveScroll: true, replace: true, only: ['shifts', 'filters'] },
     );
 }
 
@@ -119,7 +113,7 @@ usePageTitle(t('shifts.title'));
             :data="shifts"
             :filters="filters"
             :route-name="'shifts.index'"
-            :only="['shifts']"
+            :only="['shifts', 'filters']"
             storage-key="shifts"
             @search="onSearch"
             @filter-change="onFilterChange"

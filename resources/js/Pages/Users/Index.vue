@@ -89,7 +89,7 @@ function onSearch(value) {
     router.get(
         route('users.index'),
         { ...props.filters, search: value, page: 1 },
-        { preserveState: true, preserveScroll: true, replace: true, only: ['users'] },
+        { preserveState: true, preserveScroll: true, replace: true, only: ['users', 'filters'] },
     );
 }
 
@@ -100,16 +100,19 @@ function applyFilter(key, value) {
     } else {
         newFilters[key] = value;
     }
-    router.get(route('users.index'), newFilters, {
+    router.get(route('users.index'), { ...newFilters, page: 1 }, {
         preserveState: true,
         preserveScroll: true,
         replace: true,
-        only: ['users'],
+        only: ['users', 'filters'],
     });
 }
 
 function onExport() {
-    window.location.href = route('users.export', props.filters);
+    // Read live filters from the URL (source of truth for what's visible),
+    // so export never uses stale props when a partial Inertia reload lagged behind.
+    const live = Object.fromEntries(new URLSearchParams(window.location.search).entries());
+    window.location.href = route('users.export', { ...props.filters, ...live });
 }
 
 function onExportSelected() {
@@ -264,7 +267,7 @@ usePageTitle(t('users.title'));
             :data="users"
             :filters="filters"
             :route-name="'users.index'"
-            :only="['users']"
+            :only="['users', 'filters']"
             enable-bulk-delete
             enable-bulk-export
             @search="onSearch"

@@ -65,7 +65,7 @@ class HolidaysController extends Controller
 
         return Inertia::render('Holidays/Index', [
             'filters' => fn () => $filters,
-            'holidays' => fn () => $this->holidayService->getAllHolidays($filters, 20)
+            'holidays' => fn () => $this->holidayService->getAllHolidays($filters, $request->input('per_page', 20))
                 ->through(fn (Holiday $h) => $this->present($h)),
             'upcoming' => fn () => $upcoming,
         ]);

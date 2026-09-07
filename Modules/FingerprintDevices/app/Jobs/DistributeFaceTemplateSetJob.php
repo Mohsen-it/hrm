@@ -29,11 +29,18 @@ class DistributeFaceTemplateSetJob implements ShouldQueue
         public int $sourceDeviceId,
         public string $sourceSerial,
         public string $setId,
-    ) {}
+        public ?int $dispatchedAt = null,
+    ) {
+        $this->dispatchedAt ??= time();
+    }
 
     public function handle(
         FaceTemplateDistributionService $distributionService,
     ): void {
+        if ($this->distributionHalted()) {
+            return;
+        }
+
         $user = User::find($this->userId);
         if (! $user) {
             return;
@@ -76,5 +83,42 @@ class DistributeFaceTemplateSetJob implements ShouldQueue
                 throw $e;
             }
         }
+    }
+
+    /**
+     * Anti-flood guard: kill-switch + staleness TTL (see
+     * DistributeFingerprintJob::distributionHalted for rationale).
+     */
+    private function distributionHalted(): bool
+    {
+        if (! config('fingerprintdevices.device_writes_enabled', true)) {
+            Log::warning('FACE_DIST_KILLED_BY_SWITCH', [
+                'user_id' => $this->userId,
+                'set_id' => $this->setId,
+            ]);
+
+            return true;
+        }
+
+        $maxAge = max(1, (int) config('fingerprintdevices.distribution_max_age_hours', 72));
+        // NOTE: `??` (not `=== null`) is REQUIRED here: rows serialized before
+        // `dispatchedAt` existed unserialize with the typed property
+        // UNINITIALIZED, and a direct read would throw. `??` safely yields null.
+        $dispatchedAt = $this->dispatchedAt ?? null;
+        $age = $dispatchedAt === null
+            ? PHP_INT_MAX
+            : max(0, time() - $dispatchedAt);
+
+        if ($age > $maxAge * 3600) {
+            Log::info('FACE_DIST_STALE_SKIPPED', [
+                'user_id' => $this->userId,
+                'set_id' => $this->setId,
+                'age_seconds' => $age === PHP_INT_MAX ? -1 : $age,
+            ]);
+
+            return true;
+        }
+
+        return false;
     }
 }

@@ -23,3 +23,18 @@
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteRule ^ index.php [L]
 </IfModule>
+
+# HR employee photos (public/photo) are static files served directly by the
+# web server (no PHP). Long immutable cache: browsers request each photo
+# once and reuse it on every page (lists, dashboard, sidebar) with zero
+# server cost. Photos rarely change; after replacing one, rename it or run
+# `php artisan users:sync-photos` pointed at the new filename.
+<If "%{REQUEST_URI} =~ m#^/photo/#">
+    <IfModule mod_headers.c>
+        Header set Cache-Control "public, max-age=31536000, immutable"
+    </IfModule>
+    <IfModule mod_expires.c>
+        ExpiresActive On
+        ExpiresDefault "access plus 1 year"
+    </IfModule>
+</If>

@@ -78,7 +78,7 @@ class FingerprintDevicesController extends Controller
 
         return Inertia::render('FingerprintDevices/Index', [
             'filters' => fn () => $filters,
-            'devices' => fn () => $this->deviceService->getAllDevices($filters)
+            'devices' => fn () => $this->deviceService->getAllDevices($filters, request()->input('per_page', 20))
                 ->through(fn ($d) => (new FingerprintDeviceResource($d))->toArray(request())),
             'deviceTypes' => fn () => $this->typeService->getActiveDeviceTypes()
                 ->map(fn ($dt) => ['id' => $dt->id, 'name' => $dt->name])

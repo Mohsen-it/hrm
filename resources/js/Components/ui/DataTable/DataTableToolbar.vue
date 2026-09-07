@@ -75,6 +75,10 @@ const visibleColumnKeys = computed(() => new Set(props.visibleColumns.map((colum
 
 const hasSelection = computed(() => props.selectedIds.length > 0);
 
+function filterKeyOf(col) {
+    return col.filterKey || col.key;
+}
+
 function onFilterChange(key, value) {
     const next = { ...props.filters };
     if (value === '' || value === null || value === undefined) {
@@ -92,15 +96,6 @@ function handleSaveFilter() {
     showSavedFilterMenu.value = false;
 }
 
-function exportCSV() {
-    const headers = props.visibleColumns.filter((c) => c.key !== 'actions' && c.key !== 'select').map((c) => c.label);
-    const rows = [];
-    for (const col of props.visibleColumns) {
-        if (col.key === 'actions' || col.key === 'select') continue;
-    }
-    emit('export', { format: 'csv', columns: props.visibleColumns });
-    showExportMenu.value = false;
-}
 </script>
 
 <template>
@@ -270,7 +265,7 @@ function exportCSV() {
                             :class="dir === 'rtl' ? 'right-0' : 'left-0'"
                         >
                             <button
-                                v-for="fmt in [{ key: 'csv', icon: 'fas fa-file-csv', label: 'CSV' }, { key: 'excel', icon: 'fas fa-file-excel', label: 'Excel' }]"
+                                v-for="fmt in [{ key: 'excel', icon: 'fas fa-file-excel', label: 'Excel' }]"
                                 :key="fmt.key"
                                 type="button"
                                 class="w-full flex items-center gap-2 px-3 py-2 text-[13px] text-mistral-ink hover:bg-mistral-surface transition-colors"
@@ -357,9 +352,9 @@ function exportCSV() {
                                 {{ col.label }}
                             </label>
                             <select
-                                :value="filters[col.key] ?? ''"
+                                :value="filters[filterKeyOf(col)] ?? ''"
                                 class="h-9 w-full px-3 text-[13px] text-mistral-ink bg-white border border-mistral-hairline-strong rounded-lg appearance-none cursor-pointer select-with-arrow focus:outline-none focus:ring-2 focus:ring-mistral-primary/20 focus:border-mistral-primary"
-                                @change="onFilterChange(col.key, $event.target.value)"
+                                @change="onFilterChange(filterKeyOf(col), $event.target.value)"
                             >
                                 <option value="">{{ dir === 'rtl' ? 'الكل' : 'All' }}</option>
                                 <option
@@ -377,9 +372,9 @@ function exportCSV() {
                             </label>
                             <input
                                 type="date"
-                                :value="filters[col.key] ?? ''"
+                                :value="filters[filterKeyOf(col)] ?? ''"
                                 class="h-9 w-full px-3 text-[13px] text-mistral-ink bg-white border border-mistral-hairline-strong rounded-lg focus:outline-none focus:ring-2 focus:ring-mistral-primary/20 focus:border-mistral-primary"
-                                @change="onFilterChange(col.key, $event.target.value)"
+                                @change="onFilterChange(filterKeyOf(col), $event.target.value)"
                             />
                         </div>
                         <div v-else class="min-w-[160px]">
@@ -388,10 +383,10 @@ function exportCSV() {
                             </label>
                             <input
                                 type="text"
-                                :value="filters[col.key] ?? ''"
+                                :value="filters[filterKeyOf(col)] ?? ''"
                                 :placeholder="dir === 'rtl' ? 'فلتر...' : 'Filter...'"
                                 class="h-9 w-full px-3 text-[13px] text-mistral-ink bg-white border border-mistral-hairline-strong rounded-lg placeholder:text-mistral-muted focus:outline-none focus:ring-2 focus:ring-mistral-primary/20 focus:border-mistral-primary"
-                                @input="onFilterChange(col.key, $event.target.value)"
+                                @input="onFilterChange(filterKeyOf(col), $event.target.value)"
                             />
                         </div>
                     </template>

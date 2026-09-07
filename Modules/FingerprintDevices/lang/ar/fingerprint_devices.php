@@ -115,6 +115,7 @@ return [
     'live_scan_hint' => 'تحدث الصفحة تلقائياً كل 3 ثوانٍ',
     'live_punch_in' => 'دخول',
     'live_punch_out' => 'خروج',
+    'live_punch_unknown' => 'خارج الوردية',
     'punch_type' => 'نوع البصمة',
     'punched_at' => 'وقت البصمة',
     'sync_title' => 'مزامنة الجهاز',

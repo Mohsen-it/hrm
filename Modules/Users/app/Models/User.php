@@ -329,11 +329,27 @@ class User extends Authenticatable
 
     /**
      * Get the URL of the user's avatar.
+     *
+     * O(1) pure string concatenation — never touches the filesystem so it
+     * stays free in lists with hundreds of rows. The `avatar` column holds
+     * either `photo/{employee_code}.jpg` (synced from public/photo via
+     * `users:sync-photos`) or a `storage` path from manual uploads.
      */
     public function getAvatarUrlAttribute(): ?string
     {
         if (! $this->avatar) {
             return null;
+        }
+
+        $avatar = ltrim($this->avatar, '/');
+
+        if (str_starts_with($avatar, 'http://') || str_starts_with($avatar, 'https://')) {
+            return $this->avatar;
+        }
+
+        // Static HR photos served directly by the web server (no PHP).
+        if (str_starts_with($avatar, 'photo/')) {
+            return asset($avatar);
         }
 
         return Storage::disk('public')->url($this->avatar);

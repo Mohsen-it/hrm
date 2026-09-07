@@ -204,9 +204,14 @@ onMounted(() => {
 function onSearch(value) {
     router.get(
         route('attendance.daily-summaries.index'),
-        { ...props.filters, search: value },
-        { preserveState: true, preserveScroll: true, replace: true, only: ['summaries', 'stats'] },
+        { ...props.filters, search: value, page: 1 },
+        { preserveState: true, preserveScroll: true, replace: true, only: ['summaries', 'stats', 'filters'] },
     );
+}
+
+function onExportSummaries() {
+    const live = Object.fromEntries(new URLSearchParams(window.location.search).entries());
+    window.location.href = route('attendance.daily-summaries.export', { ...props.filters, ...live });
 }
 
 function onFilterChange(filters) {
@@ -218,11 +223,11 @@ function onFilterChange(filters) {
             next[key] = value;
         }
     });
-    router.get(route('attendance.daily-summaries.index'), next, {
+    router.get(route('attendance.daily-summaries.index'), { ...next, page: 1 }, {
         preserveState: true,
         preserveScroll: true,
         replace: true,
-        only: ['summaries', 'stats'],
+        only: ['summaries', 'stats', 'filters'],
     });
 }
 
@@ -286,11 +291,12 @@ usePageTitle(t('attendance.summaries'));
             :data="summaries"
             :filters="filters"
             :route-name="'attendance.daily-summaries.index'"
-            :only="['summaries', 'stats']"
+            :only="['summaries', 'stats', 'filters']"
             :empty-title="t('attendance.messages.empty_summaries')"
             storage-key="attendance-summaries"
             @search="onSearch"
             @filter-change="onFilterChange"
+            @export="onExportSummaries"
         >
             <template #cell-user="{ row }">
                 <div>

@@ -30,10 +30,11 @@ class CompaniesController extends Controller
         $this->authorize('view-companies');
 
         return Inertia::render('Companies/Index', [
-            'filters' => fn () => $request->only(['search', 'status', 'is_default']),
+            'filters' => fn () => $request->only(['search', 'status', 'is_default', 'email', 'city']),
             'companies' => fn () => CompanyResource::collection(
                 $this->companyService->getAllCompanies(
-                    $request->only(['search', 'status', 'is_default'])
+                    $request->only(['search', 'status', 'is_default', 'email', 'city']),
+                    $request->input('per_page', 20)
                 )
             ),
         ]);
@@ -157,7 +158,7 @@ class CompaniesController extends Controller
         $this->authorize('view-companies');
 
         $companies = $this->companyService->getAllCompanies(
-            $request->only(['search', 'status', 'is_default']),
+            $request->only(['search', 'status', 'is_default', 'email', 'city']),
             'all'
         );
 

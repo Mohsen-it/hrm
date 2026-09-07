@@ -85,8 +85,8 @@ const columns = computed(() => [
 function onSearch(value) {
     router.get(
         route('shift-assignments.index'),
-        { ...props.filters, search: value },
-        { preserveState: true, preserveScroll: true, replace: true, only: ['assignments'] },
+        { ...props.filters, search: value, page: 1 },
+        { preserveState: true, preserveScroll: true, replace: true, only: ['assignments', 'filters'] },
     );
 }
 
@@ -99,14 +99,26 @@ function applyFilter(key, value) {
     }
     router.get(
         route('shift-assignments.index'),
-        next,
-        { preserveState: true, preserveScroll: true, replace: true, only: ['assignments'] },
+        { ...next, page: 1 },
+        { preserveState: true, preserveScroll: true, replace: true, only: ['assignments', 'filters'] },
     );
 }
 
-function onFilterChange({ key, value }) {
-    const filterKey = key === 'category' ? 'category_id' : key;
-    applyFilter(filterKey, value);
+function onFilterChange(filters) {
+    const next = { ...props.filters };
+    Object.entries(filters).forEach(([key, value]) => {
+        const filterKey = key === 'category' ? 'category_id' : key;
+        if (value === '' || value === null || value === undefined) {
+            delete next[filterKey];
+        } else {
+            next[filterKey] = value;
+        }
+    });
+    router.get(
+        route('shift-assignments.index'),
+        { ...next, page: 1 },
+        { preserveState: true, preserveScroll: true, replace: true, only: ['assignments', 'filters'] },
+    );
 }
 
 function confirmUnassign(assignment) {
@@ -203,7 +215,7 @@ usePageTitle(t('shifts.shift_assignments'));
             :data="assignments"
             :filters="filters"
             :route-name="'shift-assignments.index'"
-            :only="['assignments']"
+            :only="['assignments', 'filters']"
             storage-key="shift-assignments"
             @search="onSearch"
             @filter-change="onFilterChange"

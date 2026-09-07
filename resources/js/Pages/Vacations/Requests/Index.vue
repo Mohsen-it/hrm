@@ -54,11 +54,16 @@ const columns = computed(() => [
 ]);
 
 function onSearch(value) {
-    router.get(route('vacations.requests.index'), { ...props.filters, search: value }, { preserveState: true, preserveScroll: true, replace: true, only: ['requests'] });
+    router.get(route('vacations.requests.index'), { ...props.filters, search: value, page: 1 }, { preserveState: true, preserveScroll: true, replace: true, only: ['requests', 'filters'] });
 }
 
-function onFilterChange(key, value) {
-    router.get(route('vacations.requests.index'), { ...props.filters, [key]: value, page: 1 }, { preserveState: true, preserveScroll: true, replace: true, only: ['requests'] });
+function onExport() {
+    const live = Object.fromEntries(new URLSearchParams(window.location.search).entries());
+    window.location.href = route('vacations.requests.export', { ...props.filters, ...live });
+}
+
+function onFilterChange(filters) {
+    router.get(route('vacations.requests.index'), { ...props.filters, ...filters, page: 1 }, { preserveState: true, preserveScroll: true, replace: true, only: ['requests', 'filters'] });
 }
 
 function editRequest(request) {
@@ -111,10 +116,11 @@ usePageTitle(t('vacations.vacation_requests'));
             :data="requests"
             :filters="filters"
             :route-name="'vacations.requests.index'"
-            :only="['requests']"
+            :only="['requests', 'filters']"
             storage-key="vacation-requests"
             @search="onSearch"
             @filter-change="onFilterChange"
+            @export="onExport"
         >
             <template #cell-status="{ row }">
                 <Badge :text="t('vacations.' + row.status)" :variant="statusVariant(row.status)" />

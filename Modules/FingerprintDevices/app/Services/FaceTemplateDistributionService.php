@@ -150,7 +150,7 @@ class FaceTemplateDistributionService
 
                     $hash = hash('sha256', (string) $row->template_data);
 
-                    $this->commandService->queueFaceTemplate(
+                    $command = $this->commandService->queueFaceTemplate(
                         $device->id,
                         $pin,
                         (string) $row->template_data,
@@ -158,7 +158,14 @@ class FaceTemplateDistributionService
                         $hash,
                     );
 
-                    $totals['queued_face_templates']++;
+                    // wasRecentlyCreated=false means idempotency kicked in
+                    // (already pending/completed/failed) — count as duplicate
+                    // so bulk runs report honestly instead of looking "new".
+                    if ($command->wasRecentlyCreated) {
+                        $totals['queued_face_templates']++;
+                    } else {
+                        $totals['duplicate_face_commands']++;
+                    }
                 } catch (\Throwable $exception) {
                     $totals['failed_face_templates']++;
                     $errors[] = "Face template {$row->template_index} for pin {$pin}: {$exception->getMessage()}";

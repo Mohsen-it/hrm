@@ -47,8 +47,8 @@ function formatDate(value) {
 function onSearch(value) {
     router.get(
         route('fingerprint-templates.index'),
-        { ...props.filters, search: value },
-        { preserveState: true, preserveScroll: true, replace: true, only: ['templates'] },
+        { ...props.filters, search: value, page: 1 },
+        { preserveState: true, preserveScroll: true, replace: true, only: ['templates', 'filters'] },
     );
 }
 
@@ -88,7 +88,7 @@ usePageTitle(t('fingerprint_devices.templates'));
             :data="templates"
             :filters="filters"
             :route-name="'fingerprint-templates.index'"
-            :only="['templates']"
+            :only="['templates', 'filters']"
             :empty-title="t('fingerprint_devices.no_templates_title')"
             :empty-description="t('fingerprint_devices.no_templates_description')"
             storage-key="fingerprint-device-templates"

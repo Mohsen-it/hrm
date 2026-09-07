@@ -42,15 +42,17 @@ function justificationTypes(row) {
 }
 
 function search(value) {
-    router.get(route('vacations.justifications.index'), { ...props.filters, search: value }, {
+    router.get(route('vacations.justifications.index'), { ...props.filters, search: value, page: 1 }, {
         preserveState: true,
+        preserveScroll: true,
         replace: true,
-        only: ['requests'],
+        only: ['requests', 'filters'],
     });
 }
 
 function exportExcel() {
-    window.location.href = route('vacations.justifications.export', props.filters);
+    const live = Object.fromEntries(new URLSearchParams(window.location.search).entries());
+    window.location.href = route('vacations.justifications.export', { ...props.filters, ...live });
 }
 
 function confirmDelete(row) {
@@ -95,6 +97,7 @@ usePageTitle('التبريرات');
             :data="requests"
             :filters="filters"
             route-name="vacations.justifications.index"
+            :only="['requests', 'filters']"
             storage-key="attendance-justifications"
             @search="search"
             @export="exportExcel"

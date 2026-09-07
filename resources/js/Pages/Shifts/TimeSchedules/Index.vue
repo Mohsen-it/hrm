@@ -44,9 +44,14 @@ const columns = computed(() => [
 function onSearch(value) {
     router.get(
         route('time-schedules.index'),
-        { ...props.filters, search: value },
-        { preserveState: true, preserveScroll: true, replace: true, only: ['schedules'] },
+        { ...props.filters, search: value, page: 1 },
+        { preserveState: true, preserveScroll: true, replace: true, only: ['schedules', 'filters'] },
     );
+}
+
+function onExport() {
+    const live = Object.fromEntries(new URLSearchParams(window.location.search).entries());
+    window.location.href = route('time-schedules.export', { ...props.filters, ...live });
 }
 
 function confirmDelete(schedule) {
@@ -97,9 +102,10 @@ usePageTitle(t('shifts.time_schedules_title'));
             :data="schedules"
             :filters="filters"
             :route-name="'time-schedules.index'"
-            :only="['schedules']"
+            :only="['schedules', 'filters']"
             storage-key="time-schedules"
             @search="onSearch"
+            @export="onExport"
         >
             <template #cell-in_time="{ row }">
                 <span dir="ltr">{{ row.in_time ? String(row.in_time).slice(0, 5) : '—' }}</span>

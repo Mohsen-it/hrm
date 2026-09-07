@@ -32,6 +32,17 @@ class DeviceCommandService
     // -----------------------------------------------------------------------
 
     /**
+     * Command types that can wipe or reboot a terminal. Nothing in the
+     * system uses them; they are refused at this single choke-point so a
+     * future bug can never mass-wipe devices.
+     */
+    public const DANGEROUS_COMMAND_TYPES = [
+        DeviceCommand::TYPE_RESTART,
+        DeviceCommand::TYPE_CLEAR_USERS,
+        DeviceCommand::TYPE_CLEAR_LOGS,
+    ];
+
+    /**
      * Queue a command for a device.
      */
     public function queueCommand(
@@ -43,6 +54,20 @@ class DeviceCommandService
         ?int $expiresInMinutes = null,
         int $maxRetries = 3,
     ): DeviceCommand {
+        if (in_array($commandType, self::DANGEROUS_COMMAND_TYPES, true)
+            && ! config('fingerprintdevices.allow_dangerous_commands', false)
+        ) {
+            Log::critical('DEVICE_DANGEROUS_COMMAND_REFUSED', [
+                'device_id' => $deviceId,
+                'command_type' => $commandType,
+            ]);
+
+            throw new \RuntimeException(
+                "Refusing to queue dangerous device command [{$commandType}] for device [{$deviceId}]. ".
+                'Enable DEVICE_ALLOW_DANGEROUS_COMMANDS explicitly if this is ever truly intended.'
+            );
+        }
+
         return $this->commandRepo->create([
             'device_id' => $deviceId,
             'command_type' => $commandType,
@@ -83,6 +108,16 @@ class DeviceCommandService
             ? $this->buildUserInfoBodyAllowArabic($pin, $name, $privilege, $password, $card)
             : $this->buildUserInfoBody($pin, $name, $privilege, $password, $card);
 
+        // Idempotency (safe, read-only): an identical completed USERINFO means
+        // this exact employee payload already reached the device — return it
+        // instead of inserting a duplicate row. A NEW pin has no completed
+        // row, so new-employee sync still queues normally. A CHANGED payload
+        // (different body) falls through and queues normally.
+        $delivered = $this->commandRepo->findCompletedUserCommand($deviceId, $body);
+        if ($delivered) {
+            return $delivered;
+        }
+
         return $this->queueCommand(
             $deviceId,
             DeviceCommand::TYPE_USER_CREATE,
@@ -114,6 +149,13 @@ class DeviceCommandService
             $existing->update(['command_body' => $body]);
 
             return $existing->fresh();
+        }
+
+        // Idempotency: identical completed payload → already delivered, skip.
+        // Different payload (e.g. renamed employee) → queue the update normally.
+        $delivered = $this->commandRepo->findCompletedUserCommand($deviceId, $body);
+        if ($delivered) {
+            return $delivered;
         }
 
         return $this->queueCommand(
@@ -234,6 +276,16 @@ class DeviceCommandService
             return $existing;
         }
 
+        // Idempotency (safe, read-only): same device+pin+index+hash already
+        // delivered (completed) or already failed-and-awaiting-retry → return
+        // it instead of inserting a duplicate row with identical bytes.
+        // A NEW template has a different hash → different correlation id →
+        // queues normally, so new enrollments still sync instantly.
+        $alreadyHandled = $this->commandRepo->findAnyByCorrelation($deviceId, $correlationId);
+        if ($alreadyHandled) {
+            return $alreadyHandled;
+        }
+
         // ZKTeco multi-bio push write — byte-exact mirror of what these
         // terminals themselves transmit in their BIODATA uploads.  Field
         // casing is CRITICAL: this firmware requires ``MajorVer`` /
@@ -289,6 +341,13 @@ class DeviceCommandService
 
         if ($existing) {
             return $existing;
+        }
+
+        // Idempotency: same fingerprint bytes already queued/delivered for
+        // this device → no duplicate row. New finger/index/hash still queues.
+        $alreadyHandled = $this->commandRepo->findAnyByCorrelation($deviceId, $correlationId);
+        if ($alreadyHandled) {
+            return $alreadyHandled;
         }
 
         $body = 'DATA UPDATE biodata '.implode("\t", [
@@ -631,21 +690,20 @@ class DeviceCommandService
     }
 
     /**
-     * Re-queue failed face-template commands for retry.
+     * Re-queue failed face-template commands for retry (bounded, no reset).
      *
-     * Resets retry_count, clears error state, and marks them as pending
-     * so the next device poll retries them. Useful for "Device returned -3"
-     * failures on iFace devices that are intermittent and recoverable.
+     * Safety rules (anti-flood): retry_count and max_retries are PRESERVED
+     * (never reset to 0), so a persistently failing device cannot loop
+     * forever; per-command backoff spreads the next attempt; nothing is
+     * deleted — unselected rows stay `failed` and visible for operators.
      *
      * @return array{requeued: int, total_failed: int}
      */
     public function retryFailedFaceCommands(
         ?int $deviceId = null,
-        int $limit = 200,
-        int $hours = 720,
+        int $limit = 50,
+        int $hours = 72,
     ): array {
-        // 720 hours = 30 days. Face templates are critical for employee
-        // attendance — we retry for up to a month before giving up.
         $query = DB::table('device_commands')
             ->where('command_type', DeviceCommand::TYPE_FACE_TEMPLATE)
             ->where('status', DeviceCommand::STATUS_FAILED)
@@ -661,26 +719,32 @@ class DeviceCommandService
 
         $totalFailed = (clone $query)->count();
 
-        $ids = (clone $query)
+        $rows = (clone $query)
             ->orderBy('updated_at')
             ->limit($limit)
-            ->pluck('id');
+            ->get(['id', 'retry_count', 'max_retries']);
 
-        if ($ids->isEmpty()) {
+        if ($rows->isEmpty()) {
             return ['requeued' => 0, 'total_failed' => $totalFailed];
         }
 
-        $requeued = DB::table('device_commands')
-            ->whereIn('id', $ids)
-            ->update([
-                'status' => DeviceCommand::STATUS_PENDING,
-                'retry_count' => 0,
-                'max_retries' => 30,
-                'sent_at' => null,
-                'error_message' => null,
-                'expires_at' => null,
-                'available_at' => null,
-            ]);
+        $requeued = 0;
+        foreach ($rows as $row) {
+            // Respect the per-command budget: exhausted rows stay failed.
+            if ((int) $row->retry_count >= (int) $row->max_retries) {
+                continue;
+            }
+            $backoffSeconds = (int) min(300, 30 * 2 ** max(0, (int) $row->retry_count));
+            DB::table('device_commands')
+                ->where('id', $row->id)
+                ->where('status', DeviceCommand::STATUS_FAILED)
+                ->update([
+                    'status' => DeviceCommand::STATUS_PENDING,
+                    'sent_at' => null,
+                    'available_at' => now()->addSeconds($backoffSeconds),
+                ]);
+            $requeued++;
+        }
 
         Log::info('FACE_COMMANDS_RETRY', [
             'device_id' => $deviceId,

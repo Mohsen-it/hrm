@@ -39,7 +39,8 @@ class ShiftCategoriesController extends Controller
             'filters' => fn () => $request->only(['search', 'type', 'company_id']),
             'categories' => fn () => ShiftCategoryResource::collection(
                 $this->shiftCategoryService->getAll(
-                    $request->only(['search', 'type', 'company_id'])
+                    $request->only(['search', 'type', 'company_id']),
+                    $request->input('per_page', 20)
                 )
             ),
             'types' => ShiftCategoryType::options(),
@@ -212,7 +213,8 @@ class ShiftCategoriesController extends Controller
         $this->authorize('view-shift-categories');
 
         $categories = $this->shiftCategoryService->getAll(
-            $request->only(['search', 'type', 'company_id'])
+            $request->only(['search', 'type', 'company_id']),
+            'all'
         );
 
         $headers = ['#', 'اسم الفئة', 'النوع', 'أيام العمل', 'أيام الراحة', 'الشركة', 'الوصف'];

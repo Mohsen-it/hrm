@@ -8,12 +8,15 @@ use Illuminate\Routing\Router;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
+use Modules\AttendanceIntegration\Console\Commands\HealthCheckCommand;
 use Modules\AttendanceIntegration\Contracts\DeviceRepositoryInterface;
 use Modules\AttendanceIntegration\Events\DeviceSyncCompleted;
 use Modules\AttendanceIntegration\Events\PunchReceived;
+use Modules\AttendanceIntegration\Events\UnmatchedPunchReceived;
 use Modules\AttendanceIntegration\Http\Middleware\AuthenticateDevice;
 use Modules\AttendanceIntegration\Http\Middleware\LogDeviceRequest;
 use Modules\AttendanceIntegration\Listeners\PublishLivePunchEvent;
+use Modules\AttendanceIntegration\Listeners\PublishUnmatchedPunchToFeed;
 use Modules\AttendanceIntegration\Listeners\UpdateDeviceSyncTimestamp;
 use Modules\AttendanceIntegration\Repositories\DeviceRepository;
 use Modules\AttendanceIntegration\Services\AuditLogger;
@@ -48,7 +51,9 @@ class AttendanceIntegrationServiceProvider extends ServiceProvider
 
     private function registerCommands(): void
     {
-        //
+        $this->commands([
+            HealthCheckCommand::class,
+        ]);
     }
 
     private function registerConfig(): void
@@ -70,6 +75,11 @@ class AttendanceIntegrationServiceProvider extends ServiceProvider
         Event::listen(
             PunchReceived::class,
             PublishLivePunchEvent::class,
+        );
+
+        Event::listen(
+            UnmatchedPunchReceived::class,
+            PublishUnmatchedPunchToFeed::class,
         );
 
         Event::listen(

@@ -50,11 +50,16 @@ const columns = computed(() => [
 ]);
 
 function onSearch(value) {
-    router.get(route('holidays.index'), { ...props.filters, search: value }, { preserveState: true, preserveScroll: true, replace: true, only: ['holidays'] });
+    router.get(route('holidays.index'), { ...props.filters, search: value, page: 1 }, { preserveState: true, preserveScroll: true, replace: true, only: ['holidays', 'filters'] });
+}
+
+function onExport() {
+    const live = Object.fromEntries(new URLSearchParams(window.location.search).entries());
+    window.location.href = route('holidays.export', { ...props.filters, ...live });
 }
 
 function onFilterChange(filters) {
-    router.get(route('holidays.index'), { ...props.filters, ...filters }, { preserveState: true, preserveScroll: true, replace: true, only: ['holidays'] });
+    router.get(route('holidays.index'), { ...props.filters, ...filters, page: 1 }, { preserveState: true, preserveScroll: true, replace: true, only: ['holidays', 'filters'] });
 }
 
 function confirmDelete(holiday) {
@@ -116,10 +121,11 @@ usePageTitle(t('holidays.title'));
             :data="holidays"
             :filters="filters"
             :route-name="'holidays.index'"
-            :only="['holidays']"
+            :only="['holidays', 'filters']"
             storage-key="holidays"
             @search="onSearch"
             @filter-change="onFilterChange"
+            @export="onExport"
         >
             <template #cell-is_recurring="{ row }">
                 <Badge v-if="row.is_recurring" :text="t('holidays.yes_recurring')" variant="info" />

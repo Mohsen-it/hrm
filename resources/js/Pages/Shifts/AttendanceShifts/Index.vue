@@ -40,7 +40,11 @@ const formatCycleUnit = (unit) => {
 };
 
 function onSearch(value) {
-    router.get(route('attendance.shifts.index'), { search: value }, { preserveState: true });
+    router.get(
+        route('attendance.shifts.index'),
+        { ...props.filters, search: value, page: 1 },
+        { preserveState: true, preserveScroll: true, replace: true, only: ['shifts', 'filters'] },
+    );
 }
 
 const confirmDelete = (shift) => {
@@ -82,7 +86,7 @@ usePageTitle(t('attendance.attendance_shifts'));
                 :data="shifts"
                 :filters="filters"
                 :route-name="'attendance.shifts.index'"
-            :only="['shifts']"
+            :only="['shifts', 'filters']"
                 storage-key="attendance-shifts"
                 @search="onSearch"
             >

@@ -38,7 +38,8 @@ class PositionsController extends Controller
             'filters' => fn () => $request->only(['search', 'status', 'company_id', 'branch_id', 'department_id']),
             'positions' => fn () => PositionResource::collection(
                 $this->positionService->getAllPositions(
-                    $request->only(['search', 'status', 'company_id', 'branch_id', 'department_id'])
+                    $request->only(['search', 'status', 'company_id', 'branch_id', 'department_id']),
+                    $request->input('per_page', 20)
                 )
             ),
             'companies' => fn () => $this->companyService->getActiveCompanies()

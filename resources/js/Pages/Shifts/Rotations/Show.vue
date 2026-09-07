@@ -156,6 +156,12 @@ function prefetchIfNeeded() {
     }
 }
 
+const exportMonthStr = computed(() => `${currentYear.value}-${String(currentMonth.value + 1).padStart(2, '0')}`);
+
+function exportMonthlyRoster() {
+    window.location.href = route('rotations.monthly-roster.export', props.rotation.id) + `?month=${exportMonthStr.value}`;
+}
+
 const groupColumns = computed(() => [
     { key: 'name', label: t('shifts.group_name') },
     { key: 'group_index', label: t('shifts.group_index'), headerClass: 'text-center' },
@@ -260,6 +266,9 @@ usePageTitle(t('shifts.rotation_details') + ': ' + props.rotation.name);
                 </Button>
                 <Button variant="secondary" :href="route('rotations.timeline', rotation.id)" icon="fas fa-project-diagram">
                     {{ t('shifts.timeline') }}
+                </Button>
+                <Button variant="secondary" @click="exportMonthlyRoster" icon="fas fa-file-excel" :title="t('shifts.monthly_roster_export_hint')">
+                    {{ t('shifts.monthly_roster_export') }}
                 </Button>
                 <Button variant="primary" :href="route('rotations.assign', { rotation: rotation.id })" icon="fas fa-user-plus">
                     {{ t('shifts.assign_employee') }}

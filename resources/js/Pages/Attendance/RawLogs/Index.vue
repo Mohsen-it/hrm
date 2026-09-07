@@ -71,9 +71,14 @@ const columns = computed(() => [
 function onSearch(value) {
     router.get(
         route('attendance.raw-logs.index'),
-        { ...props.filters, search: value },
-        { preserveState: true, preserveScroll: true, replace: true, only: ['logs'] },
+        { ...props.filters, search: value, page: 1 },
+        { preserveState: true, preserveScroll: true, replace: true, only: ['logs', 'filters'] },
     );
+}
+
+function onExport() {
+    const live = Object.fromEntries(new URLSearchParams(window.location.search).entries());
+    window.location.href = route('attendance.raw-logs.export', { ...props.filters, ...live });
 }
 
 function onFilterChange(filters) {
@@ -85,11 +90,11 @@ function onFilterChange(filters) {
             next[key] = value;
         }
     });
-    router.get(route('attendance.raw-logs.index'), next, {
+    router.get(route('attendance.raw-logs.index'), { ...next, page: 1 }, {
         preserveState: true,
         preserveScroll: true,
         replace: true,
-        only: ['logs'],
+        only: ['logs', 'filters'],
     });
 }
 
@@ -143,11 +148,12 @@ usePageTitle(t('attendance.raw_logs'));
             :data="logs"
             :filters="filters"
             :route-name="'attendance.raw-logs.index'"
-            :only="['logs']"
+            :only="['logs', 'filters']"
             :empty-title="t('attendance.messages.empty_logs')"
             storage-key="attendance-raw-logs"
             @search="onSearch"
             @filter-change="onFilterChange"
+            @export="onExport"
         >
             <template #cell-punch_time="{ row }">
                 <span dir="ltr" class="text-[12px]">{{ row.punch_time }}</span>

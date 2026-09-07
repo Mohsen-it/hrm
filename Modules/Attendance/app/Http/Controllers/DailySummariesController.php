@@ -225,11 +225,16 @@ class DailySummariesController extends Controller
             'search', 'user_id', 'status', 'session_type', 'date', 'from', 'to', 'is_complete', 'per_page',
         ]));
 
-        $from = (string) ($filters['from'] ?? now()->subDays(30)->toDateString());
-        $to = (string) ($filters['to'] ?? now()->toDateString());
-        $userId = isset($filters['user_id']) ? (int) $filters['user_id'] : null;
+        if (! isset($filters['from']) && ! isset($filters['to'])) {
+            $filters['from'] = now()->subDays(30)->toDateString();
+            $filters['to'] = now()->toDateString();
+        }
 
-        $summaries = $this->summaryService->getForDateRange($from, $to, $userId);
+        $from = (string) $filters['from'];
+        $to = (string) $filters['to'];
+
+        // Same filter bag as index: search/status/session_type/date/is_complete are honored.
+        $summaries = $this->summaryService->getPaginated($filters, 'all')->getCollection();
 
         $export = new DailySummariesExport($summaries, $from, $to);
 

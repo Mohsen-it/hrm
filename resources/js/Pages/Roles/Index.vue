@@ -118,7 +118,7 @@ usePageTitle(t('roles.title'));
             :data="roles"
             :filters="filters"
             :route-name="'roles.index'"
-            :only="['roles']"
+            :only="['roles', 'filters']"
             storage-key="roles"
             @search="onSearch"
         >

@@ -31,20 +31,25 @@ const selectedPosition = ref(null);
 const columns = computed(() => [
     { key: 'position_code', label: t('positions.code'), sortable: true },
     { key: 'position_name', label: t('positions.name'), sortable: true },
-    { key: 'company', label: t('positions.company'), filterable: true, filterType: 'select', filterOptions: props.companies.map((c) => ({ value: c.id, label: c.company_name })) },
-    { key: 'branch', label: t('positions.branch'), filterable: true, filterType: 'select', filterOptions: props.branches.map((b) => ({ value: b.id, label: b.branch_name })) },
-    { key: 'department', label: t('positions.department'), filterable: true, filterType: 'select', filterOptions: props.departments.map((d) => ({ value: d.id, label: d.department_name })) },
+    { key: 'company', label: t('positions.company'), filterable: true, filterType: 'select', filterKey: 'company_id', filterOptions: props.companies.map((c) => ({ value: c.id, label: c.company_name })) },
+    { key: 'branch', label: t('positions.branch'), filterable: true, filterType: 'select', filterKey: 'branch_id', filterOptions: props.branches.map((b) => ({ value: b.id, label: b.branch_name })) },
+    { key: 'department', label: t('positions.department'), filterable: true, filterType: 'select', filterKey: 'department_id', filterOptions: props.departments.map((d) => ({ value: d.id, label: d.department_name })) },
     { key: 'salary_range', label: t('positions.salary_range') },
     { key: 'status', label: t('common.status'), cellClass: 'text-center', filterable: true, filterType: 'select', filterOptions: [{ value: '1', label: t('common.active') }, { value: '0', label: t('common.inactive') }] },
     { key: 'actions', label: t('common.actions'), cellClass: 'text-center w-[160px]' },
 ]);
 
 function onSearch(value) {
-    router.get(route('positions.index'), { ...props.filters, search: value }, { preserveState: true, preserveScroll: true, replace: true, only: ['positions'] });
+    router.get(route('positions.index'), { ...props.filters, search: value, page: 1 }, { preserveState: true, preserveScroll: true, replace: true, only: ['positions', 'filters'] });
+}
+
+function onExport() {
+    const live = Object.fromEntries(new URLSearchParams(window.location.search).entries());
+    window.location.href = route('positions.export', { ...props.filters, ...live });
 }
 
 function onFilterChange(filters) {
-    router.get(route('positions.index'), { ...props.filters, ...filters }, { preserveState: true, preserveScroll: true, replace: true, only: ['positions'] });
+    router.get(route('positions.index'), { ...props.filters, ...filters, page: 1 }, { preserveState: true, preserveScroll: true, replace: true, only: ['positions', 'filters'] });
 }
 
 function confirmDelete(position) {
@@ -87,10 +92,11 @@ usePageTitle(t('positions.title'));
             :data="positions"
             :filters="filters"
             :route-name="'positions.index'"
-            :only="['positions']"
+            :only="['positions', 'filters']"
             storage-key="positions"
             @search="onSearch"
             @filter-change="onFilterChange"
+            @export="onExport"
         >
             <template #cell-company="{ row }">
                 <span>{{ row.company?.company_name || '—' }}</span>

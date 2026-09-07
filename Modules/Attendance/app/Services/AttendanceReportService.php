@@ -5,6 +5,7 @@ namespace Modules\Attendance\Services;
 use Carbon\CarbonPeriod;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Modules\Attendance\Models\AttendanceSession;
 use Modules\Attendance\Models\DailyAttendanceSummary;
 
@@ -662,10 +663,11 @@ class AttendanceReportService
             $rows = DB::table('daily_attendance_summaries as s')
                 ->join('users as u', 'u.id', '=', 's.user_id')
                 ->whereBetween('s.summary_date', [$from, $to])
-                ->groupBy('u.id', 'u.name')
+                ->groupBy('u.id', 'u.name', 'u.avatar')
                 ->selectRaw('
                     u.id as user_id,
                     u.name as name,
+                    u.avatar as avatar,
                     COALESCE(MAX(s.late_minutes), 0) as late_minutes,
                     SUM(CASE WHEN s.status = "absent" THEN 1 ELSE 0 END) as absent_days
                 ')
@@ -677,10 +679,36 @@ class AttendanceReportService
             return $rows->map(fn ($row) => [
                 'user_id' => (int) $row->user_id,
                 'name' => $row->name,
+                'avatar_url' => self::avatarUrl($row->avatar ?? null),
                 'late_minutes' => (int) $row->late_minutes,
                 'absent_days' => (int) $row->absent_days,
             ])->all();
         });
+    }
+
+    /**
+     * Build a public avatar URL from the raw `users.avatar` value.
+     *
+     * Mirrors User::getAvatarUrlAttribute without loading a model:
+     * O(1) string concat, no filesystem access.
+     */
+    private static function avatarUrl(?string $avatar): ?string
+    {
+        if (! $avatar) {
+            return null;
+        }
+
+        $path = ltrim($avatar, '/');
+
+        if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
+            return $avatar;
+        }
+
+        if (str_starts_with($path, 'photo/')) {
+            return asset($path);
+        }
+
+        return Storage::disk('public')->url($avatar);
     }
 
     /**

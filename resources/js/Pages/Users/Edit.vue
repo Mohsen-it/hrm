@@ -250,6 +250,10 @@ usePageTitle(t('users.edit_user'));
                         :src="user.avatar_url"
                         :alt="user.name"
                         class="w-16 h-16 rounded-full object-cover border border-mistral-hairline-soft"
+                        loading="lazy"
+                        decoding="async"
+                        draggable="false"
+                        onerror="this.style.display='none'"
                     />
                     <div>
                         <p class="text-[13px] text-mistral-steel">

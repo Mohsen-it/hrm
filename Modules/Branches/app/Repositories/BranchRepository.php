@@ -132,6 +132,10 @@ class BranchRepository
             $q->where('status', $filters['status']);
         });
 
+        $query->when($filters['city'] ?? null, function (Builder $q, string $city): void {
+            $q->where('city', 'like', "%{$city}%");
+        });
+
         $query->when($filters['is_main'] ?? null, function (Builder $q): void {
             $q->main();
         });

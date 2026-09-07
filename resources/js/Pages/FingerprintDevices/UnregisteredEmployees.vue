@@ -64,7 +64,7 @@ function onSearch(value) {
     router.get(
         route('fingerprint-devices.unregistered-employees'),
         { ...props.filters, search: value, page: 1 },
-        { preserveState: true, preserveScroll: true, replace: true, only: ['employees', 'total'] },
+        { preserveState: true, preserveScroll: true, replace: true, only: ['employees', 'total', 'filters'] },
     );
 }
 
@@ -75,16 +75,17 @@ function applyFilter(key, value) {
     } else {
         newFilters[key] = value;
     }
-    router.get(route('fingerprint-devices.unregistered-employees'), newFilters, {
+    router.get(route('fingerprint-devices.unregistered-employees'), { ...newFilters, page: 1 }, {
         preserveState: true,
         preserveScroll: true,
         replace: true,
-        only: ['employees', 'total'],
+        only: ['employees', 'total', 'filters'],
     });
 }
 
 function onExport() {
-    window.location.href = route('fingerprint-devices.unregistered-employees.export', props.filters);
+    const live = Object.fromEntries(new URLSearchParams(window.location.search).entries());
+    window.location.href = route('fingerprint-devices.unregistered-employees.export', { ...props.filters, ...live });
 }
 
 const flashSuccess = computed(() => page.props.flash?.success);
@@ -174,11 +175,12 @@ usePageTitle(t('fingerprint_devices.unregistered_employees'));
             :data="employees"
             :filters="filters"
             :route-name="'fingerprint-devices.unregistered-employees'"
-            :only="['employees']"
+            :only="['employees', 'total', 'filters']"
             :empty-title="t('fingerprint_devices.no_unregistered_title')"
             :empty-description="t('fingerprint_devices.no_unregistered_description')"
             storage-key="unregistered-employees"
             @search="onSearch"
+            @export="onExport"
         >
             <template #cell-name="{ row }">
                 <div class="flex items-center gap-2">

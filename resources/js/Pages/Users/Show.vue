@@ -114,6 +114,10 @@ usePageTitle(t('users.view_user'));
                             :src="user.avatar_url"
                             :alt="user.name"
                             class="w-full h-full object-cover"
+                            loading="lazy"
+                            decoding="async"
+                            draggable="false"
+                            onerror="this.style.display='none'"
                         />
                         <i v-else class="fas fa-user text-[32px] text-mistral-stone"></i>
                     </div>

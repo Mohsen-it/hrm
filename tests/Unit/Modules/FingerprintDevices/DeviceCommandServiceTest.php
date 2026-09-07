@@ -110,7 +110,7 @@ class DeviceCommandServiceTest extends TestCase
         $command->markSending();
         $command->update([
             'status' => DeviceCommand::STATUS_FAILED,
-            'retry_count' => 15,
+            'retry_count' => 5,
             'error_message' => 'Device returned -3',
         ]);
 
@@ -121,12 +121,90 @@ class DeviceCommandServiceTest extends TestCase
 
         $fresh = $command->fresh();
         $this->assertSame(DeviceCommand::STATUS_PENDING, $fresh->status);
-        $this->assertSame(0, $fresh->retry_count);
-        $this->assertSame(15, $fresh->max_retries);
+        // Bounded retry: budget preserved (never reset), backoff scheduled.
+        $this->assertSame(5, $fresh->retry_count);
+        $this->assertSame(30, $fresh->max_retries);
         $this->assertNull($fresh->sent_at);
-        $this->assertNull($fresh->error_message);
-        $this->assertNull($fresh->expires_at);
-        $this->assertNull($fresh->available_at);
+        $this->assertNotNull($fresh->available_at);
+    }
+
+    public function test_retry_failed_face_commands_skips_exhausted_budget(): void
+    {
+        [$target] = $this->makeDevices();
+        $service = app(DeviceCommandService::class);
+
+        $command = $service->queueFaceTemplate(
+            $target->id,
+            'EMP-301',
+            'face-template-exhausted',
+            ['index' => 1, 'valid' => 1],
+            hash('sha256', 'face-template-exhausted'),
+        );
+        $command->markSending();
+        $command->update([
+            'status' => DeviceCommand::STATUS_FAILED,
+            'retry_count' => 30,
+            'max_retries' => 30,
+            'error_message' => 'Device returned -3',
+        ]);
+
+        $result = $service->retryFailedFaceCommands(deviceId: $target->id);
+
+        $this->assertSame(0, $result['requeued']);
+        $this->assertSame(DeviceCommand::STATUS_FAILED, $command->fresh()->status);
+    }
+
+    public function test_identical_face_template_is_not_duplicated_after_completion(): void
+    {
+        [$target] = $this->makeDevices();
+        $service = app(DeviceCommandService::class);
+
+        $first = $service->queueFaceTemplate(
+            $target->id,
+            'EMP-302',
+            'same-face-bytes',
+            ['index' => 0, 'valid' => 1],
+            hash('sha256', 'same-face-bytes'),
+        );
+        $first->markSending();
+        $first->markCompleted();
+
+        $second = $service->queueFaceTemplate(
+            $target->id,
+            'EMP-302',
+            'same-face-bytes',
+            ['index' => 0, 'valid' => 1],
+            hash('sha256', 'same-face-bytes'),
+        );
+
+        $this->assertSame($first->id, $second->id);
+        $this->assertSame(1, DeviceCommand::query()->count());
+    }
+
+    public function test_identical_user_create_is_not_duplicated_after_completion(): void
+    {
+        [$target] = $this->makeDevices();
+        $service = app(DeviceCommandService::class);
+
+        $first = $service->queueUserCreate($target->id, '400', 'New Employee');
+        $first->markSending();
+        $first->markCompleted();
+
+        // Same exact payload → already delivered → no new row (new PINs still queue).
+        $second = $service->queueUserCreate($target->id, '400', 'New Employee');
+
+        $this->assertSame($first->id, $second->id);
+    }
+
+    public function test_new_pin_still_queues_user_command(): void
+    {
+        [$target] = $this->makeDevices();
+        $service = app(DeviceCommandService::class);
+
+        $command = $service->queueUserCreate($target->id, '401', 'Brand New');
+
+        $this->assertTrue($command->wasRecentlyCreated);
+        $this->assertSame(DeviceCommand::STATUS_PENDING, $command->fresh()->status);
     }
 
     public function test_retry_failed_face_commands_returns_zero_when_no_failures(): void

@@ -40,10 +40,17 @@ class DistributeFingerprintJob implements ShouldQueue
         public int $fingerId = 0,
         public string $templateData = '',
         public array $attributes = [],
-    ) {}
+        public ?int $dispatchedAt = null,
+    ) {
+        $this->dispatchedAt ??= time();
+    }
 
     public function handle(BridgeBiometricSyncService $bridgeSync): void
     {
+        if ($this->distributionHalted()) {
+            return;
+        }
+
         $source = FingerprintDevice::find($this->sourceDeviceId);
         if (! $source) {
             Log::warning('FP_DIST_SOURCE_MISSING', ['pin' => $this->pin]);
@@ -125,6 +132,45 @@ class DistributeFingerprintJob implements ShouldQueue
                 throw $e;
             }
         }
+    }
+
+    /**
+     * Anti-flood guard: kill-switch + staleness TTL.
+     *
+     * Returns true when this job must self-delete WITHOUT touching any
+     * device (direct TCP writes bypass the ADMS queue, so an unchecked
+     * backlog of thousands of stale jobs would storm the terminals).
+     * Legacy rows serialized before `dispatchedAt` existed carry null and
+     * are treated as infinitely stale.
+     */
+    private function distributionHalted(): bool
+    {
+        if (! config('fingerprintdevices.device_writes_enabled', true)) {
+            Log::warning('FP_DIST_KILLED_BY_SWITCH', ['pin' => $this->pin]);
+
+            return true;
+        }
+
+        $maxAge = max(1, (int) config('fingerprintdevices.distribution_max_age_hours', 72));
+        // NOTE: `??` (not `=== null`) is REQUIRED here: rows serialized before
+        // `dispatchedAt` existed unserialize with the typed property
+        // UNINITIALIZED, and a direct read would throw. `??` safely yields null.
+        $dispatchedAt = $this->dispatchedAt ?? null;
+        $age = $dispatchedAt === null
+            ? PHP_INT_MAX
+            : max(0, time() - $dispatchedAt);
+
+        if ($age > $maxAge * 3600) {
+            Log::info('FP_DIST_STALE_SKIPPED', [
+                'pin' => $this->pin,
+                'source_device_id' => $this->sourceDeviceId,
+                'age_seconds' => $age === PHP_INT_MAX ? -1 : $age,
+            ]);
+
+            return true;
+        }
+
+        return false;
     }
 
     /** @return array<int, array{fid:int, template:string}> */

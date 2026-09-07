@@ -15,6 +15,7 @@ use Modules\AttendanceIntegration\Contracts\DeviceRepositoryInterface;
 use Modules\AttendanceIntegration\DTOs\NormalizedPunch;
 use Modules\AttendanceIntegration\DTOs\PunchType;
 use Modules\AttendanceIntegration\Events\PunchReceived;
+use Modules\AttendanceIntegration\Events\UnmatchedPunchReceived;
 use Modules\AttendanceIntegration\Exceptions\DuplicatePunchException;
 use Modules\Users\Models\User;
 
@@ -114,6 +115,11 @@ class PunchIngestionService
                 if (in_array($classifiedPunchType, [PunchType::BreakIn, PunchType::BreakOut], true)) {
                     $rawLog->markProcessed();
                 }
+
+                // Live-scan honesty: every resolved-user punch is visible
+                // instantly — including unmatched ones — without touching
+                // session/absence logic in any way.
+                Event::dispatch(new UnmatchedPunchReceived($device, $user, $punch, $classifiedPunchType));
 
                 return null;
             }

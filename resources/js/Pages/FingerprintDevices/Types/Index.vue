@@ -38,8 +38,8 @@ const columns = computed(() => [
 function onSearch(value) {
     router.get(
         route('fingerprint-device-types.index'),
-        { ...props.filters, search: value },
-        { preserveState: true, preserveScroll: true, replace: true, only: ['deviceTypes'] },
+        { ...props.filters, search: value, page: 1 },
+        { preserveState: true, preserveScroll: true, replace: true, only: ['deviceTypes', 'filters'] },
     );
 }
 
@@ -81,7 +81,7 @@ usePageTitle(t('fingerprint_devices.device_types'));
             :data="deviceTypes"
             :filters="filters"
             :route-name="'fingerprint-device-types.index'"
-            :only="['deviceTypes']"
+            :only="['deviceTypes', 'filters']"
             :empty-title="t('fingerprint_devices.no_types_title')"
             :empty-description="t('fingerprint_devices.no_types_description')"
             storage-key="fingerprint-device-types"

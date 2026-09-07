@@ -30,8 +30,8 @@ const selectedDepartment = ref(null);
 const columns = computed(() => [
     { key: 'department_code', label: t('departments.code'), sortable: true },
     { key: 'department_name', label: t('departments.name'), sortable: true },
-    { key: 'company', label: t('departments.company'), filterable: true, filterType: 'select', filterOptions: props.companies.map((c) => ({ value: c.id, label: c.company_name })) },
-    { key: 'branch', label: t('departments.branch'), filterable: true, filterType: 'select', filterOptions: props.branches.map((b) => ({ value: b.id, label: b.branch_name })) },
+    { key: 'company', label: t('departments.company'), filterable: true, filterType: 'select', filterKey: 'company_id', filterOptions: props.companies.map((c) => ({ value: c.id, label: c.company_name })) },
+    { key: 'branch', label: t('departments.branch'), filterable: true, filterType: 'select', filterKey: 'branch_id', filterOptions: props.branches.map((b) => ({ value: b.id, label: b.branch_name })) },
     { key: 'manager', label: t('departments.manager') },
     { key: 'phone', label: t('departments.phone') },
     { key: 'status', label: t('common.status'), cellClass: 'text-center', filterable: true, filterType: 'select', filterOptions: [{ value: '1', label: t('common.active') }, { value: '0', label: t('common.inactive') }] },
@@ -39,11 +39,16 @@ const columns = computed(() => [
 ]);
 
 function onSearch(value) {
-    router.get(route('departments.index'), { ...props.filters, search: value }, { preserveState: true, preserveScroll: true, replace: true, only: ['departments'] });
+    router.get(route('departments.index'), { ...props.filters, search: value, page: 1 }, { preserveState: true, preserveScroll: true, replace: true, only: ['departments', 'filters'] });
+}
+
+function onExport() {
+    const live = Object.fromEntries(new URLSearchParams(window.location.search).entries());
+    window.location.href = route('departments.export', { ...props.filters, ...live });
 }
 
 function onFilterChange(filters) {
-    router.get(route('departments.index'), { ...props.filters, ...filters }, { preserveState: true, preserveScroll: true, replace: true, only: ['departments'] });
+    router.get(route('departments.index'), { ...props.filters, ...filters, page: 1 }, { preserveState: true, preserveScroll: true, replace: true, only: ['departments', 'filters'] });
 }
 
 function confirmDelete(department) {
@@ -81,10 +86,11 @@ usePageTitle(t('departments.title'));
             :data="departments"
             :filters="filters"
             :route-name="'departments.index'"
-            :only="['departments']"
+            :only="['departments', 'filters']"
             storage-key="departments"
             @search="onSearch"
             @filter-change="onFilterChange"
+            @export="onExport"
         >
             <template #cell-company="{ row }">
                 <span>{{ row.company?.company_name || '—' }}</span>

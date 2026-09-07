@@ -38,9 +38,14 @@ const columns = computed(() => [
 function onSearch(value) {
     router.get(
         route('rotation-groups.index'),
-        { ...props.filters, search: value },
-        { preserveState: true, preserveScroll: true, replace: true, only: ['groups'] },
+        { ...props.filters, search: value, page: 1 },
+        { preserveState: true, preserveScroll: true, replace: true, only: ['groups', 'filters'] },
     );
+}
+
+function onExport() {
+    const live = Object.fromEntries(new URLSearchParams(window.location.search).entries());
+    window.location.href = route('rotation-groups.export', { ...props.filters, ...live });
 }
 
 const flashSuccess = computed(() => page.props.flash?.success);
@@ -65,9 +70,10 @@ usePageTitle(t('shifts.rotation_groups_title'));
             :data="groups"
             :filters="filters"
             :route-name="'rotation-groups.index'"
-            :only="['groups']"
+            :only="['groups', 'filters']"
             storage-key="rotation-groups"
             @search="onSearch"
+            @export="onExport"
         >
             <template #cell-rotation_name="{ row }">
                 <span class="font-medium text-mistral-ink">{{ row.rotation?.name ?? '—' }}</span>

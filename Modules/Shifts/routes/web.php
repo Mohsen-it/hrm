@@ -171,6 +171,8 @@ Route::middleware(['auth', 'permission:view-rotations'])
             ->name('rotations.timeline');
         Route::get('rotations/{id}/timeline/export', [RotationsController::class, 'timelineExport'])
             ->name('rotations.timeline.export');
+        Route::get('rotations/{id}/monthly-roster/export', [RotationsController::class, 'monthlyRosterExport'])
+            ->name('rotations.monthly-roster.export');
         Route::get('rotations/{id}/groups', [RotationsController::class, 'getGroups'])
             ->name('rotations.groups');
         Route::get('rotations/{id}', [RotationsController::class, 'show'])

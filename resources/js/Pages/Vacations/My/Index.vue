@@ -50,8 +50,8 @@ const columns = computed(() => [
     { key: 'actions', label: t('common.actions'), cellClass: 'text-center w-[120px]' },
 ]);
 
-function onFilterChange(key, value) {
-    router.get(route('vacations.my.index'), { ...props.filters, [key]: value, page: 1 }, { preserveState: true, preserveScroll: true, replace: true, only: ['requests'] });
+function onFilterChange(filters) {
+    router.get(route('vacations.my.index'), { ...props.filters, ...filters, page: 1 }, { preserveState: true, preserveScroll: true, replace: true, only: ['requests', 'filters'] });
 }
 
 const flashSuccess = computed(() => page.props.flash?.success);
@@ -93,7 +93,7 @@ usePageTitle(t('vacations.my_vacations'));
             :data="requests"
             :filters="filters"
             :route-name="'vacations.my.index'"
-            :only="['requests']"
+            :only="['requests', 'filters']"
             storage-key="my-vacations"
             @filter-change="onFilterChange"
         >

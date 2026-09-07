@@ -39,6 +39,7 @@ function onSearch(search) {
         preserveScroll: true,
         preserveState: true,
         replace: true,
+        only: ['users', 'filters'],
     })
 }
 
@@ -71,7 +72,7 @@ usePageTitle(t('menu.role_assignments'));
             :data="users"
             :filters="filters"
             route-name="users.role-assignments"
-            :only="['users']"
+            :only="['users', 'filters']"
             storage-key="user-role-assignments"
             @search="onSearch"
         >

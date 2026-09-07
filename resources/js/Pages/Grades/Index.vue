@@ -30,18 +30,23 @@ const columns = computed(() => [
     { key: 'grade_code', label: t('grades.code'), sortable: true },
     { key: 'grade_name', label: t('grades.name'), sortable: true },
     { key: 'level', label: t('grades.level'), cellClass: 'text-center', sortable: true, filterable: true, filterType: 'text' },
-    { key: 'company', label: t('grades.company'), filterable: true, filterType: 'select', filterOptions: props.companies.map((c) => ({ value: c.id, label: c.company_name })) },
+    { key: 'company', label: t('grades.company'), filterable: true, filterType: 'select', filterKey: 'company_id', filterOptions: props.companies.map((c) => ({ value: c.id, label: c.company_name })) },
     { key: 'salary_range', label: t('grades.salary_range') },
     { key: 'status', label: t('common.status'), cellClass: 'text-center', filterable: true, filterType: 'select', filterOptions: [{ value: '1', label: t('common.active') }, { value: '0', label: t('common.inactive') }] },
     { key: 'actions', label: t('common.actions'), cellClass: 'text-center w-[160px]' },
 ]);
 
 function onSearch(value) {
-    router.get(route('grades.index'), { ...props.filters, search: value }, { preserveState: true, preserveScroll: true, replace: true, only: ['grades'] });
+    router.get(route('grades.index'), { ...props.filters, search: value, page: 1 }, { preserveState: true, preserveScroll: true, replace: true, only: ['grades', 'filters'] });
+}
+
+function onExport() {
+    const live = Object.fromEntries(new URLSearchParams(window.location.search).entries());
+    window.location.href = route('grades.export', { ...props.filters, ...live });
 }
 
 function onFilterChange(filters) {
-    router.get(route('grades.index'), { ...props.filters, ...filters }, { preserveState: true, preserveScroll: true, replace: true, only: ['grades'] });
+    router.get(route('grades.index'), { ...props.filters, ...filters, page: 1 }, { preserveState: true, preserveScroll: true, replace: true, only: ['grades', 'filters'] });
 }
 
 function confirmDelete(grade) {
@@ -84,10 +89,11 @@ usePageTitle(t('grades.title'));
             :data="grades"
             :filters="filters"
             :route-name="'grades.index'"
-            :only="['grades']"
+            :only="['grades', 'filters']"
             storage-key="grades"
             @search="onSearch"
             @filter-change="onFilterChange"
+            @export="onExport"
         >
             <template #cell-level="{ row }">
                 <span>{{ row.level }}</span>

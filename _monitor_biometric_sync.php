@@ -70,11 +70,10 @@ foreach ($coverage as $c) {
     echo "  {$devName}: {$c->user_count} users with face data\n";
 }
 
-echo "\n=== RE-QUEUING FAILED FACE COMMANDS ===\n";
-$result = DeviceCommandService::class;
-$service = app($result);
-$retryResult = $service->retryFailedFaceCommands(limit: 500);
-echo "  Requeued: {$retryResult['requeued']} | Total failed: {$retryResult['total_failed']}\n";
+echo "\n=== FAILED FACE COMMANDS (read-only, no auto requeue) ===\n";
+echo "  NOTE: this monitor no longer re-queues anything by itself.\n";
+echo "  To retry manually (bounded, preserves retry budget):\n";
+echo "    php artisan fingerprints:retry-failed-faces --limit=50 --hours=72\n";
 
 echo "\n=== DISTRIBUTING MISSING FACE SETS (dry-run) ===\n";
 $exitCode = Artisan::call('fingerprints:distribute-missing-faces', ['--dry-run' => true]);

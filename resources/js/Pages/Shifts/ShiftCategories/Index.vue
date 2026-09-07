@@ -111,8 +111,8 @@ const columns = computed(() => [
 function onSearch(value) {
     router.get(
         route('shift-categories.index'),
-        { ...props.filters, search: value },
-        { preserveState: true, preserveScroll: true, replace: true, only: ['categories'] },
+        { ...props.filters, search: value, page: 1 },
+        { preserveState: true, preserveScroll: true, replace: true, only: ['categories', 'filters'] },
     );
 }
 
@@ -125,7 +125,7 @@ function onFilterChange(filters) {
             next[key] = value;
         }
     }
-    router.get(route('shift-categories.index'), next, { preserveState: true, preserveScroll: true, replace: true, only: ['categories'] });
+    router.get(route('shift-categories.index'), { ...next, page: 1 }, { preserveState: true, preserveScroll: true, replace: true, only: ['categories', 'filters'] });
 }
 
 function confirmDelete(category) {
@@ -174,7 +174,7 @@ usePageTitle(t('shifts.shift_categories'));
             :data="categories"
             :filters="filters"
             :route-name="'shift-categories.index'"
-            :only="['categories']"
+            :only="['categories', 'filters']"
             storage-key="shift-categories"
             @search="onSearch"
             @filter-change="onFilterChange"

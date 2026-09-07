@@ -27,8 +27,8 @@ const showDeleteDialog = ref(false);
 const deletingGroup = ref(null);
 
 const columns = [
-    { key: 'code', label: t('attendance.fields.code'), sortable: true, filterable: true },
-    { key: 'name', label: t('attendance.fields.name'), sortable: true, filterable: true },
+    { key: 'code', label: t('attendance.fields.code'), sortable: true, filterable: true, filterKey: 'search' },
+    { key: 'name', label: t('attendance.fields.name'), sortable: true, filterable: true, filterKey: 'search' },
     { key: 'employees_count', label: t('attendance.fields.employees_count'), cellClass: 'text-center' },
     { key: 'status', label: t('attendance.fields.status'), cellClass: 'text-center' },
     { key: 'actions', label: t('common.actions'), cellClass: 'text-center w-[150px]' },
@@ -37,8 +37,16 @@ const columns = [
 function onSearch(value) {
     router.get(
         route('attendance.groups.index'),
-        { search: value },
-        { preserveState: true, preserveScroll: true, replace: true, only: ['groups'] },
+        { ...props.filters, search: value, page: 1 },
+        { preserveState: true, preserveScroll: true, replace: true, only: ['groups', 'filters'] },
+    );
+}
+
+function onFilterChange(filters) {
+    router.get(
+        route('attendance.groups.index'),
+        { ...props.filters, ...filters, page: 1 },
+        { preserveState: true, preserveScroll: true, replace: true, only: ['groups', 'filters'] },
     );
 }
 
@@ -81,9 +89,10 @@ usePageTitle(t('attendance.attendance_groups'));
                 :data="groups"
                 :filters="filters"
                 :route-name="'attendance.groups.index'"
-            :only="['groups']"
+            :only="['groups', 'filters']"
                 storage-key="attendance-groups"
                 @search="onSearch"
+                @filter-change="onFilterChange"
             >
                 <template #cell-code="{ row }">
                     <span class="text-[13px] font-medium">{{ row.code }}</span>

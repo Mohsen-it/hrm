@@ -43,6 +43,48 @@ class DeviceCommandRepository
     }
 
     /**
+     * Idempotency lookup: any non-cancelled/expired command with the same
+     * correlation (pending, sending, completed, or failed). Used to avoid
+     * re-queueing an already-delivered template as a brand-new row.
+     *
+     * Read-only: never deletes or mutates data. A different template hash
+     * produces a different correlation id, so genuinely new data still
+     * queues normally.
+     */
+    public function findAnyByCorrelation(int $deviceId, string $correlationId): ?DeviceCommand
+    {
+        return $this->model
+            ->where('device_id', $deviceId)
+            ->where('correlation_id', $correlationId)
+            ->whereNotIn('status', [
+                DeviceCommand::STATUS_CANCELLED,
+                DeviceCommand::STATUS_EXPIRED,
+            ])
+            ->orderByRaw("CASE status WHEN '".DeviceCommand::STATUS_PENDING."' THEN 0 WHEN '".DeviceCommand::STATUS_SENDING."' THEN 1 WHEN '".DeviceCommand::STATUS_FAILED."' THEN 2 ELSE 3 END")
+            ->orderByDesc('id')
+            ->first();
+    }
+
+    /**
+     * Find the latest completed user (create/update) command with the exact
+     * same body. An identical completed USERINFO means the device already
+     * received these exact bytes — re-queueing would only duplicate traffic.
+     */
+    public function findCompletedUserCommand(int $deviceId, string $commandBody): ?DeviceCommand
+    {
+        return $this->model
+            ->where('device_id', $deviceId)
+            ->where('status', DeviceCommand::STATUS_COMPLETED)
+            ->whereIn('command_type', [
+                DeviceCommand::TYPE_USER_CREATE,
+                DeviceCommand::TYPE_USER_UPDATE,
+            ])
+            ->where('command_body', $commandBody)
+            ->latest('id')
+            ->first();
+    }
+
+    /**
      * Fetch the next batch of pending commands for a device (ordered by priority ASC, created ASC).
      *
      * @return Collection<int, DeviceCommand>

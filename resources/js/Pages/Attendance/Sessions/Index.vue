@@ -93,9 +93,14 @@ const columns = computed(() => [
 function onSearch(value) {
     router.get(
         route('attendance.sessions.index'),
-        { ...props.filters, search: value },
-        { preserveState: true, preserveScroll: true, replace: true, only: ['sessions'] },
+        { ...props.filters, search: value, page: 1 },
+        { preserveState: true, preserveScroll: true, replace: true, only: ['sessions', 'filters'] },
     );
+}
+
+function onExport() {
+    const live = Object.fromEntries(new URLSearchParams(window.location.search).entries());
+    window.location.href = route('attendance.sessions.export', { ...props.filters, ...live });
 }
 
 function onFilterChange(filters) {
@@ -107,11 +112,11 @@ function onFilterChange(filters) {
             next[key] = value;
         }
     });
-    router.get(route('attendance.sessions.index'), next, {
+    router.get(route('attendance.sessions.index'), { ...next, page: 1 }, {
         preserveState: true,
         preserveScroll: true,
         replace: true,
-        only: ['sessions'],
+        only: ['sessions', 'filters'],
     });
 }
 
@@ -155,11 +160,12 @@ usePageTitle(t('attendance.sessions'));
             :data="sessions"
             :filters="filters"
             :route-name="'attendance.sessions.index'"
-            :only="['sessions']"
+            :only="['sessions', 'filters']"
             :empty-title="t('attendance.messages.empty_sessions')"
             storage-key="attendance-sessions"
             @search="onSearch"
             @filter-change="onFilterChange"
+            @export="onExport"
         >
             <template #cell-user="{ row }">
                 <div>

@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 const props = defineProps({
     name: { type: String, default: '' },
@@ -7,6 +7,17 @@ const props = defineProps({
     size: { type: String, default: 'md' },
     dir: { type: String, default: 'rtl' },
 });
+
+// If the image 404s (user without photo), fall back to initials instantly
+// and stop retrying — no broken icons, no repeated requests.
+const hasError = ref(false);
+watch(() => props.src, () => { hasError.value = false; });
+
+function onError() {
+    hasError.value = true;
+}
+
+const showImage = computed(() => !!props.src && !hasError.value);
 
 const sizeClass = computed(() => {
     return {
@@ -34,7 +45,17 @@ const initials = computed(() => {
         ]"
         :dir="dir"
     >
-        <img v-if="src" :src="src" :alt="name" class="w-full h-full object-cover" loading="lazy" />
+        <img
+            v-if="showImage"
+            :src="src"
+            :alt="name"
+            class="w-full h-full object-cover"
+            loading="lazy"
+            decoding="async"
+            fetchpriority="low"
+            draggable="false"
+            @error="onError"
+        />
         <span v-else>{{ initials }}</span>
     </div>
 </template>

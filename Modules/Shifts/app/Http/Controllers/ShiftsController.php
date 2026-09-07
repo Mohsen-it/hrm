@@ -31,7 +31,8 @@ class ShiftsController extends Controller
             'filters' => fn () => $request->only(['search', 'status', 'company_id', 'branch_id']),
             'shifts' => fn () => ShiftResource::collection(
                 $this->shiftService->getAllShifts(
-                    $request->only(['search', 'status', 'company_id', 'branch_id'])
+                    $request->only(['search', 'status', 'company_id', 'branch_id']),
+                    $request->input('per_page', 20)
                 )
             ),
             'companies' => fn () => $this->companyService->getActiveCompanies()

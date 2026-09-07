@@ -10,11 +10,12 @@ export default {
 import { usePageTitle } from '@/composables/usePageTitle';
 
 import { onMounted, onUnmounted, ref, computed } from 'vue';
-import { router, Link } from '@inertiajs/vue3';
+import { router, Link, usePage } from '@inertiajs/vue3';
 import PageHeader from '@/Components/ui/PageHeader.vue';
 import Button from '@/Components/ui/Button.vue';
 import Card from '@/Components/ui/Card.vue';
 import Badge from '@/Components/ui/Badge.vue';
+import AvatarWithPreview from '@/Components/ui/AvatarWithPreview.vue';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
@@ -27,6 +28,21 @@ const props = defineProps({
 const punches = ref([...(props.recentPunches || [])]);
 const stats = ref({ ...(props.deviceStats || {}) });
 const serverTime = ref('');
+const page = usePage();
+
+// Only link avatars to profiles when the viewer may open them.
+const canViewUsers = computed(() =>
+    (page.props.auth?.permissions || []).includes('view-users'),
+);
+
+function profileHref(punch) {
+    if (!canViewUsers.value || !punch.user?.id) return null;
+    try {
+        return route('users.show', punch.user.id);
+    } catch {
+        return null;
+    }
+}
 const lastUpdate = ref(null);
 const isPaused = ref(false);
 let pollHandle = null;
@@ -94,6 +110,12 @@ onUnmounted(() => {
 
 function punchVariant(type) {
     return type === 'check_in' ? 'active' : 'pending';
+}
+
+function punchLabel(punch) {
+    if (punch.punch_type === 'check_in') return t('fingerprint_devices.live_punch_in');
+    if (punch.punch_type === 'check_out') return t('fingerprint_devices.live_punch_out');
+    return t('fingerprint_devices.live_punch_unknown');
 }
 
 
@@ -172,14 +194,24 @@ usePageTitle(t('fingerprint_devices.live_scan'));
                     :key="punch.session_id + ':' + idx"
                     class="p-3 flex items-center gap-3 hover:bg-mistral-surface transition-colors"
                 >
-                    <div
-                        class="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
-                        :class="{
-                            'bg-mistral-success/15 text-mistral-success': punch.punch_type === 'check_in',
-                            'bg-mistral-warning/15 text-mistral-warning': punch.punch_type !== 'check_in',
-                        }"
-                    >
-                        <i :class="punch.punch_type === 'check_in' ? 'fas fa-sign-in-alt' : 'fas fa-sign-out-alt'"></i>
+                    <div class="relative shrink-0">
+                        <AvatarWithPreview
+                            :name="punch.user?.name || '—'"
+                            :src="punch.user?.avatar_url || null"
+                            :employee-code="punch.user?.employee_code"
+                            :href="profileHref(punch)"
+                            size="md"
+                        />
+                        <span
+                            class="absolute -bottom-0.5 -end-0.5 w-3.5 h-3.5 rounded-full border-2 border-white flex items-center justify-center"
+                            :class="punch.punch_type === 'check_in' ? 'bg-mistral-success' : 'bg-mistral-warning'"
+                            :title="punchLabel(punch)"
+                        >
+                            <i
+                                :class="punch.punch_type === 'check_in' ? 'fas fa-arrow-down' : 'fas fa-arrow-up'"
+                                class="text-[7px] text-white"
+                            ></i>
+                        </span>
                     </div>
                     <div class="flex-1 min-w-0">
                         <p class="text-[14px] font-medium text-mistral-ink truncate">
@@ -192,7 +224,7 @@ usePageTitle(t('fingerprint_devices.live_scan'));
                     </div>
                     <div class="text-end shrink-0">
                         <Badge
-                            :text="punch.punch_type === 'check_in' ? t('fingerprint_devices.live_punch_in') : t('fingerprint_devices.live_punch_out')"
+                            :text="punchLabel(punch)"
                             :variant="punchVariant(punch.punch_type)"
                         />
                         <p class="text-[12px] text-mistral-steel mt-1">

@@ -36,7 +36,8 @@ class ShiftCategoryAssignmentController extends Controller
             'filters' => fn () => $request->only(['search', 'category_id', 'department_id', 'status']),
             'assignments' => fn () => EmployeeShiftCategoryResource::collection(
                 $this->assignmentService->getAllAssignments(
-                    $request->only(['search', 'category_id', 'department_id', 'status'])
+                    $request->only(['search', 'category_id', 'department_id', 'status']),
+                    $request->input('per_page', 20)
                 )
             ),
             'categories' => fn () => ShiftCategoryResource::collection(

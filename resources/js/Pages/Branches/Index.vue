@@ -29,7 +29,7 @@ const selectedBranch = ref(null);
 const columns = computed(() => [
     { key: 'branch_code', label: t('branches.code'), sortable: true },
     { key: 'branch_name', label: t('branches.name'), sortable: true },
-    { key: 'company', label: t('branches.company'), filterable: true, filterType: 'select', filterOptions: props.companies.map((c) => ({ value: c.id, label: c.company_name })) },
+    { key: 'company', label: t('branches.company'), filterable: true, filterType: 'select', filterKey: 'company_id', filterOptions: props.companies.map((c) => ({ value: c.id, label: c.company_name })) },
     { key: 'phone', label: t('branches.phone') },
     { key: 'city', label: t('branches.city'), filterable: true, filterType: 'text' },
     { key: 'manager_name', label: t('branches.manager_name') },
@@ -39,11 +39,16 @@ const columns = computed(() => [
 ]);
 
 function onSearch(value) {
-    router.get(route('branches.index'), { ...props.filters, search: value }, { preserveState: true, preserveScroll: true, replace: true, only: ['branches'] });
+    router.get(route('branches.index'), { ...props.filters, search: value, page: 1 }, { preserveState: true, preserveScroll: true, replace: true, only: ['branches', 'filters'] });
+}
+
+function onExport() {
+    const live = Object.fromEntries(new URLSearchParams(window.location.search).entries());
+    window.location.href = route('branches.export', { ...props.filters, ...live });
 }
 
 function onFilterChange(filters) {
-    router.get(route('branches.index'), { ...props.filters, ...filters }, { preserveState: true, preserveScroll: true, replace: true, only: ['branches'] });
+    router.get(route('branches.index'), { ...props.filters, ...filters, page: 1 }, { preserveState: true, preserveScroll: true, replace: true, only: ['branches', 'filters'] });
 }
 
 function confirmDelete(branch) {
@@ -81,10 +86,11 @@ usePageTitle(t('branches.title'));
             :data="branches"
             :filters="filters"
             :route-name="'branches.index'"
-            :only="['branches']"
+            :only="['branches', 'filters']"
             storage-key="branches"
             @search="onSearch"
             @filter-change="onFilterChange"
+            @export="onExport"
         >
             <template #cell-company="{ row }">
                 <span>{{ row.company?.company_name || '—' }}</span>

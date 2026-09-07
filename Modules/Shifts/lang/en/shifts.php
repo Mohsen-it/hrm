@@ -499,6 +499,8 @@ return [
     'employee' => 'Employee',
     'date_range' => 'Date Range',
     'rotation_schedule' => 'Rotation Schedule',
+    'monthly_roster_export' => 'Export Monthly Roster (Excel)',
+    'monthly_roster_export_hint' => 'Export in the paper-table format for the viewed month: one sheet for all plus one sheet per department, employees per category with their work dates',
 
     // Employee Monthly Attendance (weighted)
     'employee_monthly_attendance' => 'Employee Monthly Attendance',

@@ -39,7 +39,7 @@ class FingerprintDeviceService
         return $this->adapterResolver->getAdapter($driver);
     }
 
-    public function getAllDevices(array $filters = [], int $perPage = 20): LengthAwarePaginator
+    public function getAllDevices(array $filters = [], int|string $perPage = 20): LengthAwarePaginator
     {
         return $this->repository->getAll($filters, $perPage);
     }

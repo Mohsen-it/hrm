@@ -32,7 +32,8 @@ class TimeSchedulesController extends Controller
             'filters' => fn () => $request->only(['search', 'company_id']),
             'schedules' => fn () => TimeScheduleResource::collection(
                 $this->timeScheduleService->getAll(
-                    $request->only(['search', 'company_id'])
+                    $request->only(['search', 'company_id']),
+                    $request->input('per_page', 20)
                 )
             ),
         ]);

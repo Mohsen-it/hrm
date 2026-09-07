@@ -49,7 +49,7 @@ class RawLogsController extends Controller
         return Inertia::render('Attendance/RawLogs/Index', [
             'filters' => fn () => $filters,
             'logs' => fn () => RawAttendanceLogResource::collection(
-                $this->rawLogService->getAllLogs($filters, 25)
+                $this->rawLogService->getAllLogs($filters, $request->input('per_page', 25))
             ),
             'users' => fn () => $this->userService->getActiveUsers()
                 ->map(fn ($u) => ['id' => $u->id, 'name' => $u->name, 'employee_code' => $u->employee_code]),

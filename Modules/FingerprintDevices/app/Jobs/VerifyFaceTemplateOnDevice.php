@@ -89,7 +89,9 @@ class VerifyFaceTemplateOnDevice implements ShouldQueue
             }
 
             // Template not found — device silently dropped it.
-            // Re-queue the command for retry.
+            // Bounded re-queue only: preserve the retry budget so a single
+            // false-negative verification can never resurrect delivered data
+            // forever. Exhausted commands stay completed for operators.
             Log::warning('FACE_VERIFICATION_FAILED_REQUEUING', [
                 'command_id' => $this->commandId,
                 'device_id' => $this->deviceId,
@@ -97,13 +99,25 @@ class VerifyFaceTemplateOnDevice implements ShouldQueue
                 'templates_on_device' => count($templates),
             ]);
 
+            $command->refresh();
+            if ($command->status !== DeviceCommand::STATUS_COMPLETED) {
+                return;
+            }
+            if ((int) $command->retry_count >= (int) $command->max_retries) {
+                Log::warning('FACE_VERIFICATION_BUDGET_EXHAUSTED', [
+                    'command_id' => $this->commandId,
+                    'device_id' => $this->deviceId,
+                ]);
+
+                return;
+            }
+
             $command->update([
                 'status' => DeviceCommand::STATUS_PENDING,
-                'retry_count' => 0,
-                'max_retries' => 15,
+                'retry_count' => (int) $command->retry_count + 1,
                 'sent_at' => null,
                 'error_message' => 'Face template ACKed by device but verification found no face data — re-queued',
-                'available_at' => now()->addSeconds(5),
+                'available_at' => now()->addSeconds(30),
             ]);
         } catch (\Throwable $e) {
             Log::warning('FACE_VERIFICATION_ERROR', [

@@ -72,7 +72,14 @@ function Test-HrmPortFree {
 
     $listener = Get-HrmPortListener -Port $Port
     if ($listener) {
-        throw "$Name cannot start because port $Port is already in use by PID $listener. Stop the old process first."
+        # Last-ditch attempt: kill the stubborn process
+        Write-Host "  Port $Port occupied by PID $listener - force killing..." -ForegroundColor DarkYellow
+        & taskkill.exe /PID $listener /F 2>&1 | Out-Null
+        Start-Sleep -Seconds 2
+        $listener = Get-HrmPortListener -Port $Port
+        if ($listener) {
+            throw "$Name cannot start because port $Port is still in use by PID $listener after force kill."
+        }
     }
 }
 
@@ -106,20 +113,7 @@ function Get-HrmPortListener {
 function Stop-HrmOldServices {
     Write-Host 'Cleaning old HRM services (killing orphans)...' -ForegroundColor Yellow
 
-    # 1) Kill anything listening on HRM ports
-    foreach ($port in @($script:LaravelPort, $script:ReverbPort, $script:AdmsPort, $script:BridgePort)) {
-        $listenerPid = Get-HrmPortListener -Port $port
-        if ($listenerPid) {
-            try {
-                $proc = Get-CimInstance Win32_Process -Filter "ProcessId=$listenerPid" -ErrorAction SilentlyContinue
-                $name = if ($proc) { $proc.Name } else { "PID $listenerPid" }
-                Write-Host "  Killing $name (PID $listenerPid) on port $port..." -ForegroundColor DarkYellow
-                & taskkill.exe /PID $listenerPid /F 2>&1 | Out-Null
-            } catch {}
-        }
-    }
-
-    # 2) Kill known HRM process patterns (orphans not holding ports)
+    # 1) Kill known HRM process patterns first (orphans not holding ports)
     $patterns = @(
         'adms_server\.py',
         'queue:work',
@@ -131,7 +125,6 @@ function Stop-HrmOldServices {
         try {
             $procs = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match $pat }
             foreach ($p in $procs) {
-                # Don't kill ourselves
                 if ($p.ProcessId -eq $PID) { continue }
                 Write-Host "  Killing orphan $($p.Name) (PID $($p.ProcessId)) [$pat]..." -ForegroundColor DarkYellow
                 & taskkill.exe /PID $p.ProcessId /F 2>&1 | Out-Null
@@ -139,7 +132,7 @@ function Stop-HrmOldServices {
         } catch {}
     }
 
-    # 3) Extra: kill stray python app.py (bridge) that may not match above due to path
+    # 2) Kill stray python app.py (bridge)
     try {
         $bridges = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.Name -eq 'python.exe' -and $_.CommandLine -match 'app\.py' }
         foreach ($p in $bridges) {
@@ -149,18 +142,46 @@ function Stop-HrmOldServices {
         }
     } catch {}
 
+    # 3) Kill anything still listening on HRM ports (up to 3 rounds)
+    $hrmPorts = @($script:LaravelPort, $script:ReverbPort, $script:AdmsPort)
+    if (-not $script:NoBridge) { $hrmPorts += $script:BridgePort }
+
+    for ($round = 1; $round -le 3; $round++) {
+        $anyKilled = $false
+        foreach ($port in $hrmPorts) {
+            $listenerPid = Get-HrmPortListener -Port $port
+            if ($listenerPid) {
+                $anyKilled = $true
+                try {
+                    $proc = Get-CimInstance Win32_Process -Filter "ProcessId=$listenerPid" -ErrorAction SilentlyContinue
+                    $name = if ($proc) { $proc.Name } else { "PID $listenerPid" }
+                    Write-Host "  [round $round] Killing $name (PID $listenerPid) on port $port..." -ForegroundColor DarkYellow
+                    & taskkill.exe /PID $listenerPid /F 2>&1 | Out-Null
+                } catch {}
+            }
+        }
+        if (-not $anyKilled) { break }
+        Start-Sleep -Seconds 2
+    }
+
+    # 4) Nuclear option: kill ALL php.exe except ourselves
+    try {
+        $phpProcs = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.Name -eq 'php.exe' }
+        foreach ($p in $phpProcs) {
+            if ($p.ProcessId -eq $PID) { continue }
+            Write-Host "  Killing stray php.exe (PID $($p.ProcessId))..." -ForegroundColor DarkYellow
+            & taskkill.exe /PID $p.ProcessId /F 2>&1 | Out-Null
+        }
+    } catch {}
+
     Start-Sleep -Seconds 3
 
-    # 4) Verify ports are free (warn, don't throw — we just cleaned)
-    foreach ($port in @($script:LaravelPort, $script:ReverbPort, $script:AdmsPort)) {
+    # 5) Final verify
+    foreach ($port in $hrmPorts) {
         $still = Get-HrmPortListener -Port $port
         if ($still) {
             Write-Host "  WARNING: port $port still in use by PID $still after cleanup." -ForegroundColor Red
         }
-    }
-    if (-not $script:NoBridge) {
-        $still = Get-HrmPortListener -Port $script:BridgePort
-        if ($still) { Write-Host "  WARNING: bridge port $($script:BridgePort) still in use by PID $still." -ForegroundColor Red }
     }
 
     Write-Host '  Cleanup done.' -ForegroundColor Green
@@ -292,7 +313,7 @@ try {
 
 
     if (-not $NoBridge) {
-        $bridgeCommand = "set `"ZKTECO_PYTHON_SERVICE_HOST=0.0.0.0`" && set `"ZKTECO_PYTHON_SERVICE_PORT=$BridgePort`" && `"$Python`" app.py"
+        $bridgeCommand = 'set ZKTECO_PYTHON_SERVICE_HOST=0.0.0.0 & set ZKTECO_PYTHON_SERVICE_PORT=' + $BridgePort + ' & "' + $Python + '" app.py'
         $services.Add((Start-HrmProcess -Job $job -Name 'ZKTeco bridge' -WorkingDirectory (Join-Path $Root 'zkteco-service') -Command $bridgeCommand -LogPath (Join-Path $Root 'zkteco-service\logs\bridge.log')))
         Wait-HrmPort -Port $BridgePort -Name 'ZKTeco bridge'
     }

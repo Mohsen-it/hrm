@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from 'vue';
 import { useTranslations } from '@/composables/useTranslations';
+import Avatar from '@/Components/ui/Avatar.vue';
 
 const props = defineProps({
   user: { type: Object, default: null },
@@ -8,6 +9,8 @@ const props = defineProps({
 });
 
 const { t, isRtl } = useTranslations();
+
+const displayName = computed(() => props.user?.name || props.user?.email || '?');
 
 const initials = computed(() => {
   if (!props.user) return '?';
@@ -18,9 +21,14 @@ const initials = computed(() => {
 
 <template>
   <div class="nav-user" :class="{ 'nav-user--collapsed': isCollapsed }">
-    <!-- Avatar -->
-    <div class="nav-user__avatar">
-      <span class="nav-user__initials">{{ initials }}</span>
+    <!-- Avatar: photo on every page (lazy + cached static file), initials fallback -->
+    <div class="nav-user__avatar nav-user__avatar--photo">
+      <Avatar
+        :name="displayName"
+        :src="user?.avatar_url || null"
+        size="sm"
+        :dir="isRtl ? 'rtl' : 'ltr'"
+      />
     </div>
 
     <!-- Info -->

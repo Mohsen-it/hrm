@@ -31,7 +31,7 @@ class AttendanceGroupsController extends Controller
         $filters = array_filter($filters, fn ($v) => $v !== null && $v !== '');
 
         return Inertia::render('Shifts/AttendanceGroups/Index', [
-            'groups' => fn () => $this->groupService->getAllGroups($filters, 20),
+            'groups' => fn () => $this->groupService->getAllGroups($filters, $request->input('per_page', 20)),
             'filters' => fn () => $filters,
         ]);
     }

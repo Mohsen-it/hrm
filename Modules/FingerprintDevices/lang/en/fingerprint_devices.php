@@ -115,6 +115,7 @@ return [
     'live_scan_hint' => 'The page refreshes automatically every 3 seconds',
     'live_punch_in' => 'Check-in',
     'live_punch_out' => 'Check-out',
+    'live_punch_unknown' => 'Off-schedule',
     'punch_type' => 'Punch Type',
     'punched_at' => 'Punched At',
     'sync_title' => 'Device Sync',

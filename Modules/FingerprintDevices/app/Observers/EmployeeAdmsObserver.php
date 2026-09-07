@@ -3,6 +3,7 @@
 namespace Modules\FingerprintDevices\Observers;
 
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Modules\FingerprintDevices\Jobs\SyncUserToDeviceViaBridgeJob;
@@ -88,6 +89,13 @@ class EmployeeAdmsObserver
             return;
         }
 
+        // Bulk-delete circuit breaker: a burst of deletions (bad import,
+        // mistaken bulk archive) must never wipe terminals unattended.
+        // Single deletions flow exactly as before.
+        if ($this->deleteBreakerTripped($user, $pin)) {
+            return;
+        }
+
         $devices = $this->zktecoDevices();
 
         foreach ($devices as $device) {
@@ -122,6 +130,43 @@ class EmployeeAdmsObserver
     public function restored(User $user): void
     {
         $this->created($user);
+    }
+
+    /**
+     * Bulk-delete circuit breaker (fail-safe, never deletes data).
+     *
+     * Counts User delete EVENTS (not per-device commands) in a sliding
+     * window. Under the threshold this is a pure counter increment and the
+     * caller proceeds unchanged. Over the threshold the delete is HELD:
+     * nothing is queued, the PIN is recorded for 24h operator replay
+     * (fingerprints:process-skipped-deletes), and a critical log is written.
+     */
+    private function deleteBreakerTripped(User $user, string $pin): bool
+    {
+        $threshold = max(1, (int) config('fingerprintdevices.delete_breaker_threshold', 5));
+        $windowMinutes = max(1, (int) config('fingerprintdevices.delete_breaker_window_minutes', 10));
+
+        $count = (int) Cache::get('adms:user_delete_breaker', 0);
+
+        if ($count >= $threshold) {
+            $skipped = Cache::get('adms:skipped_user_deletes', []);
+            $skipped[$pin] = now()->toDateTimeString();
+            Cache::put('adms:skipped_user_deletes', $skipped, now()->addDay());
+
+            Log::critical('ADMS_USER_DELETE_BREAKER_TRIPPED', [
+                'user_id' => $user->id,
+                'employee_code' => $pin,
+                'deletes_in_window' => $count,
+                'threshold' => $threshold,
+                'action' => 'Delete HELD for devices. Replay: php artisan fingerprints:process-skipped-deletes',
+            ]);
+
+            return true;
+        }
+
+        Cache::put('adms:user_delete_breaker', $count + 1, now()->addMinutes($windowMinutes));
+
+        return false;
     }
 
     /**

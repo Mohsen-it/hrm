@@ -37,7 +37,8 @@ class DepartmentsController extends Controller
             'filters' => fn () => $request->only(['search', 'status', 'company_id', 'branch_id', 'parent_id', 'roots_only']),
             'departments' => fn () => DepartmentResource::collection(
                 $this->departmentService->getAllDepartments(
-                    $request->only(['search', 'status', 'company_id', 'branch_id', 'parent_id', 'roots_only'])
+                    $request->only(['search', 'status', 'company_id', 'branch_id', 'parent_id', 'roots_only']),
+                    $request->input('per_page', 20)
                 )
             ),
             'companies' => fn () => $this->companyService->getActiveCompanies()

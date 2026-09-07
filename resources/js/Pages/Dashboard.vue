@@ -561,7 +561,7 @@ usePageTitle(t('dashboard.title'));
                             class="flex items-center gap-3 px-5 py-3 hover:bg-mistral-surface/40 transition-colors"
                         >
                             <span class="text-[11px] text-mistral-muted font-mono w-5 text-center" dir="ltr">{{ i + 1 }}</span>
-                            <Avatar :name="emp.name" size="sm" />
+                            <Avatar :name="emp.name" :src="emp.avatar_url || null" size="sm" />
                             <div class="flex-1 min-w-0">
                                 <div class="text-[13px] font-medium text-mistral-ink truncate">{{ emp.name }}</div>
                                 <div class="text-[11px] text-mistral-stone">
@@ -769,7 +769,7 @@ usePageTitle(t('dashboard.title'));
                             :key="approval.id"
                             class="flex items-center gap-3 px-5 py-3 hover:bg-mistral-surface/40 transition-colors"
                         >
-                            <Avatar :name="approval.employee_name" size="sm" />
+                            <Avatar :name="approval.employee_name" :src="approval.avatar_url || null" size="sm" />
                             <div class="flex-1 min-w-0">
                                 <div class="text-[13px] font-medium text-mistral-ink truncate">{{ approval.employee_name }}</div>
                                 <div class="text-[11px] text-mistral-stone">
@@ -867,7 +867,7 @@ usePageTitle(t('dashboard.title'));
                                 >
                                     <td class="px-5 py-3">
                                         <div class="flex items-center gap-2">
-                                            <Avatar :name="anomaly.employee_name" size="xs" />
+                                            <Avatar :name="anomaly.employee_name" :src="anomaly.avatar_url || null" size="xs" />
                                             <div>
                                                 <div class="text-mistral-ink font-medium">{{ anomaly.employee_name }}</div>
                                                 <div class="text-[11px] text-mistral-stone">{{ anomaly.employee_code }}</div>
@@ -1015,6 +1015,10 @@ usePageTitle(t('dashboard.title'));
                                     :src="log.avatar_url"
                                     :alt="log.employee_name"
                                     class="w-9 h-9 rounded-full object-cover ring-2 ring-white shadow-sm"
+                                    loading="lazy"
+                                    decoding="async"
+                                    draggable="false"
+                                    onerror="this.style.display='none'"
                                 />
                                 <div
                                     v-else

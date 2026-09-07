@@ -37,15 +37,18 @@ const columns = computed(() => [
 ]);
 
 function onSearch(value) {
-    router.get(route('companies.index'), { ...props.filters, search: value }, { preserveState: true, preserveScroll: true, replace: true, only: ['companies'] });
+    router.get(route('companies.index'), { ...props.filters, search: value, page: 1 }, { preserveState: true, preserveScroll: true, replace: true, only: ['companies', 'filters'] });
 }
 
 function onExport() {
-    window.location.href = route('companies.export', props.filters);
+    // Read live filters from the URL (source of truth for what's visible),
+    // so export never uses stale props when a partial Inertia reload lagged behind.
+    const live = Object.fromEntries(new URLSearchParams(window.location.search).entries());
+    window.location.href = route('companies.export', { ...props.filters, ...live });
 }
 
 function onFilterChange(filters) {
-    router.get(route('companies.index'), { ...props.filters, ...filters }, { preserveState: true, preserveScroll: true, replace: true, only: ['companies'] });
+    router.get(route('companies.index'), { ...props.filters, ...filters, page: 1 }, { preserveState: true, preserveScroll: true, replace: true, only: ['companies', 'filters'] });
 }
 
 function confirmDelete(company) {
@@ -83,7 +86,7 @@ usePageTitle(t('companies.title'));
             :data="companies"
             :filters="filters"
             :route-name="'companies.index'"
-            :only="['companies']"
+            :only="['companies', 'filters']"
             storage-key="companies"
             @search="onSearch"
             @filter-change="onFilterChange"

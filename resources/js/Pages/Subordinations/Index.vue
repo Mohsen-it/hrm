@@ -44,11 +44,16 @@ const columns = computed(() => [
 ]);
 
 function onSearch(value) {
-    router.get(route('subordinations.index'), { ...props.filters, search: value }, { preserveState: true, preserveScroll: true, replace: true, only: ['subordinations'] });
+    router.get(route('subordinations.index'), { ...props.filters, search: value, page: 1 }, { preserveState: true, preserveScroll: true, replace: true, only: ['subordinations', 'filters'] });
+}
+
+function onExport() {
+    const live = Object.fromEntries(new URLSearchParams(window.location.search).entries());
+    window.location.href = route('subordinations.export', { ...props.filters, ...live });
 }
 
 function onFilterChange(filters) {
-    router.get(route('subordinations.index'), { ...props.filters, ...filters }, { preserveState: true, preserveScroll: true, replace: true, only: ['subordinations'] });
+    router.get(route('subordinations.index'), { ...props.filters, ...filters, page: 1 }, { preserveState: true, preserveScroll: true, replace: true, only: ['subordinations', 'filters'] });
 }
 
 function confirmDelete(sub) {
@@ -95,10 +100,11 @@ usePageTitle(t('subordinations.title'));
             :data="subordinations"
             :filters="filters"
             :route-name="'subordinations.index'"
-            :only="['subordinations']"
+            :only="['subordinations', 'filters']"
             storage-key="subordinations"
             @search="onSearch"
             @filter-change="onFilterChange"
+            @export="onExport"
         >
             <template #cell-name_ar="{ row }">
                 <div class="font-medium text-mistral-ink">{{ displayName(row) }}</div>

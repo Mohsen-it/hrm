@@ -26,6 +26,12 @@ class PushFacesAllDevices extends Command
     {
         set_time_limit(0);
 
+        if (! config('fingerprintdevices.device_writes_enabled', true)) {
+            $this->error('Bulk writes are disabled by kill-switch (DEVICE_WRITES_ENABLED=false). Aborting.');
+
+            return self::FAILURE;
+        }
+
         $dryRun = (bool) $this->option('dry-run');
         $deviceId = $this->option('device');
 

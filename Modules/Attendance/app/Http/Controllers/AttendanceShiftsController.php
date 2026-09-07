@@ -28,7 +28,7 @@ class AttendanceShiftsController extends Controller
         $filters = array_filter($filters, fn ($v) => $v !== null && $v !== '');
 
         return Inertia::render('Shifts/AttendanceShifts/Index', [
-            'shifts' => fn () => $this->shiftService->getAllShifts($filters, 20),
+            'shifts' => fn () => $this->shiftService->getAllShifts($filters, $request->input('per_page', 20)),
             'filters' => fn () => $filters,
         ]);
     }

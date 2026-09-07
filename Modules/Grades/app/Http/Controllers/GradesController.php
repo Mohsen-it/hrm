@@ -34,7 +34,8 @@ class GradesController extends Controller
             'filters' => fn () => $request->only(['search', 'status', 'company_id', 'level']),
             'grades' => fn () => GradeResource::collection(
                 $this->gradeService->getAllGrades(
-                    $request->only(['search', 'status', 'company_id', 'level'])
+                    $request->only(['search', 'status', 'company_id', 'level']),
+                    $request->input('per_page', 20)
                 )
             ),
             'companies' => fn () => $this->companyService->getActiveCompanies()

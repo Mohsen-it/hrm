@@ -47,7 +47,17 @@ class HandleInertiaRequests extends Middleware
         return [
             ...parent::share($request),
             'auth' => [
-                'user' => $user,
+                // Lightweight payload (no full model): keeps every Inertia
+                // response small and adds avatar_url as O(1) string concat
+                // so the sidebar photo shows on all pages with zero queries.
+                'user' => $user ? [
+                    'id' => $user->id,
+                    'name' => $user->full_name ?: $user->name,
+                    'email' => $user->email,
+                    'employee_code' => $user->employee_code,
+                    'avatar' => $user->avatar,
+                    'avatar_url' => $user->avatar_url,
+                ] : null,
                 'permissions' => $user ? $user->getAllPermissions()->pluck('name')->all() : [],
                 'roles' => $user ? $user->getRoleNames()->all() : [],
             ],

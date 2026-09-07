@@ -33,6 +33,12 @@ class DistributeAllFaces extends Command
     ): int {
         set_time_limit(0);
 
+        if (! config('fingerprintdevices.device_writes_enabled', true)) {
+            $this->error('Bulk writes are disabled by kill-switch (DEVICE_WRITES_ENABLED=false). Aborting.');
+
+            return self::FAILURE;
+        }
+
         $dryRun = (bool) $this->option('dry-run');
         $limit = (int) $this->option('limit');
         $deviceFilter = $this->option('device');

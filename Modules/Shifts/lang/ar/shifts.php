@@ -486,6 +486,8 @@ return [
     'rotation_timeline' => 'جدول الدورية الزمني',
     'timeline' => 'الجدول الزمني',
     'timeline_export' => 'تصدير الجدول',
+    'monthly_roster_export' => 'تصدير الجدول الشهري (Excel)',
+    'monthly_roster_export_hint' => 'تصدير بنفس تنسيق الجدول الورقي للشهر المعروض: ورقة للكل + ورقة مستقلة لكل قسم (تفتيش، تفتيش نسائي، ...)، الموظفون في كل فئة وتحتهم تواريخ دوامهم',
 
     // Quick per-employee transfer
     'quick_transfer' => 'نقل سريع إلى مجموعة أخرى',

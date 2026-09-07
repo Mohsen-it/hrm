@@ -37,8 +37,8 @@ const columns = [
 function onSearch(value) {
     router.get(
         route('attendance.group-schedules.index'),
-        { ...props.filters, search: value },
-        { preserveState: true, preserveScroll: true, replace: true, only: ['schedules'] },
+        { ...props.filters, search: value, page: 1 },
+        { preserveState: true, preserveScroll: true, replace: true, only: ['schedules', 'filters'] },
     );
 }
 
@@ -81,7 +81,7 @@ usePageTitle(t('attendance.group_schedules'));
                 :data="schedules"
                 :filters="filters"
                 :route-name="'attendance.group-schedules.index'"
-            :only="['schedules']"
+            :only="['schedules', 'filters']"
                 storage-key="group-schedules"
                 @search="onSearch"
             >

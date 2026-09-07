@@ -19,6 +19,8 @@ class PublishLivePunchEvent
                 'id' => $event->user->id,
                 'name' => $event->user->name,
                 'employee_code' => $event->user->employee_code,
+                // O(1) string concat on the already-loaded model — no extra query.
+                'avatar_url' => $event->user->avatar_url,
             ],
             'punch_type' => ($event->classifiedPunchType ?? $event->punch->punchType)->value,
             'punched_at' => $event->punch->timestamp->format(DATE_ATOM),

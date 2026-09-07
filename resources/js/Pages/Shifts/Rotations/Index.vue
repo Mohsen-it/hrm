@@ -37,7 +37,7 @@ function formatCycleLength(rotation) {
 }
 
 const columns = computed(() => [
-    { key: 'name', label: t('shifts.rotation_name'), sortable: true, filterable: true },
+    { key: 'name', label: t('shifts.rotation_name'), sortable: true, filterable: true, filterKey: 'search' },
     { key: 'pattern', label: t('shifts.work_pattern'), cellClass: 'text-center' },
     { key: 'cycle_length', label: t('shifts.cycle_length'), cellClass: 'text-center' },
     { key: 'number_of_groups', label: t('shifts.groups_count'), cellClass: 'text-center' },
@@ -49,8 +49,21 @@ const columns = computed(() => [
 function onSearch(value) {
     router.get(
         route('rotations.index'),
-        { ...props.filters, search: value },
-        { preserveState: true, preserveScroll: true, replace: true, only: ['rotations'] },
+        { ...props.filters, search: value, page: 1 },
+        { preserveState: true, preserveScroll: true, replace: true, only: ['rotations', 'filters'] },
+    );
+}
+
+function onExport() {
+    const live = Object.fromEntries(new URLSearchParams(window.location.search).entries());
+    window.location.href = route('rotations.export', { ...props.filters, ...live });
+}
+
+function onFilterChange(filters) {
+    router.get(
+        route('rotations.index'),
+        { ...props.filters, ...filters, page: 1 },
+        { preserveState: true, preserveScroll: true, replace: true, only: ['rotations', 'filters'] },
     );
 }
 
@@ -95,9 +108,11 @@ usePageTitle(t('shifts.rotations'));
             :data="rotations"
             :filters="filters"
             :route-name="'rotations.index'"
-            :only="['rotations']"
+            :only="['rotations', 'filters']"
             storage-key="rotations"
             @search="onSearch"
+            @filter-change="onFilterChange"
+            @export="onExport"
         >
             <template #cell-name="{ row }">
                 <div class="flex items-center gap-2">

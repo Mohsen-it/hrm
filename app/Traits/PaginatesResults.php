@@ -36,6 +36,7 @@ trait PaginatesResults
                     [
                         'path' => Paginator::resolveCurrentPath(),
                         'pageName' => $pageName,
+                        'query' => request()->except('page'),
                     ]
                 );
             }
@@ -47,15 +48,16 @@ trait PaginatesResults
             return new LengthAwarePaginator(
                 $items,
                 $total,
-                $total,
+                $total > 0 ? $total : 1,
                 $currentPage,
                 [
                     'path' => Paginator::resolveCurrentPath(),
                     'pageName' => $pageName,
+                    'query' => request()->except('page'),
                 ]
             );
         }
 
-        return $query->paginate((int) $perPage, ['*'], $pageName);
+        return $query->paginate((int) $perPage, ['*'], $pageName)->withQueryString();
     }
 }

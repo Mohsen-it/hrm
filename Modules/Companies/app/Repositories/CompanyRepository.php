@@ -116,6 +116,14 @@ class CompanyRepository
             $q->default();
         });
 
+        $query->when($filters['email'] ?? null, function (Builder $q, string $email): void {
+            $q->where('email', 'like', "%{$email}%");
+        });
+
+        $query->when($filters['city'] ?? null, function (Builder $q, string $city): void {
+            $q->where('city', 'like', "%{$city}%");
+        });
+
         return $query;
     }
 }

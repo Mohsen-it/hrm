@@ -93,6 +93,12 @@ class GroupScheduleRepository
         $query->when($filters['group_id'] ?? null, fn (Builder $q, $val) => $q->where('group_id', (int) $val));
         $query->when($filters['shift_id'] ?? null, fn (Builder $q, $val) => $q->where('shift_id', (int) $val));
         $query->when($filters['date'] ?? null, fn (Builder $q, $val) => $q->forDate($val));
+        $query->when($filters['search'] ?? null, function (Builder $q, $search) {
+            $q->where(function (Builder $sub) use ($search) {
+                $sub->whereHas('group', fn (Builder $g) => $g->where('name', 'like', "%{$search}%")->orWhere('code', 'like', "%{$search}%"))
+                    ->orWhereHas('shift', fn (Builder $s) => $s->where('alias', 'like', "%{$search}%"));
+            });
+        });
 
         return $query;
     }

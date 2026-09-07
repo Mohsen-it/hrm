@@ -49,7 +49,7 @@ class ZonesController extends Controller
         return Inertia::render('Zones/Index', [
             'filters' => fn () => $filters,
             'zones' => fn () => ZoneResource::collection(
-                $this->zoneService->getAllZones($filters)
+                $this->zoneService->getAllZones($filters, $request->input('per_page', 20))
             ),
             'companies' => fn () => $this->companyService->getActiveCompanies()
                 ->map(fn ($c) => ['id' => $c->id, 'company_name' => $c->company_name]),

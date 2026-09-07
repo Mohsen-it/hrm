@@ -13,6 +13,7 @@ use Inertia\Response;
 use Modules\Departments\Models\Department;
 use Modules\Shifts\Exports\RotationEmployeesExport;
 use Modules\Shifts\Exports\RotationGroupsExport;
+use Modules\Shifts\Exports\RotationMonthlyRosterExport;
 use Modules\Shifts\Exports\RotationsExport;
 use Modules\Shifts\Exports\RotationTimelineExport;
 use Modules\Shifts\Http\Requests\AssignRotationRequest;
@@ -73,7 +74,7 @@ class RotationsController extends Controller
         return Inertia::render('Shifts/Rotations/Index', [
             'filters' => fn () => $filters,
             'rotations' => fn () => RotationResource::collection(
-                $this->rotationService->getAll($filters)
+                $this->rotationService->getAll($filters, $request->input('per_page', 20))
             ),
         ]);
     }
@@ -550,6 +551,130 @@ class RotationsController extends Controller
     }
 
     /**
+     * Export the monthly roster (paper-format) for a single rotation.
+     *
+     * Layout matches the paper table: columns are the rotation groups
+     * (A,B,C,D = الفئات), row 1 lists assigned employees per group and
+     * row 2 lists the actual work dates per group in the requested month.
+     *
+     * The workbook holds one sheet per department (plus an "الكل" sheet)
+     * so each unit (تفتيش، تفتيش نسائي، ...) gets its own printable sheet.
+     */
+    public function monthlyRosterExport(int|string $id, Request $request)
+    {
+        $this->authorize('view-rotations');
+        $id = (int) $id;
+
+        $rotation = $this->rotationService->getById($id);
+
+        if (! $rotation) {
+            abort(404);
+        }
+
+        $rotation->load(['timeSchedule', 'groups']);
+
+        $monthParam = (string) $request->get('month', now()->format('Y-m'));
+
+        try {
+            $month = Carbon::createFromFormat('Y-m', $monthParam)->startOfMonth();
+        } catch (\Throwable) {
+            $month = now()->startOfMonth();
+        }
+
+        $start = $month->copy()->startOfMonth()->toDateString();
+        $end = $month->copy()->endOfMonth()->toDateString();
+
+        $groups = $rotation->groups()->orderBy('group_index')->get();
+
+        $assignments = RotationAssignment::query()
+            ->with(['employee:id,name,first_name,last_name,employee_code,department_id', 'employee.department:id,department_name'])
+            ->where('rotation_id', $id)
+            ->where('start_date', '<=', $end)
+            ->where(function ($q) use ($start) {
+                $q->whereNull('end_date')->orWhere('end_date', '>=', $start);
+            })
+            ->get();
+
+        $emptyByGroup = [];
+        foreach ($groups as $group) {
+            $emptyByGroup[$group->id] = [];
+        }
+
+        $employeesByGroup = $emptyByGroup;
+        /** @var array<int, array{name: string, employeesByGroup: array<int, array<int, string>>}> $byDepartment */
+        $byDepartment = [];
+
+        foreach ($assignments as $assignment) {
+            $employee = $assignment->employee;
+            if (! $employee || ! isset($employeesByGroup[$assignment->rotation_group_id])) {
+                continue;
+            }
+
+            $name = $employee->name
+                ?: trim(($employee->first_name ?? '').' '.($employee->last_name ?? ''))
+                ?: $employee->employee_code;
+
+            if (! $name) {
+                continue;
+            }
+
+            if (! in_array($name, $employeesByGroup[$assignment->rotation_group_id], true)) {
+                $employeesByGroup[$assignment->rotation_group_id][] = $name;
+            }
+
+            $deptId = (int) ($employee->department_id ?? 0);
+            $deptName = $deptId > 0
+                ? ($employee->department?->department_name ?: 'قسم '.$deptId)
+                : 'بدون قسم محدد';
+
+            if (! isset($byDepartment[$deptId])) {
+                $byDepartment[$deptId] = ['name' => $deptName, 'employeesByGroup' => $emptyByGroup];
+            }
+
+            if (! in_array($name, $byDepartment[$deptId]['employeesByGroup'][$assignment->rotation_group_id], true)) {
+                $byDepartment[$deptId]['employeesByGroup'][$assignment->rotation_group_id][] = $name;
+            }
+        }
+
+        foreach ($employeesByGroup as &$names) {
+            sort($names, SORT_NATURAL);
+        }
+        unset($names);
+
+        uasort($byDepartment, fn ($a, $b) => strcmp((string) $a['name'], (string) $b['name']));
+        foreach ($byDepartment as &$dept) {
+            foreach ($dept['employeesByGroup'] as &$names) {
+                sort($names, SORT_NATURAL);
+            }
+            unset($names);
+        }
+        unset($dept);
+
+        $sheets = array_merge(
+            [['name' => 'الكل', 'employeesByGroup' => $employeesByGroup]],
+            array_values($byDepartment),
+        );
+
+        $workDatesByGroup = [];
+        foreach ($groups as $group) {
+            $workDatesByGroup[$group->id] = $this->rotationEngine->getWorkDaysInRange($rotation, $group, $start, $end);
+        }
+
+        $export = new RotationMonthlyRosterExport(
+            rotation: $rotation,
+            groups: $groups,
+            employeesByGroup: $employeesByGroup,
+            workDatesByGroup: $workDatesByGroup,
+            month: $month,
+            sheets: $sheets,
+        );
+
+        $fileName = 'rotation-'.Str::slug($rotation->name).'-roster-'.$month->format('Y-m');
+
+        return $this->downloadExcel($export->build(), $fileName);
+    }
+
+    /**
      * Search employees for rotation assignment (AJAX endpoint).
      */
     public function searchEmployees(Request $request)
@@ -817,7 +942,8 @@ class RotationsController extends Controller
         $this->authorize('view-rotations');
 
         $rotations = $this->rotationService->getAll(
-            $this->scopedFilters($request)
+            $this->scopedFilters($request),
+            'all'
         );
 
         $export = new RotationsExport($rotations->getCollection());

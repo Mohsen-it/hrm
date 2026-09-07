@@ -54,4 +54,44 @@ return [
     'pull_fingerprints_via' => env('PULL_FINGERPRINTS_VIA', 'adms'),
 
     'push_user_via' => env('PUSH_USER_VIA', 'adms'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Distribution safety (anti-flood)
+    |--------------------------------------------------------------------------
+    |
+    | device_writes_enabled: emergency kill-switch for BULK device writes
+    |   (Distribute* jobs + bulk console commands). When false, distribution
+    |   jobs self-delete without touching devices and bulk commands abort.
+    |   The event-driven single-employee path (EmployeeAdmsObserver) is NEVER
+    |   gated by this flag, and attendance INTAKE is never affected.
+    |
+    | distribution_max_age_hours: queued distribution jobs older than this
+    |   are obsolete (device state moved on) and self-delete without writing.
+    |
+    */
+    'device_writes_enabled' => env('DEVICE_WRITES_ENABLED', true),
+
+    'distribution_max_age_hours' => (int) env('DISTRIBUTION_MAX_AGE_HOURS', 72),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Destructive-command refusal + delete circuit breaker
+    |--------------------------------------------------------------------------
+    |
+    | allow_dangerous_commands: restart / clear_users / clear_logs can wipe
+    |   or reboot terminals. Nothing in the system uses them; queueing them
+    |   is refused outright unless this is explicitly enabled.
+    |
+    | delete_breaker_threshold / delete_breaker_window_minutes: deleting more
+    |   than this many employees within the window trips the breaker — further
+    |   DELETEs are held (logged + replayable) instead of hitting devices.
+    |   Single deletions are never affected.
+    |
+    */
+    'allow_dangerous_commands' => env('DEVICE_ALLOW_DANGEROUS_COMMANDS', false),
+
+    'delete_breaker_threshold' => (int) env('ADMS_DELETE_BREAKER_THRESHOLD', 5),
+
+    'delete_breaker_window_minutes' => (int) env('ADMS_DELETE_BREAKER_WINDOW_MINUTES', 10),
 ];

@@ -861,6 +861,11 @@ body {
     flex-shrink: 0;
 }
 
+.nav-user__avatar--photo {
+    background-color: transparent;
+    overflow: hidden;
+}
+
 .nav-user__initials {
     font-size: 13px;
     font-weight: 700;

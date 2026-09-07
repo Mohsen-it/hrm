@@ -13,6 +13,7 @@ use Modules\FingerprintDevices\Console\Commands\FullSyncAllDevices;
 use Modules\FingerprintDevices\Console\Commands\ImportFacePhotosFromUsb;
 use Modules\FingerprintDevices\Console\Commands\ImportHikvisionEmployees;
 use Modules\FingerprintDevices\Console\Commands\PullTemplatesDirect;
+use Modules\FingerprintDevices\Console\Commands\ProcessSkippedDeletes;
 use Modules\FingerprintDevices\Console\Commands\PushFacesAllDevices;
 use Modules\FingerprintDevices\Console\Commands\QueueUsersForAdms;
 use Modules\FingerprintDevices\Console\Commands\RetryFailedFaceCommands;
@@ -62,6 +63,7 @@ class FingerprintDevicesServiceProvider extends ServiceProvider
             ImportFacePhotosFromUsb::class,
             ExportFacePhotosToUsb::class,
             PushFacesAllDevices::class,
+            ProcessSkippedDeletes::class,
             QueueUsersForAdms::class,
             PullTemplatesDirect::class,
             RetryFailedFaceCommands::class,
@@ -72,26 +74,23 @@ class FingerprintDevicesServiceProvider extends ServiceProvider
     protected function registerCommandSchedules(): void
     {
         $this->app->booted(function (): void {
-            // Automatically retry failed face-template commands every 5 minutes.
-            // iFace 880 Plus devices intermittently return -3 on face writes;
-            // periodic retries recover transient failures without operator
-            // intervention.  Using 5 minutes (instead of 10) speeds up recovery
-            // for large deployments with thousands of face commands.
-            Schedule::command('fingerprints:retry-failed-faces --limit=200')
-                ->everyFiveMinutes()
-                ->withoutOverlapping();
-
-            // Distribute complete face-template enrollment sets to devices
-            // that are missing them. Runs every 30 minutes.
-            Schedule::command('fingerprints:distribute-missing-faces')
-                ->everyThirtyMinutes()
-                ->withoutOverlapping();
-
-            // Distribute ALL face templates (complete and partial) to all devices.
-            // Runs every 60 minutes to catch any newly enrolled faces.
-            Schedule::command('fingerprints:distribute-all-faces')
+            // Conservative retry for transient iFace (-3) face-write failures.
+            // Runs hourly (not every 5 minutes) with a small batch and a
+            // short 72h window so old/duplicate failures can never flood
+            // device_commands again. New-employee sync is event-driven
+            // (EmployeeAdmsObserver + Distribute*Job) and is NOT affected.
+            Schedule::command('fingerprints:retry-failed-faces --limit=50 --hours=72')
                 ->hourly()
                 ->withoutOverlapping();
+
+            // NOTE (2026-09): bulk distributors are MANUAL-ONLY on purpose.
+            // `distribute-missing-faces` (every 30m) and `distribute-all-faces`
+            // (hourly) re-queued already-delivered templates because their
+            // dedup only looked at pending/sending rows, causing sudden bulk
+            // syncs of identical old data and queue congestion. Run them
+            // explicitly from the console when a backfill is really needed:
+            //   php artisan fingerprints:distribute-missing-faces
+            //   php artisan fingerprints:distribute-all-faces --limit=50
         });
     }
 

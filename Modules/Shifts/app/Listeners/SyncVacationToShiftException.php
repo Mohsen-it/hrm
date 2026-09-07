@@ -24,6 +24,24 @@ class SyncVacationToShiftException implements ShouldQueue
         private ShiftExceptionService $exceptionService,
     ) {}
 
+    /**
+     * Single entry-point required by Laravel's listener dispatcher.
+     *
+     * The class previously exposed only handleApproved/handleCancelled, so
+     * every queued Vacation event failed with "undefined method __invoke"
+     * and flooded failed_jobs. This router preserves the original handlers.
+     */
+    public function handle(VacationApproved|VacationCancelled $event): void
+    {
+        if ($event instanceof VacationCancelled) {
+            $this->handleCancelled($event);
+
+            return;
+        }
+
+        $this->handleApproved($event);
+    }
+
     public function handleApproved(VacationApproved $event): void
     {
         $request = $event->request;

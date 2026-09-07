@@ -40,7 +40,7 @@ function openQuickPush(device) {
 
 function onPushComplete() {
     showQuickPush.value = false;
-    router.reload({ only: ['devices'] });
+    router.reload({ only: ['devices', 'filters'] });
 }
 
 const columns = computed(() => [
@@ -52,6 +52,7 @@ const columns = computed(() => [
         label: t('fingerprint_devices.device_type'),
         filterable: true,
         filterType: 'select',
+        filterKey: 'device_type_id',
         filterOptions: [
             { value: '', label: t('fingerprint_devices.all_types') },
             ...props.deviceTypes.map((dt) => ({ value: dt.id, label: dt.name })),
@@ -62,6 +63,7 @@ const columns = computed(() => [
         label: t('fingerprint_devices.branch'),
         filterable: true,
         filterType: 'select',
+        filterKey: 'branch_id',
         filterOptions: [
             { value: '', label: t('fingerprint_devices.all_branches') },
             ...props.branches.map((b) => ({ value: b.id, label: b.branch_name })),
@@ -105,9 +107,14 @@ function formatDate(value) {
 function onSearch(value) {
     router.get(
         route('fingerprint-devices.index'),
-        { ...props.filters, search: value },
-        { preserveState: true, preserveScroll: true, replace: true, only: ['devices'] },
+        { ...props.filters, search: value, page: 1 },
+        { preserveState: true, preserveScroll: true, replace: true, only: ['devices', 'filters'] },
     );
+}
+
+function onExport() {
+    const live = Object.fromEntries(new URLSearchParams(window.location.search).entries());
+    window.location.href = route('fingerprint-devices.export', { ...props.filters, ...live });
 }
 
 function onFilterChange(filters) {
@@ -119,8 +126,8 @@ function onFilterChange(filters) {
     });
     router.get(
         route('fingerprint-devices.index'),
-        payload,
-        { preserveState: true, preserveScroll: true, replace: true, only: ['devices'] },
+        { ...payload, page: 1 },
+        { preserveState: true, preserveScroll: true, replace: true, only: ['devices', 'filters'] },
     );
 }
 
@@ -157,7 +164,7 @@ async function syncAllDevices() {
         const json = await res.json();
         syncResult.value = json;
         showSyncResult.value = true;
-        router.reload({ only: ['devices'] });
+        router.reload({ only: ['devices', 'filters'] });
     } catch (e) {
         syncResult.value = { success: false, error: e.message };
         showSyncResult.value = true;
@@ -208,12 +215,13 @@ usePageTitle(t('fingerprint_devices.title'));
             :data="devices"
             :filters="filters"
             :route-name="'fingerprint-devices.index'"
-            :only="['devices']"
+            :only="['devices', 'filters']"
             :empty-title="t('fingerprint_devices.no_devices_title')"
             :empty-description="t('fingerprint_devices.no_devices_description')"
             storage-key="fingerprint-devices"
             @search="onSearch"
             @filter-change="onFilterChange"
+            @export="onExport"
         >
             <template #cell-device_type="{ row }">
                 <span v-if="row.device_type">{{ row.device_type.name }}</span>

@@ -33,7 +33,7 @@ class SubordinationsController extends Controller
         return Inertia::render('Subordinations/Index', [
             'filters' => fn () => $filters,
             'subordinations' => fn () => $this->subordinationService
-                ->getAllSubordinations($filters, 20)
+                ->getAllSubordinations($filters, $request->input('per_page', 20))
                 ->through(fn (Subordination $s) => [
                     'id' => $s->id,
                     'code' => $s->code,

@@ -120,6 +120,11 @@ class DailyReportDocxExport
                 // absentees made the table silently omit unregistered
                 // employees who were on a rest day, on leave, etc.
                 'no_fingerprint' => (bool) ($row['has_no_fingerprint'] ?? false),
+                // The غياب table hides employees without an enrolled
+                // fingerprint: they can never punch, so they would otherwise
+                // sit in this table every day as noise. They stay visible in
+                // the "عدم تسجيل البصمة على الجهاز" table instead.
+                'absent' => ($row['status'] ?? null) === 'absent' && ! ($row['has_no_fingerprint'] ?? false),
                 'incomplete' => (bool) ($row['has_incomplete_punch'] ?? false),
                 default => ($row['status'] ?? null) === $status,
             })
@@ -195,6 +200,12 @@ class DailyReportDocxExport
             return;
         }
 
+        // The template left some prototype cells LTR (e.g. the القسم cell of
+        // the no-fingerprint table, the الدورية cells of the lateness and
+        // missing-checkout tables): multi-word Arabic then renders with
+        // flipped word order. Normalizing the prototype fixes every clone.
+        $this->ensureRtlRow($document, $xpath, $prototype);
+
         $rowsToRemove = [];
         for ($i = 1; $i < $tableRows->length; $i++) {
             $rowsToRemove[] = $tableRows->item($i);
@@ -234,8 +245,49 @@ class DailyReportDocxExport
         }
     }
 
-    /** Fill visible text in a Word table row without changing its formatting. */
-    private function fillRow(DOMXPath $xpath, DOMElement $row, array $values): void
+    /**
+     * Force a prototype data row's cells to render right-to-left.
+     *
+     * Adds the paragraph bidi marker and the run rtl marker wherever the
+     * template omitted them. Cells that already carry them are untouched,
+     * so correctly-styled cells render exactly as before.
+     */
+    private function ensureRtlRow(DOMDocument $document, DOMXPath $xpath, DOMElement $row): void
+    {
+        foreach ($xpath->query('./w:tc', $row) as $cell) {
+            if (! $cell instanceof DOMElement) {
+                continue;
+            }
+            foreach ($xpath->query('./w:p', $cell) as $paragraph) {
+                if (! $paragraph instanceof DOMElement) {
+                    continue;
+                }
+                $pPr = $xpath->query('./w:pPr', $paragraph)->item(0);
+                if (! $pPr instanceof DOMElement) {
+                    $pPr = $document->createElementNS(self::WORD_NAMESPACE, 'w:pPr');
+                    $paragraph->insertBefore($pPr, $paragraph->firstChild);
+                }
+                if ($xpath->query('./w:bidi', $pPr)->length === 0) {
+                    $pPr->appendChild($document->createElementNS(self::WORD_NAMESPACE, 'w:bidi'));
+                }
+                $pRpr = $xpath->query('./w:rPr', $pPr)->item(0);
+                if (! $pRpr instanceof DOMElement) {
+                    $pRpr = $document->createElementNS(self::WORD_NAMESPACE, 'w:rPr');
+                    $pPr->appendChild($pRpr);
+                }
+                if ($xpath->query('./w:rtl', $pRpr)->length === 0) {
+                    $pRpr->appendChild($document->createElementNS(self::WORD_NAMESPACE, 'w:rtl'));
+                }
+            }
+            foreach ($xpath->query('.//w:r/w:rPr', $cell) as $rPr) {
+                if ($rPr instanceof DOMElement && $xpath->query('./w:rtl', $rPr)->length === 0) {
+                    $rPr->appendChild($document->createElementNS(self::WORD_NAMESPACE, 'w:rtl'));
+                }
+            }
+        }
+    }
+
+    /** Fill visible text in a Word table row without changing its formatting. */    private function fillRow(DOMXPath $xpath, DOMElement $row, array $values): void
     {
         $cells = $xpath->query('./w:tc', $row);
         foreach ($values as $index => $value) {

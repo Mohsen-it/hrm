@@ -72,6 +72,32 @@ class DailyReportDocxExportTest extends TestCase
         $this->assertStringContainsString('موظف راحة بلا بصمة', $noFingerprint->textContent);
         $this->assertStringNotContainsString('موظف غياب مسجل بالبصمة', $noFingerprint->textContent);
 
+        // The غياب table (index 0) hides employees without an enrolled
+        // fingerprint — they can never punch and stay visible in the
+        // no-fingerprint table instead.
+        $absent = $tables->item(0);
+        $this->assertInstanceOf(\DOMElement::class, $absent);
+        $this->assertStringContainsString('موظف غياب', $absent->textContent);
+        $this->assertStringNotContainsString('موظف بلا بصمة', $absent->textContent);
+
+        // Every data cell must render right-to-left: the template left the
+        // القسم prototype cell of the no-fingerprint table (and the الدورية
+        // cells of the lateness/missing-checkout tables) LTR, so multi-word
+        // Arabic rendered with flipped word order.
+        foreach ([0, 1, 2, 3, 4, 5] as $tableIndex) {
+            $table = $tables->item($tableIndex);
+            $this->assertInstanceOf(\DOMElement::class, $table);
+            $firstDataRow = $xpath->query('./w:tr[2]', $table)->item(0);
+            if (! $firstDataRow instanceof \DOMElement) {
+                continue;
+            }
+            foreach ($xpath->query('./w:tc', $firstDataRow) as $cell) {
+                $this->assertInstanceOf(\DOMElement::class, $cell);
+                $this->assertGreaterThan(0, $xpath->query('./w:p/w:pPr/w:bidi', $cell)->length);
+                $this->assertGreaterThan(0, $xpath->query('./w:p/w:pPr/w:rPr/w:rtl', $cell)->length);
+            }
+        }
+
         // The lateness table keeps its six columns; the missing-checkout table
         // gains the expected-exit column (seven columns).
         $late = $tables->item(1);

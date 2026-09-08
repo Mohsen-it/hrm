@@ -86,12 +86,15 @@ class DailySummariesController extends Controller
             'cutoff_time' => ['nullable', 'date_format:H:i'],
             'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
             'department_id' => ['nullable', 'integer', 'exists:departments,id'],
+            'department_ids' => ['nullable', 'array'],
+            'department_ids.*' => ['integer', 'exists:departments,id'],
             'user_id' => ['nullable', 'integer', 'exists:users,id'],
             'status' => ['nullable', 'in:absent,late,leave,no_fingerprint,mission,incomplete,holiday'],
         ]);
+        $departmentIds = $this->resolveDepartmentIds($data);
         $report = $this->dailyReportService->build(
             $data['date'] ?? now()->toDateString(), $data['cutoff_time'] ?? '09:00', $data['branch_id'] ?? null,
-            $data['department_id'] ?? null,
+            $departmentIds,
             $data['user_id'] ?? null, $data['status'] ?? null,
         );
 
@@ -100,6 +103,7 @@ class DailySummariesController extends Controller
             'filters' => [
                 'date' => $report['date'], 'cutoff_time' => $report['cutoff_time'],
                 'branch_id' => $data['branch_id'] ?? null, 'department_id' => $data['department_id'] ?? null,
+                'department_ids' => $departmentIds,
                 'user_id' => $data['user_id'] ?? null,
                 'status' => $data['status'] ?? null,
             ],
@@ -120,11 +124,13 @@ class DailySummariesController extends Controller
             'date' => ['required', 'date_format:Y-m-d'], 'cutoff_time' => ['required', 'date_format:H:i'],
             'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
             'department_id' => ['nullable', 'integer', 'exists:departments,id'],
+            'department_ids' => ['nullable', 'array'],
+            'department_ids.*' => ['integer', 'exists:departments,id'],
             'user_id' => ['nullable', 'integer', 'exists:users,id'],
             'status' => ['nullable', 'in:absent,late,leave,no_fingerprint,mission,incomplete,holiday'],
         ]);
         $report = $this->dailyReportService->build(
-            $data['date'], $data['cutoff_time'], $data['branch_id'] ?? null, $data['department_id'] ?? null,
+            $data['date'], $data['cutoff_time'], $data['branch_id'] ?? null, $this->resolveDepartmentIds($data),
             $data['user_id'] ?? null, $data['status'] ?? null,
         );
         $export = new DailyReportDocxExport($report);
@@ -477,6 +483,27 @@ class DailySummariesController extends Controller
         }
 
         return (int) $checkIn->diffInMinutes($dayEnd);
+    }
+
+    /**
+     * Merge the multi-select department filter with the legacy single value.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<int, int>
+     */
+    private function resolveDepartmentIds(array $data): array
+    {
+        $ids = $data['department_ids'] ?? [];
+        if ($ids === [] && isset($data['department_id'])) {
+            $ids = [$data['department_id']];
+        }
+
+        return collect(is_array($ids) ? $ids : [$ids])
+            ->filter(fn ($id) => $id !== null && $id !== '')
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
     }
 
     /**

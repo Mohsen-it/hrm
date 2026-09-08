@@ -5,7 +5,9 @@ namespace Tests\Unit\Modules\Attendance;
 use Modules\Attendance\Models\AttendanceSession;
 use Modules\Attendance\Models\RawAttendanceLog;
 use Modules\Attendance\Services\DailyReportService;
+use Modules\Branches\Models\Branch;
 use Modules\Companies\Models\Company;
+use Modules\Departments\Models\Department;
 use Modules\FingerprintDevices\Models\UserFingerprint;
 use Modules\Holidays\Models\Holiday;
 use Modules\Shifts\Models\Rotation;
@@ -141,7 +143,11 @@ class DailyReportServiceTest extends TestCase
         $row = $report['rows']->firstWhere('id', $user->id);
 
         $this->assertTrue($row['has_incomplete_punch']);
-        $this->assertSame('incomplete', $row['status']);
+        // No session on the report day itself: today's status is absence,
+        // yesterday's missing check-out stays as a flag + note (and its own
+        // DOCX table) instead of hiding the absence.
+        $this->assertSame('absent', $row['status']);
+        $this->assertStringContainsString('لم يسجل خروج أمس', $row['notes']);
         // The expected exit comes from the time table (17:00), never from the
         // rotation's own window end (11:50).
         $this->assertSame('08:00', $row['expected_check_in']);
@@ -198,7 +204,8 @@ class DailyReportServiceTest extends TestCase
         $report = $this->service->build('2026-08-10', '09:00');
         $row = $report['rows']->firstWhere('id', $user->id);
 
-        $this->assertSame('incomplete', $row['status']);
+        $this->assertTrue($row['has_incomplete_punch']);
+        $this->assertSame('absent', $row['status']);
         $this->assertSame('10:00', $row['expected_check_out']);
     }
 
@@ -224,7 +231,7 @@ class DailyReportServiceTest extends TestCase
         $row = $report['rows']->firstWhere('id', $user->id);
 
         $this->assertTrue($row['has_incomplete_punch']);
-        $this->assertSame('incomplete', $row['status']);
+        $this->assertSame('absent', $row['status']);
     }
 
     /**
@@ -246,7 +253,8 @@ class DailyReportServiceTest extends TestCase
         $report = $this->service->build('2026-08-10', '09:00');
         $row = $report['rows']->firstWhere('id', $user->id);
 
-        $this->assertSame('incomplete', $row['status']);
+        $this->assertTrue($row['has_incomplete_punch']);
+        $this->assertSame('absent', $row['status']);
     }
 
     /**
@@ -367,7 +375,7 @@ class DailyReportServiceTest extends TestCase
         $row = $report['rows']->firstWhere('id', $user->id);
 
         $this->assertTrue($row['has_incomplete_punch']);
-        $this->assertSame('incomplete', $row['status']);
+        $this->assertSame('absent', $row['status']);
     }
 
     /**
@@ -424,7 +432,9 @@ class DailyReportServiceTest extends TestCase
         $row = $report['rows']->firstWhere('id', $user->id);
 
         $this->assertTrue($row['has_incomplete_punch']);
-        $this->assertSame('incomplete', $row['status']);
+        // 08-11 is a rest day of this 1-day duty: today's status is rest,
+        // yesterday's missing check-out stays as a flag + note.
+        $this->assertSame('rest', $row['status']);
         $this->assertSame('لم يسجل خروج أمس', $row['notes']);
     }
 
@@ -453,7 +463,9 @@ class DailyReportServiceTest extends TestCase
         $row = $report['rows']->firstWhere('id', $user->id);
 
         $this->assertTrue($row['has_incomplete_punch']);
-        $this->assertSame('incomplete', $row['status']);
+        // 08-11 is a rest day of this 1-day duty: today's status is rest,
+        // yesterday's missing check-out stays as a flag + note.
+        $this->assertSame('rest', $row['status']);
         $this->assertSame('لم يسجل خروج أمس', $row['notes']);
         // The expected entry/exit columns come from the rotation's time table:
         // in 08:00, out 08:00 on the next day (اليوم التالي).
@@ -512,7 +524,7 @@ class DailyReportServiceTest extends TestCase
         $report = $this->service->build('2026-08-11', '09:00');
         $row = $report['rows']->firstWhere('id', $user->id);
         $this->assertTrue($row['has_incomplete_punch']);
-        $this->assertSame('incomplete', $row['status']);
+        $this->assertSame('rest', $row['status']);
 
         // On 08-12 and 08-13 the session is older than yesterday -> gone.
         foreach (['2026-08-12', '2026-08-13'] as $reportDate) {
@@ -606,7 +618,9 @@ class DailyReportServiceTest extends TestCase
         $row = $report['rows']->firstWhere('id', $user->id);
 
         $this->assertTrue($row['has_incomplete_punch']);
-        $this->assertSame('incomplete', $row['status']);
+        // 08-13 is the departure morning (rest): today's status is rest,
+        // yesterday's missing check-out stays as a flag + note.
+        $this->assertSame('rest', $row['status']);
         $this->assertSame('لم يسجل خروج أمس', $row['notes']);
         $this->assertSame('08:00', $row['expected_check_in']);
         $this->assertSame('08:00', $row['expected_check_out']);
@@ -640,6 +654,157 @@ class DailyReportServiceTest extends TestCase
         $this->assertNotSame('absent', $row['status'], 'A raw device punch must prove presence.');
         $this->assertSame('present', $row['status']);
         $this->assertStringContainsString('بصمة مسجلة دون جلسة', $row['notes']);
+    }
+
+    /**
+     * Regression: an employee absent on the report day who missed yesterday's
+     * check-out must still appear as غياب (production: فاتنه ظافر حاج خليل on
+     * 2026-09-08 was hidden from the غياب table because yesterday's violation
+     * overrode today's status). Yesterday's violation stays as a flag + note
+     * (and its own DOCX table) so the employee is listed in BOTH tables.
+     */
+    public function test_absent_today_with_yesterday_missing_checkout_stays_absent(): void
+    {
+        $this->travelTo('2026-08-10 12:00:00');
+
+        $user = $this->makeEmployee('EMP50010');
+        $this->assignOpenWorkEveryDay($user);
+        $rotation = RotationAssignment::where('employee_id', $user->id)->first()->rotation;
+        $rotation->update([
+            'time_schedule_id' => $this->makeTimeSchedule($user, '08:00', '15:00')->id,
+            'out_ahead_margin' => '14:30:00',
+            'out_above_margin' => '18:00:00',
+        ]);
+        // Yesterday: checked in, never checked out (deadline passed).
+        $this->makeOpenSession($user, '2026-08-09 08:00:00');
+        // Today: no session at all.
+
+        $report = $this->service->build('2026-08-10', '09:00');
+        $row = $report['rows']->firstWhere('id', $user->id);
+
+        $this->assertSame('absent', $row['status']);
+        $this->assertTrue($row['has_incomplete_punch']);
+        // No punch today: the column must be empty, never yesterday's time.
+        $this->assertSame('', $row['check_in']);
+        $this->assertStringContainsString('عدد أيام الغياب خلال الشهر', $row['notes']);
+        $this->assertStringContainsString('لم يسجل خروج أمس', $row['notes']);
+    }
+
+    /**
+     * Regression: an employee present on the report day who missed yesterday's
+     * check-out must show today's punch and today's status (production: nine
+     * employees on 2026-09-08 were shown with yesterday's check-in time and
+     * hidden from the حاضر/متأخر tables).
+     */
+    public function test_present_today_with_yesterday_missing_checkout_shows_today_punch(): void
+    {
+        $this->travelTo('2026-08-10 12:00:00');
+
+        $user = $this->makeEmployee('EMP50011');
+        $this->assignOpenWorkEveryDay($user);
+        $rotation = RotationAssignment::where('employee_id', $user->id)->first()->rotation;
+        $rotation->update([
+            'time_schedule_id' => $this->makeTimeSchedule($user, '08:00', '15:00')->id,
+            'out_ahead_margin' => '14:30:00',
+            'out_above_margin' => '18:00:00',
+        ]);
+        // Yesterday: checked in, never checked out (deadline passed).
+        $this->makeOpenSession($user, '2026-08-09 07:55:00');
+        // Today: checked in on time.
+        $this->makeOpenSession($user, '2026-08-10 08:13:00');
+
+        $report = $this->service->build('2026-08-10', '09:00');
+        $row = $report['rows']->firstWhere('id', $user->id);
+
+        $this->assertSame('present', $row['status']);
+        $this->assertTrue($row['has_incomplete_punch']);
+        $this->assertSame('08:13', $row['check_in']);
+        $this->assertStringContainsString('لم يسجل خروج أمس', $row['notes']);
+    }
+
+    /**
+     * Employees whose fingerprint is not enrolled on the device can never
+     * punch, so they must not sit in the غياب table every day as noise: the
+     * absent filter and the absent counter skip them while the
+     * no-fingerprint filter (and its DOCX table) still lists them.
+     */
+    public function test_absent_filter_hides_employees_without_enrolled_fingerprint(): void
+    {
+        $unregistered = $this->makeEmployee('EMP50020');
+        $this->assignOpenWorkEveryDay($unregistered);
+
+        $registered = $this->makeEmployee('EMP50021');
+        $this->registerFingerprint($registered);
+        $this->assignOpenWorkEveryDay($registered);
+
+        // No sessions for either: both are absent today, only the registered
+        // one belongs in the غياب table.
+        $report = $this->service->build('2026-08-06', '09:00');
+        $this->assertSame('absent', $report['rows']->firstWhere('id', $unregistered->id)['status']);
+        $this->assertTrue($report['rows']->firstWhere('id', $unregistered->id)['has_no_fingerprint']);
+
+        $absent = $this->service->build('2026-08-06', '09:00', null, null, null, 'absent');
+        $this->assertNull($absent['rows']->firstWhere('id', $unregistered->id));
+        $this->assertNotNull($absent['rows']->firstWhere('id', $registered->id));
+
+        $unfiltered = $this->service->build('2026-08-06', '09:00');
+        $this->assertSame(
+            $unfiltered['rows']->where('status', 'absent')->where('has_no_fingerprint', false)->count(),
+            $unfiltered['stats']['absent']
+        );
+
+        $noFingerprint = $this->service->build('2026-08-06', '09:00', null, null, null, 'no_fingerprint');
+        $this->assertNotNull($noFingerprint['rows']->firstWhere('id', $unregistered->id));
+    }
+
+    /**
+     * The report can be filtered by several departments at once; a single id
+     * keeps working for backward compatibility.
+     */
+    public function test_report_can_filter_by_multiple_departments(): void
+    {
+        $companyId = Company::create(['company_code' => 'CMP_DEPTS', 'company_name' => 'Depts Co', 'status' => 1])->id;
+        $branchId = Branch::create([
+            'company_id' => $companyId,
+            'branch_code' => 'BR_DEPTS',
+            'branch_name' => 'الفرع',
+            'status' => 1,
+        ])->id;
+        $deptA = Department::create([
+            'company_id' => $companyId,
+            'branch_id' => $branchId,
+            'department_code' => 'DEPTA',
+            'department_name' => 'القسم أ',
+            'status' => 1,
+        ]);
+        $deptB = Department::create([
+            'company_id' => $companyId,
+            'branch_id' => $branchId,
+            'department_code' => 'DEPTB',
+            'department_name' => 'القسم ب',
+            'status' => 1,
+        ]);
+
+        $userA = $this->makeEmployee('EMP60001');
+        $userA->update(['department_id' => $deptA->id]);
+        $this->assignOpenWorkEveryDay($userA);
+
+        $userB = $this->makeEmployee('EMP60002');
+        $userB->update(['department_id' => $deptB->id]);
+        $this->assignOpenWorkEveryDay($userB);
+
+        $outsider = $this->makeEmployee('EMP60003');
+        $this->assignOpenWorkEveryDay($outsider);
+
+        $report = $this->service->build('2026-08-06', '09:00', null, [$deptA->id, $deptB->id]);
+        $this->assertNotNull($report['rows']->firstWhere('id', $userA->id));
+        $this->assertNotNull($report['rows']->firstWhere('id', $userB->id));
+        $this->assertNull($report['rows']->firstWhere('id', $outsider->id));
+
+        // A single id still filters to that department only.
+        $single = $this->service->build('2026-08-06', '09:00', null, $deptA->id);
+        $this->assertNotNull($single['rows']->firstWhere('id', $userA->id));
+        $this->assertNull($single['rows']->firstWhere('id', $userB->id));
     }
 
     /**

@@ -25,37 +25,41 @@ class DailyReportService
     ) {}
 
     /**
+     * @param  int|array<int, int>|null  $departmentIds
      * @return array{date:string, cutoff_time:string, rows:Collection, stats:array<string,int>}
      */
     public function build(
         string $date,
         string $cutoffTime,
         ?int $branchId = null,
-        ?int $departmentId = null,
+        int|array|null $departmentIds = null,
         ?int $userId = null,
         ?string $statusFilter = null,
     ): array {
         $day = Carbon::parse($date)->startOfDay();
         $date = $day->toDateString();
         $monthFrom = $day->copy()->startOfMonth()->toDateString();
+        $departmentIds = $departmentIds === null || is_array($departmentIds)
+            ? ($departmentIds ?? [])
+            : [$departmentIds];
 
         $users = User::query()->employees()->active()
             ->where(fn ($q) => $q->whereNull('termination_date')->orWhere('termination_date', '>=', $date))
             ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
-            ->when($departmentId, fn ($q) => $q->where('department_id', $departmentId))
+            ->when($departmentIds !== [], fn ($q) => $q->whereIn('department_id', $departmentIds))
             ->when($userId, fn ($q) => $q->whereKey($userId))
             ->with('department')
             ->orderBy('name')
             ->get();
         $userIds = $users->pluck('id');
-        $expected = $this->absenceService->getExpectedEmployees($day, $departmentId)->flip();
+        $expected = $this->absenceService->getExpectedEmployees($day, $departmentIds)->flip();
         $assignments = $this->rotationAssignmentRepository->getAssignmentsForDate($date)
             ->whereIn('employee_id', $userIds)
             ->unique('employee_id')
             ->keyBy('employee_id');
 
         $previousDate = $day->copy()->subDay()->toDateString();
-        $previousExpected = $this->absenceService->getExpectedEmployees($day->copy()->subDay(), $departmentId)->flip();
+        $previousExpected = $this->absenceService->getExpectedEmployees($day->copy()->subDay(), $departmentIds)->flip();
         $previousAssignments = $this->rotationAssignmentRepository->getAssignmentsForDate($previousDate)
             ->whereIn('employee_id', $userIds)
             ->unique('employee_id')
@@ -147,7 +151,6 @@ class DailyReportService
             $hasNoFingerprint = $unregisteredFingerprintIds->has($user->id);
 
             $hasPreviousDayMissingCheckout = false;
-            $previousCheckIn = null;
             $previousAssignment = null;
             $previousFlaggedSession = null;
             $previousUserSessions = $previousSessions->get($user->id, collect());
@@ -163,7 +166,6 @@ class DailyReportService
                 $previousAssignment = $previousAssignments->get($user->id);
                 if ($this->isIncompletePunchDue($previousDate, $date, $previousMainSession, $previousExpected->has($user->id), $previousAssignment)) {
                     $hasPreviousDayMissingCheckout = true;
-                    $previousCheckIn = $previousMainSession->check_in_at->format('H:i');
                     $previousFlaggedSession = $previousMainSession;
                 }
             }
@@ -193,24 +195,28 @@ class DailyReportService
 
             $status = 'present';
             $label = 'حاضر';
+            // The status always describes the REPORT day itself: today's
+            // sessions decide present/late/absent. Yesterday's missing
+            // check-out stays visible through has_incomplete_punch and the
+            // "لم يسجل خروج أمس" note (plus its own DOCX table) but must
+            // never hide today's attendance — previously an employee absent
+            // today vanished from the غياب table while employees present
+            // today were shown with yesterday's check-in time.
             if ($onMission) {
                 $status = 'mission';
                 $label = 'مهمة سفر';
             } elseif ($onLeave) {
                 $status = 'leave';
                 $label = 'إجازة';
-            } elseif (! $expected->has($user->id) && ! $hasPreviousDayMissingCheckout) {
+            } elseif (! $expected->has($user->id)) {
                 $status = 'rest';
                 $label = 'غير متوقع دوامه';
-            } elseif ($isHoliday && ! $hasPreviousDayMissingCheckout) {
+            } elseif ($isHoliday) {
                 $status = 'holiday';
                 $label = 'إجازة رسمية';
-            } elseif (! $userSessions->count() && ! $hasPreviousDayMissingCheckout && ! $hasRawPunch) {
+            } elseif (! $userSessions->count() && ! $hasRawPunch) {
                 $status = 'absent';
                 $label = 'غياب';
-            } elseif ($hasIncompletePunch) {
-                $status = 'incomplete';
-                $label = 'دخول دون خروج';
             } elseif ($late) {
                 $status = 'late';
                 $label = 'متأخر';
@@ -238,11 +244,10 @@ class DailyReportService
                 $notes[] = 'الموظف غير مسجل في جهاز البصمة';
             }
 
+            // Always today's punch: yesterday's check-in belongs to the
+            // missing-checkout table (expected entry/exit columns), never to
+            // this column.
             $checkIn = $first?->check_in_at?->format('H:i') ?? '';
-
-            if ($hasPreviousDayMissingCheckout) {
-                $checkIn = $previousCheckIn ?? '';
-            }
 
             return [
                 'id' => $user->id, 'name' => $user->full_name, 'employee_code' => $user->employee_code,
@@ -265,11 +270,19 @@ class DailyReportService
                         'status_label' => 'لا توجد بصمة مسجلة',
                     ]),
                 'incomplete' => $collection->where('has_incomplete_punch', true),
+                // Employees whose fingerprint is not enrolled on the device
+                // can never punch, so they would sit in the غياب table every
+                // day as noise: they belong to the "عدم تسجيل البصمة على
+                // الجهاز" table instead and are hidden from the غياب filter.
+                'absent' => $collection->where('status', 'absent')->where('has_no_fingerprint', false),
                 default => $collection->where('status', $statusFilter),
             };
         })->values();
 
         $stats = $rows->countBy('status')->all();
+        // Keep the غياب counter in sync with the غياب table: unregistered
+        // employees are listed under "عدم تسجيل البصمة على الجهاز", not here.
+        $stats['absent'] = $rows->where('status', 'absent')->where('has_no_fingerprint', false)->count();
         $stats['no_fingerprint'] = $rows->where('has_no_fingerprint', true)->count();
         $stats['incomplete'] = $rows->where('has_incomplete_punch', true)->count();
         $stats['total'] = $rows->count();

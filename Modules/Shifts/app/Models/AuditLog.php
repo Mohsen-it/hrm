@@ -20,6 +20,8 @@ class AuditLog extends Model
      *
      * @var array<int, string>
      */
+    public $timestamps = false;
+
     protected $fillable = [
         'actor_id',
         'action',
@@ -27,6 +29,7 @@ class AuditLog extends Model
         'entity_id',
         'old_values',
         'new_values',
+        'created_at',
     ];
 
     /**
@@ -37,6 +40,7 @@ class AuditLog extends Model
     protected $casts = [
         'old_values' => 'array',
         'new_values' => 'array',
+        'created_at' => 'datetime',
     ];
 
     /**

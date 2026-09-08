@@ -75,6 +75,16 @@ function clearAll(e) {
     search.value = '';
 }
 
+function selectAll(e) {
+    if (e) e.stopPropagation();
+    if (props.disabled) return;
+    const values = new Set(props.modelValue);
+    filteredOptions.value.forEach((opt) => values.add(opt.value));
+    const next = [...values];
+    emit('update:modelValue', next);
+    emit('change', next);
+}
+
 function open() {
     if (props.disabled) return;
     isOpen.value = true;
@@ -252,11 +262,26 @@ watch(() => props.disabled, (val) => { if (val) close(); });
                         {{ emptyText }}
                     </div>
                 </div>
-                <div v-if="hasValue" class="px-3 py-2 border-t border-mistral-hairline-soft bg-mistral-surface/40 text-[12px] text-mistral-steel flex items-center justify-between">
+                <div v-if="options.length > 0" class="px-3 py-2 border-t border-mistral-hairline-soft bg-mistral-surface/40 text-[12px] text-mistral-steel flex items-center justify-between">
                     <span>{{ selectedCount }} محدد</span>
-                    <button type="button" @click="clearAll" class="text-mistral-primary hover:underline">
-                        مسح الكل
-                    </button>
+                    <div class="flex items-center gap-3">
+                        <button
+                            v-if="selectedCount < options.length"
+                            type="button"
+                            @click="selectAll"
+                            class="text-mistral-primary hover:underline"
+                        >
+                            تحديد الكل
+                        </button>
+                        <button
+                            v-if="hasValue"
+                            type="button"
+                            @click="clearAll"
+                            class="text-mistral-primary hover:underline"
+                        >
+                            مسح الكل
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

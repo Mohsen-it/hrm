@@ -76,6 +76,30 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Fingerprint distribution channels
+    |--------------------------------------------------------------------------
+    |
+    | distribute_fingerprint_via_bridge: direct-TCP propagation
+    | (DistributeFingerprintJob via the pyzk bridge). This is the PROVEN
+    | channel on this fleet (fleet-wide spread observed 2026-09-02) and is
+    | enabled by default. Requires TCP 4370 from this server to each
+    | terminal; when the network blocks it, jobs fail fast (short
+    | timeouts) into failed_jobs instead of clogging workers.
+    |
+    | distribute_fingerprint_via_adms: queue fp_template rows into
+    | device_commands (same pattern as face templates). Enabled: fingerprints
+    | travel over the classic FINGERTMP table (``DATA UPDATE FINGERTMP``),
+    | which this fleet honors — the earlier unified-``biodata`` variants
+    | were ACKed but never stored, so only the FINGERTMP body format may
+    | be used (see DeviceCommandService::queueFingerprintTemplate).
+    |
+    */
+    'distribute_fingerprint_via_bridge' => env('DISTRIBUTE_FINGERPRINT_VIA_BRIDGE', true),
+
+    'distribute_fingerprint_via_adms' => env('DISTRIBUTE_FINGERPRINT_VIA_ADMS', true),
+
+    /*
+    |--------------------------------------------------------------------------
     | Destructive-command refusal + delete circuit breaker
     |--------------------------------------------------------------------------
     |

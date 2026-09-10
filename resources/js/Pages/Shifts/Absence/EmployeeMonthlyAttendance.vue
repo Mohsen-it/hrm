@@ -6,7 +6,7 @@ export default { layout: AppLayout };
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { router } from '@inertiajs/vue3'
-import { PageHeader, Card, Button, Badge, StatCard, FormInput, FormSelect, EmptyState } from '@/Components/ui'
+import { PageHeader, Card, Button, Badge, StatCard, FormInput, FormSelect, EmptyState, IconButton } from '@/Components/ui'
 import { useTranslations } from '@/composables/useTranslations'
 import { usePageTitle } from '@/composables/usePageTitle'
 
@@ -96,7 +96,7 @@ usePageTitle(t('shifts.employee_monthly_attendance') || 'دوام الموظف �
                         <div v-if="selectedEmployeeLabel" class="flex items-center gap-2 mb-2">
                             <span class="inline-flex items-center gap-1.5 bg-mistral-primary/10 text-mistral-primary rounded-md px-2.5 py-1 text-[12px] font-medium">
                                 <i class="fas fa-user text-[11px]"></i> {{ selectedEmployeeLabel }}
-                                <button type="button" @click="selectedEmployeeId=null; selectedEmployeeLabel=''" class="ms-1 hover:text-mistral-danger"><i class="fas fa-times text-[10px]"></i></button>
+                                <IconButton icon="fas fa-times" aria-label="Clear" variant="ghost" size="sm" @click="selectedEmployeeId=null; selectedEmployeeLabel=''" />
                             </span>
                         </div>
                         <div class="relative">

@@ -56,16 +56,26 @@ class ScheduleCalendarController extends Controller
             ->where('is_active_employee', true)
             ->get(['id', 'name', 'employee_code']);
 
+        // 011/P1-B: one service instance (memoized holidays) + one batched
+        // punch lookup instead of N container resolves and N exists queries.
+        // Output is identical: exists(user) ⇔ user ∈ punched set.
+        $absenceService = app(AbsenceCalculationService::class);
+        $employeeIds = $employees->pluck('id')->all();
+        $punchedIds = $employeeIds === []
+            ? collect()
+            : AttendanceSession::onDate($dateStr)
+                ->whereIn('user_id', $employeeIds)
+                ->pluck('user_id')
+                ->flip();
+
         $statuses = [];
         foreach ($employees as $emp) {
             $statuses[] = [
                 'id' => $emp->id,
                 'name' => $emp->name,
                 'employee_code' => $emp->employee_code,
-                'is_expected' => app(AbsenceCalculationService::class)->isEmployeeExpectedToWork($emp->id, $date),
-                'has_punch' => AttendanceSession::onDate($dateStr)
-                    ->where('user_id', $emp->id)
-                    ->exists(),
+                'is_expected' => $absenceService->isEmployeeExpectedToWork($emp->id, $date),
+                'has_punch' => isset($punchedIds[$emp->id]),
             ];
         }
 

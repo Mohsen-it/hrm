@@ -14,6 +14,7 @@ import { Link, router } from '@inertiajs/vue3';
 import PageHeader from '@/Components/ui/PageHeader.vue';
 import Button from '@/Components/ui/Button.vue';
 import Card from '@/Components/ui/Card.vue';
+import FormModal from '@/Components/ui/FormModal.vue';
 import Badge from '@/Components/ui/Badge.vue';
 import StatCard from '@/Components/ui/StatCard.vue';
 import Alert from '@/Components/ui/Alert.vue';
@@ -661,37 +662,13 @@ usePageTitle(t('fingerprint_devices.face_sync_dashboard') || 'Face Sync Dashboar
             </div>
         </Card>
 
-        <!-- Employee detail modal -->
-        <Teleport to="body">
-            <Transition
-                enter-active-class="duration-200 ease-out"
-                enter-from-class="opacity-0"
-                enter-to-class="opacity-100"
-                leave-active-class="duration-150 ease-in"
-                leave-from-class="opacity-100"
-                leave-to-class="opacity-0"
-            >
-                <div
-                    v-if="showSyncDetail && selectedEmployee"
-                    class="fixed inset-0 z-50 flex items-center justify-center p-4"
-                    @click.self="showSyncDetail = false"
-                >
-                    <div class="absolute inset-0 bg-mistral-ink/40 backdrop-blur-sm"></div>
-                    <Card
-                        variant="base"
-                        padding="none"
-                        class="relative z-10 flex w-full max-w-lg max-h-[90vh] flex-col overflow-hidden rounded-2xl shadow-level-4"
-                    >
-                        <div class="flex items-center justify-between border-b border-mistral-hairline-soft px-6 py-5">
-                            <h3 class="text-[16px] font-semibold text-mistral-ink">{{ selectedEmployee.name }}</h3>
-                            <button class="text-mistral-stone hover:text-mistral-ink" @click="showSyncDetail = false">
-                                <i class="fas fa-times text-[16px]"></i>
-                            </button>
-                        </div>
-                        <p class="px-6 pb-4 text-[12px] text-mistral-steel">
+        <!-- Employee detail modal (unified FormModal — same content, shared chrome) -->
+        <FormModal v-model="showSyncDetail" :title="selectedEmployee?.name || ''" size="sm">
+            <div v-if="selectedEmployee">
+                        <p class="pb-4 text-[12px] text-mistral-steel">
                             Code: {{ selectedEmployee.employee_code }} | Coverage: {{ formatPercent(selectedEmployee.coverage_percent) }}
                         </p>
-                        <div class="flex-1 overflow-y-auto px-6 pb-6">
+                        <div>
                             <h4 class="text-[13px] font-semibold text-mistral-ink mb-3">
                                 {{ t('fingerprint_devices.device_sync_status') || 'Device Sync Status' }}
                             </h4>
@@ -725,10 +702,8 @@ usePageTitle(t('fingerprint_devices.face_sync_dashboard') || 'Face Sync Dashboar
                                 </div>
                             </div>
                         </div>
-                    </Card>
-                </div>
-            </Transition>
-        </Teleport>
+            </div>
+        </FormModal>
     </div>
 
     <!-- ===== COMMAND QUEUE TAB ===== -->

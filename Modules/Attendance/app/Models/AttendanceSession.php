@@ -140,13 +140,15 @@ class AttendanceSession extends Model
      * Scope a query to sessions within a date range (inclusive).
      *
      * Uses direct column comparison (no whereDate function) so the composite
-     * index `idx_att_sessions_user_date_status` can be used. Works on both
-     * MySQL DATE and SQLite TEXT storage.
+     * index `idx_att_sessions_user_date_status` can be used. The upper bound
+     * carries `23:59:59` so SQLite TEXT storage (`'D 00:00:00'`, kept because
+     * SQLite has no DATE truncation) still includes the last day — on MySQL
+     * DATE the time part is truncated away, so the result set is identical.
      */
     public function scopeBetweenDates(Builder $query, string $from, string $to): Builder
     {
         return $query->where('attendance_date', '>=', $from)
-            ->where('attendance_date', '<=', $to);
+            ->where('attendance_date', '<=', $to.' 23:59:59');
     }
 
     /**

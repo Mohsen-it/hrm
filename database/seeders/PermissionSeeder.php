@@ -67,6 +67,22 @@ class PermissionSeeder extends Seeder
         'delete-rotations',
         'assign-employees-to-rotation',
         'view-activity-logs',
+        // 011/P2-PERM: used by Attendance controllers but never seeded —
+        // without these rows every authorize() denies (403 for everyone).
+        // Found by diffing code usage against the live permissions table.
+        'view-attendance-groups',
+        'create-attendance-groups',
+        'edit-attendance-groups',
+        'delete-attendance-groups',
+        'assign-attendance-groups',
+        'view-attendance-shifts',
+        'create-attendance-shifts',
+        'edit-attendance-shifts',
+        'delete-attendance-shifts',
+        'view-group-schedules',
+        'create-group-schedules',
+        'edit-group-schedules',
+        'delete-group-schedules',
     ];
 
     /**
@@ -122,6 +138,11 @@ class PermissionSeeder extends Seeder
     /**
      * Grant every supplied permission to the super-admin role.
      *
+     * Additive only (011/P2-PERM): the previous syncPermissions() would STRIP
+     * any permission not in this catalogue (e.g. the subordinations set, or
+     * hand-granted ones) whenever this seeder re-ran. give-missing-only keeps
+     * the fresh-install result identical while never removing anything live.
+     *
      * @param  array<int, string>  $permissions
      */
     protected function assignPermissionsToSuperAdmin(array $permissions): void
@@ -130,6 +151,10 @@ class PermissionSeeder extends Seeder
             ['name' => 'super-admin', 'guard_name' => 'web'],
         );
 
-        $role->syncPermissions($permissions);
+        foreach ($permissions as $name) {
+            if (! $role->hasPermissionTo($name)) {
+                $role->givePermissionTo($name);
+            }
+        }
     }
 }

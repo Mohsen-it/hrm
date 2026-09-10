@@ -176,7 +176,9 @@ class DistributeFingerprintJob implements ShouldQueue
     /** @return array<int, array{fid:int, template:string}> */
     private function pullTemplates(FingerprintDevice $device, int $uid): array
     {
-        $response = Http::timeout(300)->post($this->bridgeUrl().'/device/get-templates', [
+        // Bounded: a blocked network must fail fast instead of parking a
+        // queue worker for minutes (LAN pulls normally finish in seconds).
+        $response = Http::timeout(90)->post($this->bridgeUrl().'/device/get-templates', [
             'ip' => $device->ip_address,
             'port' => (int) $device->port,
             'password' => (int) $device->comm_key,
@@ -193,7 +195,7 @@ class DistributeFingerprintJob implements ShouldQueue
 
     private function exportTemplate(FingerprintDevice $device, int $uid, int $fid, string $template): array
     {
-        $response = Http::timeout(120)->post($this->bridgeUrl().'/device/export-template', [
+        $response = Http::timeout(60)->post($this->bridgeUrl().'/device/export-template', [
             'ip' => $device->ip_address,
             'port' => (int) $device->port,
             'password' => (int) $device->comm_key,
@@ -208,7 +210,9 @@ class DistributeFingerprintJob implements ShouldQueue
     private function uidOn(FingerprintDevice $device, string $pin): ?int
     {
         try {
-            $response = Http::timeout(120)->post($this->bridgeUrl().'/device/get-users', [
+            // Bounded: get-users on a LAN answers in seconds; a blocked
+            // route must fail fast instead of parking the worker.
+            $response = Http::timeout(20)->post($this->bridgeUrl().'/device/get-users', [
                 'ip' => $device->ip_address,
                 'port' => (int) $device->port,
                 'password' => (int) $device->comm_key,

@@ -16,6 +16,9 @@ class RotationAssignmentRepository
         'employee',
         'rotation.timeSchedule.categoryTimeSchedule',
         'rotation.timeSchedule.category',
+        // 011/P1-F: resolveTimes()->liveBreaks() reads timeSchedule->breaks
+        // per assignment — eager here instead of N lazy queries on reports.
+        'rotation.timeSchedule.breaks',
         'rotationGroup',
     ];
 
@@ -50,6 +53,29 @@ class RotationAssignmentRepository
             ->orderByDesc('start_date')
             ->orderByDesc('id')
             ->first();
+    }
+
+    /**
+     * All assignments of one employee overlapping a date range, ordered so
+     * the first match for any day equals getAssignmentForDate() for that day
+     * (start_date desc, id desc). Lets month loops avoid one query per day
+     * (011/P1-G). Additive — no existing signature changed.
+     *
+     * @return Collection<int, RotationAssignment>
+     */
+    public function getEmployeeAssignmentsOverlapping(int $employeeId, string $from, string $to): Collection
+    {
+        return $this->query()
+            ->with($this->defaultWith)
+            ->where('employee_id', $employeeId)
+            ->where('start_date', '<=', $to)
+            ->where(function (Builder $q) use ($from): void {
+                $q->whereNull('end_date')
+                    ->orWhere('end_date', '>=', $from);
+            })
+            ->orderByDesc('start_date')
+            ->orderByDesc('id')
+            ->get();
     }
 
     /**

@@ -96,7 +96,7 @@ Polish ░░░ التوثيق + Benchmark            يوم 5
 | 2 | لا duplicate jobs ✅ |
 | 3 | `/users` < 200ms على 10k ✅ |
 | 4 | تقرير الحضور < 500ms ✅ |
-| 5 | `hrm-laravel-server.log` daily rotation ✅ |
+| 5 | `hrm-laravel-server.log` rotation ⏳ (قنوات Laravel يومية ✅، أما stdout الخارجي فيُدوَّر عند الإقلاع منذ 011/P0-1) |
 | 6 | JS initial < 200KB ✅ |
 | 7 | `php artisan test` 100% ✅ |
 | 8 | `pint` نظيف ✅ |

@@ -316,11 +316,19 @@ class DeviceCommandService
     }
 
     /**
-     * Queue a ZKTeco multi-bio push FINGERPRINT template write.
+     * Queue a ZKTeco Push SDK FINGERTMP fingerprint-template write.
      *
-     * Byte-exact mirror of the terminals' own Type=1 BIODATA uploads
-     * (verified Return=0 on this fleet): ``Format=ZK`` and
-     * ``MajorVer=10`` are what these terminals emit for fingerprints.
+     * Fingerprints use the CLASSIC table (``DATA UPDATE FINGERTMP`` with
+     * ``PIN/FID/Size/Valid/TMP``) — not the unified ``biodata`` table.
+     * The unified table is face/palm-only: these terminals ACK
+     * ``DATA UPDATE biodata Type=1`` with Return=0 yet store nothing
+     * (verified twice on 2026-09-10, with and without the Format token).
+     * ``Size`` is the length of the base64 template payload, mirroring
+     * what the terminals themselves emit on upload.
+     *
+     * Correlation ids carry the ``fp3-`` prefix (body-format v3): v1/v2
+     * rows (unified ``biodata``) were ACKed-but-dropped by the firmware,
+     * so they must not suppress re-queueing under the working format.
      *
      * @param  array<string, int|string>  $attributes
      */
@@ -332,7 +340,7 @@ class DeviceCommandService
         string $templateHash,
     ): DeviceCommand {
         $index = max(0, min(9, (int) ($attributes['index'] ?? 0)));
-        $correlationId = 'fp-'.substr(
+        $correlationId = 'fp3-'.substr(
             hash('sha256', $deviceId.':'.$pin.':'.$index.':'.$templateHash),
             0,
             56,
@@ -350,17 +358,14 @@ class DeviceCommandService
             return $alreadyHandled;
         }
 
-        $body = 'DATA UPDATE biodata '.implode("\t", [
-            'Pin='.$this->sanitizeField($pin),
-            'No='.(int) ($attributes['no'] ?? 0),
-            'Index='.$index,
+        $payload = $this->sanitizeTemplate($template);
+
+        $body = 'DATA UPDATE FINGERTMP '.implode("\t", [
+            'PIN='.$this->sanitizeField($pin),
+            'FID='.$index,
+            'Size='.strlen($payload),
             'Valid='.(int) ($attributes['valid'] ?? 1),
-            'Duress='.(int) ($attributes['duress'] ?? 0),
-            'Type=1',
-            'MajorVer='.(int) ($attributes['major_ver'] ?? 10),
-            'MinorVer='.(int) ($attributes['minor_ver'] ?? 0),
-            'Format=ZK',
-            'Tmp='.$this->sanitizeTemplate($template),
+            'TMP='.$payload,
         ]);
 
         return $this->queueCommand(
@@ -556,6 +561,7 @@ class DeviceCommandService
 
         $retryableTypes = [
             DeviceCommand::TYPE_FACE_TEMPLATE,
+            DeviceCommand::TYPE_FP_TEMPLATE,
             DeviceCommand::TYPE_USER_CREATE,
             DeviceCommand::TYPE_USER_UPDATE,
         ];

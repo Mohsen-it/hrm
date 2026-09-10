@@ -40,6 +40,10 @@ FACE_SERIAL_COOLDOWN_SECONDS = max(2, int(os.environ.get("ADMS_FACE_SERIAL_COOLD
 MAX_OUTBOX_ATTEMPTS = max(5, int(os.environ.get("ADMS_MAX_OUTBOX_ATTEMPTS", "30")))
 USER_COMMAND_TYPES = {"user_create", "user_update", "user_delete"}
 NO_ACK_COMMAND_TYPES = {"restart", "refresh_config"}
+# Biometric template writes share pacing, per-poll caps, and the user-record
+# hold: terminals reject face AND fingerprint templates with Return=-3 while
+# the user record does not exist yet.
+BIO_COMMAND_TYPES = {"face_template", "fp_template"}
 
 logging.basicConfig(
     level=logging.INFO,
@@ -505,34 +509,35 @@ def resolve_command_id(serial: str, device_command_id: int) -> int | None:
 
 def _pace_face_delivery(serial: str, commands: list, now: float | None = None) -> list:
     now = time.time() if now is None else now
-    pending_faces = [c for c in commands if c.get("command_type") == "face_template"]
-    if not pending_faces:
+    pending_bio = [c for c in commands if c.get("command_type") in BIO_COMMAND_TYPES]
+    if not pending_bio:
         return commands
     with DELIVERY._lock:
-        for command in pending_faces:
+        for command in pending_bio:
             cid = command.get("id")
             if cid is None:
                 continue
             first = DELIVERY._first_served_at.get((serial, cid))
             if first is not None and now - first < FACE_SERIAL_COOLDOWN_SECONDS:
-                return [c for c in commands if c.get("command_type") != "face_template"]
+                return [c for c in commands if c.get("command_type") not in BIO_COMMAND_TYPES]
     return commands
 
 
 def _cap_face_commands(commands: list) -> list:
-    """Allow up to 5 face commands per device poll for faster distribution.
+    """Allow up to 5 biometric-template commands per device poll for faster distribution.
 
     The original limit of 1 face command per poll caused distribution of
     thousands of templates to take hours.  5 commands per poll keeps the
-    device buffer manageable while being ~5x faster.
+    device buffer manageable while being ~5x faster. Face and fingerprint
+    templates share the budget because both are large BIODATA payloads.
     """
     deliverable = []
-    face_count = 0
-    MAX_FACE_PER_POLL = 5
+    bio_count = 0
+    MAX_BIO_PER_POLL = 5
     for command in commands:
-        if command.get("command_type") == "face_template":
-            face_count += 1
-            if face_count > MAX_FACE_PER_POLL:
+        if command.get("command_type") in BIO_COMMAND_TYPES:
+            bio_count += 1
+            if bio_count > MAX_BIO_PER_POLL:
                 break
         deliverable.append(command)
     return deliverable
@@ -574,7 +579,7 @@ def apply_delivery_guards(serial: str, commands: list) -> list:
 
     deliverable = []
     for command in commands:
-        if command.get("command_type") == "face_template":
+        if command.get("command_type") in BIO_COMMAND_TYPES:
             pin = _extract_face_pin(str(command.get("command_body", "")))
             if pin and pin in held_user_pins:
                 continue

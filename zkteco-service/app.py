@@ -46,12 +46,16 @@ def _resolve_service_port(default: int = 5000) -> int:
         or str(default)
     )
     try:
-        return int(raw_port)
+        # 011/P1-C: strip() — cmd `set VAR=x & ...` can smuggle a trailing
+        # space; int() tolerates it but we stay explicit.
+        return int(str(raw_port).strip())
     except (TypeError, ValueError):
         return default
 
 
-SERVICE_HOST = os.getenv('ZKTECO_PYTHON_SERVICE_HOST', '0.0.0.0')
+# 011/P1-C: strip() — a trailing space in the host ("0.0.0.0 ") makes
+# Werkzeug's getaddrinfo fail and the server never binds. Seen 2026-09-09.
+SERVICE_HOST = os.getenv('ZKTECO_PYTHON_SERVICE_HOST', '0.0.0.0').strip() or '0.0.0.0'
 SERVICE_PORT = _resolve_service_port()
 
 

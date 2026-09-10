@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\DB;
 use Modules\Attendance\Models\AttendanceSession;
 use Modules\Attendance\Models\RawAttendanceLog;
 use Modules\Holidays\Models\Holiday;
+use Modules\Shifts\Models\RotationAssignment;
 use Modules\Shifts\Models\ShiftException;
 use Modules\Shifts\Repositories\RotationAssignmentRepository;
 use Modules\Users\Models\User;
@@ -16,10 +17,32 @@ use Modules\Vacations\Models\UserVacationRequest;
 
 class AbsenceCalculationService
 {
+    /**
+     * Per-instance memo of active holidays (011/P1-B).
+     *
+     * The service is transient (no singleton binding), so this lives for one
+     * resolve only — never stale across requests or queue jobs. Callers must
+     * treat the returned collection as READ-ONLY (all current usages iterate
+     * or filter into new collections).
+     *
+     * @var Collection<int, Holiday>|null
+     */
+    private ?Collection $activeHolidays = null;
+
     public function __construct(
         private RotationAssignmentRepository $rotationAssignmentRepository,
         private RotationEngine $rotationEngine,
     ) {}
+
+    /**
+     * Active holidays, queried once per service instance.
+     *
+     * @return Collection<int, Holiday>
+     */
+    private function activeHolidays(): Collection
+    {
+        return $this->activeHolidays ??= Holiday::active()->get();
+    }
 
     /**
      * Normalize a rotation filter (single id or array) into a list of ids.
@@ -223,7 +246,7 @@ class AbsenceCalculationService
             ->get()
             ->keyBy('user_id');
 
-        $holidays = Holiday::active()->get();
+        $holidays = $this->activeHolidays();
 
         foreach ($employeeIds as $employeeId) {
             $employee = $employees->get($employeeId);
@@ -409,7 +432,7 @@ class AbsenceCalculationService
         // and the operational snapshot, instead of the old blanket "any
         // holiday cancels all absence" rule.
         if ($absent->isNotEmpty()) {
-            $holidays = Holiday::active()->get();
+            $holidays = $this->activeHolidays();
 
             if ($holidays->isNotEmpty()) {
                 $absentUsers = DB::table('users')
@@ -563,7 +586,7 @@ class AbsenceCalculationService
 
         // Official holidays excuse only the covered employees (same rule as
         // getAbsentEmployees).
-        $holidays = Holiday::active()->get();
+        $holidays = $this->activeHolidays();
         $holidayExcusedIds = collect();
         if ($holidays->isNotEmpty()) {
             $users = DB::table('users')
@@ -639,7 +662,48 @@ class AbsenceCalculationService
 
         $times = $this->rotationEngine->resolveTimes($rotationAssignment);
         $expectedTime = $times['check_in'] ?? null;
-        $holidays = Holiday::active()->get();
+        $holidays = $this->activeHolidays();
+
+        // 011/P1-E: batch the whole month up front (mirrors the proven
+        // getMonthlyAbsenceReport() pattern) instead of ~4 exists() queries
+        // per day (~120/month). Day membership below is logically identical
+        // to the per-day queries it replaces (see evidence/p1e-batch-month).
+        $monthFromStr = $startOfMonth->toDateString();
+        $monthToStr = $endOfMonth->toDateString();
+
+        $sessionDays = AttendanceSession::betweenDates($monthFromStr, $monthToStr)
+            ->where('user_id', $employeeId)
+            ->distinct()
+            ->pluck('attendance_date')
+            ->map(fn ($value) => $this->dateKey($value))
+            ->flip();
+
+        $monthUtcBounds = [
+            Carbon::parse($monthFromStr)->startOfDay()->setTimezone('UTC')->format('Y-m-d H:i:s'),
+            Carbon::parse($monthToStr)->endOfDay()->setTimezone('UTC')->format('Y-m-d H:i:s'),
+        ];
+        $rawDays = DB::table('raw_attendance_logs')
+            ->where('user_id', $employeeId)
+            ->whereBetween('punch_time', $monthUtcBounds)
+            ->whereNull('deleted_at')
+            ->pluck('punch_time')
+            ->map(fn ($value) => $this->localDateFromUtc((string) $value))
+            ->flip();
+
+        $monthVacations = $this->indexCoverage(
+            UserVacationRequest::where('status', UserVacationRequest::STATUS_APPROVED)
+                ->where('user_id', $employeeId)
+                ->overlapping($monthFromStr, $monthToStr)
+                ->get(['user_id', 'start_date', 'end_date'])
+        );
+        $monthExceptions = $this->indexCoverage(
+            ShiftException::active()
+                ->where('employee_id', $employeeId)
+                ->whereIn('exception_type', ['leave', 'mission', 'swap', 'training'])
+                ->whereDate('from_date', '<=', $monthToStr)
+                ->whereDate('to_date', '>=', $monthFromStr)
+                ->get(['employee_id', 'from_date', 'to_date', 'exception_type'])
+        );
 
         $current = $startOfMonth->copy();
         while ($current->lte($endOfMonth)) {
@@ -661,31 +725,20 @@ class AbsenceCalculationService
                 $isHoliday = ! (bool) $rotation->work_on_holidays
                     && $this->hasApplicableHoliday($holidays, $dateStr, $employee);
 
-                $hasPunch = AttendanceSession::onDate($dateStr)
-                    ->where('user_id', $employeeId)
-                    ->exists();
+                // Set lookups over the precomputed month batches — identical
+                // membership to the per-day exists() queries above
+                // (session day set, raw-punch local-date set, coverage ranges).
+                $hasPunch = isset($sessionDays[$dateStr]);
 
                 if (! $hasPunch) {
                     // Fall back to raw device punches: a punch proves physical
                     // presence even when no session was created for the date.
-                    $hasPunch = RawAttendanceLog::query()
-                        ->where('user_id', $employeeId)
-                        ->whereBetween('punch_time', $this->localDayUtcBounds($dateStr))
-                        ->exists();
+                    $hasPunch = isset($rawDays[$dateStr]);
                 }
 
-                $approvedLeave = UserVacationRequest::where('status', UserVacationRequest::STATUS_APPROVED)
-                    ->where('user_id', $employeeId)
-                    ->whereDate('start_date', '<=', $dateStr)
-                    ->whereDate('end_date', '>=', $dateStr)
-                    ->exists();
+                $approvedLeave = $this->isCoveredBy($employeeId, $dateStr, $monthVacations);
 
-                $intercepted = ShiftException::active()
-                    ->where('employee_id', $employeeId)
-                    ->whereIn('exception_type', ['leave', 'mission', 'swap', 'training'])
-                    ->whereDate('from_date', '<=', $dateStr)
-                    ->whereDate('to_date', '>=', $dateStr)
-                    ->exists();
+                $intercepted = $this->isCoveredBy($employeeId, $dateStr, $monthExceptions);
 
                 $status = 'present';
                 if ($approvedLeave || $intercepted) {
@@ -836,7 +889,7 @@ class AbsenceCalculationService
         // employees — evaluated per employee below (rotation work_on_holidays
         // + branch/department scope, recurring and multi-day included), exactly
         // like the daily report.
-        $holidays = Holiday::active()->get();
+        $holidays = $this->activeHolidays();
 
         $stats = []; // employee_id => ['expected' => int, 'present' => int, 'day_details' => array<int, array{date: string, status: string, label: string}>, 'absent_dates' => array<int, string>]
         $meta = [];  // employee_id => RotationAssignment (most recent in range)
@@ -1015,6 +1068,24 @@ class AbsenceCalculationService
     }
 
     /**
+     * Whether the employee has any coverage range (vacation / exception)
+     * containing the date — boolean twin of getCoverage() for call sites
+     * that only need existence (011/P1-E batched month loop).
+     *
+     * @param  array<int, array<int, array{from: string, to: string}>>  $index
+     */
+    private function isCoveredBy(int $employeeId, string $dateStr, array $index): bool
+    {
+        foreach (($index[$employeeId] ?? []) as $range) {
+            if ($range['from'] <= $dateStr && $range['to'] >= $dateStr) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Human-readable label for an intercepting shift exception type.
      */
     private function exceptionLabel(?string $type): string
@@ -1160,7 +1231,7 @@ class AbsenceCalculationService
             ];
         }
 
-        $holidays = Holiday::active()->get();
+        $holidays = $this->activeHolidays();
         $details = [];
         $expectedPhysical = 0;
         $holidayDays = 0;
@@ -1192,6 +1263,44 @@ class AbsenceCalculationService
             ->map(fn ($r) => ['from' => $this->dateKey($r->from_date), 'to' => $this->dateKey($r->to_date), 'type' => $r->exception_type])
             ->all();
 
+        // 011/P1-G: batch the whole month (same proven pattern as
+        // getMonthlyAbsence). Assignments are DATE columns, so the in-memory
+        // pick below replicates getAssignmentForDate() exactly
+        // (start<=day, open or end>=day, start desc, id desc, first).
+        $monthAssignments = $this->rotationAssignmentRepository
+            ->getEmployeeAssignmentsOverlapping($employeeId, $fromStr, $toStr);
+
+        $empSessionDays = AttendanceSession::betweenDates($fromStr, $toStr)
+            ->where('user_id', $employeeId)
+            ->distinct()
+            ->pluck('attendance_date')
+            ->map(fn ($value) => $this->dateKey($value))
+            ->flip();
+
+        $empMonthUtcBounds = [
+            Carbon::parse($fromStr)->startOfDay()->setTimezone('UTC')->format('Y-m-d H:i:s'),
+            Carbon::parse($toStr)->endOfDay()->setTimezone('UTC')->format('Y-m-d H:i:s'),
+        ];
+        $empRawDays = DB::table('raw_attendance_logs')
+            ->where('user_id', $employeeId)
+            ->whereBetween('punch_time', $empMonthUtcBounds)
+            ->whereNull('deleted_at')
+            ->pluck('punch_time')
+            ->map(fn ($value) => $this->localDateFromUtc((string) $value))
+            ->flip();
+
+        $pickAssignmentForDate = function (string $day) use ($monthAssignments): ?RotationAssignment {
+            foreach ($monthAssignments as $candidate) {
+                $start = $this->dateKey($candidate->start_date);
+                $end = $candidate->end_date === null ? null : $this->dateKey($candidate->end_date);
+                if ($start <= $day && ($end === null || $end >= $day)) {
+                    return $candidate;
+                }
+            }
+
+            return null;
+        };
+
         $current = $start->copy();
         while ($current->lte($end)) {
             $dateStr = $current->toDateString();
@@ -1207,7 +1316,7 @@ class AbsenceCalculationService
                 continue;
             }
 
-            $assignment = $this->rotationAssignmentRepository->getAssignmentForDate($employeeId, $dateStr);
+            $assignment = $pickAssignmentForDate($dateStr);
             if (! $assignment) {
                 $current->addDay();
                 continue;
@@ -1251,12 +1360,11 @@ class AbsenceCalculationService
                 continue;
             }
 
-            $hasPunch = AttendanceSession::onDate($dateStr)->where('user_id', $employeeId)->exists();
+            // Set lookups over the precomputed month batches — identical
+            // membership to the per-day exists() queries (011/P1-G).
+            $hasPunch = isset($empSessionDays[$dateStr]);
             if (! $hasPunch) {
-                $hasPunch = RawAttendanceLog::query()
-                    ->where('user_id', $employeeId)
-                    ->whereBetween('punch_time', $this->localDayUtcBounds($dateStr))
-                    ->exists();
+                $hasPunch = isset($empRawDays[$dateStr]);
             }
 
             $onVacation = false;

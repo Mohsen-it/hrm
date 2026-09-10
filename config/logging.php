@@ -141,7 +141,9 @@ return [
 
         'hrm_server' => [
             'driver' => 'daily',
-            'path' => storage_path('logs/hrm-laravel-server.log'),
+            // NOTE (011/P0-3): dedicated path — `hrm-laravel-server.log` is the
+            // Start-HRM-Windows.ps1 stdout redirect, not a Laravel channel file.
+            'path' => storage_path('logs/hrm-server.log'),
             'level' => env('LOG_LEVEL', 'warning'),
             'days' => env('LOG_DAILY_DAYS', 14),
             'replace_placeholders' => true,

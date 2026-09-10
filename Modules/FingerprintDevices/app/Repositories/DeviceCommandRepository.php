@@ -213,7 +213,13 @@ class DeviceCommandRepository
         $updated = 0;
         foreach ($pending as $command) {
             $newRetryCount = $command->retry_count + 1;
-            $backoffSeconds = $command->command_type === DeviceCommand::TYPE_FACE_TEMPLATE
+            // Biometric templates (face + fingerprint) are large payloads:
+            // slow backoff avoids hammering the device buffer.
+            $isBioTemplate = in_array($command->command_type, [
+                DeviceCommand::TYPE_FACE_TEMPLATE,
+                DeviceCommand::TYPE_FP_TEMPLATE,
+            ], true);
+            $backoffSeconds = $isBioTemplate
                 ? min(300, 30 * pow(2, $newRetryCount - 1))  // 30s, 60s, 120s, 240s, 300s cap
                 : min(60, 10 * pow(2, $newRetryCount - 1));   // 10s, 20s, 40s, 60s cap
 

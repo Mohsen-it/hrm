@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Log;
 use Modules\AttendanceIntegration\Parsers\BiodataParser;
 use Modules\FingerprintDevices\Jobs\DistributeFaceTemplateSetJob;
 use Modules\FingerprintDevices\Jobs\DistributeFingerprintJob;
+use Modules\FingerprintDevices\Jobs\DistributeFingerprintSetJob;
 use Modules\FingerprintDevices\Models\FingerprintDevice;
 use Modules\FingerprintDevices\Models\UserFingerprint;
 use Modules\FingerprintDevices\Repositories\UserFingerprintRepository;
@@ -22,6 +23,103 @@ class BiodataIngestionService
         private UserFingerprintRepository $fingerprintRepository,
         private UserRepository $userRepository,
     ) {}
+
+    /**
+     * Store a classic OPERLOG fingerprint record (``FP Pin=.. FID=.. Size=..
+     * Valid=.. TMP=..``) and queue distribution through the same channels
+     * as BIODATA fingerprints.
+     *
+     * This method is called by DevicePushController::handleOperlog. It must
+     * never throw for unknown PINs (that would turn the whole OPERLOG
+     * upload into a 500 and the device would retry forever): unknown
+     * employees are logged and skipped, mirroring the BIODATA path.
+     *
+     * @return 'saved'|'duplicates'|'skipped'
+     */
+    public function ingestOperlogFingerprint(
+        ?int $deviceId,
+        ?string $serialNumber,
+        string $pin,
+        int $fingerId,
+        int $valid,
+        string $tmpData,
+    ): string {
+        $pin = trim($pin);
+        $tmpData = trim($tmpData);
+        $fingerId = max(0, min(9, $fingerId));
+
+        if ($pin === '' || $tmpData === '') {
+            return 'skipped';
+        }
+
+        $user = User::query()->where('employee_code', $pin)->first();
+        if (! $user) {
+            Log::channel('biodata')->warning('OPERLOG_FINGERPRINT_EMPLOYEE_NOT_FOUND', [
+                'device_serial' => $serialNumber ?? 'unknown',
+                'pin' => $pin,
+            ]);
+
+            return 'skipped';
+        }
+
+        $hash = hash('sha256', $tmpData);
+        $duplicate = UserFingerprint::query()
+            ->where('user_id', $user->id)
+            ->where('device_serial', $serialNumber ?? 'unknown')
+            ->where('template_hash', $hash)
+            ->exists();
+
+        if ($duplicate) {
+            return 'duplicates';
+        }
+
+        $device = $deviceId ? FingerprintDevice::find($deviceId) : null;
+
+        UserFingerprint::create([
+            'user_id' => $user->id,
+            'device_id' => $device?->id,
+            'finger_id' => $fingerId,
+            'template_data' => $tmpData,
+            'template_format' => 'zkteco-fp-operlog',
+            'template_type' => 'fingerprint',
+            'template_index' => $fingerId,
+            'device_serial' => $serialNumber ?? 'unknown',
+            'template_hash' => $hash,
+            'template_metadata' => [
+                'FID' => $fingerId,
+                'Valid' => $valid,
+                'Size' => strlen($tmpData),
+            ],
+            'template_version' => 100,
+            'captured_at' => now(),
+        ]);
+
+        Log::channel('biodata')->info('OPERLOG_FINGERPRINT_STORED_FOR_DISTRIBUTION', [
+            'device_serial' => $serialNumber ?? 'unknown',
+            'pin' => $pin,
+            'finger_id' => $fingerId,
+        ]);
+
+        if (config('fingerprintdevices.distribute_fingerprint_via_bridge', true)) {
+            DistributeFingerprintJob::dispatch($pin, (int) $device?->id, $fingerId, $tmpData, [
+                'no' => 0,
+                'valid' => $valid,
+                'duress' => 0,
+                'major_ver' => 10,
+                'minor_ver' => 0,
+            ]);
+        }
+
+        if ($device && config('fingerprintdevices.distribute_fingerprint_via_adms', true)) {
+            DistributeFingerprintSetJob::dispatch(
+                $user->id,
+                $device->id,
+                (string) $device->serial_number,
+            );
+        }
+
+        return 'saved';
+    }
 
     /**
      * Process a batch of parsed BIODATA records and persist face templates.
@@ -47,10 +145,11 @@ class BiodataIngestionService
         $userMap = $this->resolveUsersBatch($uniquePins);
         $existingHashMap = $this->findExistingTemplatesBatch($userMap, $device, $bioRecords);
         $existingFaceIdsMap = $this->getExistingFaceIdsBatch($userMap, $device);
+        $savedFingerprintPins = [];
 
         foreach ($records as $record) {
             try {
-                $result = $this->ingestSingle($device, $record, $correlationId, $userMap, $existingHashMap, $existingFaceIdsMap);
+                $result = $this->ingestSingle($device, $record, $correlationId, $userMap, $existingHashMap, $existingFaceIdsMap, $savedFingerprintPins);
                 $stats[$result]++;
             } catch (\Throwable $e) {
                 $stats['errors'][] = "Pin {$record['pin']}: {$e->getMessage()}";
@@ -65,6 +164,7 @@ class BiodataIngestionService
         }
 
         $this->queueCompleteFaceTemplateSets($device, $records, $correlationId, $stats, $userMap);
+        $this->queueSavedFingerprintPins($device, $savedFingerprintPins, $correlationId, $stats, $userMap);
 
         return $stats;
     }
@@ -170,6 +270,7 @@ class BiodataIngestionService
      * @param  array<string, User>  $userMap
      * @param  array<string, UserFingerprint>  $existingHashMap
      * @param  array<int, array<int, int>>  $existingFaceIdsMap
+     * @param  array<int, string>  $savedFingerprintPins  Collects PINs with newly saved fingerprints for ADMS distribution.
      * @return 'saved'|'duplicates'|'skipped'
      */
     private function ingestSingle(
@@ -179,6 +280,7 @@ class BiodataIngestionService
         array $userMap,
         array $existingHashMap,
         array $existingFaceIdsMap,
+        array &$savedFingerprintPins = [],
     ): string {
         $pin = $record['pin'];
         $type = $record['type'];
@@ -214,7 +316,7 @@ class BiodataIngestionService
                 return 'skipped';
             }
 
-            return $this->ingestFingerprint($device, $record, $correlationId, $user, $existingHashMap);
+            return $this->ingestFingerprint($device, $record, $correlationId, $user, $existingHashMap, $savedFingerprintPins);
         }
 
         if ($type !== BiodataParser::TYPE_FACE) {
@@ -306,6 +408,13 @@ class BiodataIngestionService
 
     /**
      * Store a captured fingerprint template and queue auto-distribution.
+     *
+     * Distribution fans out through every enabled channel: the direct-TCP
+     * bridge (proven on this fleet) and ADMS ``FINGERTMP`` commands (same
+     * visibility as face templates). Writes are idempotent per finger
+     * index, so dual delivery is a safe overwrite, not a duplication.
+     *
+     * @param  array<int, string>  $savedFingerprintPins
      */
     private function ingestFingerprint(
         ?FingerprintDevice $device,
@@ -313,6 +422,7 @@ class BiodataIngestionService
         string $correlationId,
         $user,
         array $existingHashMap,
+        array &$savedFingerprintPins = [],
     ): string {
         $pin = (string) $record['pin'];
         $tmpData = (string) $record['tmp'];
@@ -359,21 +469,73 @@ class BiodataIngestionService
             'finger_id' => $templateIndex,
         ]);
 
-        DistributeFingerprintJob::dispatch(
-            $pin,
-            (int) $device?->id,
-            $templateIndex,
-            $tmpData,
-            [
-                'no' => (int) ($extra['No'] ?? 0),
-                'valid' => (int) ($extra['Valid'] ?? 1),
-                'duress' => (int) ($extra['Duress'] ?? 0),
-                'major_ver' => (int) $record['major_ver'],
-                'minor_ver' => (int) $record['minor_ver'],
-            ],
-        );
+        $savedFingerprintPins[] = $pin;
+
+        if (config('fingerprintdevices.distribute_fingerprint_via_bridge', true)) {
+            DistributeFingerprintJob::dispatch(
+                $pin,
+                (int) $device?->id,
+                $templateIndex,
+                $tmpData,
+                [
+                    'no' => (int) ($extra['No'] ?? 0),
+                    'valid' => (int) ($extra['Valid'] ?? 1),
+                    'duress' => (int) ($extra['Duress'] ?? 0),
+                    'major_ver' => (int) $record['major_ver'],
+                    'minor_ver' => (int) $record['minor_ver'],
+                ],
+            );
+        }
 
         return 'saved';
+    }
+
+    /**
+     * Queue ADMS auto-delivery for every PIN with newly saved fingerprints.
+     *
+     * One DistributeFingerprintSetJob per PIN (not per template): the job
+     * fans out the freshest template of every finger index to all sibling
+     * terminals, and correlation-id idempotency absorbs re-enrollments.
+     * Mirrors queueCompleteFaceTemplateSets(): any ingest error aborts
+     * auto-distribution for this batch.
+     *
+     * @param  array<int, string>  $savedFingerprintPins
+     * @param  array<string, User>  $userMap
+     */
+    private function queueSavedFingerprintPins(
+        ?FingerprintDevice $device,
+        array $savedFingerprintPins,
+        string $correlationId,
+        array $stats,
+        array $userMap,
+    ): void {
+        if (! $device || empty($savedFingerprintPins) || ! empty($stats['errors'])) {
+            return;
+        }
+
+        if (! config('fingerprintdevices.distribute_fingerprint_via_adms', true)) {
+            return;
+        }
+
+        foreach (array_unique($savedFingerprintPins) as $pin) {
+            $user = $userMap[$pin] ?? null;
+            if (! $user) {
+                continue;
+            }
+
+            DistributeFingerprintSetJob::dispatch(
+                $user->id,
+                $device->id,
+                (string) $device->serial_number,
+            );
+
+            Log::channel('biodata')->info('FINGERPRINT_PIN_READY_FOR_AUTO_DISTRIBUTION', [
+                'correlation_id' => $correlationId,
+                'device_serial' => $device->serial_number,
+                'user_id' => $user->id,
+                'pin' => $pin,
+            ]);
+        }
     }
 
     /**

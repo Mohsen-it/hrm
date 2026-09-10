@@ -6,6 +6,8 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
 use Modules\AttendanceIntegration\Services\BiodataIngestionService;
 use Modules\FingerprintDevices\Jobs\DistributeFaceTemplateSetJob;
+use Modules\FingerprintDevices\Jobs\DistributeFingerprintJob;
+use Modules\FingerprintDevices\Jobs\DistributeFingerprintSetJob;
 use Modules\FingerprintDevices\Models\FingerprintDevice;
 use Modules\FingerprintDevices\Models\FingerprintDeviceType;
 use Modules\Users\Models\User;
@@ -55,6 +57,109 @@ class BiodataIngestionServiceTest extends TestCase
         Queue::assertNotPushed(DistributeFaceTemplateSetJob::class);
     }
 
+    public function test_it_queues_bridge_distribution_for_fingerprints_by_default(): void
+    {
+        Queue::fake();
+        [$user, $device] = $this->makeUserAndDevice();
+
+        $stats = app(BiodataIngestionService::class)->ingest(
+            $device,
+            $this->fingerprintRecords($user->employee_code, [0, 1]),
+            'fp-batch-20010',
+        );
+
+        $this->assertSame(2, $stats['saved']);
+        $this->assertDatabaseHas('user_fingerprints', [
+            'user_id' => $user->id,
+            'device_id' => $device->id,
+            'template_type' => 'fingerprint',
+            'template_index' => 1,
+        ]);
+        // Proven channel: direct-TCP bridge job per saved template.
+        Queue::assertPushed(DistributeFingerprintJob::class, 2);
+        // ADMS FINGERTMP job: one per PIN.
+        Queue::assertPushed(DistributeFingerprintSetJob::class, 1);
+        Queue::assertPushed(DistributeFingerprintSetJob::class, function (DistributeFingerprintSetJob $job) use ($user, $device): bool {
+            return $job->userId === $user->id
+                && $job->sourceDeviceId === $device->id
+                && $job->sourceSerial === $device->serial_number;
+        });
+    }
+
+    public function test_it_skips_adms_fingerprint_distribution_when_disabled(): void
+    {
+        config()->set('fingerprintdevices.distribute_fingerprint_via_adms', false);
+        Queue::fake();
+        [$user, $device] = $this->makeUserAndDevice();
+
+        app(BiodataIngestionService::class)->ingest(
+            $device,
+            $this->fingerprintRecords($user->employee_code, [0, 1]),
+            'fp-batch-adms-off',
+        );
+
+        Queue::assertNotPushed(DistributeFingerprintSetJob::class);
+        Queue::assertPushed(DistributeFingerprintJob::class, 2);
+    }
+
+    public function test_it_skips_bridge_job_when_bridge_disabled(): void
+    {
+        config()->set('fingerprintdevices.distribute_fingerprint_via_bridge', false);
+        Queue::fake();
+        [$user, $device] = $this->makeUserAndDevice();
+
+        app(BiodataIngestionService::class)->ingest(
+            $device,
+            $this->fingerprintRecords($user->employee_code, [0]),
+            'fp-batch-bridge-off',
+        );
+
+        Queue::assertNotPushed(DistributeFingerprintJob::class);
+    }
+
+    public function test_it_stores_classic_operlog_fingerprint_without_throwing(): void
+    {
+        Queue::fake();
+        [$user, $device] = $this->makeUserAndDevice();
+        $service = app(BiodataIngestionService::class);
+
+        $result = $service->ingestOperlogFingerprint(
+            $device->id,
+            $device->serial_number,
+            $user->employee_code,
+            4,
+            1,
+            'operlog-fp-template',
+        );
+
+        $this->assertSame('saved', $result);
+        $this->assertDatabaseHas('user_fingerprints', [
+            'user_id' => $user->id,
+            'template_type' => 'fingerprint',
+            'template_index' => 4,
+            'template_format' => 'zkteco-fp-operlog',
+        ]);
+
+        $this->assertSame('duplicates', $service->ingestOperlogFingerprint(
+            $device->id,
+            $device->serial_number,
+            $user->employee_code,
+            4,
+            1,
+            'operlog-fp-template',
+        ));
+
+        // Unknown PINs are skipped, never fatal (no 500 on OPERLOG upload).
+        $this->assertSame('skipped', $service->ingestOperlogFingerprint(
+            $device->id,
+            $device->serial_number,
+            'NO-SUCH-PIN',
+            0,
+            1,
+            'some-template',
+        ));
+    }
+
     /** @return array{User, FingerprintDevice} */
     private function makeUserAndDevice(): array
     {
@@ -96,6 +201,26 @@ class BiodataIngestionServiceTest extends TestCase
             'type' => 2,
             'tmp' => "face-component-{$index}",
             'major_ver' => 12,
+            'minor_ver' => 0,
+            'format' => 0,
+            'extra_fields' => [
+                'No' => 0,
+                'Index' => $index,
+                'Valid' => 1,
+                'Duress' => 0,
+            ],
+            'raw' => "BIODATA Pin={$pin} Index={$index}",
+        ], $indices);
+    }
+
+    /** @param array<int, int> $indices */
+    private function fingerprintRecords(string $pin, array $indices): array
+    {
+        return array_map(fn (int $index) => [
+            'pin' => $pin,
+            'type' => 1,
+            'tmp' => "fp-template-{$pin}-{$index}",
+            'major_ver' => 10,
             'minor_ver' => 0,
             'format' => 0,
             'extra_fields' => [

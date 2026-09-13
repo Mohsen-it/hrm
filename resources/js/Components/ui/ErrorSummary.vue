@@ -52,16 +52,16 @@ onMounted(async () => {
     >
         <div
             v-if="errorCount > 0 && isVisible"
-            class="bg-red-50 border border-red-200 rounded-lg p-4 mb-6"
+            class="bg-mistral-danger-bg border border-mistral-danger/20 rounded-lg p-4 mb-6"
             role="alert"
             :dir="dir"
         >
             <div class="flex items-start gap-3">
-                <div class="w-8 h-8 rounded-lg bg-red-100 flex items-center justify-center shrink-0 mt-0.5">
-                    <i class="fas fa-circle-exclamation text-red-600 text-[14px]" aria-hidden="true"></i>
+                <div class="w-8 h-8 rounded-md bg-mistral-danger/10 flex items-center justify-center shrink-0 mt-0.5">
+                    <i class="fas fa-circle-exclamation text-mistral-danger text-[14px]" aria-hidden="true"></i>
                 </div>
                 <div class="flex-1 min-w-0">
-                    <h3 class="text-[14px] font-semibold text-red-800">
+                    <h3 class="text-[14px] font-semibold text-mistral-danger">
                         {{ errorCount === 1 ? t('common.errors_one', { count: 1 }) : t('common.errors_many', { count: errorCount }) }}
                     </h3>
                     <ul class="mt-2 space-y-1">
@@ -71,7 +71,7 @@ onMounted(async () => {
                         >
                             <button
                                 type="button"
-                                class="text-[13px] text-red-700 hover:text-red-900 hover:underline transition-colors cursor-pointer"
+                                class="text-[13px] text-mistral-danger hover:brightness-75 hover:underline transition-colors cursor-pointer"
                                 @click="scrollToField(error.fieldId)"
                             >
                                 {{ error.message }}

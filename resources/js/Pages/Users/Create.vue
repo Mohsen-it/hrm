@@ -68,6 +68,7 @@ const form = useForm({
     iban: '',
     avatar: null,
     status: 1,
+    device_privilege: '',
     is_active_employee: true,
     must_change_password: true,
     company_id: '',
@@ -86,6 +87,12 @@ const form = useForm({
 const statusOptions = [
     { value: 1, label: t('common.active') },
     { value: 0, label: t('common.inactive') },
+];
+
+const devicePrivilegeOptions = [
+    { value: '', label: t('users.device_privilege_auto') },
+    { value: 0, label: t('users.device_privilege_member') },
+    { value: 14, label: t('users.device_privilege_admin') },
 ];
 
 const genderOptions = [
@@ -145,7 +152,15 @@ watch(
 );
 
 function submit() {
-    form.post(route('users.store'), {
+    form.transform((data) => {
+        const payload = { ...data };
+        if (payload.device_privilege === '' || payload.device_privilege === null) {
+            payload.device_privilege = null;
+        } else {
+            payload.device_privilege = Number(payload.device_privilege);
+        }
+        return payload;
+    }).post(route('users.store'), {
         preserveScroll: true,
     });
 }
@@ -360,6 +375,13 @@ usePageTitle(t('users.add_new'));
                         :options="statusOptions"
                         required
                         :error="form.errors.status"
+                    />
+                    <FormSelect
+                        v-model="form.device_privilege"
+                        :label="t('users.device_privilege')"
+                        name="device_privilege"
+                        :options="devicePrivilegeOptions"
+                        :error="form.errors.device_privilege"
                     />
                 </div>
             </FormSection>

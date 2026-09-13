@@ -1,4 +1,6 @@
 <script setup>
+// DEPRECATED — use navigation/NavItem.vue + NavGroup.vue + NavSidebar.vue instead.
+// This legacy component is kept for backward compatibility only and will be removed.
 import { computed } from 'vue';
 import { Link } from '@inertiajs/vue3';
 import { useTranslations } from '@/composables/useTranslations';
@@ -61,7 +63,7 @@ const paddingClass = computed(() => {
         <span
             v-if="!isCollapsed && item.badge"
             class="sidebar-item-badge"
-            aria-label="notifications"
+            :aria-label="t('common.notifications')"
         >{{ item.badge }}</span>
     </Link>
 </template>

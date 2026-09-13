@@ -191,8 +191,8 @@ const quickActions = computed(() => [
     { label: t('dashboard.action_view_reports'), icon: 'fas fa-chart-line', route: 'attendance.reports.index', color: 'bg-mistral-info/10 text-mistral-info' },
     { label: t('dashboard.action_manage_devices'), icon: 'fas fa-microchip', route: 'fingerprint-devices.index', color: 'bg-mistral-success/10 text-mistral-success' },
     { label: t('dashboard.action_vacation_requests'), icon: 'fas fa-inbox', route: 'vacations.requests.index', color: 'bg-mistral-warning/10 text-mistral-warning' },
-    { label: t('dashboard.action_view_employees'), icon: 'fas fa-users', route: 'users.index', color: 'bg-purple-50 text-purple-600' },
-    { label: t('dashboard.action_live_monitoring'), icon: 'fas fa-satellite-dish', route: 'attendance.live.index', color: 'bg-cyan-50 text-cyan-600' },
+    { label: t('dashboard.action_view_employees'), icon: 'fas fa-users', route: 'users.index', color: 'bg-mistral-status-overtime/10 text-mistral-status-overtime' },
+    { label: t('dashboard.action_live_monitoring'), icon: 'fas fa-satellite-dish', route: 'attendance.live.index', color: 'bg-mistral-status-vacation/10 text-mistral-status-vacation' },
 ]);
 
 function getInitials(name) {

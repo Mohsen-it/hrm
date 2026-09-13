@@ -109,7 +109,12 @@ class Rotation extends Model
      */
     public function resolveForDate(Carbon $date, int $groupIndex): bool
     {
-        $daysSinceAnchor = (int) $date->startOfDay()->diffInDays($this->anchor_start_date->startOfDay());
+        // Signed distance: date - anchor (positive after the anchor).
+        // $date->diffInDays($anchor) returns anchor - date, which mirrors
+        // the schedule around the anchor — hence the explicit swap.
+        $target = $date->copy()->startOfDay();
+        $anchor = $this->anchor_start_date->copy()->startOfDay();
+        $daysSinceAnchor = (int) $anchor->diffInDays($target, false);
         $workDaysCount = $this->work_days_count
             ?: count(array_filter(is_array($this->pattern) ? $this->pattern : [], fn ($v) => $v == 1));
         $offset = $groupIndex * (int) $workDaysCount;

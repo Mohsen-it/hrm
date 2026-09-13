@@ -80,10 +80,10 @@ class AbsenceCalculationService
         $rotationIdList = $this->normalizeRotationFilter($rotationIds);
         $groupIdList = $this->normalizeRotationFilter($rotationGroupIds);
 
-        // Smart absence is an operational report: always calculate against
-        // the employee's latest open assignment, even when an old date range
-        // still has a closed history row for a previous rotation/group.
-        $rotationAssignments = $this->rotationAssignmentRepository->getLatestActiveAssignments();
+        // Past dates resolve against the historically active assignment so a
+        // rotation transfer does not rewrite history; today/future use the
+        // latest open assignment (operational view).
+        $rotationAssignments = $this->rotationAssignmentRepository->getEffectiveAssignmentsForDate($dateStr);
         $expectedIds = collect();
 
         foreach ($rotationAssignments as $rotationAssignment) {
@@ -120,6 +120,7 @@ class AbsenceCalculationService
             });
 
         $this->excludeAttendanceExemptions($query, $dateStr);
+        $this->excludeNotYetHired($query, $dateStr);
 
         if ($departmentIds !== null) {
             $departmentIds = is_array($departmentIds) ? $departmentIds : [$departmentIds];
@@ -146,7 +147,7 @@ class AbsenceCalculationService
     public function getUnassignedEmployeeIds(Carbon $date): Collection
     {
         $dateStr = $date->toDateString();
-        $assignedIds = $this->rotationAssignmentRepository->getLatestActiveAssignments()
+        $assignedIds = $this->rotationAssignmentRepository->getEffectiveAssignmentsForDate($dateStr)
             ->pluck('employee_id');
 
         $query = DB::table('users')
@@ -161,6 +162,7 @@ class AbsenceCalculationService
             });
 
         $this->excludeAttendanceExemptions($query, $dateStr);
+        $this->excludeNotYetHired($query, $dateStr);
 
         return $query->pluck('id');
     }
@@ -201,6 +203,7 @@ class AbsenceCalculationService
             ->where(fn ($query) => $query->whereNull('termination_date')->orWhere('termination_date', '>=', $dateStr));
 
         $this->excludeAttendanceExemptions($employees, $dateStr);
+        $this->excludeNotYetHired($employees, $dateStr);
 
         $employees = $employees->get()
             ->keyBy('id');
@@ -360,6 +363,129 @@ class AbsenceCalculationService
     }
 
     /**
+     * Employees expected today whose check-in deadline has not passed yet.
+     *
+     * Same coverage rules as getAbsentEmployees() (vacation, exception,
+     * holiday), but keeping only the employees still inside their arrival
+     * window. Lets the daily page show them explicitly instead of an empty
+     * absent list on current-day mornings.
+     *
+     * @param  int|array<int, int>|null  $departmentIds
+     * @param  int|array<int, int>|null  $rotationIds
+     * @param  int|array<int, int>|null  $rotationGroupIds
+     * @return Collection<int, int>
+     */
+    public function getAwaitingArrivalEmployees(
+        Carbon $date,
+        int|array|null $departmentIds = null,
+        int|array|null $rotationIds = null,
+        int|array|null $rotationGroupIds = null,
+    ): Collection {
+        $expected = $this->getExpectedEmployees($date, $departmentIds, $rotationIds, $rotationGroupIds);
+
+        if ($expected->isEmpty()) {
+            return collect();
+        }
+
+        $dateStr = $date->toDateString();
+        $present = $this->computePresentIds($date, $expected);
+        $waiting = $expected->diff($present)->values();
+
+        if ($waiting->isEmpty()) {
+            return $waiting;
+        }
+
+        $onLeaveIds = UserVacationRequest::where('status', UserVacationRequest::STATUS_APPROVED)
+            ->whereIn('user_id', $waiting->toArray())
+            ->whereDate('start_date', '<=', $dateStr)
+            ->whereDate('end_date', '>=', $dateStr)
+            ->distinct()
+            ->pluck('user_id');
+
+        $interceptedIds = ShiftException::active()
+            ->whereIn('employee_id', $waiting->toArray())
+            ->whereIn('exception_type', ['leave', 'mission', 'swap', 'training'])
+            ->whereDate('from_date', '<=', $dateStr)
+            ->whereDate('to_date', '>=', $dateStr)
+            ->distinct()
+            ->pluck('employee_id');
+
+        $waiting = $waiting->diff($onLeaveIds)->diff($interceptedIds)->values();
+
+        if ($waiting->isEmpty()) {
+            return $waiting;
+        }
+
+        $holidays = $this->activeHolidays();
+
+        if ($holidays->isNotEmpty()) {
+            $waitingUsers = DB::table('users')
+                ->whereIn('id', $waiting->toArray())
+                ->get(['id', 'branch_id', 'department_id'])
+                ->keyBy('id');
+
+            $assignments = $this->rotationAssignmentRepository->getEffectiveAssignmentsForDate($dateStr)
+                ->keyBy('employee_id');
+
+            $waiting = $waiting->reject(function (int $employeeId) use ($holidays, $waitingUsers, $assignments, $dateStr): bool {
+                $employee = $waitingUsers->get($employeeId);
+
+                if (! $employee) {
+                    return false;
+                }
+
+                if ((bool) ($assignments->get($employeeId)?->rotation?->work_on_holidays ?? false)) {
+                    return false;
+                }
+
+                return $this->hasApplicableHoliday($holidays, $dateStr, $employee);
+            })->values();
+        }
+
+        if ($waiting->isEmpty()) {
+            return $waiting;
+        }
+
+        $now = Carbon::now();
+        $assignments = $this->rotationAssignmentRepository->getEffectiveAssignmentsForDate($dateStr)
+            ->keyBy('employee_id');
+
+        return $waiting->filter(function (int $employeeId) use ($date, $now, $assignments): bool {
+            $assignment = $assignments->get($employeeId);
+
+            if (! $assignment) {
+                return false;
+            }
+
+            $deadline = $this->arrivalDeadline($date, $assignment);
+
+            return $deadline === null || $now->lessThanOrEqualTo($deadline);
+        })->values();
+    }
+
+    /**
+     * The moment an employee without a punch turns from "awaiting arrival"
+     * into "absent": their rotation's expected check-in plus grace minutes
+     * (or the end of the day when the rotation carries no time schedule).
+     *
+     * Public so the daily operational report (DailyReportService) applies
+     * the exact same deadline instead of drifting from smart absence.
+     */
+    public function arrivalDeadline(Carbon $date, mixed $assignment): ?Carbon
+    {
+        if (! $assignment) {
+            return null;
+        }
+
+        $times = $this->rotationEngine->resolveTimes($assignment);
+        $grace = (int) ($assignment->rotation->grace_minutes ?: $times['late_margin'] ?: 0);
+
+        return $times['check_in']
+            ? $date->copy()->setTimeFromTimeString($times['check_in'])->addMinutes($grace)
+            : $date->copy()->endOfDay();
+    }
+
+    /**
      * Get the list of absent employees for a given date.
      *
      * @param  int|array<int, int>|null  $departmentIds
@@ -381,22 +507,11 @@ class AbsenceCalculationService
 
         $dateStr = $date->toDateString();
 
-        $punchedIds = AttendanceSession::onDate($dateStr)
-            ->whereIn('user_id', $expected->toArray())
-            ->distinct()
-            ->pluck('user_id');
-
-        // A raw device punch is physical proof of presence even when the
-        // session pipeline could not create an attendance session for this
-        // date (e.g. an early-morning punch outside the configured check-in
-        // window that was attached to a previous day's still-open session).
-        $punchedIds = $punchedIds->merge(
-            RawAttendanceLog::query()
-                ->whereIn('user_id', $expected->toArray())
-                ->whereBetween('punch_time', $this->localDayUtcBounds($dateStr))
-                ->distinct()
-                ->pluck('user_id')
-        )->unique()->values();
+        // Presence proof: a session with a real check-in, or a raw device
+        // punch that is not merely yesterday's overnight checkout.
+        // (Sessions without check_in_at and lone morning checkouts must not
+        // mark the employee present — see computePresentIds().)
+        $punchedIds = $this->computePresentIds($date, $expected);
 
         $absent = $expected->diff($punchedIds)->values();
 
@@ -440,7 +555,7 @@ class AbsenceCalculationService
                     ->get(['id', 'branch_id', 'department_id'])
                     ->keyBy('id');
 
-                $assignments = $this->rotationAssignmentRepository->getLatestActiveAssignments()
+                $assignments = $this->rotationAssignmentRepository->getEffectiveAssignmentsForDate($dateStr)
                     ->keyBy('employee_id');
 
                 $holidayExcusedIds = $absent->filter(function (int $employeeId) use ($holidays, $absentUsers, $assignments, $dateStr): bool {
@@ -469,7 +584,7 @@ class AbsenceCalculationService
         // as absent prematurely.
         if ($absent->isNotEmpty()) {
             $now = Carbon::now();
-            $assignments = $this->rotationAssignmentRepository->getLatestActiveAssignments()
+            $assignments = $this->rotationAssignmentRepository->getEffectiveAssignmentsForDate($dateStr)
                 ->keyBy('employee_id');
 
             $absent = $absent->filter(function (int $employeeId) use ($date, $now, $assignments): bool {
@@ -479,13 +594,9 @@ class AbsenceCalculationService
                     return true;
                 }
 
-                $times = $this->rotationEngine->resolveTimes($assignment);
-                $grace = (int) ($assignment->rotation->grace_minutes ?: $times['late_margin'] ?: 0);
-                $deadline = $times['check_in']
-                    ? $date->copy()->setTimeFromTimeString($times['check_in'])->addMinutes($grace)
-                    : $date->copy()->endOfDay();
+                $deadline = $this->arrivalDeadline($date, $assignment);
 
-                return $now->greaterThan($deadline);
+                return $deadline === null || $now->greaterThan($deadline);
             })->values();
         }
 
@@ -532,19 +643,10 @@ class AbsenceCalculationService
         $dateStr = $date->toDateString();
         $ids = $expected->toArray();
 
-        // Physical presence: an attendance session OR a raw device punch today.
-        $punchedIds = AttendanceSession::onDate($dateStr)
-            ->whereIn('user_id', $ids)
-            ->distinct()
-            ->pluck('user_id')
-            ->merge(
-                RawAttendanceLog::query()
-                    ->whereIn('user_id', $ids)
-                    ->whereBetween('punch_time', $this->localDayUtcBounds($dateStr))
-                    ->distinct()
-                    ->pluck('user_id')
-            )
-            ->unique();
+        // Physical presence: a session with a real check-in, or a raw device
+        // punch that is not merely yesterday's overnight checkout (same rule
+        // as getAbsentEmployees() so the counts always reconcile).
+        $punchedIds = $this->computePresentIds($date, $expected);
 
         // Approved vacations and intercepting shift exceptions covering today.
         $vacationIds = UserVacationRequest::where('status', UserVacationRequest::STATUS_APPROVED)
@@ -565,7 +667,7 @@ class AbsenceCalculationService
         // Awaiting arrival: expected, no punch, check-in deadline not passed yet.
         // (A missing check-out from a previous day never converts a new work
         // day into "incomplete" — same rule as getAbsentEmployees().)
-        $assignments = $this->rotationAssignmentRepository->getLatestActiveAssignments();
+        $assignments = $this->rotationAssignmentRepository->getEffectiveAssignmentsForDate($dateStr);
         $now = Carbon::now();
         $awaitingIds = collect();
         $deadlines = [];
@@ -573,13 +675,9 @@ class AbsenceCalculationService
             if (! $expected->contains($assignment->employee_id)) {
                 continue;
             }
-            $times = $this->rotationEngine->resolveTimes($assignment);
-            $grace = (int) ($assignment->rotation->grace_minutes ?: $times['late_margin'] ?: 0);
-            $deadline = $times['check_in']
-                ? $date->copy()->setTimeFromTimeString($times['check_in'])->addMinutes($grace)
-                : $date->copy()->endOfDay();
+            $deadline = $this->arrivalDeadline($date, $assignment);
             $deadlines[$assignment->employee_id] = $deadline;
-            if ($now->lte($deadline)) {
+            if ($deadline === null || $now->lte($deadline)) {
                 $awaitingIds->push((int) $assignment->employee_id);
             }
         }
@@ -645,34 +743,50 @@ class AbsenceCalculationService
             ->whereNull('deleted_at')
             ->where('status', 1)
             ->where('is_active_employee', true)
-            ->first(['id', 'branch_id', 'department_id', 'attendance_exemption_type', 'attendance_exemption_from', 'attendance_exemption_to']);
+            ->first(['id', 'hire_date', 'branch_id', 'department_id', 'attendance_exemption_type', 'attendance_exemption_from', 'attendance_exemption_to']);
 
         if (! $employee) {
             return [];
         }
 
-        $rotationAssignment = $this->rotationAssignmentRepository->getActiveAssignment($employeeId);
+        // Historical assignment per day (one day back so yesterday's overnight
+        // checkout can be recognised), not just the current one.
+        $monthFromStr = $startOfMonth->toDateString();
+        $monthToStr = $endOfMonth->toDateString();
+        $monthAssignments = $this->rotationAssignmentRepository
+            ->getEmployeeAssignmentsOverlapping(
+                $employeeId,
+                $startOfMonth->copy()->subDay()->toDateString(),
+                $monthToStr
+            );
 
-        if (! $rotationAssignment) {
+        if ($monthAssignments->isEmpty()) {
             return [];
         }
 
-        $rotation = $rotationAssignment->rotation;
-        $group = $rotationAssignment->rotationGroup;
+        $pickAssignmentForDate = function (string $day) use ($monthAssignments): ?RotationAssignment {
+            foreach ($monthAssignments as $candidate) {
+                $start = $this->dateKey($candidate->start_date);
+                $end = $candidate->end_date === null ? null : $this->dateKey($candidate->end_date);
+                if ($start <= $day && ($end === null || $end >= $day)) {
+                    return $candidate;
+                }
+            }
 
-        $times = $this->rotationEngine->resolveTimes($rotationAssignment);
-        $expectedTime = $times['check_in'] ?? null;
+            return null;
+        };
+
         $holidays = $this->activeHolidays();
 
         // 011/P1-E: batch the whole month up front (mirrors the proven
         // getMonthlyAbsenceReport() pattern) instead of ~4 exists() queries
         // per day (~120/month). Day membership below is logically identical
         // to the per-day queries it replaces (see evidence/p1e-batch-month).
-        $monthFromStr = $startOfMonth->toDateString();
-        $monthToStr = $endOfMonth->toDateString();
-
+        // Sessions only count with a real check-in; raw punches keep their
+        // local times so an overnight checkout is not mistaken for arrival.
         $sessionDays = AttendanceSession::betweenDates($monthFromStr, $monthToStr)
             ->where('user_id', $employeeId)
+            ->whereNotNull('check_in_at')
             ->distinct()
             ->pluck('attendance_date')
             ->map(fn ($value) => $this->dateKey($value))
@@ -682,13 +796,17 @@ class AbsenceCalculationService
             Carbon::parse($monthFromStr)->startOfDay()->setTimezone('UTC')->format('Y-m-d H:i:s'),
             Carbon::parse($monthToStr)->endOfDay()->setTimezone('UTC')->format('Y-m-d H:i:s'),
         ];
-        $rawDays = DB::table('raw_attendance_logs')
-            ->where('user_id', $employeeId)
-            ->whereBetween('punch_time', $monthUtcBounds)
-            ->whereNull('deleted_at')
-            ->pluck('punch_time')
-            ->map(fn ($value) => $this->localDateFromUtc((string) $value))
-            ->flip();
+        $rawTimesByDay = [];
+        foreach (
+            DB::table('raw_attendance_logs')
+                ->where('user_id', $employeeId)
+                ->whereBetween('punch_time', $monthUtcBounds)
+                ->whereNull('deleted_at')
+                ->pluck('punch_time') as $punch
+        ) {
+            $rawTimesByDay[$this->localDateFromUtc((string) $punch)][] = Carbon::parse((string) $punch, 'UTC')
+                ->setTimezone(config('app.timezone'));
+        }
 
         $monthVacations = $this->indexCoverage(
             UserVacationRequest::where('status', UserVacationRequest::STATUS_APPROVED)
@@ -714,6 +832,24 @@ class AbsenceCalculationService
                 continue;
             }
 
+            if ($this->isNotYetHired($employee, $dateStr)) {
+                $current->addDay();
+
+                continue;
+            }
+
+            $dayAssignment = $pickAssignmentForDate($dateStr);
+
+            if (! $dayAssignment) {
+                $current->addDay();
+
+                continue;
+            }
+
+            $rotation = $dayAssignment->rotation;
+            $group = $dayAssignment->rotationGroup;
+            $expectedTime = $this->rotationEngine->resolveTimes($dayAssignment)['check_in'] ?? null;
+
             $isExpected = $this->rotationEngine->isWorkDay($rotation, $group, $current);
 
             if ($isExpected) {
@@ -725,15 +861,20 @@ class AbsenceCalculationService
                 $isHoliday = ! (bool) $rotation->work_on_holidays
                     && $this->hasApplicableHoliday($holidays, $dateStr, $employee);
 
-                // Set lookups over the precomputed month batches — identical
-                // membership to the per-day exists() queries above
-                // (session day set, raw-punch local-date set, coverage ranges).
+                // A session with a real check-in proves presence. A raw punch
+                // counts too — unless it is only yesterday's overnight
+                // checkout landing on today's date.
                 $hasPunch = isset($sessionDays[$dateStr]);
 
-                if (! $hasPunch) {
-                    // Fall back to raw device punches: a punch proves physical
-                    // presence even when no session was created for the date.
-                    $hasPunch = isset($rawDays[$dateStr]);
+                if (! $hasPunch && isset($rawTimesByDay[$dateStr])) {
+                    $prevAssignment = $pickAssignmentForDate($current->copy()->subDay()->toDateString());
+                    $prevMap = collect($prevAssignment ? [$employeeId => $prevAssignment] : []);
+                    $hasPunch = ! $this->isOvernightCheckoutOnly(
+                        $employeeId,
+                        $rawTimesByDay[$dateStr],
+                        $current->copy(),
+                        $prevMap
+                    );
                 }
 
                 $approvedLeave = $this->isCoveredBy($employeeId, $dateStr, $monthVacations);
@@ -812,10 +953,26 @@ class AbsenceCalculationService
         $rotationIdList = $this->normalizeRotationFilter($rotationIds);
         $groupIdList = $this->normalizeRotationFilter($rotationGroupIds);
 
-        // This is an operational report, so its roster is always the latest
-        // open assignment for each employee, not the historical assignment
-        // that was attached to a previous group/rotation.
-        $assignments = $this->rotationAssignmentRepository->getLatestActiveAssignments();
+        // Historical assignments overlapping the range (one extra day back so
+        // yesterday's overnight checkout can be recognised): each day uses
+        // the assignment that was actually active on that day, so a rotation
+        // transfer does not rewrite the past.
+        $rangeAssignments = $this->rotationAssignmentRepository->getAssignmentsOverlapping(
+            $from->copy()->subDay()->toDateString(),
+            $toStr
+        )->groupBy('employee_id');
+
+        $pickAssignmentForDate = function (int $employeeId, string $day) use ($rangeAssignments): ?RotationAssignment {
+            foreach ($rangeAssignments->get($employeeId, collect()) as $candidate) {
+                $start = $this->dateKey($candidate->start_date);
+                $end = $candidate->end_date === null ? null : $this->dateKey($candidate->end_date);
+                if ($start <= $day && ($end === null || $end >= $day)) {
+                    return $candidate;
+                }
+            }
+
+            return null;
+        };
 
         // Active employees, respecting the department filter.
         // id => employment / exemption metadata.
@@ -828,14 +985,17 @@ class AbsenceCalculationService
                     ->orWhere('termination_date', '>=', $fromStr);
             })
             ->when($departmentId !== null, fn ($q) => $q->where('department_id', $departmentId))
-            ->get(['id', 'branch_id', 'department_id', 'termination_date', 'attendance_exemption_type', 'attendance_exemption_from', 'attendance_exemption_to'])
+            ->get(['id', 'hire_date', 'branch_id', 'department_id', 'termination_date', 'attendance_exemption_type', 'attendance_exemption_from', 'attendance_exemption_to'])
             ->keyBy('id');
 
         $activeIds = $activeUsers->keys()->all();
 
-        // Attendance punches grouped by date (one query for the whole range).
-        $punchesByDate = AttendanceSession::betweenDates($fromStr, $toStr)
+        // Attendance sessions grouped by date (one query for the whole range).
+        // Only sessions with a real check-in prove presence — a checkout-only
+        // row left over from a previous day says nothing about this day.
+        $sessionsByDate = AttendanceSession::betweenDates($fromStr, $toStr)
             ->whereIn('user_id', $activeIds)
+            ->whereNotNull('check_in_at')
             ->distinct()
             ->get(['attendance_date', 'user_id'])
             ->groupBy(fn ($row) => $this->dateKey($row->attendance_date))
@@ -845,27 +1005,24 @@ class AbsenceCalculationService
         // pipeline can attach a punch to a previous day's open session (early
         // morning punches outside the configured check-in window), leaving the
         // expected day without a session - without these, such employees would
-        // be wrongly reported as absent.
+        // be wrongly reported as absent. Times are kept (app timezone) so an
+        // overnight duty's morning checkout is not mistaken for an arrival.
         $utcFrom = Carbon::parse($fromStr)->startOfDay()->setTimezone('UTC')->format('Y-m-d H:i:s');
         $utcTo = Carbon::parse($toStr)->endOfDay()->setTimezone('UTC')->format('Y-m-d H:i:s');
-        $rawPunchesByDate = DB::table('raw_attendance_logs')
-            ->whereIn('user_id', $activeIds)
-            ->whereBetween('punch_time', [$utcFrom, $utcTo])
-            // Soft-deleted logs are excluded, exactly like the Eloquent model
-            // query the rest of the report uses.
-            ->whereNull('deleted_at')
-            ->get(['punch_time', 'user_id'])
-            // Punches are stored in UTC; group them under their local
-            // app-timezone date so late-evening UTC punches roll onto the
-            // correct day (mirrors localDayUtcBounds()).
-            ->groupBy(fn ($row) => $this->localDateFromUtc((string) $row->punch_time))
-            ->map(fn ($rows) => $rows->pluck('user_id')->flip());
-
-        $punchesByDate = $punchesByDate->map(function (Collection $ids, string $date) use ($rawPunchesByDate): Collection {
-            $rawIds = $rawPunchesByDate->get($date, collect());
-
-            return $rawIds->isEmpty() ? $ids : $ids->union($rawIds);
-        })->union($rawPunchesByDate->diffKeys($punchesByDate));
+        $rawTimesByDate = [];
+        foreach (
+            DB::table('raw_attendance_logs')
+                ->whereIn('user_id', $activeIds)
+                ->whereBetween('punch_time', [$utcFrom, $utcTo])
+                // Soft-deleted logs are excluded, exactly like the Eloquent model
+                // query the rest of the report uses.
+                ->whereNull('deleted_at')
+                ->get(['punch_time', 'user_id']) as $rawRow
+        ) {
+            $localDay = $this->localDateFromUtc((string) $rawRow->punch_time);
+            $rawTimesByDate[$localDay][(int) $rawRow->user_id][] = Carbon::parse((string) $rawRow->punch_time, 'UTC')
+                ->setTimezone(config('app.timezone'));
+        }
 
         // Approved vacations overlapping the range.
         $vacations = $this->indexCoverage(
@@ -897,22 +1054,28 @@ class AbsenceCalculationService
         $current = $from->copy();
         while ($current->lte($to)) {
             $dateStr = $current->toDateString();
-            $punchedThatDay = $punchesByDate->get($dateStr, collect())->keys()->flip();
+            $sessionThatDay = $sessionsByDate->get($dateStr, collect())->keys()->flip();
+            $rawThatDay = $rawTimesByDate[$dateStr] ?? [];
+            $prevStr = $current->copy()->subDay()->toDateString();
 
-            foreach ($assignments as $assignment) {
-                $employeeId = $assignment->employee_id;
+            foreach ($activeUsers as $employeeId => $employee) {
+                $employeeId = (int) $employeeId;
+                $assignment = $pickAssignmentForDate($employeeId, $dateStr);
+
+                if (! $assignment) {
+                    continue;
+                }
+
                 $rotation = $assignment->rotation;
                 $group = $assignment->rotationGroup;
 
-                // `has()` (unlike isset) treats a null termination_date as a
-                // valid key, so employees still employed are not skipped.
-                if (! $activeUsers->has($employeeId)) {
-                    continue;
-                }
-                // The employee must still be employed on this exact day.
-                $employee = $activeUsers[$employeeId];
+                // The employee must still be employed on this exact day, and
+                // already hired (a newcomer is not expected before joining).
                 $terminationDate = $employee->termination_date;
                 if ($terminationDate !== null && $this->dateKey($terminationDate) < $dateStr) {
+                    continue;
+                }
+                if ($this->isNotYetHired($employee, $dateStr)) {
                     continue;
                 }
                 if ($this->isAttendanceExempt($employee, $dateStr)) {
@@ -946,7 +1109,21 @@ class AbsenceCalculationService
                 $isHoliday = ! (bool) $rotation->work_on_holidays
                     && $this->hasApplicableHoliday($holidays, $dateStr, $employee);
 
-                $hasPunch = $punchedThatDay->has($employeeId);
+                // A session with a real check-in proves presence. A raw punch
+                // counts too — unless it is only yesterday's overnight
+                // checkout landing on today's date.
+                $hasPunch = $sessionThatDay->has($employeeId);
+
+                if (! $hasPunch && isset($rawThatDay[$employeeId])) {
+                    $prevAssignment = $pickAssignmentForDate($employeeId, $prevStr);
+                    $prevMap = collect($prevAssignment ? [$employeeId => $prevAssignment] : []);
+                    $hasPunch = ! $this->isOvernightCheckoutOnly(
+                        $employeeId,
+                        $rawThatDay[$employeeId],
+                        $current->copy(),
+                        $prevMap
+                    );
+                }
 
                 if ($hasPunch) {
                     $stats[$employeeId]['present']++;
@@ -1144,6 +1321,163 @@ class AbsenceCalculationService
     }
 
     /**
+     * Exclude employees not hired yet on the given date.
+     *
+     * The hire_date column exists but was never consulted: a newcomer hired
+     * mid-month was counted as expected (then absent) for days before they
+     * even joined. A null hire_date means "unknown" and never excludes.
+     */
+    private function excludeNotYetHired($query, string $date): void
+    {
+        $query->where(function ($subQuery) use ($date): void {
+            $subQuery->whereNull('hire_date')
+                ->orWhere('hire_date', '<=', $date);
+        });
+    }
+
+    /**
+     * Employees with a genuine presence proof on a single day.
+     *
+     * Two accuracy rules live here:
+     *   - an attendance session only counts when it carries a real check-in
+     *     (a checkout-only row left over from a previous day proves nothing
+     *     about today — mirrors the operational snapshot); and
+     *   - a raw punch that is merely the morning checkout of yesterday's
+     *     overnight duty does not count as today's arrival (see
+     *     isOvernightCheckoutOnly()).
+     *
+     * @param  Collection<int, int>  $expected
+     * @return Collection<int, int>
+     */
+    private function computePresentIds(Carbon $date, Collection $expected): Collection
+    {
+        $dateStr = $date->toDateString();
+        $ids = $expected->toArray();
+
+        if ($ids === []) {
+            return collect();
+        }
+
+        $sessionIds = AttendanceSession::onDate($dateStr)
+            ->whereIn('user_id', $ids)
+            ->whereNotNull('check_in_at')
+            ->distinct()
+            ->pluck('user_id');
+
+        $rawRows = RawAttendanceLog::query()
+            ->whereIn('user_id', $ids)
+            ->whereBetween('punch_time', $this->localDayUtcBounds($dateStr))
+            ->get(['user_id', 'punch_time']);
+
+        if ($rawRows->isEmpty()) {
+            return $sessionIds->unique()->values();
+        }
+
+        $sessionFlip = $sessionIds->flip();
+        $rawByUser = [];
+        foreach ($rawRows as $row) {
+            $rawByUser[(int) $row->user_id][] = Carbon::parse($row->punch_time, 'UTC')
+                ->setTimezone(config('app.timezone'));
+        }
+
+        $assignments = $this->rotationAssignmentRepository
+            ->getEffectiveAssignmentsForDate($dateStr)->keyBy('employee_id');
+        $prevStr = $date->copy()->subDay()->toDateString();
+        $prevAssignments = $prevStr === $dateStr
+            ? $assignments
+            : $this->rotationAssignmentRepository
+                ->getEffectiveAssignmentsForDate($prevStr)->keyBy('employee_id');
+
+        $present = $sessionIds->all();
+        foreach ($rawByUser as $userId => $times) {
+            if ($sessionFlip->has($userId)) {
+                continue;
+            }
+            if ($this->isOvernightCheckoutOnly($userId, $times, $date, $prevAssignments)) {
+                continue;
+            }
+            $present[] = $userId;
+        }
+
+        return collect($present)->unique()->values();
+    }
+
+    /**
+     * Whether raw punches are only the checkout of yesterday's overnight duty.
+     *
+     * An overnight (multi-day) shift ending this morning leaves punches on
+     * today's date that belong to yesterday's duty. When every punch of the
+     * day falls inside the duty's departure-morning window and no session
+     * with a check-in exists, the employee has not arrived for today.
+     *
+     * Public so the daily operational report (DailyReportService) applies
+     * the exact same rule instead of drifting from smart absence.
+     *
+     * @param  array<int, Carbon>  $localTimes  Raw punch times in app timezone.
+     */
+    public function isOvernightCheckoutOnly(
+        int $userId,
+        array $localTimes,
+        Carbon $date,
+        Collection $prevAssignments,
+    ): bool {
+        $prev = $prevAssignments->get($userId);
+
+        if (! $prev) {
+            return false;
+        }
+
+        $prevDay = $date->copy()->subDay();
+        if (! $this->rotationEngine->isWorkDay($prev->rotation, $prev->rotationGroup, $prevDay)) {
+            return false;
+        }
+
+        $prevTimes = $this->rotationEngine->resolveTimes($prev);
+
+        if (! ($prevTimes['is_overnight'] ?? false)) {
+            return false;
+        }
+
+        $dayStr = $date->toDateString();
+        $ahead = $prevTimes['next_day_out_ahead_margin'] ?? null;
+        $above = $prevTimes['next_day_out_above_margin'] ?? null;
+
+        if ($ahead || $above) {
+            $windowStart = $ahead
+                ? Carbon::parse("{$dayStr} {$ahead}")
+                : $date->copy()->startOfDay();
+            $windowEnd = $above
+                ? Carbon::parse("{$dayStr} {$above}")
+                : $date->copy()->endOfDay();
+        } else {
+            $checkOut = $prevTimes['check_out'] ?? null;
+
+            if (! $checkOut) {
+                return false;
+            }
+
+            // No explicit morning window: the checkout clusters around the
+            // scheduled out_time, while a real next-day arrival is hours
+            // away. Keep the window tight to avoid swallowing arrivals.
+            $anchor = Carbon::parse("{$dayStr} {$checkOut}");
+            $windowStart = $anchor->copy()->subMinutes(120);
+            $windowEnd = $anchor->copy()->addMinutes(60);
+        }
+
+        if ($windowEnd->lt($windowStart)) {
+            [$windowStart, $windowEnd] = [$windowEnd, $windowStart];
+        }
+
+        foreach ($localTimes as $time) {
+            if ($time->lt($windowStart) || $time->gt($windowEnd)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
      * Exclude an employee while an approved HR attendance-exemption is active.
      */
     private function excludeAttendanceExemptions($query, string $date): void
@@ -1154,6 +1488,19 @@ class AbsenceCalculationService
                 ->orWhere('attendance_exemption_from', '>', $date)
                 ->orWhere('attendance_exemption_to', '<', $date);
         });
+    }
+
+    /**
+     * Whether the employee had not been hired yet on a date (object twin of
+     * excludeNotYetHired() for call sites holding a single employee row).
+     */
+    private function isNotYetHired(object $employee, string $date): bool
+    {
+        if (empty($employee->hire_date)) {
+            return false;
+        }
+
+        return $this->dateKey($employee->hire_date) > $date;
     }
 
     /**
@@ -1213,7 +1560,7 @@ class AbsenceCalculationService
         $employee = DB::table('users')
             ->where('id', $employeeId)
             ->whereNull('deleted_at')
-            ->first(['id', 'name', 'employee_code', 'branch_id', 'department_id', 'attendance_exemption_type', 'attendance_exemption_from', 'attendance_exemption_to', 'termination_date', 'status', 'is_active_employee']);
+            ->first(['id', 'name', 'employee_code', 'hire_date', 'branch_id', 'department_id', 'attendance_exemption_type', 'attendance_exemption_from', 'attendance_exemption_to', 'termination_date', 'status', 'is_active_employee']);
 
         if (! $employee) {
             return [
@@ -1267,11 +1614,13 @@ class AbsenceCalculationService
         // getMonthlyAbsence). Assignments are DATE columns, so the in-memory
         // pick below replicates getAssignmentForDate() exactly
         // (start<=day, open or end>=day, start desc, id desc, first).
+        // One extra day back so yesterday's overnight checkout is recognised.
         $monthAssignments = $this->rotationAssignmentRepository
-            ->getEmployeeAssignmentsOverlapping($employeeId, $fromStr, $toStr);
+            ->getEmployeeAssignmentsOverlapping($employeeId, $start->copy()->subDay()->toDateString(), $toStr);
 
         $empSessionDays = AttendanceSession::betweenDates($fromStr, $toStr)
             ->where('user_id', $employeeId)
+            ->whereNotNull('check_in_at')
             ->distinct()
             ->pluck('attendance_date')
             ->map(fn ($value) => $this->dateKey($value))
@@ -1281,13 +1630,17 @@ class AbsenceCalculationService
             Carbon::parse($fromStr)->startOfDay()->setTimezone('UTC')->format('Y-m-d H:i:s'),
             Carbon::parse($toStr)->endOfDay()->setTimezone('UTC')->format('Y-m-d H:i:s'),
         ];
-        $empRawDays = DB::table('raw_attendance_logs')
-            ->where('user_id', $employeeId)
-            ->whereBetween('punch_time', $empMonthUtcBounds)
-            ->whereNull('deleted_at')
-            ->pluck('punch_time')
-            ->map(fn ($value) => $this->localDateFromUtc((string) $value))
-            ->flip();
+        $empRawTimesByDay = [];
+        foreach (
+            DB::table('raw_attendance_logs')
+                ->where('user_id', $employeeId)
+                ->whereBetween('punch_time', $empMonthUtcBounds)
+                ->whereNull('deleted_at')
+                ->pluck('punch_time') as $empPunch
+        ) {
+            $empRawTimesByDay[$this->localDateFromUtc((string) $empPunch)][] = Carbon::parse((string) $empPunch, 'UTC')
+                ->setTimezone(config('app.timezone'));
+        }
 
         $pickAssignmentForDate = function (string $day) use ($monthAssignments): ?RotationAssignment {
             foreach ($monthAssignments as $candidate) {
@@ -1307,18 +1660,27 @@ class AbsenceCalculationService
 
             if ($this->isAttendanceExempt($employee, $dateStr)) {
                 $current->addDay();
+
                 continue;
             }
 
             $terminationDate = $employee->termination_date ? $this->dateKey($employee->termination_date) : null;
             if ($terminationDate !== null && $terminationDate < $dateStr) {
                 $current->addDay();
+
+                continue;
+            }
+
+            if ($this->isNotYetHired($employee, $dateStr)) {
+                $current->addDay();
+
                 continue;
             }
 
             $assignment = $pickAssignmentForDate($dateStr);
             if (! $assignment) {
                 $current->addDay();
+
                 continue;
             }
             $hasAssignment = true;
@@ -1331,6 +1693,7 @@ class AbsenceCalculationService
 
             if (! $this->rotationEngine->isWorkDay($rotation, $group, $current)) {
                 $current->addDay();
+
                 continue;
             }
 
@@ -1357,23 +1720,37 @@ class AbsenceCalculationService
                     'is_work_day' => true,
                 ];
                 $current->addDay();
+
                 continue;
             }
 
-            // Set lookups over the precomputed month batches — identical
-            // membership to the per-day exists() queries (011/P1-G).
+            // A session with a real check-in proves presence. A raw punch
+            // counts too — unless it is only yesterday's overnight checkout.
             $hasPunch = isset($empSessionDays[$dateStr]);
-            if (! $hasPunch) {
-                $hasPunch = isset($empRawDays[$dateStr]);
+            if (! $hasPunch && isset($empRawTimesByDay[$dateStr])) {
+                $prevAssignment = $pickAssignmentForDate($current->copy()->subDay()->toDateString());
+                $prevMap = collect($prevAssignment ? [$employeeId => $prevAssignment] : []);
+                $hasPunch = ! $this->isOvernightCheckoutOnly(
+                    $employeeId,
+                    $empRawTimesByDay[$dateStr],
+                    $current->copy(),
+                    $prevMap
+                );
             }
 
             $onVacation = false;
             foreach ($vacationRanges as $range) {
-                if ($range['from'] <= $dateStr && $range['to'] >= $dateStr) { $onVacation = true; break; }
+                if ($range['from'] <= $dateStr && $range['to'] >= $dateStr) {
+                    $onVacation = true;
+                    break;
+                }
             }
             $onException = null;
             foreach ($exceptionRanges as $range) {
-                if ($range['from'] <= $dateStr && $range['to'] >= $dateStr) { $onException = $range['type']; break; }
+                if ($range['from'] <= $dateStr && $range['to'] >= $dateStr) {
+                    $onException = $range['type'];
+                    break;
+                }
             }
 
             if ($onVacation) {
@@ -1427,7 +1804,9 @@ class AbsenceCalculationService
         $effectiveExpected = $expectedPhysical - $holidayDays;
         $workedPhysical = $presentDays + $vacationDays;
         $attendanceRate = $effectiveExpected > 0 ? (int) round(($workedPhysical / $effectiveExpected) * 100) : 100;
-        if ($attendanceRate > 100) $attendanceRate = 100;
+        if ($attendanceRate > 100) {
+            $attendanceRate = 100;
+        }
 
         $primaryCycle = $primaryRotation ? (int) $primaryRotation->cycle_length : null;
         $primaryWork = $primaryRotation ? (int) $primaryRotation->work_days_count : null;

@@ -124,7 +124,12 @@ class DailyReportDocxExport
                 // fingerprint: they can never punch, so they would otherwise
                 // sit in this table every day as noise. They stay visible in
                 // the "عدم تسجيل البصمة على الجهاز" table instead.
-                'absent' => ($row['status'] ?? null) === 'absent' && ! ($row['has_no_fingerprint'] ?? false),
+                // Employees still inside their arrival window ride along in
+                // this table (the fixed template has no seventh table): their
+                // notes column carries "بانتظار الوصول — الدوام المتوقع …"
+                // instead of an absence count, so nobody mistakes them for
+                // absentees.
+                'absent' => in_array($row['status'] ?? null, ['absent', 'awaiting'], true) && ! ($row['has_no_fingerprint'] ?? false),
                 'incomplete' => (bool) ($row['has_incomplete_punch'] ?? false),
                 default => ($row['status'] ?? null) === $status,
             })

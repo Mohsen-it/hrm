@@ -60,11 +60,12 @@ class DistributeFingerprintJob implements ShouldQueue
 
         $user = User::query()
             ->where('employee_code', $this->pin)
-            ->first(['id', 'employee_code', 'full_name_ar', 'full_name_en', 'name']);
+            ->first(['id', 'employee_code', 'full_name_ar', 'full_name_en', 'name', 'device_privilege']);
 
         $name = $user
             ? (string) ($user->full_name_ar ?: $user->full_name_en ?: $user->name ?: $this->pin)
             : $this->pin;
+        $privilege = $user ? $user->devicePrivilege() : 0;
 
         // 1) Pull all fingerprint templates of this PIN from the source device.
         $srcUid = $this->uidOn($source, $this->pin);
@@ -94,8 +95,9 @@ class DistributeFingerprintJob implements ShouldQueue
 
         foreach ($targets as $target) {
             try {
-                // Identity first (clean Arabic name via bridge).
-                $bridgeSync->syncUser($target, $this->pin, $name);
+                // Identity first (clean Arabic name via bridge), preserving
+                // the employee's device privilege (never demote admins).
+                $bridgeSync->syncUser($target, $this->pin, $name, $privilege);
 
                 $tgtUid = $this->uidOn($target, $this->pin);
                 if ($tgtUid === null) {

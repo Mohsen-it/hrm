@@ -40,6 +40,7 @@ use Illuminate\Validation\Rule;
  * @property string|null $iban
  * @property UploadedFile|null $avatar
  * @property int $status
+ * @property int|null $device_privilege
  * @property bool $is_active_employee
  * @property bool $must_change_password
  * @property int|null $company_id
@@ -117,6 +118,7 @@ class UpdateUserRequest extends FormRequest
             'avatar' => ['nullable', 'image', 'mimes:png,jpg,jpeg,svg,webp', 'max:2048'],
 
             'status' => ['required', 'integer', 'in:0,1'],
+            'device_privilege' => ['nullable', 'integer', 'in:0,14'],
             'is_active_employee' => ['boolean'],
             'must_change_password' => ['boolean'],
 
@@ -174,6 +176,7 @@ class UpdateUserRequest extends FormRequest
             'avatar.max' => __('users.avatar_max_size'),
             'status.required' => __('users.status_required'),
             'status.in' => __('users.status_invalid'),
+            'device_privilege.in' => __('users.device_privilege_invalid'),
             'company_id.exists' => __('users.company_id_exists'),
             'branch_id.exists' => __('users.branch_id_exists'),
             'department_id.exists' => __('users.department_id_exists'),

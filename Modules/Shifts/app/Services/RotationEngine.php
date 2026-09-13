@@ -82,7 +82,11 @@ class RotationEngine
             return false;
         }
 
-        $daysSinceAnchor = (int) $date->diffInDays($anchor);
+        // Signed distance: positive after the anchor, negative before it.
+        // Carbon 3 returns signed diffs by default; pass false explicitly so
+        // Carbon 2 (absolute by default) behaves identically. The negation
+        // bug (anchor - date) mirrored the whole schedule around the anchor.
+        $daysSinceAnchor = (int) $anchor->diffInDays($date, false);
         $offset = $this->groupOffset($rotation, $group);
         $positionInCycle = ($daysSinceAnchor + $offset) % $rotation->cycle_length;
 
@@ -108,7 +112,8 @@ class RotationEngine
             return null;
         }
 
-        $daysSinceAnchor = (int) $date->diffInDays($anchor);
+        // Signed distance (see isWorkDay): date - anchor.
+        $daysSinceAnchor = (int) $anchor->diffInDays($date, false);
         $offset = $this->groupOffset($rotation, $group);
         $positionInCycle = ($daysSinceAnchor + $offset) % $cycleLength;
 

@@ -59,11 +59,20 @@ class UserIndexResource extends JsonResource
             ] : null),
 
             'rotation' => $this->whenLoaded('rotationAssignments', function () {
-                $active = $this->rotationAssignments->first();
-                return $active?->rotation ? [
+                $active = $this->rotationAssignments->firstWhere(fn ($a) => is_null($a->end_date))
+                    ?? $this->rotationAssignments->first();
+                if (! $active?->rotation) {
+                    return null;
+                }
+
+                return [
                     'id' => $active->rotation->id,
                     'rotation_name' => $active->rotation->name,
-                ] : null;
+                    'rotation_group_id' => $active->rotation_group_id,
+                    'rotation_group_name' => $active->relationLoaded('rotationGroup')
+                        ? $active->rotationGroup?->name
+                        : null,
+                ];
             }),
         ];
     }

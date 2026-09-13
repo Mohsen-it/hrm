@@ -163,14 +163,14 @@ function onSelectionChange(ids) {
 
 const groupColorClass = (groupName) => {
     const colors = {
-        'A': 'bg-green-100 text-green-700 border-green-200',
-        'B': 'bg-blue-100 text-blue-700 border-blue-200',
-        'C': 'bg-amber-100 text-amber-700 border-amber-200',
-        'D': 'bg-red-100 text-red-700 border-red-200',
-        'E': 'bg-purple-100 text-purple-700 border-purple-200',
-        'F': 'bg-cyan-100 text-cyan-700 border-cyan-200',
+        'A': 'bg-mistral-success-bg text-mistral-success border-mistral-success/20',
+        'B': 'bg-mistral-info-bg text-mistral-info border-mistral-info/20',
+        'C': 'bg-mistral-warning-bg text-mistral-warning border-mistral-warning/20',
+        'D': 'bg-mistral-danger-bg text-mistral-danger border-mistral-danger/20',
+        'E': 'bg-mistral-status-overtime/10 text-mistral-status-overtime border-mistral-status-overtime/20',
+        'F': 'bg-mistral-status-vacation/10 text-mistral-status-vacation border-mistral-status-vacation/20',
     };
-    return colors[groupName] || 'bg-gray-100 text-gray-700 border-gray-200';
+    return colors[groupName] || 'bg-mistral-surface text-mistral-steel border-mistral-hairline';
 };
 
 function exportExcel() {
@@ -468,12 +468,12 @@ usePageTitle(t('shifts.manage_assignments'));
                         :class="groupColorClass(group.name)"
                     >
                         <span class="w-2 h-2 rounded-full" :class="{
-                            'bg-green-500': group.name === 'A',
-                            'bg-blue-500': group.name === 'B',
-                            'bg-amber-500': group.name === 'C',
-                            'bg-red-500': group.name === 'D',
-                            'bg-purple-500': group.name === 'E',
-                            'bg-cyan-500': group.name === 'F',
+                            'bg-mistral-success': group.name === 'A',
+                            'bg-mistral-info': group.name === 'B',
+                            'bg-mistral-warning': group.name === 'C',
+                            'bg-mistral-danger': group.name === 'D',
+                            'bg-mistral-status-overtime': group.name === 'E',
+                            'bg-mistral-status-vacation': group.name === 'F',
                         }"></span>
                         {{ group.name }}
                         <span class="text-mistral-muted">({{ group.active_employees_count || 0 }})</span>
@@ -591,12 +591,12 @@ usePageTitle(t('shifts.manage_assignments'));
                         :class="groupColorClass(row.rotation_group_name)"
                     >
                         <span class="w-2 h-2 rounded-full" :class="{
-                            'bg-green-500': row.rotation_group_name === 'A',
-                            'bg-blue-500': row.rotation_group_name === 'B',
-                            'bg-amber-500': row.rotation_group_name === 'C',
-                            'bg-red-500': row.rotation_group_name === 'D',
-                            'bg-purple-500': row.rotation_group_name === 'E',
-                            'bg-cyan-500': row.rotation_group_name === 'F',
+                            'bg-mistral-success': row.rotation_group_name === 'A',
+                            'bg-mistral-info': row.rotation_group_name === 'B',
+                            'bg-mistral-warning': row.rotation_group_name === 'C',
+                            'bg-mistral-danger': row.rotation_group_name === 'D',
+                            'bg-mistral-status-overtime': row.rotation_group_name === 'E',
+                            'bg-mistral-status-vacation': row.rotation_group_name === 'F',
                         }"></span>
                         {{ row.rotation_group_name }}
                     </span>

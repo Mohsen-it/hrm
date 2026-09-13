@@ -37,7 +37,7 @@ onUnmounted(() => {
 <template>
     <div
         :class="[
-            'sticky bottom-0 z-30 border-t border-mistral-hairline-soft bg-white/95 backdrop-blur-sm',
+            'sticky bottom-0 z-30 border-t border-mistral-hairline-soft bg-mistral-canvas/95 backdrop-blur-sm',
             'px-5 sm:px-6 py-4',
         ]"
         :dir="dir"

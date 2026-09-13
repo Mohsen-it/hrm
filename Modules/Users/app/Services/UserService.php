@@ -596,6 +596,7 @@ class UserService
             'avatar' => ['nullable', 'image', 'mimes:png,jpg,jpeg,svg,webp', 'max:2048'],
 
             'status' => ['required', 'integer', 'in:0,1'],
+            'device_privilege' => ['nullable', 'integer', 'in:0,14'],
             'is_active_employee' => ['boolean'],
             'must_change_password' => ['boolean'],
 

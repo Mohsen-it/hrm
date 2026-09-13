@@ -53,7 +53,9 @@ class UserRepository
                         'grade:id,grade_name',
                         'subordination:id,code,name_ar,name_en',
                         'shift:id,shift_name',
-                        'rotationAssignments.rotation:id,name',
+                        'rotationAssignments' => fn ($q) => $q->active()
+                            ->with(['rotation:id,name', 'rotationGroup:id,rotation_id,name'])
+                            ->orderByDesc('start_date'),
                     ]),
                 $filters
             )->orderBy('users.id', 'desc'),

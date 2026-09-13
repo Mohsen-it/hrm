@@ -18,7 +18,7 @@ const colorClasses = computed(() => {
         danger: 'bg-mistral-danger/10 text-mistral-danger',
         warning: 'bg-mistral-warning/10 text-mistral-warning',
         info: 'bg-mistral-info/10 text-mistral-info',
-        vacation: 'bg-cyan-50 text-cyan-600',
+        vacation: 'bg-mistral-status-vacation/10 text-mistral-status-vacation',
     };
     return map[props.color] || map.primary;
 });
@@ -35,7 +35,7 @@ const trendIcon = computed(() => {
 </script>
 
 <template>
-    <div class="bg-white border border-mistral-hairline-soft rounded-xl p-5 hover:shadow-level-1 transition-shadow duration-200" :dir="dir">
+    <div class="bg-mistral-canvas border border-mistral-hairline-soft rounded-lg p-5 hover:shadow-level-1 transition-shadow duration-200" :dir="dir">
         <div class="flex items-start justify-between mb-3">
             <span class="text-[12px] text-mistral-steel font-medium">
                 {{ label }}

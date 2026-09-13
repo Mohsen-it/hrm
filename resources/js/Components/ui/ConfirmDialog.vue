@@ -85,7 +85,7 @@ onUnmounted(() => {
                             aria-modal="true"
                             :aria-label="title"
                             :dir="dir"
-                            class="relative z-10 flex w-full max-w-[28rem] max-h-[calc(100dvh-2rem)] flex-col overflow-hidden rounded-2xl shadow-level-4 max-sm:max-h-[85dvh] max-sm:max-w-full max-sm:rounded-b-none max-sm:rounded-t-3xl"
+                            class="relative z-10 flex w-full max-w-[28rem] max-h-[calc(100dvh-2rem)] flex-col overflow-hidden rounded-lg shadow-level-4 max-sm:max-h-[85dvh] max-sm:max-w-full max-sm:rounded-b-none max-sm:rounded-t-lg"
                         >
                             <div class="p-6 text-center max-sm:p-5">
                                 <div

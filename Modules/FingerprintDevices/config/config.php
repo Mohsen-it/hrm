@@ -48,12 +48,13 @@ return [
     |   - bridge : direct TCP via pyzk bridge.
     |   - both   : ADMS first + bridge verification (highest reliability).
     |
-    | These defaults enforce the user's request: ADMS everywhere.
+    | Default is `both`: identity flows instantly over ADMS while privilege
+    | (which this fleet's firmware only honors over TCP) is enforced by the
+    | bridge. Bridge jobs retry with backoff, so edits made while the
+    | terminals are unreachable still converge once they are reachable.
     |
     */
-    'pull_fingerprints_via' => env('PULL_FINGERPRINTS_VIA', 'adms'),
-
-    'push_user_via' => env('PUSH_USER_VIA', 'adms'),
+    'push_user_via' => env('PUSH_USER_VIA', 'both'),
 
     /*
     |--------------------------------------------------------------------------

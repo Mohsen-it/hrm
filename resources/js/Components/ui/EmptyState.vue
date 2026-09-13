@@ -8,8 +8,8 @@ defineProps({
 </script>
 
 <template>
-    <div class="flex flex-col items-center justify-center text-center py-16 px-6" :dir="dir">
-        <div class="w-16 h-16 rounded-2xl bg-mistral-surface flex items-center justify-center mb-4">
+    <div class="flex flex-col items-center justify-center text-center py-10 px-6" :dir="dir">
+        <div class="w-16 h-16 rounded-md bg-mistral-surface flex items-center justify-center mb-4">
             <i :class="[icon, 'text-[28px] text-mistral-stone']" aria-hidden="true"></i>
         </div>
         <h3 v-if="title" class="text-[15px] text-mistral-ink font-semibold mb-1.5">

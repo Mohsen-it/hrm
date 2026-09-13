@@ -30,7 +30,7 @@ const isActive = (tab) => active.value === tab.value;
     <div :dir="dir">
         <div
             v-if="variant === 'pill'"
-            class="inline-flex items-center gap-1 p-1 bg-mistral-surface rounded-xl flex-wrap"
+            class="inline-flex items-center gap-1 p-1 bg-mistral-surface rounded-full flex-wrap"
             role="tablist"
         >
             <button
@@ -41,9 +41,10 @@ const isActive = (tab) => active.value === tab.value;
                 :aria-selected="isActive(tab)"
                 :disabled="tab.disabled"
                 :class="[
-                    'px-4 py-1.5 text-[13px] font-medium rounded-lg transition-all duration-150',
+                    'px-4 py-1.5 text-[13px] font-medium rounded-full transition-all duration-150',
+                    'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mistral-primary',
                     isActive(tab)
-                        ? 'bg-white text-mistral-ink shadow-sm'
+                        ? 'bg-mistral-ink text-white shadow-sm'
                         : 'bg-transparent text-mistral-steel hover:text-mistral-ink',
                     tab.disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer',
                 ]"
@@ -66,6 +67,7 @@ const isActive = (tab) => active.value === tab.value;
                 :disabled="tab.disabled"
                 :class="[
                     'px-4 py-2.5 text-[13px] font-medium transition-all duration-150 border-b-2 whitespace-nowrap',
+                    'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mistral-primary',
                     isActive(tab)
                         ? 'text-mistral-primary border-mistral-primary'
                         : 'text-mistral-stone border-transparent hover:text-mistral-ink hover:border-mistral-hairline',

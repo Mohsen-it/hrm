@@ -22,6 +22,18 @@ class EmployeeAdmsObserver
     }
 
     /**
+     * PIN renames observed in updating(), consumed in updated().
+     *
+     * Eloquent syncs original attributes before the updated event fires,
+     * so the previous employee_code is only visible during updating().
+     * Keyed by user id and always consumed (or discarded) in updated(),
+     * so a cancelled update can never leak into a later one.
+     *
+     * @var array<int, string>
+     */
+    private array $pendingPinRenames = [];
+
+    /**
      * Handle the User "created" event.
      *
      * Queues DATA UPDATE USER command for all ADMS-enabled ZKTeco devices.
@@ -33,6 +45,21 @@ class EmployeeAdmsObserver
         }
 
         $this->queueUserCommands($user, 'created');
+    }
+
+    /**
+     * Capture the previous employee_code before Eloquent syncs attributes.
+     */
+    public function updating(User $user): void
+    {
+        if (! $user->isDirty('employee_code')) {
+            return;
+        }
+
+        $oldPin = (string) $user->getOriginal('employee_code');
+        if ($oldPin !== '' && $user->id !== null) {
+            $this->pendingPinRenames[(int) $user->id] = $oldPin;
+        }
     }
 
     /**
@@ -53,22 +80,30 @@ class EmployeeAdmsObserver
             return;
         }
 
-        // Only queue if relevant fields changed
-        $relevantFields = ['employee_code', 'name', 'full_name_ar', 'full_name_en', 'privilege', 'status', 'is_active_employee'];
-        $changed = array_intersect($relevantFields, array_keys($user->getDirty()));
+        // Only queue if relevant fields changed. NOTE: getChanges(), not
+        // getDirty() — Eloquent syncs attributes before the updated event
+        // fires, so getDirty() is always empty here and updates would
+        // silently never propagate.
+        $relevantFields = ['employee_code', 'name', 'full_name_ar', 'full_name_en', 'privilege', 'device_privilege', 'status', 'is_active_employee'];
+        $changed = array_intersect($relevantFields, array_keys($user->getChanges()));
 
         if (empty($changed)) {
+            unset($this->pendingPinRenames[(int) $user->id]);
+
             return;
         }
 
         // When employee_code (PIN) changes: copy biometrics to new PIN
-        if (in_array('employee_code', $changed, true)) {
-            $oldPin = (string) $user->getOriginal('employee_code');
+        if (in_array('employee_code', $changed, true) && $user->wasChanged('employee_code')) {
+            $oldPin = $this->pendingPinRenames[(int) $user->id] ?? '';
+            unset($this->pendingPinRenames[(int) $user->id]);
             $newPin = (string) $user->employee_code;
 
             if ($oldPin !== '' && $oldPin !== $newPin) {
                 $this->copyBiometricsToNewPin($user, $oldPin, $newPin);
             }
+        } else {
+            unset($this->pendingPinRenames[(int) $user->id]);
         }
 
         $this->queueUserCommands($user, 'updated');
@@ -181,7 +216,7 @@ class EmployeeAdmsObserver
     {
         $pin = (string) $user->employee_code;
         $name = $this->getDisplayName($user);
-        $privilege = $user->isSuperAdmin() ? 14 : 0;
+        $privilege = $user->devicePrivilege();
 
         $devices = $this->zktecoDevices();
         $via = config('fingerprintdevices.push_user_via', 'adms');
@@ -192,13 +227,24 @@ class EmployeeAdmsObserver
                 $bridgeOk = null;
 
                 if (in_array($via, ['adms', 'both'], true)) {
-                    // ADMS is the canonical path per user request
-                    $this->commandService->queueUserCreate(
-                        $device->id,
-                        $pin,
-                        $name,
-                        $privilege,
-                    );
+                    // Created identities use user_create; later edits use
+                    // user_update so pending rows merge instead of stacking.
+                    // Wire bodies are identical (DATA UPDATE USERINFO upsert).
+                    if ($action === 'updated') {
+                        $this->commandService->queueUserUpdate(
+                            $device->id,
+                            $pin,
+                            $name,
+                            $privilege,
+                        );
+                    } else {
+                        $this->commandService->queueUserCreate(
+                            $device->id,
+                            $pin,
+                            $name,
+                            $privilege,
+                        );
+                    }
                     $admsQueued = true;
                 }
 

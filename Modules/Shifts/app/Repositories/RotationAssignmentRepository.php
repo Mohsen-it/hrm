@@ -108,6 +108,27 @@ class RotationAssignmentRepository
     }
 
     /**
+     * Assignments effective on a given date.
+     *
+     * Today and future dates use the latest open assignment per employee
+     * (operational view: a transfer takes effect immediately). Past dates
+     * use the historically active assignment on that day so reports stay
+     * accurate after rotations change.
+     *
+     * @return Collection<int, RotationAssignment>
+     */
+    public function getEffectiveAssignmentsForDate(string $date): Collection
+    {
+        if ($date >= now()->toDateString()) {
+            return $this->getLatestActiveAssignments();
+        }
+
+        return $this->getAssignmentsForDate($date)
+            ->unique('employee_id')
+            ->values();
+    }
+
+    /**
      * Find an assignment for an employee whose inclusive date range conflicts
      * with the requested one.
      */

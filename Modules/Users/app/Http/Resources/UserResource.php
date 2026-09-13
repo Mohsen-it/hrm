@@ -59,6 +59,7 @@ class UserResource extends JsonResource
             'avatar_url' => $this->avatar_url,
 
             'status' => $this->status,
+            'device_privilege' => $this->device_privilege,
             'is_active_employee' => $this->is_active_employee,
             'is_active' => $this->isActive(),
             'is_locked' => $this->isLocked(),

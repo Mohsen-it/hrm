@@ -205,8 +205,10 @@ class DailyReportServiceTest extends TestCase
         $row = $report['rows']->firstWhere('id', $user->id);
 
         $this->assertTrue($row['has_incomplete_punch']);
+        // The rotation has an 08:00 time schedule and it is noon: the arrival
+        // deadline has passed, so the employee is absent while yesterday's
+        // missing check-out stays flagged.
         $this->assertSame('absent', $row['status']);
-        $this->assertSame('10:00', $row['expected_check_out']);
     }
 
     /**
@@ -231,7 +233,10 @@ class DailyReportServiceTest extends TestCase
         $row = $report['rows']->firstWhere('id', $user->id);
 
         $this->assertTrue($row['has_incomplete_punch']);
-        $this->assertSame('absent', $row['status']);
+        // No time schedule means no known check-in: the arrival deadline is
+        // the end of the day, so at noon the employee is still awaiting
+        // arrival (not absent), while yesterday's missing check-out is kept.
+        $this->assertSame('awaiting', $row['status']);
     }
 
     /**
@@ -254,7 +259,9 @@ class DailyReportServiceTest extends TestCase
         $row = $report['rows']->firstWhere('id', $user->id);
 
         $this->assertTrue($row['has_incomplete_punch']);
-        $this->assertSame('absent', $row['status']);
+        // Same awaiting rule as above: no time schedule, noon report, the
+        // arrival deadline (end of day) has not passed yet.
+        $this->assertSame('awaiting', $row['status']);
     }
 
     /**
@@ -375,14 +382,17 @@ class DailyReportServiceTest extends TestCase
         $row = $report['rows']->firstWhere('id', $user->id);
 
         $this->assertTrue($row['has_incomplete_punch']);
+        // The rotation has an 08:00 time schedule and it is noon: the arrival
+        // deadline has passed, so the employee is absent while yesterday's
+        // missing check-out stays flagged.
         $this->assertSame('absent', $row['status']);
     }
 
     /**
-     * An overnight rotation (multi-day schedule) closes its exit window on the
-     * next morning. When the daily report is prepared before that window ends
-     * (the manager submits it before the end of the shift), an employee who
-     * checked in yesterday but has not checked out yet must NOT be flagged yet.
+     * Rotations without a time schedule have no expected check-out time, but
+     * the rotation still defines an absolute exit window. Yesterday's open
+     * session is still listed: they were expected to work, they came in and
+     * they never left.
      */
     public function test_overnight_rotation_not_flagged_before_next_day_exit_window(): void
     {
@@ -858,6 +868,134 @@ class DailyReportServiceTest extends TestCase
         $row = $report['rows']->firstWhere('id', $user->id);
 
         $this->assertSame('absent', $row['status'], 'Rotations that work on holidays stay accountable on holidays.');
+    }
+
+    /**
+     * An expected employee with no punch whose check-in deadline has not
+     * passed yet is awaiting arrival — never absent. Same rule as smart
+     * absence: a 10:00 shift is not absent at 09:00 even with a 09:00 cutoff.
+     */
+    public function test_employee_inside_arrival_window_is_awaiting_not_absent(): void
+    {
+        $this->travelTo('2026-08-10 09:00:00');
+
+        $user = $this->makeEmployee('EMP60001');
+        $this->assignOpenWorkEveryDay($user);
+        RotationAssignment::where('employee_id', $user->id)->first()->rotation->update([
+            'time_schedule_id' => $this->makeTimeSchedule($user, '10:00', '18:00')->id,
+        ]);
+
+        $report = $this->service->build('2026-08-10', '09:00');
+        $row = $report['rows']->firstWhere('id', $user->id);
+
+        $this->assertSame('awaiting', $row['status']);
+        $this->assertSame(0, $report['stats']['absent']);
+        $this->assertSame(1, $report['stats']['awaiting']);
+    }
+
+    /**
+     * Once the same deadline passes with no punch, the awaiting employee
+     * becomes absent.
+     */
+    public function test_awaiting_employee_becomes_absent_after_deadline(): void
+    {
+        $this->travelTo('2026-08-10 11:00:00');
+
+        $user = $this->makeEmployee('EMP60002');
+        $this->assignOpenWorkEveryDay($user);
+        RotationAssignment::where('employee_id', $user->id)->first()->rotation->update([
+            'time_schedule_id' => $this->makeTimeSchedule($user, '10:00', '18:00')->id,
+        ]);
+
+        $report = $this->service->build('2026-08-10', '09:00');
+        $row = $report['rows']->firstWhere('id', $user->id);
+
+        $this->assertSame('absent', $row['status']);
+        $this->assertSame(0, $report['stats']['awaiting'] ?? 0);
+    }
+
+    /**
+     * Lateness respects the rotation's own deadline: arriving at 09:30 for a
+     * 10:00 shift is on time even though it is past the 09:00 report cutoff.
+     */
+    public function test_late_respects_rotation_deadline_over_cutoff(): void
+    {
+        $this->travelTo('2026-08-10 12:00:00');
+
+        $user = $this->makeEmployee('EMP60003');
+        $this->assignOpenWorkEveryDay($user);
+        RotationAssignment::where('employee_id', $user->id)->first()->rotation->update([
+            'time_schedule_id' => $this->makeTimeSchedule($user, '10:00', '18:00')->id,
+        ]);
+        $this->makeCompleteSession($user, '2026-08-10 09:30:00');
+
+        $report = $this->service->build('2026-08-10', '09:00');
+        $row = $report['rows']->firstWhere('id', $user->id);
+
+        $this->assertSame('present', $row['status']);
+    }
+
+    /**
+     * A session without a check-in (checkout-only row) proves nothing about
+     * today — same rule as smart absence.
+     */
+    public function test_checkout_only_session_is_not_presence(): void
+    {
+        $this->travelTo('2026-08-10 12:00:00');
+
+        $user = $this->makeEmployee('EMP60004');
+        $this->assignOpenWorkEveryDay($user);
+        RotationAssignment::where('employee_id', $user->id)->first()->rotation->update([
+            'time_schedule_id' => $this->makeTimeSchedule($user, '08:00', '17:00')->id,
+        ]);
+        AttendanceSession::create([
+            'user_id' => $user->id,
+            'attendance_date' => '2026-08-10',
+            'check_in_at' => null,
+            'check_out_at' => '2026-08-10 08:05:00',
+            'status' => 'present',
+            'session_type' => 'normal',
+            'source' => 'device',
+        ]);
+
+        $report = $this->service->build('2026-08-10', '09:00');
+        $row = $report['rows']->firstWhere('id', $user->id);
+
+        $this->assertSame('absent', $row['status']);
+    }
+
+    /**
+     * Nobody is expected (or absent) before being hired — same rule as smart
+     * absence.
+     */
+    public function test_employee_hired_after_report_date_is_excluded(): void
+    {
+        $user = $this->makeEmployee('EMP60005');
+        $this->assignOpenWorkEveryDay($user);
+        User::query()->whereKey($user->id)->update(['hire_date' => '2026-09-01']);
+
+        $report = $this->service->build('2026-08-10', '09:00');
+
+        $this->assertNull($report['rows']->firstWhere('id', $user->id));
+    }
+
+    /**
+     * An approved HR attendance-exemption removes the employee from the
+     * report — same rule as smart absence.
+     */
+    public function test_exempt_employee_is_excluded(): void
+    {
+        $user = $this->makeEmployee('EMP60006');
+        $this->assignOpenWorkEveryDay($user);
+        User::query()->whereKey($user->id)->update([
+            'attendance_exemption_type' => 'mission',
+            'attendance_exemption_from' => '2026-08-01',
+            'attendance_exemption_to' => '2026-08-31',
+        ]);
+
+        $report = $this->service->build('2026-08-10', '09:00');
+
+        $this->assertNull($report['rows']->firstWhere('id', $user->id));
     }
 
     // ------------------------------------------------------------------

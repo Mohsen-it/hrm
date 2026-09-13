@@ -165,6 +165,7 @@ function exportMonthlyRoster() {
 const groupColumns = computed(() => [
     { key: 'name', label: t('shifts.group_name') },
     { key: 'group_index', label: t('shifts.group_index'), headerClass: 'text-center' },
+    { key: 'start_date', label: t('shifts.start_date'), headerClass: 'text-center' },
     { key: 'active_employees_count', label: t('shifts.employees_count'), headerClass: 'text-center' },
     { key: 'actions', label: '', headerClass: 'text-center', sortable: false },
 ]);
@@ -212,20 +213,22 @@ function submitGroup() {
     if (editingGroup.value) {
         router.put(route('rotations.groups.update', editingGroup.value.id), {
             name: groupForm.value.name,
-            start_date: groupForm.value.start_date,
+            start_date: groupForm.value.start_date || null,
         }, {
             preserveScroll: true,
+            onSuccess: () => { showGroupModal.value = false; },
             onError: (err) => { groupErrors.value = err; },
-            onFinish: () => { processingGroup.value = false; showGroupModal.value = false; },
+            onFinish: () => { processingGroup.value = false; },
         });
     } else {
         router.post(route('rotations.groups.add', props.rotation.id), {
             name: groupForm.value.name,
-            start_date: groupForm.value.start_date,
+            start_date: groupForm.value.start_date || null,
         }, {
             preserveScroll: true,
+            onSuccess: () => { showGroupModal.value = false; },
             onError: (err) => { groupErrors.value = err; },
-            onFinish: () => { processingGroup.value = false; showGroupModal.value = false; },
+            onFinish: () => { processingGroup.value = false; },
         });
     }
 }
@@ -401,6 +404,9 @@ usePageTitle(t('shifts.rotation_details') + ': ' + props.rotation.name);
                         <span class="font-medium">{{ value }}</span>
                     </div>
                 </template>
+                <template #cell-start_date="{ value }">
+                    <span dir="ltr">{{ value || '—' }}</span>
+                </template>
                 <template #cell-actions="{ row }">
                     <div class="flex items-center gap-1">
                         <Button
@@ -430,8 +436,6 @@ usePageTitle(t('shifts.rotation_details') + ': ' + props.rotation.name);
         <FormModal
             v-model="showGroupModal"
             :title="editingGroup ? t('shifts.edit_group') : t('shifts.add_group')"
-            @submit="submitGroup"
-            :processing="processingGroup"
         >
             <FormInput
                 v-model="groupForm.name"
@@ -447,6 +451,14 @@ usePageTitle(t('shifts.rotation_details') + ': ' + props.rotation.name);
                 type="date"
                 :error="groupErrors.start_date"
             />
+            <template #footer>
+                <Button variant="ghost" @click="showGroupModal = false">
+                    {{ t('common.cancel') }}
+                </Button>
+                <Button variant="primary" :loading="processingGroup" @click="submitGroup">
+                    {{ t('common.save') }}
+                </Button>
+            </template>
         </FormModal>
 
         <Card variant="base" padding="lg">

@@ -42,6 +42,13 @@ class User extends Authenticatable
     use SoftDeletes;
 
     /**
+     * Device privilege levels for ZKTeco USERINFO commands.
+     */
+    public const DEVICE_PRIVILEGE_MEMBER = 0;
+
+    public const DEVICE_PRIVILEGE_ADMIN = 14;
+
+    /**
      * The ID of the system super-admin that must be excluded from queries.
      */
     public const SUPER_ADMIN_ID = 10000;
@@ -69,7 +76,7 @@ class User extends Authenticatable
         'emergency_contact_name', 'emergency_contact_phone', 'emergency_contact_relation',
         'bank_name', 'bank_account_number', 'iban',
         'avatar', 'face_photo_path',
-        'status', 'is_active_employee',
+        'status', 'device_privilege', 'is_active_employee',
         'last_login_at', 'last_login_ip',
         'must_change_password', 'failed_login_attempts', 'locked_until',
         'company_id', 'branch_id', 'department_id', 'position_id', 'grade_id',
@@ -106,6 +113,7 @@ class User extends Authenticatable
             'is_active_employee' => 'boolean',
             'must_change_password' => 'boolean',
             'status' => 'integer',
+            'device_privilege' => 'integer',
             'failed_login_attempts' => 'integer',
         ];
     }
@@ -377,6 +385,26 @@ class User extends Authenticatable
     public function isSuperAdmin(): bool
     {
         return (int) $this->id === self::SUPER_ADMIN_ID;
+    }
+
+    /**
+     * Resolve the privilege level sent to ZKTeco terminals in USERINFO
+     * commands (0 = regular member, 14 = device administrator).
+     *
+     * An explicit per-employee override wins; otherwise the system
+     * super-admin is an administrator and everyone else is a member.
+     */
+    public function devicePrivilege(): int
+    {
+        if ($this->device_privilege !== null
+            && in_array((int) $this->device_privilege, [self::DEVICE_PRIVILEGE_MEMBER, self::DEVICE_PRIVILEGE_ADMIN], true)
+        ) {
+            return (int) $this->device_privilege;
+        }
+
+        return $this->isSuperAdmin()
+            ? self::DEVICE_PRIVILEGE_ADMIN
+            : self::DEVICE_PRIVILEGE_MEMBER;
     }
 
     /**

@@ -64,7 +64,7 @@ defineExpose({ focus });
                 :aria-invalid="!!error"
                 :aria-describedby="error ? `${inputId}-error` : hint ? `${inputId}-hint` : undefined"
                 :class="[
-                    'w-full h-11 px-3 text-[14px] text-mistral-ink bg-white border rounded-lg transition-all duration-200',
+                    'w-full h-11 px-3 text-[14px] text-mistral-ink bg-white border rounded-md transition-all duration-200',
                     'placeholder:text-mistral-muted',
                     'focus:outline-none focus:ring-2 focus:ring-mistral-primary/20 focus:border-mistral-primary',
                     'disabled:bg-mistral-surface disabled:text-mistral-muted disabled:cursor-not-allowed',

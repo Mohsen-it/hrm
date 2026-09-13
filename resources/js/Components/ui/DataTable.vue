@@ -367,9 +367,9 @@ const lastVisibleColIndex = computed(() => {
                                 </td>
                             </tr>
                             <tr v-else-if="error">
-                                <td :colspan="table.visibleColumns.value.length + (selectable ? 1 : 0)" class="text-center py-16">
+                                <td :colspan="table.visibleColumns.value.length + (selectable ? 1 : 0)" class="text-center py-10">
                                     <div class="flex flex-col items-center gap-3">
-                                        <div class="w-14 h-14 rounded-2xl bg-mistral-danger/10 flex items-center justify-center">
+                                        <div class="w-14 h-14 rounded-md bg-mistral-danger/10 flex items-center justify-center">
                                             <i class="fas fa-exclamation-triangle text-[24px] text-mistral-danger"></i>
                                         </div>
                                         <p class="text-[14px] text-mistral-ink font-semibold">حدث خطأ</p>

@@ -214,7 +214,7 @@ function handleSaveFilter() {
                     >
                         <div
                             v-if="showColumnMenu"
-                            class="absolute top-full mt-1 z-30 w-56 bg-white border border-mistral-hairline-soft rounded-xl shadow-level-3 py-1"
+                            class="absolute top-full mt-1 z-30 w-56 bg-mistral-canvas border border-mistral-hairline-soft rounded-lg shadow-level-3 py-1"
                             :class="dir === 'rtl' ? 'right-0' : 'left-0'"
                         >
                             <div class="px-3 py-2 border-b border-mistral-hairline-soft">
@@ -261,7 +261,7 @@ function handleSaveFilter() {
                     >
                         <div
                             v-if="showExportMenu"
-                            class="absolute top-full mt-1 z-30 w-44 bg-white border border-mistral-hairline-soft rounded-xl shadow-level-3 py-1"
+                            class="absolute top-full mt-1 z-30 w-44 bg-mistral-canvas border border-mistral-hairline-soft rounded-lg shadow-level-3 py-1"
                             :class="dir === 'rtl' ? 'right-0' : 'left-0'"
                         >
                             <button
@@ -297,7 +297,7 @@ function handleSaveFilter() {
                     >
                         <div
                             v-if="showSavedFilterMenu"
-                            class="absolute top-full mt-1 z-30 w-56 bg-white border border-mistral-hairline-soft rounded-xl shadow-level-3 py-1"
+                            class="absolute top-full mt-1 z-30 w-56 bg-mistral-canvas border border-mistral-hairline-soft rounded-lg shadow-level-3 py-1"
                             :class="dir === 'rtl' ? 'right-0' : 'left-0'"
                         >
                             <div class="px-3 py-2 border-b border-mistral-hairline-soft">

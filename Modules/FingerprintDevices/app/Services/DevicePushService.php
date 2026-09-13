@@ -185,7 +185,7 @@ class DevicePushService
             $usersAdms = User::query()
                 ->whereIn('id', $userIds)
                 ->whereNotNull('employee_code')
-                ->get(['id', 'employee_code', 'name', 'full_name_ar']);
+                ->get(['id', 'employee_code', 'name', 'full_name_ar', 'device_privilege']);
 
             if ($usersAdms->isEmpty()) {
                 $errors[] = 'No users with valid employee_code to push.';
@@ -200,6 +200,7 @@ class DevicePushService
                         $device->id,
                         (string) $u->employee_code,
                         (string) $name,
+                        $u->devicePrivilege(),
                     );
                     $totals['pushed_users']++;
                     $rows[] = $this->buildResultRow($syncLog->id, $device->id, 'user', $u->id, null, 'success', 'queued via ADMS', null);

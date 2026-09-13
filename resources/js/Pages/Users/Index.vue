@@ -47,7 +47,8 @@ const fingerprintPagination = ref({ total: 0, per_page: 50, current_page: 1, las
 const columns = computed(() => [
     { key: 'employee_code', label: t('users.employee_code'), sortable: true },
     { key: 'name', label: t('users.name'), sortable: true },
-    { key: 'email', label: t('users.email') },
+    { key: 'rotation', label: t('users.rotation') },
+    { key: 'rotation_group', label: t('users.rotation_group') },
     { key: 'company', label: t('users.company') },
     { key: 'branch', label: t('users.branch') },
     { key: 'subordination', label: t('users.subordination') },
@@ -304,6 +305,14 @@ usePageTitle(t('users.title'));
             </template>
             <template #cell-position="{ row }">
                 <span>{{ row.position?.position_name || '—' }}</span>
+            </template>
+            <template #cell-rotation="{ row }">
+                <span v-if="row.rotation?.rotation_name" class="font-medium text-mistral-ink">{{ row.rotation.rotation_name }}</span>
+                <span v-else class="text-mistral-hairline">—</span>
+            </template>
+            <template #cell-rotation_group="{ row }">
+                <Badge v-if="row.rotation?.rotation_group_name" :text="row.rotation.rotation_group_name" variant="info" />
+                <span v-else class="text-mistral-hairline">—</span>
             </template>
 
             <template #cell-status="{ row }">

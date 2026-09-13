@@ -28,6 +28,10 @@
         <env name="DB_URL" value=""/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
+        <!-- ADMS-only in tests: the bridge path needs real TCP to terminals.
+             The dual-channel path is covered by faked-queue tests that set
+             fingerprintdevices.push_user_via explicitly. -->
+        <env name="PUSH_USER_VIA" value="adms"/>
         <env name="SESSION_DRIVER" value="array"/>
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>

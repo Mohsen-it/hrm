@@ -90,7 +90,7 @@ onUnmounted(() => {
                             aria-modal="true"
                             :aria-label="title || 'Dialog'"
                             tabindex="-1"
-                            :class="['relative z-10 flex w-full max-h-[calc(100dvh-2rem)] flex-col overflow-hidden rounded-2xl shadow-level-4 max-sm:max-h-[90dvh] max-sm:max-w-full max-sm:rounded-b-none max-sm:rounded-t-3xl', sizeClass]"
+                            :class="['relative z-10 flex w-full max-h-[calc(100dvh-2rem)] flex-col overflow-hidden rounded-lg shadow-level-4 max-sm:max-h-[90dvh] max-sm:max-w-full max-sm:rounded-b-none max-sm:rounded-t-lg', sizeClass]"
                         >
                             <div v-if="title || $slots.header" class="flex shrink-0 items-center justify-between border-b border-mistral-hairline-soft px-6 py-5 max-sm:px-5 max-sm:pt-[max(1.25rem,env(safe-area-inset-top))]">
                                 <h3 class="text-[16px] font-semibold text-mistral-ink">

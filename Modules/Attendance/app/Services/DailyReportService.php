@@ -45,6 +45,14 @@ class DailyReportService
 
         $users = User::query()->employees()->active()
             ->where(fn ($q) => $q->whereNull('termination_date')->orWhere('termination_date', '>=', $date))
+            // Same employment boundaries as smart absence: nobody is
+            // expected (or absent) before being hired, and approved HR
+            // attendance-exemptions remove the employee from the report.
+            ->where(fn ($q) => $q->whereNull('hire_date')->orWhere('hire_date', '<=', $date))
+            ->where(fn ($q) => $q->whereNull('attendance_exemption_type')
+                ->orWhereNull('attendance_exemption_from')
+                ->orWhere('attendance_exemption_from', '>', $date)
+                ->orWhere('attendance_exemption_to', '<', $date))
             ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
             ->when($departmentIds !== [], fn ($q) => $q->whereIn('department_id', $departmentIds))
             ->when($userId, fn ($q) => $q->whereKey($userId))
@@ -70,14 +78,24 @@ class DailyReportService
 
         // A raw device punch is physical proof of presence even when the
         // session pipeline could not create a session for this date (e.g. an
-        // early-morning punch outside the configured check-in window). The
-        // smart-absence report already treats raw punches as presence, so the
-        // daily report must never mark these employees absent.
-        $rawPunchIds = RawAttendanceLog::query()
+        // early-morning punch outside the configured check-in window). Times
+        // are kept (app timezone) so an overnight duty's morning checkout is
+        // not mistaken for an arrival — the exact smart-absence rule.
+        $rawTimesByUser = RawAttendanceLog::query()
             ->whereIn('user_id', $userIds)
             ->whereBetween('punch_time', $this->localDayUtcBounds($date))
-            ->distinct()
-            ->pluck('user_id')
+            ->get(['user_id', 'punch_time'])
+            ->groupBy('user_id')
+            ->map(fn (Collection $rows) => $rows
+                ->map(fn ($row) => Carbon::parse($row->punch_time, 'UTC')->setTimezone(config('app.timezone')))
+                ->all());
+        $rawPunchIds = $rawTimesByUser->keys()->flip();
+        // Employees still inside their arrival window (expected, no proof of
+        // presence, check-in deadline not passed): the report shows them as
+        // awaiting instead of falsely flagging them absent on current-day
+        // mornings. Same rule as smart absence, narrowed to this roster.
+        $awaitingIds = $this->absenceService->getAwaitingArrivalEmployees($day, $departmentIds)
+            ->intersect($userIds)
             ->flip();
         // Active official holidays, checked per employee (branch/department
         // scoping + work_on_holidays) using the same rule as smart absence.
@@ -121,9 +139,8 @@ class DailyReportService
             ->whereIn('exception_type', ['leave', 'mission', 'training', 'swap'])
             ->overlapping($date)->get()->groupBy('employee_id');
 
-        $rows = $users->map(function (User $user) use ($date, $cutoffTime, $expected, $assignments, $sessions, $previousSessions, $previousExpected, $previousAssignments, $previousDate, $monthSessions, $monthlyAbsenceCounts, $monthlyVacationDays, $unregisteredFingerprintIds, $vacations, $exceptions, $rawPunchIds, $holidays): array {
+        $rows = $users->map(function (User $user) use ($date, $day, $cutoffTime, $expected, $assignments, $sessions, $previousSessions, $previousExpected, $previousAssignments, $previousDate, $monthSessions, $monthlyAbsenceCounts, $monthlyVacationDays, $unregisteredFingerprintIds, $vacations, $exceptions, $rawTimesByUser, $awaitingIds, $holidays): array {
             $userSessions = $sessions->get($user->id, collect());
-            $first = $userSessions->first();
             $assignment = $assignments->get($user->id);
             $rotation = $assignment?->rotation?->name
                 ? $assignment->rotation->name.($assignment->rotationGroup?->name ? ' ('.$assignment->rotationGroup->name.')' : '')
@@ -135,6 +152,14 @@ class DailyReportService
             // after the exit window) must never turn an already-recorded
             // check-out into a missing-checkout violation.
             $mainSession = $userSessions->firstWhere(fn ($session) => $session->check_in_at !== null);
+            // Presence requires a real check-in: a checkout-only session left
+            // over from a previous day proves nothing about today (same rule
+            // as smart absence). A raw punch counts too — unless it is only
+            // yesterday's overnight checkout landing on today's date.
+            $hasCheckedIn = $mainSession !== null;
+            $rawTimes = $rawTimesByUser->get($user->id, []);
+            $hasRawPunch = ! $hasCheckedIn && $rawTimes !== []
+                && ! $this->absenceService->isOvernightCheckoutOnly($user->id, $rawTimes, $day->copy(), $previousAssignments);
             $onMission = $exception?->exception_type === 'mission' || $this->isMission($vacation);
             // The vacations table must reflect only the employees who are
             // genuinely on vacation on the report day. An approved vacation
@@ -146,8 +171,15 @@ class DailyReportService
             // leave.
             $onLeave = $expected->has($user->id)
                 && ($vacation !== null || in_array($exception?->exception_type, ['leave', 'training', 'swap'], true))
-                && ! $userSessions->contains(fn ($session) => $session->check_in_at !== null);
-            $late = $first?->check_in_at && $first->check_in_at->format('H:i') > $cutoffTime;
+                && ! $hasCheckedIn;
+            // Lateness is judged against the stricter of the report's cutoff
+            // and the employee's own arrival deadline (check-in + grace): a
+            // 10:00 shift arriving at 09:30 is on time for its rotation even
+            // though it is past a 09:00 cutoff, while an 08:00 shift keeps the
+            // cutoff strictness. Same deadline smart absence uses.
+            $personalDeadline = $this->absenceService->arrivalDeadline($day, $assignment)?->format('H:i');
+            $lateThreshold = $personalDeadline !== null && $personalDeadline > $cutoffTime ? $personalDeadline : $cutoffTime;
+            $late = $mainSession?->check_in_at && $mainSession->check_in_at->format('H:i') > $lateThreshold;
             $hasNoFingerprint = $unregisteredFingerprintIds->has($user->id);
 
             $hasPreviousDayMissingCheckout = false;
@@ -189,9 +221,9 @@ class DailyReportService
             // An official holiday only excuses employees whose rotation does
             // not work on holidays — matching smart absence. Employees who
             // actually attended keep their real status.
-            $isHoliday = ! $userSessions->count()
+            $isHoliday = ! $hasCheckedIn
                 && $this->isOfficialHoliday($date, $user, $holidays, $assignment);
-            $hasRawPunch = ! $userSessions->count() && $rawPunchIds->has($user->id);
+            $isAwaiting = $awaitingIds->has($user->id);
 
             $status = 'present';
             $label = 'حاضر';
@@ -214,7 +246,10 @@ class DailyReportService
             } elseif ($isHoliday) {
                 $status = 'holiday';
                 $label = 'إجازة رسمية';
-            } elseif (! $userSessions->count() && ! $hasRawPunch) {
+            } elseif ($isAwaiting) {
+                $status = 'awaiting';
+                $label = 'بانتظار الوصول';
+            } elseif (! $hasCheckedIn && ! $hasRawPunch) {
                 $status = 'absent';
                 $label = 'غياب';
             } elseif ($late) {
@@ -225,6 +260,9 @@ class DailyReportService
             $notes = [];
             if ($status === 'late') {
                 $notes[] = 'عدد مرات التأخر خلال الشهر: '.$this->arabicNumber($lateCount);
+            }
+            if ($status === 'awaiting') {
+                $notes[] = 'بانتظار الوصول — الدوام المتوقع: '.($rowExpectedCheckIn ?? '—');
             }
             if ($status === 'absent') {
                 $absenceCount = (int) ($monthlyAbsenceCounts->get($user->id, 0)) + 1;
@@ -246,8 +284,9 @@ class DailyReportService
 
             // Always today's punch: yesterday's check-in belongs to the
             // missing-checkout table (expected entry/exit columns), never to
-            // this column.
-            $checkIn = $first?->check_in_at?->format('H:i') ?? '';
+            // this column. The main session (first one with a check-in) is
+            // used so a stray checkout-only row cannot mask a real arrival.
+            $checkIn = $mainSession?->check_in_at?->format('H:i') ?? '';
 
             return [
                 'id' => $user->id, 'name' => $user->full_name, 'employee_code' => $user->employee_code,
@@ -258,7 +297,7 @@ class DailyReportService
                 'expected_check_in' => $rowExpectedCheckIn, 'expected_check_out' => $rowExpectedCheckOut,
                 'expected_check_out_next_day' => $rowExpectedCheckOutNextDay,
                 'has_no_fingerprint' => $hasNoFingerprint, 'has_incomplete_punch' => $hasIncompletePunch,
-                'late_minutes' => $late && $first?->check_in_at ? $first->check_in_at->diffInMinutes(Carbon::parse($date.' '.$cutoffTime)) : 0,
+                'late_minutes' => $late && $mainSession?->check_in_at ? $mainSession->check_in_at->diffInMinutes(Carbon::parse($date.' '.$lateThreshold)) : 0,
                 'notes' => implode('، ', $notes),
             ];
         })->when($statusFilter, function (Collection $collection) use ($statusFilter): Collection {
@@ -275,6 +314,7 @@ class DailyReportService
                 // day as noise: they belong to the "عدم تسجيل البصمة على
                 // الجهاز" table instead and are hidden from the غياب filter.
                 'absent' => $collection->where('status', 'absent')->where('has_no_fingerprint', false),
+                'awaiting' => $collection->where('status', 'awaiting'),
                 default => $collection->where('status', $statusFilter),
             };
         })->values();
@@ -283,6 +323,7 @@ class DailyReportService
         // Keep the غياب counter in sync with the غياب table: unregistered
         // employees are listed under "عدم تسجيل البصمة على الجهاز", not here.
         $stats['absent'] = $rows->where('status', 'absent')->where('has_no_fingerprint', false)->count();
+        $stats['awaiting'] = $rows->where('status', 'awaiting')->count();
         $stats['no_fingerprint'] = $rows->where('has_no_fingerprint', true)->count();
         $stats['incomplete'] = $rows->where('has_incomplete_punch', true)->count();
         $stats['total'] = $rows->count();

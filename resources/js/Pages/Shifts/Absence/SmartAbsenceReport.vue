@@ -12,7 +12,7 @@ import { usePageTitle } from '@/composables/usePageTitle';
 import { computed, ref, watch } from 'vue'
 import { router } from '@inertiajs/vue3'
 import {
-    PageHeader, Card, Button, DataTable, FormInput, FormSelect, FormMultiSelect,
+    PageHeader, Card, Button, DataTable, FormInput, FormSelect, FormMultiSelect, FormSwitch,
     StatCard, Badge, EmptyState, SearchInput,
 } from '@/Components/ui'
 import { useTranslations } from '@/composables/useTranslations'
@@ -34,6 +34,9 @@ const selectedDate = ref(props.filters?.date || new Date().toISOString().split('
 const selectedDepartmentId = ref(props.filters?.department_id || null)
 const selectedRotationIds = ref(Array.isArray(props.filters?.rotation_ids) ? props.filters.rotation_ids : (props.filters?.rotation_id ? [props.filters.rotation_id] : []))
 const selectedRotationGroupIds = ref(Array.isArray(props.filters?.rotation_group_ids) ? props.filters.rotation_group_ids : (props.filters?.rotation_group_id ? [props.filters.rotation_group_id] : []))
+// Show employees still inside their arrival window in the daily table
+// (current-day mornings would otherwise render an empty absent list).
+const includeAwaiting = ref(Boolean(props.filters?.include_awaiting))
 
 const today = new Date()
 const selectedMonth = ref(Number(props.filters?.month) || today.getMonth() + 1)
@@ -97,7 +100,18 @@ const filterParams = computed(() => ({
     department_id: selectedDepartmentId.value || null,
     rotation_ids: selectedRotationIds.value,
     rotation_group_ids: selectedRotationGroupIds.value,
+    include_awaiting: includeAwaiting.value || null,
 }))
+
+// Employees still inside their arrival window (no punch yet, deadline not
+// passed) — shown as a hint when the absent list is empty and the toggle
+// that would list them is off.
+const awaitingCount = computed(() => Number(props.dailyData?.status_counts?.awaiting_arrival) || 0)
+const showAwaitingHint = computed(() =>
+    (props.dailyData?.absent?.data || []).length === 0
+    && !includeAwaiting.value
+    && awaitingCount.value > 0
+)
 
 const monthlyFilterParams = computed(() => ({
     from_date: fromDate.value,
@@ -183,6 +197,10 @@ watch(selectedDepartmentId, () => {
     reloadActiveTab()
 })
 
+watch(includeAwaiting, () => {
+    reloadActiveTab()
+})
+
 watch([selectedMonth, selectedYear], () => {
     fromDate.value = firstOfMonth(selectedMonth.value, selectedYear.value)
     toDate.value = lastOfMonth(selectedMonth.value, selectedYear.value)
@@ -200,6 +218,7 @@ function loadDaily() {
         department_id: selectedDepartmentId.value || null,
         rotation_ids: selectedRotationIds.value,
         rotation_group_ids: selectedRotationGroupIds.value,
+        include_awaiting: includeAwaiting.value ? 1 : null,
     }, { preserveState: true, preserveScroll: true, replace: true, only: ['dailyData', 'monthlyData', 'monthlyReportData', 'filters'] })
 }
 
@@ -298,6 +317,7 @@ function buildExportParams() {
     if (selectedDepartmentId.value) params.set('department_id', String(selectedDepartmentId.value))
     selectedRotationIds.value.forEach((id) => params.append('rotation_ids[]', String(id)))
     selectedRotationGroupIds.value.forEach((id) => params.append('rotation_group_ids[]', String(id)))
+    if (includeAwaiting.value) params.set('include_awaiting', '1')
     return params
 }
 
@@ -573,6 +593,18 @@ usePageTitle(t('shifts.smart_absence_report'));
                         />
                     </div>
 
+                    <!-- Show employees still inside their arrival window -->
+                    <div class="mt-4 pt-4 border-t border-mistral-hairline-soft">
+                        <FormSwitch
+                            v-model="includeAwaiting"
+                            name="include_awaiting"
+                            :label="t('shifts.show_awaiting')"
+                        />
+                        <p class="text-[11px] text-mistral-steel mt-1">
+                            {{ t('shifts.show_awaiting_hint') }}
+                        </p>
+                    </div>
+
                     <!-- Active filter pills -->
                     <div v-if="filterPills.length" class="mt-4 flex items-center gap-2 flex-wrap pt-4 border-t border-mistral-hairline-soft">
                         <span class="text-[12px] text-mistral-steel font-medium">
@@ -694,6 +726,13 @@ usePageTitle(t('shifts.smart_absence_report'));
 
                     <template #cell-status="{ row }">
                         <Badge
+                            v-if="row.status === 'awaiting_arrival'"
+                            :text="t('shifts.awaiting_arrival')"
+                            variant="pending"
+                            dot
+                        />
+                        <Badge
+                            v-else
                             :text="t('shifts.absent_short')"
                             variant="absent"
                             dot
@@ -704,8 +743,14 @@ usePageTitle(t('shifts.smart_absence_report'));
                         <EmptyState
                             icon="fas fa-user-check"
                             :title="t('shifts.no_absent_employees')"
-                            :description="t('shifts.no_absent_employees_description')"
+                            :description="showAwaitingHint ? t('shifts.no_absent_awaiting_hint', { count: awaitingCount }) : t('shifts.no_absent_employees_description')"
                         />
+                        <div v-if="showAwaitingHint" class="mt-3 flex justify-center">
+                            <Button variant="secondary" size="sm" @click="includeAwaiting = true">
+                                <i class="fas fa-hourglass-half text-[11px] ms-1"></i>
+                                {{ t('shifts.show_awaiting') }}
+                            </Button>
+                        </div>
                     </template>
                 </DataTable>
             </Card>

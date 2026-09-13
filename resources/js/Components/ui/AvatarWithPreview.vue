@@ -121,7 +121,7 @@ onUnmounted(() => {
                 role="tooltip"
             >
                 <div
-                    class="avatar-preview-pop relative w-[208px] overflow-hidden rounded-2xl bg-white/95 shadow-[0_20px_50px_rgba(0,0,0,0.25)] ring-1 ring-mistral-ink/10 backdrop-blur-sm"
+                    class="avatar-preview-pop relative w-[208px] overflow-hidden rounded-lg bg-mistral-canvas/95 shadow-[0_20px_50px_rgba(0,0,0,0.25)] ring-1 ring-mistral-ink/10 backdrop-blur-sm"
                     :style="{ transformOrigin: anchor.side === 'right' ? 'left center' : 'right center' }"
                 >
                     <div class="bg-gradient-to-b from-mistral-primary/15 via-transparent to-transparent p-2.5 pb-2">
@@ -129,7 +129,7 @@ onUnmounted(() => {
                             v-if="previewMounted && src && !previewFailed"
                             :src="src"
                             :alt="name"
-                            class="h-64 w-[188px] rounded-xl object-cover ring-1 ring-black/10"
+                            class="h-64 w-[188px] rounded-md object-cover ring-1 ring-mistral-ink/10"
                             loading="lazy"
                             decoding="async"
                             draggable="false"
@@ -145,7 +145,7 @@ onUnmounted(() => {
                         </div>
                     </div>
                     <span
-                        class="absolute top-1/2 h-3 w-3 -translate-y-1/2 rotate-45 bg-white"
+                        class="absolute top-1/2 h-3 w-3 -translate-y-1/2 rotate-45 bg-mistral-canvas"
                         :class="anchor.side === 'right' ? '-left-[7px]' : '-right-[7px]'"
                         aria-hidden="true"
                     ></span>

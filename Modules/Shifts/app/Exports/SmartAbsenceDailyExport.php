@@ -22,6 +22,7 @@ class SmartAbsenceDailyExport
         private int $totalAbsent,
         private iterable $absentDetails,
         private string $statusLabel = 'غياب',
+        private string $awaitingLabel = 'منتظر الوصول',
     ) {
         $this->exporter = app(ExcelExportService::class);
     }
@@ -96,7 +97,9 @@ class SmartAbsenceDailyExport
         $preparedData = [];
         foreach ($this->absentDetails as $employee) {
             $employee->index = $index;
-            $employee->status = $this->statusLabel;
+            $employee->status = (($employee->status ?? 'absent') === 'awaiting_arrival')
+                ? $this->awaitingLabel
+                : $this->statusLabel;
             if (! empty($employee->expected_in)) {
                 $employee->expected_in = substr((string) $employee->expected_in, 0, 5);
             } else {

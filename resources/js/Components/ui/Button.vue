@@ -83,24 +83,24 @@ const variantClasses = computed(() => {
         ].join(' '),
         danger: [
             'bg-mistral-danger text-white shadow-sm',
-            'hover:bg-red-700 hover:shadow-md',
-            'active:bg-red-800 active:shadow-sm',
+            'hover:brightness-90 hover:shadow-md',
+            'active:brightness-75 active:shadow-sm',
             'focus-visible:outline-mistral-danger',
-            'dark:bg-mistral-danger dark:hover:bg-red-700',
+            'dark:bg-mistral-danger dark:hover:brightness-90',
         ].join(' '),
         success: [
             'bg-mistral-success text-white shadow-sm',
-            'hover:bg-green-700 hover:shadow-md',
-            'active:bg-green-800 active:shadow-sm',
+            'hover:brightness-90 hover:shadow-md',
+            'active:brightness-75 active:shadow-sm',
             'focus-visible:outline-mistral-success',
-            'dark:bg-mistral-success dark:hover:bg-green-700',
+            'dark:bg-mistral-success dark:hover:brightness-90',
         ].join(' '),
         warning: [
             'bg-mistral-warning text-white shadow-sm',
-            'hover:bg-amber-700 hover:shadow-md',
-            'active:bg-amber-800 active:shadow-sm',
+            'hover:brightness-90 hover:shadow-md',
+            'active:brightness-75 active:shadow-sm',
             'focus-visible:outline-mistral-warning',
-            'dark:bg-mistral-warning dark:hover:bg-amber-700',
+            'dark:bg-mistral-warning dark:hover:brightness-90',
         ].join(' '),
         ghost: [
             'bg-transparent text-mistral-steel',
@@ -127,7 +127,7 @@ const pressedClass = computed(() => {
 
 const radiusClass = computed(() => {
     if (props.variant === 'link') return '';
-    return 'rounded-lg';
+    return 'rounded-md';
 });
 
 const blockClass = computed(() => (props.block ? 'w-full' : ''));

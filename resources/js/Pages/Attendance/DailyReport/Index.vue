@@ -33,7 +33,8 @@ const userId = ref(props.filters.user_id || '');
 const status = ref(props.filters.status || '');
 const statusOptions = [
     { value: '', label: 'كل الحالات' }, { value: 'absent', label: 'الغياب' },
-    { value: 'late', label: 'التأخير' }, { value: 'leave', label: 'الإجازات' },
+    { value: 'awaiting', label: 'بانتظار الوصول' },
+    { value: 'late', label: 'التأخر' }, { value: 'leave', label: 'الإجازات' },
     { value: 'mission', label: 'المهمات' }, { value: 'no_fingerprint', label: 'غير المسجلين بالبصمة' },
     { value: 'incomplete', label: 'عدم الالتزام بالبصمة' }, { value: 'holiday', label: 'إجازة رسمية' },
 ];
@@ -48,7 +49,7 @@ const columns = [
 function filterParams() { return { date: date.value, cutoff_time: cutoffTime.value, branch_id: branchId.value || undefined, department_ids: departmentIds.value.length ? departmentIds.value : undefined, user_id: userId.value || undefined, status: status.value || undefined }; }
 function applyFilters() { router.get(route('attendance.daily-summaries.daily-report'), filterParams(), { preserveState: true, replace: true }); }
 function exportReport() { window.location.href = route('attendance.daily-summaries.daily-report.export', filterParams()); }
-function badgeVariant(status) { return ({ present: 'active', late: 'warning', absent: 'absent', leave: 'info', mission: 'primary', incomplete: 'warning', no_fingerprint: 'neutral', rest: 'neutral', holiday: 'neutral' }[status] || 'neutral'); }
+function badgeVariant(status) { return ({ present: 'active', late: 'warning', absent: 'absent', awaiting: 'pending', leave: 'info', mission: 'primary', incomplete: 'warning', no_fingerprint: 'neutral', rest: 'neutral', holiday: 'neutral' }[status] || 'neutral'); }
 
 
 usePageTitle('التقرير اليومي');
@@ -72,11 +73,12 @@ usePageTitle('التقرير اليومي');
             </div>
         </Card>
 
-        <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-5">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
             <StatCard label="الإجمالي" :value="report.stats.total || 0" color="info" icon="fas fa-users" />
             <StatCard label="حاضرون" :value="report.stats.present || 0" color="success" icon="fas fa-user-check" />
             <StatCard label="متأخرون" :value="report.stats.late || 0" color="warning" icon="fas fa-clock" />
             <StatCard label="غياب" :value="report.stats.absent || 0" color="danger" icon="fas fa-user-xmark" />
+            <StatCard label="بانتظار الوصول" :value="report.stats.awaiting || 0" color="warning" icon="fas fa-hourglass-half" />
             <StatCard label="إجازات" :value="report.stats.leave || 0" color="info" icon="fas fa-umbrella-beach" />
             <StatCard label="مهمات سفر" :value="report.stats.mission || 0" color="warning" icon="fas fa-briefcase" />
             <StatCard label="بصمة ناقصة" :value="report.stats.incomplete || 0" color="warning" icon="fas fa-fingerprint" />

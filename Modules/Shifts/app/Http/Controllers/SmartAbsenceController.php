@@ -41,8 +41,9 @@ class SmartAbsenceController extends Controller
         $departmentId = $request->input('department_id') ? (int) $request->input('department_id') : null;
         $rotationIds = $this->parseIdList($request->input('rotation_ids', $request->input('rotation_id')));
         $rotationGroupIds = $this->parseIdList($request->input('rotation_group_ids', $request->input('rotation_group_id')));
+        $includeAwaiting = $request->boolean('include_awaiting');
 
-        $report = $this->buildDailyReport($date, $dateStr, $departmentId, $rotationIds, $rotationGroupIds);
+        $report = $this->buildDailyReport($date, $dateStr, $departmentId, $rotationIds, $rotationGroupIds, $includeAwaiting);
 
         $unassigned = $this->buildUnassignedDetails($date, $dateStr);
 
@@ -95,6 +96,7 @@ class SmartAbsenceController extends Controller
                 'rotation_ids' => $rotationIds,
                 'rotation_group_ids' => $rotationGroupIds,
                 'date' => $dateStr,
+                'include_awaiting' => $includeAwaiting,
             ],
         ]);
     }
@@ -346,7 +348,7 @@ class SmartAbsenceController extends Controller
         $rotationIds = $this->parseIdList($request->input('rotation_ids', $request->input('rotation_id')));
         $rotationGroupIds = $this->parseIdList($request->input('rotation_group_ids', $request->input('rotation_group_id')));
 
-        $report = $this->buildDailyReport($date, $dateStr, $departmentId, $rotationIds, $rotationGroupIds);
+        $report = $this->buildDailyReport($date, $dateStr, $departmentId, $rotationIds, $rotationGroupIds, $request->boolean('include_awaiting'));
 
         $export = new SmartAbsenceDailyExport(
             date: $date,
@@ -354,6 +356,7 @@ class SmartAbsenceController extends Controller
             totalAbsent: $report['absent']->count(),
             absentDetails: $report['absentDetails'],
             statusLabel: __('shifts.absent_short', [], null) ?: 'غياب',
+            awaitingLabel: __('shifts.awaiting_arrival', [], null) ?: 'منتظر الوصول',
         );
 
         $fileName = "smart-absence-{$dateStr}.xlsx";
@@ -401,14 +404,27 @@ class SmartAbsenceController extends Controller
         ?int $departmentId,
         array $rotationIds,
         array $rotationGroupIds,
+        bool $includeAwaiting = false,
     ): array {
         $expected = $this->absenceService->getExpectedEmployees($date, $departmentId, $rotationIds, $rotationGroupIds);
         $absent = $this->absenceService->getAbsentEmployees($date, $departmentId, $rotationIds, $rotationGroupIds);
 
+        // Optionally append the employees still inside their arrival window
+        // (current-day mornings), flagged with an awaiting status so the
+        // table explains itself instead of rendering empty.
+        $awaiting = collect();
+        if ($includeAwaiting) {
+            $awaiting = $this->absenceService->getAwaitingArrivalEmployees($date, $departmentId, $rotationIds, $rotationGroupIds)
+                ->diff($absent)
+                ->values();
+        }
+
+        $listedIds = $absent->merge($awaiting)->unique()->values();
+
         $absentDetails = collect();
-        if ($absent->isNotEmpty()) {
+        if ($listedIds->isNotEmpty()) {
             $absentDetails = DB::table('users')
-                ->whereIn('users.id', $absent->toArray())
+                ->whereIn('users.id', $listedIds->toArray())
                 ->leftJoin('departments', 'users.department_id', '=', 'departments.id')
                 ->leftJoin('branches', 'users.branch_id', '=', 'branches.id')
                 ->leftJoin('positions', 'users.position_id', '=', 'positions.id')
@@ -429,9 +445,9 @@ class SmartAbsenceController extends Controller
                     'grades.grade_name',
                 ]);
 
-            $absentAssignments = $this->rotationAssignmentRepository->getLatestActiveAssignments();
+            $absentAssignments = $this->rotationAssignmentRepository->getEffectiveAssignmentsForDate($dateStr);
 
-            $absentDetails = $absentDetails->map(function ($row) use ($absentAssignments) {
+            $absentDetails = $absentDetails->map(function ($row) use ($absentAssignments, $awaiting) {
                 $assignment = $absentAssignments->firstWhere('employee_id', $row->id);
                 // Expected times come from RotationEngine::resolveTimes() — the
                 // same single source of truth the punch classifier and session
@@ -441,7 +457,7 @@ class SmartAbsenceController extends Controller
                 $row->rotation_group_name = $assignment?->rotationGroup?->name;
                 $row->expected_in = $times['check_in'] ?? null;
                 $row->expected_out = $times['check_out'] ?? null;
-                $row->status = 'absent';
+                $row->status = $awaiting->contains($row->id) ? 'awaiting_arrival' : 'absent';
 
                 return $row;
             })->values();
@@ -606,7 +622,7 @@ class SmartAbsenceController extends Controller
                 'positions.position_name',
             ]);
 
-        $absentAssignments = $this->rotationAssignmentRepository->getLatestActiveAssignments();
+        $absentAssignments = $this->rotationAssignmentRepository->getEffectiveAssignmentsForDate($dateStr);
 
         $absentDetails = $absentDetails->map(function ($row) use ($absentAssignments) {
             $assignment = $absentAssignments->firstWhere('employee_id', $row->id);

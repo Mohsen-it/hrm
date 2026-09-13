@@ -15,9 +15,16 @@ class SyncUserToDeviceViaBridgeJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public int $tries = 1;
+    /**
+     * Retry across a ~100-minute window: terminals are routinely
+     * unreachable for stretches (VPN/firewall), and user edits must
+     * converge once the TCP path is back instead of dying on the
+     * first attempt.
+     */
+    public int $tries = 6;
 
-    public int $backoff = 5;
+    /** @var array<int, int> Backoff seconds between attempts. */
+    public array $backoff = [30, 120, 600, 1800, 3600];
 
     public int $timeout = 35;
 

@@ -69,6 +69,7 @@ const form = useForm({
     iban: props.user.iban || '',
     avatar: null,
     status: Number(props.user.status ?? 1),
+    device_privilege: props.user.device_privilege ?? '',
     is_active_employee: !!props.user.is_active_employee,
     must_change_password: !!props.user.must_change_password,
     company_id: props.user.company_id || '',
@@ -92,6 +93,12 @@ const form = useForm({
 const statusOptions = [
     { value: 1, label: t('common.active') },
     { value: 0, label: t('common.inactive') },
+];
+
+const devicePrivilegeOptions = [
+    { value: '', label: t('users.device_privilege_auto') },
+    { value: 0, label: t('users.device_privilege_member') },
+    { value: 14, label: t('users.device_privilege_admin') },
 ];
 
 const genderOptions = [
@@ -213,6 +220,11 @@ function submit() {
         if (!payload.password) {
             delete payload.password;
             delete payload.password_confirmation;
+        }
+        if (payload.device_privilege === '' || payload.device_privilege === null) {
+            payload.device_privilege = null;
+        } else {
+            payload.device_privilege = Number(payload.device_privilege);
         }
         if (payload.roles && payload.roles.length === 0) delete payload.roles;
         if (payload.permissions && payload.permissions.length === 0) delete payload.permissions;
@@ -452,6 +464,13 @@ usePageTitle(t('users.edit_user'));
                         :options="statusOptions"
                         required
                         :error="form.errors.status"
+                    />
+                    <FormSelect
+                        v-model="form.device_privilege"
+                        :label="t('users.device_privilege')"
+                        name="device_privilege"
+                        :options="devicePrivilegeOptions"
+                        :error="form.errors.device_privilege"
                     />
                 </div>
             </FormSection>

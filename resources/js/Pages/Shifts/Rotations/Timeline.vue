@@ -30,14 +30,14 @@ const searchQuery = ref(props.filters.search || '');
 const selectedGroup = ref(props.filters.group_id || '');
 
 const groupColors = [
-    { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-700', dot: 'bg-emerald-500' },
-    { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-700', dot: 'bg-blue-500' },
-    { bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-700', dot: 'bg-amber-500' },
-    { bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-700', dot: 'bg-red-500' },
-    { bg: 'bg-violet-50', border: 'border-violet-200', text: 'text-violet-700', dot: 'bg-violet-500' },
-    { bg: 'bg-cyan-50', border: 'border-cyan-200', text: 'text-cyan-700', dot: 'bg-cyan-500' },
-    { bg: 'bg-pink-50', border: 'border-pink-200', text: 'text-pink-700', dot: 'bg-pink-500' },
-    { bg: 'bg-teal-50', border: 'border-teal-200', text: 'text-teal-700', dot: 'bg-teal-500' },
+    { bg: 'bg-mistral-success-bg', border: 'border-mistral-success/20', text: 'text-mistral-success', dot: 'bg-mistral-success' },
+    { bg: 'bg-mistral-info-bg', border: 'border-mistral-info/20', text: 'text-mistral-info', dot: 'bg-mistral-info' },
+    { bg: 'bg-mistral-warning-bg', border: 'border-mistral-warning/20', text: 'text-mistral-warning', dot: 'bg-mistral-warning' },
+    { bg: 'bg-mistral-danger-bg', border: 'border-mistral-danger/20', text: 'text-mistral-danger', dot: 'bg-mistral-danger' },
+    { bg: 'bg-mistral-status-overtime/10', border: 'border-mistral-status-overtime/20', text: 'text-mistral-status-overtime', dot: 'bg-mistral-status-overtime' },
+    { bg: 'bg-mistral-status-vacation/10', border: 'border-mistral-status-vacation/20', text: 'text-mistral-status-vacation', dot: 'bg-mistral-status-vacation' },
+    { bg: 'bg-mistral-primary/10', border: 'border-mistral-primary/20', text: 'text-mistral-primary', dot: 'bg-mistral-primary' },
+    { bg: 'bg-mistral-cream-deeper', border: 'border-mistral-beige-deep', text: 'text-mistral-primary-deep', dot: 'bg-mistral-sunshine-700' },
 ];
 
 const groupColorMap = computed(() => {

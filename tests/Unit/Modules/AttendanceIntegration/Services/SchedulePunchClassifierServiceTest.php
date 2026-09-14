@@ -22,7 +22,7 @@ class SchedulePunchClassifierServiceTest extends TestCase
         $this->assertSame(PunchType::CheckOut, $type);
     }
 
-    public function test_it_returns_unknown_when_windows_are_configured_but_nothing_matches(): void
+    public function test_it_returns_extra_when_windows_are_configured_but_nothing_matches(): void
     {
         $resolver = $this->createMock(ScheduleResolverService::class);
         $resolver->method('resolve')->willReturn($this->workSchedule());
@@ -31,9 +31,9 @@ class SchedulePunchClassifierServiceTest extends TestCase
 
         $type = $service->classify(10, new DateTimeImmutable('2026-08-03 13:00:00'), PunchType::CheckIn);
 
-        // A device-typed check-in outside every configured window must never
-        // become a phantom attendance session.
-        $this->assertSame(PunchType::Unknown, $type);
+        // A punch outside every configured window is an Extra punch: stored
+        // for audit, never a phantom attendance session and never unknown.
+        $this->assertSame(PunchType::Extra, $type);
     }
 
     public function test_it_keeps_the_device_type_when_no_windows_are_configured(): void
@@ -48,7 +48,7 @@ class SchedulePunchClassifierServiceTest extends TestCase
         $this->assertSame(PunchType::CheckIn, $type);
     }
 
-    public function test_it_returns_unknown_when_windows_overlap(): void
+    public function test_it_resolves_overlapping_windows_by_open_session(): void
     {
         $resolver = $this->createMock(ScheduleResolverService::class);
         $resolver->method('resolve')->willReturn([
@@ -59,9 +59,17 @@ class SchedulePunchClassifierServiceTest extends TestCase
 
         $service = new SchedulePunchClassifierService($resolver);
 
-        $type = $service->classify(10, new DateTimeImmutable('2026-08-03 11:30:00'), PunchType::CheckIn);
+        // No open session → check-in; the second punch is never automatic.
+        $this->assertSame(
+            PunchType::CheckIn,
+            $service->classify(10, new DateTimeImmutable('2026-08-03 11:30:00'), PunchType::CheckIn)
+        );
 
-        $this->assertSame(PunchType::Unknown, $type);
+        // Open session → check-out (punch is inside the exit window too).
+        $this->assertSame(
+            PunchType::CheckOut,
+            $service->classify(10, new DateTimeImmutable('2026-08-03 11:30:00'), PunchType::CheckIn, true)
+        );
     }
 
     public function test_it_classifies_the_rest_day_morning_punch_of_an_overnight_duty_as_check_out(): void

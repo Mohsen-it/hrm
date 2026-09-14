@@ -30,6 +30,7 @@ export { default as IconButton } from './IconButton.vue';
 export { default as LoadingSpinner } from './LoadingSpinner.vue';
 export { default as PageHeader } from './PageHeader.vue';
 export { default as Pagination } from './Pagination.vue';
+export { default as PunchTypeBadge } from './PunchTypeBadge.vue';
 export { usePagination, useTableNavigation } from './Pagination/usePagination.js';
 export { default as SearchInput } from './SearchInput.vue';
 export { default as StatCard } from './StatCard.vue';

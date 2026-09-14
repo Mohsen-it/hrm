@@ -21,6 +21,7 @@ class NormalizedPunchTest extends TestCase
         $this->assertSame('check_out', PunchType::CheckOut->value);
         $this->assertSame('break_in', PunchType::BreakIn->value);
         $this->assertSame('break_out', PunchType::BreakOut->value);
+        $this->assertSame('extra', PunchType::Extra->value);
         $this->assertSame('unknown', PunchType::Unknown->value);
     }
 

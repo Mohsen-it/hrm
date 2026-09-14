@@ -1,5 +1,8 @@
 <script setup>
 import { computed } from 'vue';
+import { useTranslations } from '@/composables/useTranslations';
+
+const { t } = useTranslations();
 
 const props = defineProps({
     size: { type: String, default: 'md' },
@@ -35,7 +38,7 @@ const colorClass = computed(() => {
     <span
         :class="['inline-block rounded-full animate-spin', sizeClass, colorClass]"
         role="status"
-        :aria-label="dir === 'rtl' ? 'جار التحميل' : 'Loading'"
+        :aria-label="t('components.loading')"
         :dir="dir"
     ></span>
 </template>

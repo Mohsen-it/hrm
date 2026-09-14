@@ -226,12 +226,12 @@ function timeAgo(dateStr) {
     const date = new Date(dateStr);
     const diffMs = now - date;
     const diffMin = Math.floor(diffMs / 60000);
-    if (diffMin < 1) return 'الآن';
-    if (diffMin < 60) return diffMin + ' دقيقة';
+    if (diffMin < 1) return t('dashboard.time_ago_just');
+    if (diffMin < 60) return t('dashboard.time_ago_minutes', { minutes: diffMin });
     const diffH = Math.floor(diffMin / 60);
-    if (diffH < 24) return diffH + ' ساعة';
+    if (diffH < 24) return t('dashboard.time_ago_hours', { hours: diffH });
     const diffD = Math.floor(diffH / 24);
-    return diffD + ' يوم';
+    return t('dashboard.time_ago_days', { days: diffD });
 }
 
 async function fetchJson(url) {

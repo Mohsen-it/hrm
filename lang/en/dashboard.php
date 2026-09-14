@@ -122,4 +122,16 @@ return [
     'check_out' => 'Check-out',
     'view_details' => 'View details',
     'no_attendance_yet' => 'No attendance records yet today',
+
+    // Time ago
+    'time_ago_just' => 'Just now',
+    'time_ago_minutes' => ':minutes min ago',
+    'time_ago_hours' => ':hours hr ago',
+    'time_ago_days' => ':days days ago',
+
+    // Live punch notification
+    'live_punch_employee' => 'Employee',
+    'live_punch_check_in' => 'Check-in recorded',
+    'live_punch_check_out' => 'Check-out recorded',
+    'live_punch_dismiss' => 'Dismiss fingerprint notification',
 ];

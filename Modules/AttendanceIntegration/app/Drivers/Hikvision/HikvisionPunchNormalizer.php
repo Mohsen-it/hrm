@@ -63,6 +63,9 @@ class HikvisionPunchNormalizer implements PunchNormalizerInterface
         if ($explicit === 'break_out') {
             return PunchType::BreakOut;
         }
+        if ($explicit === 'extra') {
+            return PunchType::Extra;
+        }
 
         $major = (int) ($raw['major'] ?? 0);
         $minor = (int) ($raw['minor'] ?? 0);

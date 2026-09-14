@@ -23,6 +23,7 @@ class PublishUnmatchedPunchToFeed
                 'avatar_url' => $event->user->avatar_url,
             ],
             'punch_type' => ($event->classifiedPunchType ?? $event->punch->punchType)->value,
+            'verify_method' => $event->punch->verifyMethod->value,
             'punched_at' => $event->punch->timestamp->format(DATE_ATOM),
             'session_id' => null,
             'status' => 'unmatched',

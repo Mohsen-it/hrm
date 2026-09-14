@@ -1,5 +1,8 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
+import { useTranslations } from '@/composables/useTranslations';
+
+const { t } = useTranslations();
 
 const props = defineProps({
     columns: { type: Array, required: true },
@@ -99,31 +102,29 @@ function handleSaveFilter() {
 </script>
 
 <template>
-    <div class="border-b border-mistral-hairline-soft bg-white rounded-t-xl">
+    <div class="border-b border-mistral-hairline-soft bg-mistral-canvas rounded-t-lg">
         <div class="px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
             <div class="flex items-center gap-2 flex-wrap">
                 <div v-if="enableSearch" class="relative">
                     <i
-                        class="fas fa-magnifying-glass absolute top-1/2 -translate-y-1/2 text-mistral-muted text-[13px]"
-                        :class="dir === 'rtl' ? 'right-3' : 'left-3'"
+                        class="fas fa-magnifying-glass absolute start-3 top-1/2 -translate-y-1/2 text-mistral-muted text-[13px]"
                         aria-hidden="true"
                     ></i>
                     <input
                         v-model="searchValue"
                         type="search"
-                        :placeholder="dir === 'rtl' ? 'بحث...' : 'Search...'"
+                        :placeholder="t('common.search_placeholder')"
                         :class="[
-                            'h-9 w-full sm:w-64 text-[13px] text-mistral-ink bg-white border border-mistral-hairline-strong rounded-lg transition-all duration-150',
+                            'h-9 w-full sm:w-64 text-[13px] text-mistral-ink bg-mistral-canvas border border-mistral-hairline-strong rounded-md transition-all duration-150',
                             'placeholder:text-mistral-muted',
                             'focus:outline-none focus:ring-2 focus:ring-mistral-primary/20 focus:border-mistral-primary',
-                            dir === 'rtl' ? 'pr-9 pl-8' : 'pl-9 pr-8',
+                            'ps-9 pe-8',
                         ]"
                     />
                     <button
                         v-if="searchValue"
                         type="button"
-                        class="absolute top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full text-mistral-muted hover:text-mistral-ink hover:bg-mistral-surface transition-colors"
-                        :class="dir === 'rtl' ? 'left-2' : 'right-2'"
+                        class="absolute end-2 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full text-mistral-muted hover:text-mistral-ink hover:bg-mistral-surface transition-colors"
                         @click="searchValue = ''"
                     >
                         <i class="fas fa-xmark text-[10px]" aria-hidden="true"></i>
@@ -134,15 +135,15 @@ function handleSaveFilter() {
                     v-if="enableFilters && filterableColumns.length > 0"
                     type="button"
                     :class="[
-                        'h-9 px-3 text-[13px] font-medium rounded-lg border transition-all duration-150 inline-flex items-center gap-2',
+                        'h-9 px-3 text-[13px] font-medium rounded-md border transition-all duration-150 inline-flex items-center gap-2',
                         expandedFilters
                             ? 'bg-mistral-primary/10 text-mistral-primary border-mistral-primary/30'
-                            : 'bg-white text-mistral-steel border-mistral-hairline-strong hover:bg-mistral-surface',
+                            : 'bg-mistral-canvas text-mistral-steel border-mistral-hairline-strong hover:bg-mistral-surface',
                     ]"
                     @click="emit('toggle-expanded-filters')"
                 >
                     <i class="fas fa-sliders text-[11px]" aria-hidden="true"></i>
-                    <span class="hidden sm:inline">{{ dir === 'rtl' ? 'فلاتر' : 'Filters' }}</span>
+                    <span class="hidden sm:inline">{{ t('common.filters_btn') }}</span>
                     <span
                         v-if="activeFilterCount > 0"
                         class="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold rounded-full bg-mistral-primary text-white"
@@ -155,29 +156,29 @@ function handleSaveFilter() {
             <div class="flex items-center gap-2">
                 <div v-if="hasSelection" class="flex items-center gap-2 ms-2 pe-2 border-e border-mistral-hairline-soft">
                     <span class="text-[13px] text-mistral-primary font-semibold whitespace-nowrap">
-                        {{ selectedIds.length }} {{ dir === 'rtl' ? 'محدد' : 'selected' }}
+                        {{ t('common.selected_count', { count: selectedIds.length }) }}
                     </span>
                     <button
                         v-if="enableBulkDelete"
                         type="button"
-                        class="h-8 px-3 text-[12px] font-medium rounded-lg bg-mistral-danger/10 text-mistral-danger hover:bg-mistral-danger/20 transition-colors"
+                        class="h-8 px-3 text-[12px] font-medium rounded-md bg-mistral-danger/10 text-mistral-danger hover:bg-mistral-danger/20 transition-colors"
                         @click="emit('bulk-delete')"
                     >
                         <i class="fas fa-trash ms-1" aria-hidden="true"></i>
-                        {{ dir === 'rtl' ? 'حذف' : 'Delete' }}
+                        {{ t('common.bulk_delete') }}
                     </button>
                     <button
                         v-if="enableBulkExport"
                         type="button"
-                        class="h-8 px-3 text-[12px] font-medium rounded-lg bg-mistral-info/10 text-mistral-info hover:bg-mistral-info/20 transition-colors"
+                        class="h-8 px-3 text-[12px] font-medium rounded-md bg-mistral-info/10 text-mistral-info hover:bg-mistral-info/20 transition-colors"
                         @click="emit('bulk-export')"
                     >
                         <i class="fas fa-download ms-1" aria-hidden="true"></i>
-                        {{ dir === 'rtl' ? 'تصدير' : 'Export' }}
+                        {{ t('common.bulk_export') }}
                     </button>
                 </div>
 
-                <div v-if="enableDensity" class="flex items-center bg-mistral-surface rounded-lg p-0.5">
+                <div v-if="enableDensity" class="flex items-center bg-mistral-surface rounded-md p-0.5">
                     <button
                         v-for="d in [{ key: 'compact', icon: 'fas fa-compress', label: 'Compact' }, { key: 'default', icon: 'fas fa-equals', label: 'Default' }, { key: 'comfortable', icon: 'fas fa-expand', label: 'Comfortable' }]"
                         :key="d.key"
@@ -214,12 +215,11 @@ function handleSaveFilter() {
                     >
                         <div
                             v-if="showColumnMenu"
-                            class="absolute top-full mt-1 z-30 w-56 bg-mistral-canvas border border-mistral-hairline-soft rounded-lg shadow-level-3 py-1"
-                            :class="dir === 'rtl' ? 'right-0' : 'left-0'"
+                            class="absolute top-full start-0 mt-1 z-30 w-56 bg-mistral-canvas border border-mistral-hairline-soft rounded-lg shadow-level-3 py-1"
                         >
                             <div class="px-3 py-2 border-b border-mistral-hairline-soft">
                                 <span class="text-[11px] font-semibold text-mistral-steel uppercase tracking-wider">
-                                    {{ dir === 'rtl' ? 'الأعمدة' : 'Columns' }}
+                                    {{ t('common.columns_btn') }}
                                 </span>
                             </div>
                             <div class="max-h-64 overflow-y-auto">
@@ -248,7 +248,7 @@ function handleSaveFilter() {
                         @click="showExportMenu = !showExportMenu"
                     >
                         <i class="fas fa-download text-[11px]" aria-hidden="true"></i>
-                        <span class="hidden sm:inline">{{ dir === 'rtl' ? 'تصدير' : 'Export' }}</span>
+                        <span class="hidden sm:inline">{{ t('common.export_btn') }}</span>
                         <i class="fas fa-chevron-down text-[9px] text-mistral-muted" aria-hidden="true"></i>
                     </button>
                     <Transition
@@ -261,8 +261,7 @@ function handleSaveFilter() {
                     >
                         <div
                             v-if="showExportMenu"
-                            class="absolute top-full mt-1 z-30 w-44 bg-mistral-canvas border border-mistral-hairline-soft rounded-lg shadow-level-3 py-1"
-                            :class="dir === 'rtl' ? 'right-0' : 'left-0'"
+                            class="absolute top-full start-0 mt-1 z-30 w-44 bg-mistral-canvas border border-mistral-hairline-soft rounded-lg shadow-level-3 py-1"
                         >
                             <button
                                 v-for="fmt in [{ key: 'excel', icon: 'fas fa-file-excel', label: 'Excel' }]"
@@ -285,7 +284,7 @@ function handleSaveFilter() {
                         @click="showSavedFilterMenu = !showSavedFilterMenu"
                     >
                         <i class="fas fa-bookmark text-[11px]" aria-hidden="true"></i>
-                        <span class="hidden sm:inline">{{ dir === 'rtl' ? 'المحفوظة' : 'Saved' }}</span>
+                        <span class="hidden sm:inline">{{ t('common.saved_btn') }}</span>
                     </button>
                     <Transition
                         enter-active-class="transition ease-out duration-100"
@@ -297,16 +296,15 @@ function handleSaveFilter() {
                     >
                         <div
                             v-if="showSavedFilterMenu"
-                            class="absolute top-full mt-1 z-30 w-56 bg-mistral-canvas border border-mistral-hairline-soft rounded-lg shadow-level-3 py-1"
-                            :class="dir === 'rtl' ? 'right-0' : 'left-0'"
+                            class="absolute top-full start-0 mt-1 z-30 w-56 bg-mistral-canvas border border-mistral-hairline-soft rounded-lg shadow-level-3 py-1"
                         >
                             <div class="px-3 py-2 border-b border-mistral-hairline-soft">
                                 <span class="text-[11px] font-semibold text-mistral-steel uppercase tracking-wider">
-                                    {{ dir === 'rtl' ? 'الفلاتر المحفوظة' : 'Saved Filters' }}
+                                    {{ t('common.saved_filters') }}
                                 </span>
                             </div>
                             <div v-if="savedFilters.length === 0" class="px-3 py-4 text-center text-[13px] text-mistral-muted">
-                                {{ dir === 'rtl' ? 'لا توجد فلاتر محفوظة' : 'No saved filters' }}
+                                {{ t('common.no_saved_filters') }}
                             </div>
                             <div v-else class="max-h-48 overflow-y-auto">
                                 <div
@@ -353,10 +351,10 @@ function handleSaveFilter() {
                             </label>
                             <select
                                 :value="filters[filterKeyOf(col)] ?? ''"
-                                class="h-9 w-full px-3 text-[13px] text-mistral-ink bg-white border border-mistral-hairline-strong rounded-lg appearance-none cursor-pointer select-with-arrow focus:outline-none focus:ring-2 focus:ring-mistral-primary/20 focus:border-mistral-primary"
+                                class="h-9 w-full px-3 text-[13px] text-mistral-ink bg-mistral-canvas border border-mistral-hairline-strong rounded-md appearance-none cursor-pointer select-with-arrow focus:outline-none focus:ring-2 focus:ring-mistral-primary/20 focus:border-mistral-primary"
                                 @change="onFilterChange(filterKeyOf(col), $event.target.value)"
                             >
-                                <option value="">{{ dir === 'rtl' ? 'الكل' : 'All' }}</option>
+                                <option value="">{{ t('common.filter_all') }}</option>
                                 <option
                                     v-for="opt in col.filterOptions"
                                     :key="opt.value"
@@ -373,7 +371,7 @@ function handleSaveFilter() {
                             <input
                                 type="date"
                                 :value="filters[filterKeyOf(col)] ?? ''"
-                                class="h-9 w-full px-3 text-[13px] text-mistral-ink bg-white border border-mistral-hairline-strong rounded-lg focus:outline-none focus:ring-2 focus:ring-mistral-primary/20 focus:border-mistral-primary"
+                                class="h-9 w-full px-3 text-[13px] text-mistral-ink bg-mistral-canvas border border-mistral-hairline-strong rounded-md focus:outline-none focus:ring-2 focus:ring-mistral-primary/20 focus:border-mistral-primary"
                                 @change="onFilterChange(filterKeyOf(col), $event.target.value)"
                             />
                         </div>
@@ -384,8 +382,8 @@ function handleSaveFilter() {
                             <input
                                 type="text"
                                 :value="filters[filterKeyOf(col)] ?? ''"
-                                :placeholder="dir === 'rtl' ? 'فلتر...' : 'Filter...'"
-                                class="h-9 w-full px-3 text-[13px] text-mistral-ink bg-white border border-mistral-hairline-strong rounded-lg placeholder:text-mistral-muted focus:outline-none focus:ring-2 focus:ring-mistral-primary/20 focus:border-mistral-primary"
+                                :placeholder="t('common.filter_placeholder')"
+                                class="h-9 w-full px-3 text-[13px] text-mistral-ink bg-mistral-canvas border border-mistral-hairline-strong rounded-md placeholder:text-mistral-muted focus:outline-none focus:ring-2 focus:ring-mistral-primary/20 focus:border-mistral-primary"
                                 @input="onFilterChange(filterKeyOf(col), $event.target.value)"
                             />
                         </div>
@@ -394,24 +392,23 @@ function handleSaveFilter() {
                     <div class="flex items-end gap-2 ms-auto">
                         <button
                             type="button"
-                            class="h-9 px-3 text-[13px] font-medium rounded-lg text-mistral-steel hover:bg-mistral-surface border border-mistral-hairline-strong transition-colors"
+                            class="h-9 px-3 text-[13px] font-medium rounded-md text-mistral-steel hover:bg-mistral-surface border border-mistral-hairline-strong transition-colors"
                             @click="emit('clear-filters')"
                         >
                             <i class="fas fa-rotate-left ms-1 text-[11px]" aria-hidden="true"></i>
-                            {{ dir === 'rtl' ? 'مسح' : 'Clear' }}
+                            {{ t('common.clear') }}
                         </button>
                         <div class="relative">
                             <input
                                 v-model="saveFilterName"
                                 type="text"
-                                :placeholder="dir === 'rtl' ? 'اسم الفلتر' : 'Filter name'"
-                                class="h-9 px-3 text-[13px] text-mistral-ink bg-white border border-mistral-hairline-strong rounded-lg placeholder:text-mistral-muted focus:outline-none focus:ring-2 focus:ring-mistral-primary/20 focus:border-mistral-primary w-32"
+                                :placeholder="t('common.filter_name_placeholder')"
+                                class="h-9 px-3 text-[13px] text-mistral-ink bg-mistral-canvas border border-mistral-hairline-strong rounded-md placeholder:text-mistral-muted focus:outline-none focus:ring-2 focus:ring-mistral-primary/20 focus:border-mistral-primary w-32"
                                 @keydown.enter="handleSaveFilter"
                             />
                             <button
                                 type="button"
-                                class="absolute top-1/2 -translate-y-1/2 h-6 w-6 flex items-center justify-center rounded text-mistral-muted hover:text-mistral-primary transition-colors"
-                                :class="dir === 'rtl' ? 'left-1' : 'right-1'"
+                                class="absolute end-1 top-1/2 -translate-y-1/2 h-6 w-6 flex items-center justify-center rounded text-mistral-muted hover:text-mistral-primary transition-colors"
                                 :disabled="!saveFilterName.trim()"
                                 @click="handleSaveFilter"
                             >

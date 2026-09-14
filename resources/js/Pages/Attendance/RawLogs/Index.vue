@@ -16,6 +16,7 @@ import Button from '@/Components/ui/Button.vue';
 import DataTable from '@/Components/ui/DataTable.vue';
 import ConfirmDialog from '@/Components/ui/ConfirmDialog.vue';
 import Badge from '@/Components/ui/Badge.vue';
+import PunchTypeBadge from '@/Components/ui/PunchTypeBadge.vue';
 import IconButton from '@/Components/ui/IconButton.vue';
 import Alert from '@/Components/ui/Alert.vue';
 import { useTranslations } from '@/composables/useTranslations';
@@ -37,6 +38,7 @@ const punchTypeOptions = [
     { value: 'check_out', label: t('attendance.punch_type.check_out') },
     { value: 'break_out', label: t('attendance.punch_type.break_out') },
     { value: 'break_in', label: t('attendance.punch_type.break_in') },
+    { value: 'extra', label: t('attendance.punch_type.extra') },
     { value: 'unknown', label: t('attendance.punch_type.unknown') },
 ];
 
@@ -162,10 +164,7 @@ usePageTitle(t('attendance.raw_logs'));
                 <span>{{ row.user?.name || '—' }}</span>
             </template>
             <template #cell-punch_type="{ row }">
-                <Badge
-                    :text="t(`attendance.punch_type.${row.punch_type}`, row.punch_type)"
-                    :variant="({ check_in: 'active', check_out: 'info', break_out: 'pending', break_in: 'orange' })[row.punch_type] || 'inactive'"
-                />
+                <PunchTypeBadge :type="row.punch_type" />
             </template>
             <template #cell-source="{ row }">
                 <Badge :text="t(`attendance.source.${row.source}`, row.source)" variant="info" />

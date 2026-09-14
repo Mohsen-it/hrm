@@ -25,8 +25,9 @@
 - Buttons: `<Button variant="primary|secondary|cream|dark|on-cream|link|danger|ghost|icon">`
 - Cards: `<Card variant="base|feature|cream|cream-soft|feature-product|stat">`
 - Form fields: `<FormInput>`, `<FormSelect>`, `<FormTextarea>`, `<FormCheckbox>`, `<FormRadio>`, `<FormSwitch>`, `<FormDatepicker>`
-- Brand signature: `<SunsetStripeBand />` (in `layout/`) — appears at the bottom of every page
-- Colors: use `mistral-primary` (orange #fa520f) for CTAs and active states
+- Brand signature: `<SunsetStripeBand />` (in `layout/`) — appears at the bottom of every page (height locked at 3px — see `specs/012-ui-ux-improvement/PROGRESS.md`)
+- Colors: use `mistral-primary` (orange #fa520f) for CTAs and active states — **zero raw palette colors** (`bg-red-500` etc.) in `Components/` and `Pages/`; enforced by `npm run lint:tokens`
+- Design tokens reference: **`mistral.ai/DESIGN.md` only** — root `DESIGN.md` is a redirect stub; run `npm run lint:tokens` before committing UI changes
 - RTL: every component accepts a `dir` prop and uses logical properties (`ms-`, `me-`, `ps-`, `pe-`)
 
 **Full spec:** `specs/003-mistral-design-system\spec.md`

@@ -60,6 +60,7 @@ class PunchIngestionService
                 $user->id,
                 $punch->timestamp,
                 $punch->punchType,
+                $this->attendanceSessionService->getOpenSessionForUser($user->id) !== null,
             );
             $punchTypeStr = $classifiedPunchType->value;
 
@@ -112,7 +113,7 @@ class PunchIngestionService
                     'punch_type' => $classifiedPunchType->value,
                 ]);
 
-                if (in_array($classifiedPunchType, [PunchType::BreakIn, PunchType::BreakOut], true)) {
+                if (in_array($classifiedPunchType, [PunchType::BreakIn, PunchType::BreakOut, PunchType::Extra, PunchType::Unknown], true)) {
                     $rawLog->markProcessed();
                 }
 

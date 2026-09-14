@@ -19,7 +19,7 @@ class StoreDevicePunchRequest extends FormRequest
             'api_token' => ['nullable', 'string', 'max:128'],
             'user_id' => ['nullable', 'string', 'max:50'],
             'timestamp' => ['nullable', 'string', 'max:30'],
-            'punch_type' => ['nullable', 'string', 'in:check_in,check_out,auto,break_in,break_out'],
+            'punch_type' => ['nullable', 'string', 'in:check_in,check_out,auto,break_in,break_out,extra'],
             'status' => ['nullable', 'integer', 'min:0', 'max:255'],
             'work_code' => ['nullable', 'integer', 'min:0', 'max:65535'],
             'Body' => ['nullable', 'string', 'max:1048576'],
@@ -28,12 +28,12 @@ class StoreDevicePunchRequest extends FormRequest
             'attendance.*.user_id' => ['required', 'string', 'max:50'],
             'attendance.*.timestamp' => ['nullable', 'string', 'max:30'],
             'attendance.*.status' => ['nullable', 'integer', 'min:0', 'max:255'],
-            'attendance.*.punch_type' => ['nullable', 'string', 'in:check_in,check_out,auto,break_in,break_out'],
+            'attendance.*.punch_type' => ['nullable', 'string', 'in:check_in,check_out,auto,break_in,break_out,extra'],
             'punches' => ['nullable', 'array', 'max:500'],
             'punches.*.user_id' => ['required', 'string', 'max:50'],
             'punches.*.timestamp' => ['nullable', 'string', 'max:30'],
             'punches.*.status' => ['nullable', 'integer', 'min:0', 'max:255'],
-            'punches.*.punch_type' => ['nullable', 'string', 'in:check_in,check_out,auto,break_in,break_out'],
+            'punches.*.punch_type' => ['nullable', 'string', 'in:check_in,check_out,auto,break_in,break_out,extra'],
         ];
     }
 

@@ -26,16 +26,24 @@ class SchedulePunchClassifierService
     /**
      * Classify a punch by its assigned rotation windows.
      *
-     * The original device classification is retained only when the employee
-     * has no configured punch windows at all (unassigned employees, rotations
-     * without a schedule). Once windows exist, a punch outside every window is
-     * deliberately Unknown: an early-morning punch on a rest day is the
-     * previous overnight duty's check-out, never a new phantom session.
+     * Strict window rule:
+     *  - inside the check-in window only  → CheckIn (حضور)
+     *  - inside the check-out window only → CheckOut (انصراف)
+     *  - inside both (legacy overlapping windows) → resolved by the open
+     *    session: an open session makes it a check-out, otherwise check-in.
+     *    The second punch is NEVER an automatic check-out — only windows decide.
+     *  - outside every window but windows exist → Extra (بصمة إضافية):
+     *    an accidental / mid-duty punch. Stored for audit, never opens or
+     *    closes a session.
+     *  - no configured windows at all → keep the device fallback.
+     * Unknown is reserved for "no information" (no user, no windows and an
+     * unknown device value).
      */
     public function classify(
         ?int $userId,
         DateTimeInterface $punchedAt,
         PunchType $fallback,
+        bool $preferCheckOut = false,
     ): PunchType {
         if (! $userId) {
             return $fallback;
@@ -91,9 +99,13 @@ class SchedulePunchClassifierService
         $matches = array_values(array_unique(array_map(fn (PunchType $type) => $type->value, $matches)));
 
         return match (count($matches)) {
-            0 => $hasConfiguredWindow ? PunchType::Unknown : $fallback,
+            0 => $hasConfiguredWindow ? PunchType::Extra : $fallback,
             1 => PunchType::from($matches[0]),
-            default => PunchType::Unknown,
+            // Overlapping windows: the punch is inside BOTH allowed windows,
+            // so the open session disambiguates — never an automatic exit.
+            default => $preferCheckOut && in_array(PunchType::CheckOut->value, $matches, true)
+                ? PunchType::CheckOut
+                : (in_array(PunchType::CheckIn->value, $matches, true) ? PunchType::CheckIn : PunchType::CheckOut),
         };
     }
 

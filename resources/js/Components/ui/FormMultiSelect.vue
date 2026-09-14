@@ -1,5 +1,8 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { useTranslations } from '@/composables/useTranslations';
+
+const { t } = useTranslations();
 
 const props = defineProps({
     modelValue: { type: Array, default: () => [] },
@@ -135,7 +138,7 @@ watch(() => props.disabled, (val) => { if (val) close(); });
                 :aria-haspopup="true"
                 :aria-invalid="!!error"
                 :class="[
-                    'peer w-full min-h-[44px] pt-5 pb-1.5 px-3 text-start text-[14px] bg-white border rounded-lg transition-all duration-200',
+                    'peer w-full min-h-[44px] pt-5 pb-1.5 px-3 text-start text-[14px] bg-mistral-canvas border rounded-md transition-all duration-200',
                     'focus:outline-none focus:ring-2 focus:ring-mistral-primary/20 focus:border-mistral-primary',
                     'disabled:bg-mistral-surface disabled:text-mistral-muted disabled:cursor-not-allowed',
                     error
@@ -158,7 +161,7 @@ watch(() => props.disabled, (val) => { if (val) close(); });
                             type="button"
                             @click="removeTag(item.value, $event)"
                             class="hover:text-mistral-primary-deep"
-                            :aria-label="`إزالة ${item.label}`"
+                            :aria-label="t('common.remove_item', { item: item.label })"
                         >
                             <i class="fas fa-times text-[10px]"></i>
                         </button>
@@ -178,8 +181,8 @@ watch(() => props.disabled, (val) => { if (val) close(); });
                 :class="[
                     'absolute text-[13px] font-medium pointer-events-none transition-all duration-200 origin-top-start z-10',
                     isFloating
-                        ? (dir === 'rtl' ? 'top-1.5 right-3 text-[11px]' : 'top-1.5 left-3 text-[11px]')
-                        : (dir === 'rtl' ? 'top-2.5 right-3 text-[14px]' : 'top-2.5 left-3 text-[14px]'),
+                        ? 'top-1.5 start-3 text-[11px]'
+                        : 'top-2.5 start-3 text-[14px]',
                     isFloating && 'text-mistral-steel',
                     !isFloating && 'text-mistral-muted',
                     isFocused && !error && 'text-mistral-primary',
@@ -190,13 +193,13 @@ watch(() => props.disabled, (val) => { if (val) close(); });
                 <span v-if="required" class="text-mistral-danger ms-0.5" aria-hidden="true">*</span>
             </label>
 
-            <div class="absolute top-0 bottom-0 flex items-center gap-1" :class="dir === 'rtl' ? 'left-2' : 'right-2'">
+            <div class="absolute top-0 bottom-0 end-2 flex items-center gap-1">
                 <button
                     v-if="hasValue && !disabled"
                     type="button"
                     @click="clearAll"
                     class="text-mistral-muted hover:text-mistral-danger w-6 h-6 flex items-center justify-center rounded transition-colors"
-                    aria-label="مسح"
+                    :aria-label="t('common.remove')"
                 >
                     <i class="fas fa-times-circle text-[12px]"></i>
                 </button>
@@ -212,19 +215,16 @@ watch(() => props.disabled, (val) => { if (val) close(); });
             <div
                 v-if="isOpen"
                 ref="dropdownRef"
-                class="absolute z-50 mt-1 w-full bg-white border border-mistral-hairline-strong rounded-lg shadow-lg overflow-hidden"
-                :class="dir === 'rtl' ? 'right-0' : 'left-0'"
+                class="absolute z-50 mt-1 start-0 w-full bg-mistral-canvas border border-mistral-hairline-strong rounded-lg shadow-lg overflow-hidden"
             >
                 <div v-if="searchable" class="p-2 border-b border-mistral-hairline-soft">
                     <div class="relative">
-                        <i class="fas fa-search absolute top-1/2 -translate-y-1/2 text-mistral-muted text-[12px]"
-                           :class="dir === 'rtl' ? 'right-2.5' : 'left-2.5'"></i>
+                        <i class="fas fa-search absolute start-2.5 top-1/2 -translate-y-1/2 text-mistral-muted text-[12px]"></i>
                         <input
                             v-model="search"
                             type="text"
                             :placeholder="searchPlaceholder"
-                            class="w-full h-9 text-[13px] bg-mistral-surface/40 border border-mistral-hairline rounded-md focus:outline-none focus:border-mistral-primary"
-                            :class="dir === 'rtl' ? 'pr-8 pl-2' : 'pl-8 pr-2'"
+                            class="w-full h-9 text-[13px] bg-mistral-surface/40 border border-mistral-hairline rounded-md focus:outline-none focus:border-mistral-primary ps-8 pe-2"
                             @keydown.escape="close"
                             @keydown.enter.prevent
                         />

@@ -63,8 +63,7 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside));
         >
             <div
                 v-if="open"
-                class="absolute top-full mt-1 bg-white border border-mistral-hairline-soft rounded-xl shadow-level-3 min-w-[150px] z-50 py-1 overflow-hidden"
-                :class="dir === 'rtl' ? 'left-0' : 'right-0'"
+                class="absolute top-full end-0 mt-1 bg-mistral-canvas border border-mistral-hairline-soft rounded-lg shadow-level-3 min-w-[150px] z-50 py-1 overflow-hidden"
                 role="listbox"
                 :aria-label="t('common.language') || 'Language'"
             >

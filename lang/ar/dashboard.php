@@ -122,4 +122,16 @@ return [
     'check_out' => 'خروج',
     'view_details' => 'عرض التفاصيل',
     'no_attendance_yet' => 'لا توجد سجلات حضور اليوم',
+
+    // Time ago
+    'time_ago_just' => 'الآن',
+    'time_ago_minutes' => 'منذ :minutes دقيقة',
+    'time_ago_hours' => 'منذ :hours ساعة',
+    'time_ago_days' => 'منذ :days يوم',
+
+    // Live punch notification
+    'live_punch_employee' => 'موظف',
+    'live_punch_check_in' => 'تم تسجيل حضور',
+    'live_punch_check_out' => 'تم تسجيل انصراف',
+    'live_punch_dismiss' => 'إخفاء إشعار تسجيل البصمة',
 ];

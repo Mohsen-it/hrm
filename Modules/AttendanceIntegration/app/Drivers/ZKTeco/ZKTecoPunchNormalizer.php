@@ -55,6 +55,9 @@ class ZKTecoPunchNormalizer implements PunchNormalizerInterface
         if ($explicit === 'break_out') {
             return PunchType::BreakOut;
         }
+        if ($explicit === 'extra') {
+            return PunchType::Extra;
+        }
 
         $status = $raw['status'] ?? null;
         if ($status !== null) {
@@ -72,7 +75,12 @@ class ZKTecoPunchNormalizer implements PunchNormalizerInterface
 
     private static function resolveVerifyMethod(array $raw): VerifyMethod
     {
-        $punch = $raw['punch'] ?? $raw['status'] ?? null;
+        // NOTE: only the device `punch` column carries the verify method.
+        // The `status` column is the IN/OUT state and must never be read as
+        // a verify method (status 2/3 would falsely report 'card').
+        // Observed fleet values: 0/1 = fingerprint, 2/3 = card, 4 = password,
+        // 5/6/15 = face (iFace devices — absent on non-face terminals).
+        $punch = $raw['punch'] ?? null;
         if ($punch === null) {
             return VerifyMethod::Fingerprint;
         }
@@ -81,6 +89,7 @@ class ZKTecoPunchNormalizer implements PunchNormalizerInterface
             0, 1 => VerifyMethod::Fingerprint,
             2, 3 => VerifyMethod::Card,
             4 => VerifyMethod::Password,
+            5, 6, 15 => VerifyMethod::Face,
             default => VerifyMethod::Fingerprint,
         };
     }

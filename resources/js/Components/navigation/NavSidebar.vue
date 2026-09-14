@@ -68,9 +68,8 @@ const visibilityClass = computed(() => {
 <template>
   <aside
     :class="[
-      'nav-sidebar fixed top-0 bottom-0 flex flex-col z-40 transition-all duration-200 ease-out',
+      'nav-sidebar fixed top-0 bottom-0 start-0 flex flex-col z-40 transition-all duration-200 ease-out',
       widthClass,
-      isRtl ? 'right-0' : 'left-0',
       visibilityClass,
     ]"
     :aria-label="t('common.main') || 'Navigation'"

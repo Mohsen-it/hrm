@@ -12,7 +12,7 @@ import { usePageTitle } from '@/composables/usePageTitle';
 import { ref, computed } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
-import { PageHeader, DataTable, SearchInput, ConfirmDialog, Badge, Button, Card, IconButton, FormSelect, Alert, AvatarWithPreview, FormModal } from '@/Components/ui';
+import { PageHeader, DataTable, SearchInput, ConfirmDialog, Badge, Button, Card, IconButton, FormSelect, Alert, AvatarWithPreview, FormModal, PunchTypeBadge } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
@@ -42,7 +42,7 @@ const fingerprintUser = ref(null);
 const fingerprintLogs = ref([]);
 const fingerprintLoading = ref(false);
 const fingerprintPage = ref(1);
-const fingerprintPagination = ref({ total: 0, per_page: 50, current_page: 1, last_page: 1 });
+const fingerprintPagination = ref({ total: 0, per_page: 20, current_page: 1, last_page: 1 });
 
 const columns = computed(() => [
     { key: 'employee_code', label: t('users.employee_code'), sortable: true },
@@ -376,14 +376,11 @@ usePageTitle(t('users.title'));
                     </thead>
                     <tbody>
                         <tr v-for="log in fingerprintLogs" :key="log.id" class="border-b border-mistral-hairline-soft/50 hover:bg-mistral-surface/40 transition-colors">
-                            <td class="py-2 px-2.5 text-mistral-ink font-medium whitespace-nowrap">{{ log.punch_time }}</td>
+                            <td class="py-2 px-2.5 text-mistral-ink font-medium whitespace-nowrap" dir="ltr">{{ log.punch_time }}</td>
                             <td class="py-2 px-2.5">
-                                <Badge
-                                    :text="log.punch_type === 'check_in' ? t('attendance.punch_type.check_in') : log.punch_type === 'check_out' ? t('attendance.punch_type.check_out') : log.punch_type"
-                                    :variant="log.punch_type === 'check_in' ? 'active' : log.punch_type === 'check_out' ? 'warning' : 'inactive'"
-                                />
+                                <PunchTypeBadge :type="log.punch_type" />
                             </td>
-                            <td class="py-2 px-2.5 text-mistral-steel capitalize">{{ log.verify_type }}</td>
+                            <td class="py-2 px-2.5 text-mistral-steel">{{ t(`attendance.verify_type.${log.verify_type}`, log.verify_type) }}</td>
                             <td class="py-2 px-2.5">
                                 <div v-if="log.device" class="text-mistral-ink">
                                     <div class="font-medium">{{ log.device.name }}</div>
@@ -410,19 +407,19 @@ usePageTitle(t('users.title'));
                         <Button
                             variant="secondary"
                             size="sm"
-                            :disabled="fingerprintPage <= 1"
-                            @click="fetchFingerprintLogs(fingerprintPage - 1)"
+                            :disabled="fingerprintPagination.current_page <= 1"
+                            @click="fetchFingerprintLogs(fingerprintPagination.current_page - 1)"
                         >
                             <i class="fas fa-chevron-right text-[11px]"></i>
                         </Button>
                         <span class="text-[13px] text-mistral-steel px-2">
-                            {{ fingerprintPage }} / {{ fingerprintPagination.last_page }}
+                            {{ fingerprintPagination.current_page }} / {{ fingerprintPagination.last_page }}
                         </span>
                         <Button
                             variant="secondary"
                             size="sm"
-                            :disabled="fingerprintPage >= fingerprintPagination.last_page"
-                            @click="fetchFingerprintLogs(fingerprintPage + 1)"
+                            :disabled="fingerprintPagination.current_page >= fingerprintPagination.last_page"
+                            @click="fetchFingerprintLogs(fingerprintPagination.current_page + 1)"
                         >
                             <i class="fas fa-chevron-left text-[11px]"></i>
                         </Button>

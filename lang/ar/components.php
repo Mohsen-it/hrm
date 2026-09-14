@@ -34,4 +34,8 @@ return [
     'settings' => 'الإعدادات',
     'breadcrumb' => 'مسار التنقل',
     'pagination' => 'ترقيم الصفحات',
+    'first_page' => 'الصفحة الأولى',
+    'last_page' => 'الصفحة الأخيرة',
+    'page_number' => 'صفحة :number',
+    'dialog' => 'حوار',
 ];

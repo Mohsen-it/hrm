@@ -22,10 +22,10 @@ const monthLabels = {
 const colorScale = [
     // Empty days are represented by null; zero is a real 0% attendance rate.
     { min: -1, max: -0.01, bg: 'bg-mistral-surface', text: 'text-mistral-muted', label: 'no_data' },
-    { min: 0, max: 50, bg: 'bg-red-100', text: 'text-red-700', label: 'poor' },
-    { min: 50.01, max: 70, bg: 'bg-amber-100', text: 'text-amber-700', label: 'average' },
-    { min: 70.01, max: 85, bg: 'bg-green-100', text: 'text-green-700', label: 'good' },
-    { min: 85.01, max: 100, bg: 'bg-emerald-200', text: 'text-emerald-800', label: 'excellent' },
+    { min: 0, max: 50, bg: 'bg-mistral-danger/10', text: 'text-mistral-danger', label: 'poor' },
+    { min: 50.01, max: 70, bg: 'bg-mistral-warning/10', text: 'text-mistral-warning', label: 'average' },
+    { min: 70.01, max: 85, bg: 'bg-mistral-success/10', text: 'text-mistral-success', label: 'good' },
+    { min: 85.01, max: 100, bg: 'bg-mistral-success/20', text: 'text-mistral-success', label: 'excellent' },
 ];
 
 const weeks = computed(() => {

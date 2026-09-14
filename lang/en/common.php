@@ -94,4 +94,28 @@ return [
     'close' => 'Close',
     'notes' => 'Notes',
     'total' => 'Total',
+    'error_occurred' => 'An error occurred',
+
+    // DataTable toolbar
+    'search_placeholder' => 'Search...',
+    'filters_btn' => 'Filters',
+    'selected_count' => ':count selected',
+    'bulk_delete' => 'Delete',
+    'bulk_export' => 'Export',
+    'columns_btn' => 'Columns',
+    'export_btn' => 'Export',
+    'saved_btn' => 'Saved',
+    'saved_filters' => 'Saved Filters',
+    'no_saved_filters' => 'No saved filters',
+    'filter_all' => 'All',
+    'filter_placeholder' => 'Filter...',
+    'clear' => 'Clear',
+    'filter_name_placeholder' => 'Filter name',
+    'remove_item' => 'Remove :item',
+
+    // Accessibility (a11y)
+    'select_all' => 'Select all rows',
+    'select_row' => 'Select row',
+    'menu_opened' => 'menu opened',
+    'print' => 'Print',
 ];

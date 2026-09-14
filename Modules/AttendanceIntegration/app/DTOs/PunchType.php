@@ -8,5 +8,6 @@ enum PunchType: string
     case CheckOut = 'check_out';
     case BreakIn = 'break_in';
     case BreakOut = 'break_out';
+    case Extra = 'extra';
     case Unknown = 'unknown';
 }

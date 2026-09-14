@@ -117,12 +117,21 @@ class RealtimeFingerprintPull extends Command
 
     /**
      * Resolve punch type from device record.
+     *
+     * Provisional only: the processing pipeline re-classifies strictly by
+     * rotation windows. Unknown here means "device said nothing".
      */
     protected function resolvePunchType(array $record): string
     {
         $status = $record['status'] ?? null;
-        if ($status !== null) {
-            return ((int) $status) === 1 ? 'check_out' : 'check_in';
+        if ($status !== null && is_numeric($status)) {
+            return match ((int) $status) {
+                0 => 'check_in',
+                1 => 'check_out',
+                2 => 'break_out',
+                3 => 'break_in',
+                default => 'unknown',
+            };
         }
 
         return 'unknown';
@@ -130,6 +139,9 @@ class RealtimeFingerprintPull extends Command
 
     /**
      * Resolve verify type from device record.
+     *
+     * Unified mapping (same as FingerprintDeviceService and the ZKTeco
+     * normalizer): 0/1=fingerprint, 2/3=card, 4=password, 5/6/15=face.
      */
     protected function resolveVerifyType(array $record): string
     {
@@ -139,9 +151,10 @@ class RealtimeFingerprintPull extends Command
         }
 
         return match ((int) $punch) {
-            0 => 'fingerprint',
-            1 => 'card',
-            2 => 'password',
+            0, 1 => 'fingerprint',
+            2, 3 => 'card',
+            4 => 'password',
+            5, 6, 15 => 'face',
             default => 'fingerprint',
         };
     }

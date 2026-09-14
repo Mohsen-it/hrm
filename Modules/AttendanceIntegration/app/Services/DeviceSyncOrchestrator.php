@@ -414,7 +414,7 @@ class DeviceSyncOrchestrator
                     'device_id' => $device->id,
                     'device_user_id' => $externalId,
                     'punch_time' => $normalized->timestamp,
-                    'punch_type' => in_array($punchType, ['check_in', 'check_out']) ? $punchType : 'unknown',
+                    'punch_type' => in_array($punchType, ['check_in', 'check_out', 'break_in', 'break_out', 'extra'], true) ? $punchType : 'unknown',
                     'verify_type' => $normalized->verifyMethod->value,
                     'work_code' => $normalized->workCode,
                     'source' => 'device_pull',
@@ -492,6 +492,13 @@ class DeviceSyncOrchestrator
                 $raw->markProcessed();
 
                 return $session;
+            }
+
+            // Extra / break / unknown punches (and a check-in arriving while a
+            // session is already open) never touch sessions — but they must be
+            // marked processed so they don't pile up as unprocessed forever.
+            if (! in_array($punchType, ['check_in', 'check_out'], true)) {
+                $raw->markProcessed();
             }
         } catch (\Throwable $e) {
             Log::warning('DeviceSyncOrchestrator::reconcileSession failed', [

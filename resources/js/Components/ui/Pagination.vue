@@ -264,19 +264,19 @@ const rangeText = computed(() => {
 
         <nav
             v-if="showPageNav"
-            :aria-label="isRtl ? 'ترقيم الصفحات' : 'Pagination'"
+            :aria-label="t('components.pagination')"
             class="flex items-center gap-1"
         >
             <button
                 v-if="showFirstLast"
                 type="button"
                 :disabled="!canPrev || isLoading"
-                :aria-label="isRtl ? 'الصفحة الأولى' : 'First page'"
+                :aria-label="t('components.first_page')"
                 :class="[
                     'dt-page-btn h-8 min-w-[32px] px-2 rounded-md text-mistral-steel transition-all duration-150',
                     !canPrev || isLoading
                         ? 'opacity-30 cursor-not-allowed'
-                        : 'hover:text-mistral-ink hover:bg-white cursor-pointer',
+                        : 'hover:text-mistral-ink hover:bg-mistral-canvas cursor-pointer',
                 ]"
                 @click="goFirst"
             >
@@ -286,12 +286,12 @@ const rangeText = computed(() => {
             <button
                 type="button"
                 :disabled="!canPrev || isLoading"
-                :aria-label="isRtl ? 'السابق' : 'Previous'"
+                :aria-label="t('components.previous')"
                 :class="[
                     'dt-page-btn h-8 min-w-[32px] px-2 rounded-md text-mistral-steel transition-all duration-150',
                     !canPrev || isLoading
                         ? 'opacity-30 cursor-not-allowed'
-                        : 'hover:text-mistral-ink hover:bg-white cursor-pointer',
+                        : 'hover:text-mistral-ink hover:bg-mistral-canvas cursor-pointer',
                 ]"
                 @click="goPrev"
             >
@@ -309,13 +309,13 @@ const rangeText = computed(() => {
                     v-else
                     type="button"
                     :disabled="isLoading"
-                    :aria-label="`${isRtl ? 'صفحة' : 'Page'} ${p}`"
+                    :aria-label="t('components.page_number', { number: p })"
                     :aria-current="p === meta.current ? 'page' : undefined"
                     :class="[
                         'dt-page-btn h-8 min-w-[32px] px-2.5 text-[12px] font-semibold rounded-md transition-all duration-150 tabular-nums',
                         p === meta.current
                             ? 'bg-mistral-primary text-white shadow-sm'
-                            : 'text-mistral-steel hover:text-mistral-ink hover:bg-white cursor-pointer',
+                            : 'text-mistral-steel hover:text-mistral-ink hover:bg-mistral-canvas cursor-pointer',
                         isLoading && p !== meta.current ? 'opacity-60' : '',
                     ]"
                     @click="goToPage(p)"
@@ -331,12 +331,12 @@ const rangeText = computed(() => {
             <button
                 type="button"
                 :disabled="!canNext || isLoading"
-                :aria-label="isRtl ? 'التالي' : 'Next'"
+                :aria-label="t('components.next')"
                 :class="[
                     'dt-page-btn h-8 min-w-[32px] px-2 rounded-md text-mistral-steel transition-all duration-150',
                     !canNext || isLoading
                         ? 'opacity-30 cursor-not-allowed'
-                        : 'hover:text-mistral-ink hover:bg-white cursor-pointer',
+                        : 'hover:text-mistral-ink hover:bg-mistral-canvas cursor-pointer',
                 ]"
                 @click="goNext"
             >
@@ -347,12 +347,12 @@ const rangeText = computed(() => {
                 v-if="showFirstLast"
                 type="button"
                 :disabled="!canNext || isLoading"
-                :aria-label="isRtl ? 'الصفحة الأخيرة' : 'Last page'"
+                :aria-label="t('components.last_page')"
                 :class="[
                     'dt-page-btn h-8 min-w-[32px] px-2 rounded-md text-mistral-steel transition-all duration-150',
                     !canNext || isLoading
                         ? 'opacity-30 cursor-not-allowed'
-                        : 'hover:text-mistral-ink hover:bg-white cursor-pointer',
+                        : 'hover:text-mistral-ink hover:bg-mistral-canvas cursor-pointer',
                 ]"
                 @click="goLast"
             >
@@ -387,7 +387,7 @@ const rangeText = computed(() => {
                         v-else
                         key="button"
                         type="button"
-                        class="dt-page-btn h-8 px-2 text-[12px] text-mistral-steel rounded-md hover:text-mistral-ink hover:bg-white transition-all duration-150 cursor-pointer tabular-nums"
+                        class="dt-page-btn h-8 px-2 text-[12px] text-mistral-steel rounded-md hover:text-mistral-ink hover:bg-mistral-canvas transition-all duration-150 cursor-pointer tabular-nums"
                         :title="isRtl ? 'الانتقال إلى صفحة' : 'Jump to page'"
                         @click="openJumpInput"
                     >

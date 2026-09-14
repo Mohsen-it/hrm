@@ -7,9 +7,12 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Modules\Attendance\Models\RawAttendanceLog;
+use Modules\Attendance\Services\AttendanceSessionService;
 use Modules\Attendance\Services\RawAttendanceLogService;
 use Modules\AttendanceIntegration\Contracts\DeviceAdapterInterface;
+use Modules\AttendanceIntegration\DTOs\PunchType;
 use Modules\AttendanceIntegration\Services\DeviceAdapterResolver;
+use Modules\AttendanceIntegration\Services\SchedulePunchClassifierService;
 use Modules\FingerprintDevices\Models\FingerprintDevice;
 use Modules\FingerprintDevices\Models\UserFingerprint;
 use Modules\FingerprintDevices\Repositories\FingerprintDeviceRepository;
@@ -43,6 +46,8 @@ class DeviceFullSyncService
         private UserFingerprintRepository $fingerprintRepository,
         private DeviceAdapterResolver $adapterResolver,
         private RawAttendanceLogService $rawLogService,
+        private SchedulePunchClassifierService $schedulePunchClassifier,
+        private AttendanceSessionService $sessionService,
     ) {}
 
     private function resolveAdapter(FingerprintDevice $device): DeviceAdapterInterface
@@ -912,7 +917,7 @@ class DeviceFullSyncService
                 $stamp = $pl['stamp'];
 
                 $userPk = $matchedByUserId[$externalId] ?? $matchedByUid[(int) ($log['uid'] ?? 0)] ?? null;
-                $punchType = $this->resolvePunchType($log);
+                $punchType = $this->resolvePunchType($userPk, $log, $stamp);
 
                 // Check pre-fetched duplicate set
                 $key = $externalId.'_'.$stamp->format('Y-m-d H:i:s');
@@ -926,8 +931,8 @@ class DeviceFullSyncService
                     'device_user_id' => $externalId,
                     'punch_time' => $stamp,
                     'punch_type' => $punchType,
-                    'verify_type' => (int) ($log['punch'] ?? 0),
-                    'work_code' => (int) ($log['status'] ?? 0),
+                    'verify_type' => $this->resolveVerifyType($log),
+                    'work_code' => (int) ($log['work_code'] ?? 0),
                     'source' => 'device_pull',
                     'processed' => false,
                     'ip_address' => $device->ip_address,
@@ -1038,15 +1043,44 @@ class DeviceFullSyncService
         return ['resolved' => $resolved, 'sessions' => $sessions];
     }
 
-    protected function resolvePunchType(array $log): string
+    /**
+     * Classify a pulled punch strictly by the employee's rotation windows.
+     *
+     * The device `status` field is only the fallback when the employee has no
+     * configured windows. A punch outside every window becomes an Extra punch
+     * (بصمة إضافية) — never an automatic check-out.
+     */
+    protected function resolvePunchType(?int $userPk, array $log, DateTimeImmutable $stamp): string
     {
-        $punch = $log['punch'] ?? null;
+        $fallback = match ((int) ($log['status'] ?? -1)) {
+            0 => PunchType::CheckIn,
+            1 => PunchType::CheckOut,
+            2 => PunchType::BreakOut,
+            3 => PunchType::BreakIn,
+            default => PunchType::Unknown,
+        };
 
-        if ($punch !== null && is_numeric($punch)) {
-            return ((int) $punch) === 1 ? 'check_out' : 'check_in';
-        }
+        return $this->schedulePunchClassifier->classify(
+            $userPk,
+            $stamp,
+            $fallback,
+            $userPk !== null && $this->sessionService->getOpenSessionForUser($userPk) !== null,
+        )->value;
+    }
 
-        return 'check_in';
+    /**
+     * Map the device verify field to the canonical verify_type string.
+     * 5/6/15 = face on iFace terminals.
+     */
+    protected function resolveVerifyType(array $log): string
+    {
+        return match ((int) ($log['punch'] ?? 0)) {
+            0, 1 => 'fingerprint',
+            2, 3 => 'card',
+            4 => 'password',
+            5, 6, 15 => 'face',
+            default => 'fingerprint',
+        };
     }
 
     protected function parseTimestamp(mixed $raw): ?DateTimeImmutable

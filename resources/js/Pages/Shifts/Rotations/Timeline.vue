@@ -157,7 +157,7 @@ function exportExcel() {
 }
 
 function getCellBg(day) {
-    if (day.isWeekend) return 'bg-gray-100/70';
+    if (day.isWeekend) return 'bg-mistral-surface/70';
     return '';
 }
 
@@ -383,14 +383,14 @@ const submitQuickTransfer = async () => {
                         <!-- Legend -->
                         <div class="flex items-center gap-4 me-auto">
                             <div class="flex items-center gap-1.5">
-                                <div class="w-5 h-5 rounded-md bg-emerald-200 flex items-center justify-center">
-                                    <i class="fas fa-check text-emerald-700 text-[9px]"></i>
+                                <div class="w-5 h-5 rounded-md bg-mistral-success/20 flex items-center justify-center">
+                                    <i class="fas fa-check text-mistral-success text-[9px]"></i>
                                 </div>
                                 <span class="text-xs text-mistral-steel">{{ t('shifts.work_day') }}</span>
                             </div>
                             <div class="flex items-center gap-1.5">
-                                <div class="w-5 h-5 rounded-md bg-gray-100 flex items-center justify-center">
-                                    <span class="text-gray-400 text-[10px]">—</span>
+                                <div class="w-5 h-5 rounded-md bg-mistral-surface flex items-center justify-center">
+                                    <span class="text-mistral-muted text-[10px]">—</span>
                                 </div>
                                 <span class="text-xs text-mistral-steel">{{ t('shifts.rest_day') }}</span>
                             </div>
@@ -450,7 +450,7 @@ const submitQuickTransfer = async () => {
                                         :key="day.date"
                                         class="border-b border-l border-mistral-hairline px-0 py-1.5 text-center text-xs font-medium min-w-[40px]"
                                         :class="[
-                                            day.isWeekend ? 'bg-gray-100/80' : '',
+                                            day.isWeekend ? 'bg-mistral-surface/80' : '',
                                             day.isToday ? 'bg-mistral-primary/10 border-mistral-primary/30' : '',
                                         ]"
                                     >
@@ -462,8 +462,8 @@ const submitQuickTransfer = async () => {
                                                 class="text-[9px] font-semibold"
                                                 :class="[
                                                     day.isToday ? 'text-mistral-primary' : '',
-                                                    day.dayOfWeek === 5 ? 'text-amber-600' : '',
-                                                    day.dayOfWeek === 6 ? 'text-amber-600' : '',
+                                                    day.dayOfWeek === 5 ? 'text-mistral-warning' : '',
+                                                    day.dayOfWeek === 6 ? 'text-mistral-warning' : '',
                                                     !day.isToday && day.dayOfWeek !== 5 && day.dayOfWeek !== 6 ? 'text-mistral-stone' : '',
                                                 ]"
                                             >
@@ -530,12 +530,12 @@ const submitQuickTransfer = async () => {
                                     >
                                         <div class="w-full h-10 flex items-center justify-center">
                                             <template v-if="getCellContent(emp.days, idx).type === 'work'">
-                                                <div class="w-6 h-6 rounded-md bg-emerald-200 flex items-center justify-center">
-                                                    <i class="fas fa-check text-emerald-700 text-[9px]"></i>
+                                                <div class="w-6 h-6 rounded-md bg-mistral-success/20 flex items-center justify-center">
+                                                    <i class="fas fa-check text-mistral-success text-[9px]"></i>
                                                 </div>
                                             </template>
                                             <template v-else-if="getCellContent(emp.days, idx).type === 'rest'">
-                                                <span class="text-gray-300 text-xs">—</span>
+                                                <span class="text-mistral-muted text-xs">—</span>
                                             </template>
                                         </div>
                                     </td>

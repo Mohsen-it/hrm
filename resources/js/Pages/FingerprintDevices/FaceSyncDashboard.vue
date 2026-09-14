@@ -18,6 +18,7 @@ import FormModal from '@/Components/ui/FormModal.vue';
 import Badge from '@/Components/ui/Badge.vue';
 import StatCard from '@/Components/ui/StatCard.vue';
 import Alert from '@/Components/ui/Alert.vue';
+import SearchInput from '@/Components/ui/SearchInput.vue';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
@@ -561,13 +562,10 @@ usePageTitle(t('fingerprint_devices.face_sync_dashboard') || 'Face Sync Dashboar
                         <i class="fas fa-users text-mistral-primary"></i>
                         {{ t('fingerprint_devices.employee_face_coverage') || 'Employee Face Coverage' }}
                     </h3>
-                    <div class="relative">
-                        <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-mistral-stone text-[12px]"></i>
-                        <input
+                    <div>
+                        <SearchInput
                             v-model="searchQuery"
-                            type="text"
-                            :placeholder="t('common.search') || 'Search...'"
-                            class="pl-8 pr-3 py-1.5 text-[13px] border border-mistral-hairline-soft rounded-lg bg-mistral-surface text-mistral-ink focus:outline-none focus:ring-2 focus:ring-mistral-primary/30 focus:border-mistral-primary w-64"
+                            class="!w-64"
                         />
                     </div>
                 </div>
@@ -576,14 +574,14 @@ usePageTitle(t('fingerprint_devices.face_sync_dashboard') || 'Face Sync Dashboar
                     <table class="w-full text-[13px]">
                         <thead>
                             <tr class="border-b border-mistral-hairline-soft">
-                                <th class="text-left py-3 px-3 font-semibold text-mistral-steel">{{ t('fingerprint_devices.employee') || 'Employee' }}</th>
-                                <th class="text-center py-3 px-3 font-semibold text-mistral-steel">{{ t('fingerprint_devices.code') || 'Code' }}</th>
-                                <th class="text-center py-3 px-3 font-semibold text-mistral-steel">{{ t('fingerprint_devices.total_templates') || 'Templates' }}</th>
-                                <th class="text-center py-3 px-3 font-semibold text-mistral-steel">{{ t('fingerprint_devices.synced_devices_count') || 'Synced Devices' }}</th>
-                                <th class="text-center py-3 px-3 font-semibold text-mistral-steel">{{ t('fingerprint_devices.missing_devices_count') || 'Missing' }}</th>
-                                <th class="text-center py-3 px-3 font-semibold text-mistral-steel">{{ t('fingerprint_devices.coverage') || 'Coverage' }}</th>
-                                <th class="text-center py-3 px-3 font-semibold text-mistral-steel">{{ t('fingerprint_devices.status') || 'Status' }}</th>
-                                <th class="text-center py-3 px-3 font-semibold text-mistral-steel">{{ t('fingerprint_devices.source') || 'Source' }}</th>
+                                <th scope="col" class="text-start py-3 px-3 font-semibold text-mistral-steel">{{ t('fingerprint_devices.employee') || 'Employee' }}</th>
+                                <th scope="col" class="text-center py-3 px-3 font-semibold text-mistral-steel">{{ t('fingerprint_devices.code') || 'Code' }}</th>
+                                <th scope="col" class="text-center py-3 px-3 font-semibold text-mistral-steel">{{ t('fingerprint_devices.total_templates') || 'Templates' }}</th>
+                                <th scope="col" class="text-center py-3 px-3 font-semibold text-mistral-steel">{{ t('fingerprint_devices.synced_devices_count') || 'Synced Devices' }}</th>
+                                <th scope="col" class="text-center py-3 px-3 font-semibold text-mistral-steel">{{ t('fingerprint_devices.missing_devices_count') || 'Missing' }}</th>
+                                <th scope="col" class="text-center py-3 px-3 font-semibold text-mistral-steel">{{ t('fingerprint_devices.coverage') || 'Coverage' }}</th>
+                                <th scope="col" class="text-center py-3 px-3 font-semibold text-mistral-steel">{{ t('fingerprint_devices.status') || 'Status' }}</th>
+                                <th scope="col" class="text-center py-3 px-3 font-semibold text-mistral-steel">{{ t('fingerprint_devices.source') || 'Source' }}</th>
                             </tr>
                         </thead>
                         <tbody>

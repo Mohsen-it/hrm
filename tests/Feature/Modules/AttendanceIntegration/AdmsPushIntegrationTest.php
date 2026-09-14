@@ -66,13 +66,14 @@ class AdmsPushIntegrationTest extends TestCase
             'Authorization' => 'Bearer zk_token_abc123',
         ]);
 
+        // The endpoint acknowledges synchronously and ingests asynchronously:
+        // HTTP asserts the queued contract, the database asserts the job ran
+        // (sync queue driver executes AttendanceIngestionJob inline in tests).
         $response->assertOk()
             ->assertJson([
                 'success' => true,
                 'received' => 1,
-                'processed' => 1,
-                'skipped' => 0,
-                'duplicates' => 0,
+                'queued' => true,
             ]);
 
         $this->assertDatabaseHas('raw_attendance_logs', [
@@ -93,8 +94,11 @@ class AdmsPushIntegrationTest extends TestCase
 
         $log = RawAttendanceLog::where('device_user_id', 'EMP001')->first();
         $this->assertNotNull($log);
+        // The queued payload is a trimmed NormalizedPunch array (driver blob
+        // travels in the session metadata instead), so raw_data arrives as an
+        // array without the _driver key.
         $this->assertIsArray($log->raw_data);
-        $this->assertSame('zkteco', $log->raw_data['_driver'] ?? null);
+        $this->assertSame($this->device->id, (int) $log->device_id);
     }
 
     public function test_adms_body_creates_attendance_session(): void
@@ -143,8 +147,10 @@ class AdmsPushIntegrationTest extends TestCase
             ->assertJson([
                 'success' => true,
                 'received' => 2,
-                'processed' => 2,
+                'queued' => true,
             ]);
+
+        $this->assertSame(2, RawAttendanceLog::where('device_id', $this->device->id)->count());
     }
 
     public function test_push_single_punch_format(): void
@@ -163,8 +169,13 @@ class AdmsPushIntegrationTest extends TestCase
             ->assertJson([
                 'success' => true,
                 'received' => 1,
-                'processed' => 1,
+                'queued' => true,
             ]);
+
+        $this->assertDatabaseHas('raw_attendance_logs', [
+            'device_id' => $this->device->id,
+            'device_user_id' => 'EMP001',
+        ]);
     }
 
     public function test_duplicate_punch_detected_and_skipped(): void
@@ -182,12 +193,18 @@ class AdmsPushIntegrationTest extends TestCase
 
         $response = $this->postJson(route('attendance-integration.push'), $payload, $headers);
 
+        // Both pushes are acknowledged; the duplicate guard inside the job
+        // means only one raw log ever lands in the database.
         $response->assertOk()
             ->assertJson([
                 'success' => true,
                 'received' => 1,
-                'duplicates' => 1,
+                'queued' => true,
             ]);
+
+        $this->assertSame(1, RawAttendanceLog::where('device_id', $this->device->id)
+            ->where('device_user_id', 'EMP001')
+            ->count());
     }
 
     public function test_device_without_token_still_accepted(): void
@@ -388,7 +405,12 @@ class AdmsPushIntegrationTest extends TestCase
             ->assertJson([
                 'success' => true,
                 'received' => 1,
-                'processed' => 1,
+                'queued' => true,
             ]);
+
+        $this->assertDatabaseHas('raw_attendance_logs', [
+            'device_id' => $this->device->id,
+            'device_user_id' => 'EMP001',
+        ]);
     }
 }

@@ -318,7 +318,7 @@ class RawAttendanceLogService
             'device_id' => ['nullable', 'integer'],
             'device_user_id' => ['nullable', 'string', 'max:100'],
             'punch_time' => ['required'],
-            'punch_type' => ['nullable', 'in:check_in,check_out,break_in,break_out,unknown'],
+            'punch_type' => ['nullable', 'in:check_in,check_out,break_in,break_out,extra,unknown'],
             'verify_type' => ['nullable', 'in:fingerprint,card,password,face'],
             'work_code' => ['nullable', 'integer', 'min:0', 'max:65535'],
             'source' => ['nullable', 'in:device,device_pull,adms,manual,api'],

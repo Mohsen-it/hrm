@@ -1,6 +1,10 @@
 <script setup>
 import { computed, nextTick, onUnmounted, ref, watch } from 'vue';
 import Card from './Card.vue';
+import { useTranslations } from '@/composables/useTranslations';
+import { useFocusTrap } from '@/composables/useFocusTrap';
+
+const { t } = useTranslations();
 
 const props = defineProps({
     modelValue: { type: Boolean, default: false },
@@ -14,7 +18,13 @@ const emit = defineEmits(['update:modelValue', 'close']);
 
 const isOpen = computed(() => props.modelValue);
 const panelRef = ref(null);
-let previouslyFocusedElement = null;
+const panelEl = computed(() => {
+    const comp = panelRef.value;
+    if (!comp) return null;
+    return comp.$el || comp;
+});
+
+const focusTrap = useFocusTrap(panelEl, isOpen);
 
 const sizeClass = computed(() => {
     return {
@@ -41,16 +51,17 @@ function onEsc(e) {
 
 watch(isOpen, async (val) => {
     if (val) {
-        previouslyFocusedElement = document.activeElement;
         document.body.style.overflow = 'hidden';
         document.addEventListener('keydown', onEsc);
         await nextTick();
-        panelRef.value?.$el?.focus();
+        // useFocusTrap watches `isOpen` and moves focus to the first
+        // focusable element inside the dialog (activates on open).
+        if (!panelEl.value?.contains(document.activeElement)) {
+            focusTrap.focusFirst();
+        }
     } else {
         document.body.style.overflow = '';
         document.removeEventListener('keydown', onEsc);
-        previouslyFocusedElement?.focus?.();
-        previouslyFocusedElement = null;
     }
 });
 
@@ -88,7 +99,7 @@ onUnmounted(() => {
                             :dir="dir"
                             role="dialog"
                             aria-modal="true"
-                            :aria-label="title || 'Dialog'"
+                            :aria-label="title || t('components.dialog')"
                             tabindex="-1"
                             :class="['relative z-10 flex w-full max-h-[calc(100dvh-2rem)] flex-col overflow-hidden rounded-lg shadow-level-4 max-sm:max-h-[90dvh] max-sm:max-w-full max-sm:rounded-b-none max-sm:rounded-t-lg', sizeClass]"
                         >
@@ -99,7 +110,7 @@ onUnmounted(() => {
                                 <button
                                     type="button"
                                     class="w-8 h-8 flex items-center justify-center rounded-lg text-mistral-steel hover:text-mistral-ink hover:bg-mistral-surface transition-colors"
-                                    :aria-label="dir === 'rtl' ? 'إغلاق' : 'Close'"
+                                    :aria-label="t('components.close')"
                                     @click="close"
                                 >
                                     <i class="fas fa-xmark text-[14px]" aria-hidden="true"></i>

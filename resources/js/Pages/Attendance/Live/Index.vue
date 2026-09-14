@@ -74,6 +74,8 @@ const punchTypeLabel = (type) => {
         check_out: t('attendance.punch_type.check_out'),
         break_out: t('attendance.punch_type.break_out'),
         break_in: t('attendance.punch_type.break_in'),
+        extra: t('attendance.punch_type.extra'),
+        unknown: t('attendance.punch_type.unknown'),
     }[type] || type;
 };
 
@@ -83,16 +85,18 @@ const punchTypeVariant = (type) => {
         check_out: 'info',
         break_out: 'pending',
         break_in: 'orange',
+        extra: 'inactive',
+        unknown: 'pending',
     }[type] || 'inactive';
 };
 
 const sourceLabel = (source) => {
     return {
-        device_push: 'جهاز بصمة',
-        device: 'جهاز',
-        adms: 'ADMS',
-        manual: 'يدوي',
-        api: 'API',
+        device_push: t('attendance.source.device_push'),
+        device: t('attendance.source.device'),
+        adms: t('attendance.source.adms'),
+        manual: t('attendance.source.manual'),
+        api: t('attendance.source.api'),
     }[source] || source;
 };
 

@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
 import { Link, router, usePage } from '@inertiajs/vue3';
 import { useTranslations } from '@/composables/useTranslations';
 import Breadcrumb from '@/Components/ui/Breadcrumb.vue';
@@ -29,22 +29,85 @@ const showModuleSwitcher = ref(false);
 const showRecentDropdown = ref(false);
 const showQuickActions = ref(false);
 
+// Track which dropdown trigger to restore focus to when a menu closes.
+const moduleTrigger = ref(null);
+const quickTrigger = ref(null);
+const triggerRefs = { module: moduleTrigger, quick: quickTrigger };
+const openMenu = computed(() =>
+  showModuleSwitcher.value ? 'module' : showRecentDropdown.value ? 'recent' : showQuickActions.value ? 'quick' : null,
+);
+
 function toggleModuleSwitcher() {
-  showModuleSwitcher.value = !showModuleSwitcher.value;
+  const opening = !showModuleSwitcher.value;
+  showModuleSwitcher.value = opening;
   showRecentDropdown.value = false;
   showQuickActions.value = false;
+  if (opening) announceMenu();
 }
 
 function toggleRecent() {
-  showRecentDropdown.value = !showRecentDropdown.value;
+  const opening = !showRecentDropdown.value;
+  showRecentDropdown.value = opening;
   showModuleSwitcher.value = false;
   showQuickActions.value = false;
+  if (opening) announceMenu();
 }
 
 function toggleQuickActions() {
-  showQuickActions.value = !showQuickActions.value;
+  const opening = !showQuickActions.value;
+  showQuickActions.value = opening;
   showModuleSwitcher.value = false;
   showRecentDropdown.value = false;
+  if (opening) announceMenu();
+}
+
+// aria-live region text: screen readers announce menu open/close state.
+const liveMessage = ref('');
+let liveTimer = null;
+function announceMenu() {
+  const menuLabels = {
+    module: t('common.module_switcher'),
+    recent: t('common.recent'),
+    quick: t('common.quick_actions'),
+  };
+  const name = menuLabels[openMenu.value] || '';
+  liveMessage.value = `${name} — ${t('common.menu_opened')}`;
+  if (liveTimer) clearTimeout(liveTimer);
+  liveTimer = setTimeout(() => { liveMessage.value = ''; }, 1200);
+}
+
+function closeMenuFromKeyboard() {
+  const current = openMenu.value;
+  closeAllDropdowns();
+  if (current && triggerRefs[current]) {
+    nextTick(() => triggerRefs[current].value?.focus());
+  }
+}
+
+// Listbox-style arrow navigation between [role=option] items of the open menu.
+function onMenuKeydown(e) {
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    e.stopPropagation();
+    closeMenuFromKeyboard();
+    return;
+  }
+  if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+
+  const menu = e.currentTarget;
+  const items = Array.from(menu.querySelectorAll('[role="option"]'));
+  if (items.length === 0) return;
+
+  e.preventDefault();
+  const currentIndex = items.indexOf(document.activeElement);
+  let nextIndex;
+  if (currentIndex === -1) {
+    nextIndex = e.key === 'ArrowDown' ? 0 : items.length - 1;
+  } else {
+    const step = e.key === 'ArrowDown' ? 1 : -1;
+    nextIndex = (currentIndex + step + items.length) % items.length;
+  }
+  items[nextIndex].focus();
 }
 
 function closeAllDropdowns() {
@@ -86,12 +149,12 @@ function formatTimeAgo(timestamp) {
   if (!timestamp) return '';
   const diff = Date.now() - timestamp;
   const minutes = Math.floor(diff / 60000);
-  if (minutes < 1) return 'Just now';
-  if (minutes < 60) return `${minutes}m ago`;
+  if (minutes < 1) return t('dashboard.time_ago_just');
+  if (minutes < 60) return t('dashboard.time_ago_minutes', { minutes });
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
+  if (hours < 24) return t('dashboard.time_ago_hours', { hours });
   const days = Math.floor(hours / 24);
-  return `${days}d ago`;
+  return t('dashboard.time_ago_days', { days });
 }
 
 const breadcrumbItems = computed(() => {
@@ -114,12 +177,21 @@ function onClickOutside(e) {
   }
 }
 
+function onGlobalKeydown(e) {
+  if (e.key === 'Escape' && openMenu.value) {
+    closeMenuFromKeyboard();
+  }
+}
+
 onMounted(() => {
   document.addEventListener('click', onClickOutside);
+  document.addEventListener('keydown', onGlobalKeydown);
 });
 
 onUnmounted(() => {
   document.removeEventListener('click', onClickOutside);
+  document.removeEventListener('keydown', onGlobalKeydown);
+  if (liveTimer) clearTimeout(liveTimer);
 });
 </script>
 
@@ -152,11 +224,13 @@ onUnmounted(() => {
         <!-- Module switcher -->
         <div class="navbar-dropdown" v-if="activeModule">
           <button
+            ref="moduleTrigger"
             type="button"
             class="navbar__module-switcher"
             @click.stop="toggleModuleSwitcher"
             :aria-expanded="showModuleSwitcher"
             aria-haspopup="listbox"
+            aria-controls="navbar-modules-menu"
           >
             <div :class="['navbar__module-icon', activeModule.color]">
               <i :class="activeModule.icon" aria-hidden="true"></i>
@@ -174,8 +248,10 @@ onUnmounted(() => {
           <Transition name="dropdown">
             <div
               v-if="showModuleSwitcher"
+              id="navbar-modules-menu"
               class="navbar-dropdown__menu navbar-dropdown__menu--modules"
               role="listbox"
+              @keydown="onMenuKeydown"
             >
               <button
                 v-for="mod in modules"
@@ -186,6 +262,7 @@ onUnmounted(() => {
                 ]"
                 role="option"
                 :aria-selected="mod.id === activeModule.id"
+                tabindex="-1"
                 @click.stop="navigateTo(mod.route)"
               >
                 <div :class="['navbar__module-icon navbar__module-icon--sm', mod.color]">
@@ -208,7 +285,7 @@ onUnmounted(() => {
         <!-- Breadcrumbs -->
         <nav
           v-if="breadcrumbItems.length > 1"
-          :aria-label="isRtl ? 'مسار التنقل' : 'Breadcrumb'"
+          :aria-label="t('components.breadcrumb')"
           class="navbar__breadcrumbs hidden sm:block"
         >
           <ol class="navbar__breadcrumb-list">
@@ -261,11 +338,13 @@ onUnmounted(() => {
         <!-- Quick actions -->
         <div class="navbar-dropdown hidden sm:block">
           <button
+            ref="quickTrigger"
             type="button"
             class="navbar__icon-btn"
             :title="t('common.quick_actions') || 'Quick actions'"
             :aria-label="t('common.quick_actions') || 'Quick actions'"
             :aria-expanded="showQuickActions"
+            aria-controls="navbar-quick-actions-menu"
             @click.stop="toggleQuickActions"
           >
             <i class="fas fa-bolt text-[15px]" aria-hidden="true"></i>
@@ -274,7 +353,9 @@ onUnmounted(() => {
           <Transition name="dropdown">
             <div
               v-if="showQuickActions"
+              id="navbar-quick-actions-menu"
               class="navbar-dropdown__menu navbar-dropdown__menu--actions"
+              @keydown="onMenuKeydown"
             >
               <div class="navbar-dropdown__heading">{{ t('common.quick_actions') || 'Quick Actions' }}</div>
               <button
@@ -288,7 +369,7 @@ onUnmounted(() => {
                 class="navbar-dropdown__item"
                 @click.stop="navigateTo('users.index')"
               >
-                <i class="fas fa-users text-blue-500 text-[13px]" aria-hidden="true"></i>
+                <i class="fas fa-users text-mistral-info text-[13px]" aria-hidden="true"></i>
                 <span class="navbar-dropdown__label">{{ t('menu.users') }}</span>
               </button>
               <button
@@ -319,7 +400,7 @@ onUnmounted(() => {
                 @click.stop="printPage"
               >
                 <i class="fas fa-print text-mistral-steel text-[13px]" aria-hidden="true"></i>
-                <span class="navbar-dropdown__label">Print</span>
+                <span class="navbar-dropdown__label">{{ t('common.print') }}</span>
                 <kbd class="navbar__kbd navbar__kbd--sm ms-auto">Ctrl+P</kbd>
               </button>
             </div>
@@ -355,4 +436,7 @@ onUnmounted(() => {
       </div>
     </div>
   </header>
+
+  <!-- Screen-reader announcements for dropdown open/close (a11y) -->
+  <div aria-live="polite" class="sr-only">{{ liveMessage }}</div>
 </template>

@@ -576,7 +576,12 @@ class DashboardController extends Controller
             'device_name' => $p['device']['name'] ?? '',
             'time' => isset($p['punched_at']) ? Carbon::parse($p['punched_at'])->format('H:i:s') : '—',
             'check_in_at' => $p['punched_at'] ?? null,
-            'type' => $p['punch_type'] === 'check_in' ? 'دخول' : 'خروج',
+            'type' => match ($p['punch_type'] ?? null) {
+                'check_in' => 'دخول',
+                'check_out' => 'خروج',
+                'extra' => 'بصمة إضافية',
+                default => 'غير معروف',
+            },
             'status' => $p['punch_type'],
         ]);
 

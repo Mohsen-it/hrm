@@ -1,5 +1,8 @@
 <script setup>
 import { computed, ref } from 'vue';
+import { useTranslations } from '@/composables/useTranslations';
+
+const { t } = useTranslations();
 
 const props = defineProps({
     type: { type: String, default: 'info' },
@@ -63,7 +66,7 @@ function dismiss() {
                 v-if="dismissible"
                 type="button"
                 class="shrink-0 opacity-60 hover:opacity-100 focus-visible:outline-2 focus-visible:outline-current focus-visible:outline-offset-2 rounded transition-opacity"
-                :aria-label="dir === 'rtl' ? 'إغلاق' : 'Dismiss'"
+                :aria-label="t('components.dismiss')"
                 @click="dismiss"
             >
                 <i class="fas fa-xmark text-[14px]" aria-hidden="true"></i>

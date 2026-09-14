@@ -201,6 +201,12 @@ function getSortIcon(col) {
     return 'fas fa-sort-down text-mistral-primary';
 }
 
+// ARIA column sort state for screen readers (WAI-ARIA aria-sort pattern).
+function ariaSortFor(col) {
+    if (table.sortColumn.value !== col.key) return 'none';
+    return table.sortDirection.value === 'asc' ? 'ascending' : 'descending';
+}
+
 // Keep header labels aligned with their cell content: when a column is
 // centered/right-aligned via `cellClass` (or an explicit `headerClass`),
 // apply the matching alignment to the header label so the data lines up
@@ -306,7 +312,12 @@ const lastVisibleColIndex = computed(() => {
                     ref="tableWrapperRef"
                     @scroll="handleTableScroll"
                 >
-                    <table class="w-full border-collapse text-start" :class="table.densityClass.value" role="grid">
+                    <table
+                        class="w-full border-collapse text-start"
+                        :class="table.densityClass.value"
+                        role="grid"
+                        :aria-rowcount="meta.total > 0 ? String(meta.total + 1) : undefined"
+                    >
                         <thead>
                             <tr
                                 :class="[
@@ -316,13 +327,14 @@ const lastVisibleColIndex = computed(() => {
                             >
                                 <th
                                     v-if="selectable"
-                                    class="sticky bg-mistral-surface/60 z-10 px-4 py-3 text-center w-[48px] align-middle"
-                                    :class="dir === 'rtl' ? 'right-0' : 'left-0'"
+                                    scope="col"
+                                    class="sticky start-0 bg-mistral-surface/60 z-10 px-4 py-3 text-center w-[48px] align-middle"
                                 >
                                     <input
                                         type="checkbox"
                                         :checked="allSelected"
                                         :indeterminate.prop="someSelected"
+                                        :aria-label="t('common.select_all')"
                                         class="w-4 h-4 rounded border-mistral-hairline-strong text-mistral-primary focus:ring-mistral-primary/20 cursor-pointer"
                                         @change="table.selectAll(allRowIds)"
                                     />
@@ -330,26 +342,33 @@ const lastVisibleColIndex = computed(() => {
                                 <th
                                     v-for="(col, colIdx) in table.visibleColumns.value"
                                     :key="col.key"
+                                    scope="col"
+                                    :aria-sort="col.sortable ? ariaSortFor(col) : undefined"
                                     :class="[
                                         'px-4 py-3 text-[11px] font-semibold text-mistral-steel uppercase tracking-wider align-middle',
-                                        col.sortable ? 'cursor-pointer select-none hover:text-mistral-ink transition-colors' : '',
+                                        !col.sortable && col.key !== 'actions' ? 'hover:text-mistral-ink transition-colors' : '',
                                         table.sortColumn.value === col.key ? 'text-mistral-primary' : '',
                                         col.headerClass,
                                         headerAlignmentClass(col) === 'justify-center' ? 'text-center' : headerAlignmentClass(col) === 'justify-end' ? 'text-end' : '',
-                                        col.key === 'actions' ? 'sticky bg-mistral-surface/60 z-10 text-center w-[120px]' : '',
-                                        col.key === 'actions' ? (dir === 'rtl' ? 'right-0' : 'left-0') : '',
+                                        col.key === 'actions' ? 'sticky start-0 bg-mistral-surface/60 z-10 text-center w-[120px]' : '',
                                         colIdx === lastVisibleColIndex && col.key !== 'actions' ? (dir === 'rtl' ? 'ps-4' : 'pe-4') : '',
                                     ]"
                                     :style="col.width ? { width: col.width } : {}"
-                                    @click="col.sortable ? table.toggleSort(col.key) : null"
                                 >
-                                    <div class="flex items-center gap-1.5" :class="headerAlignmentClass(col)">
+                                    <!-- Sortable headers are real buttons: keyboard users get Enter/Space
+                                         natively, and screen readers announce the aria-sort state. -->
+                                    <button
+                                        v-if="col.sortable"
+                                        type="button"
+                                        class="flex w-full items-center gap-1.5 bg-transparent p-0 cursor-pointer select-none transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mistral-primary"
+                                        :class="headerAlignmentClass(col)"
+                                        @click="table.toggleSort(col.key)"
+                                    >
+                                        <span class="whitespace-nowrap">{{ col.label }}</span>
+                                        <i :class="[getSortIcon(col), 'text-[10px]']" aria-hidden="true"></i>
+                                    </button>
+                                    <div v-else class="flex items-center gap-1.5" :class="headerAlignmentClass(col)">
                                         <span>{{ col.label }}</span>
-                                        <i
-                                            v-if="col.sortable"
-                                            :class="[getSortIcon(col), 'text-[10px]']"
-                                            aria-hidden="true"
-                                        ></i>
                                     </div>
                                 </th>
                             </tr>
@@ -372,7 +391,7 @@ const lastVisibleColIndex = computed(() => {
                                         <div class="w-14 h-14 rounded-md bg-mistral-danger/10 flex items-center justify-center">
                                             <i class="fas fa-exclamation-triangle text-[24px] text-mistral-danger"></i>
                                         </div>
-                                        <p class="text-[14px] text-mistral-ink font-semibold">حدث خطأ</p>
+                                        <p class="text-[14px] text-mistral-ink font-semibold">{{ t('common.error_occurred') }}</p>
                                         <p class="text-[13px] text-mistral-stone">{{ error }}</p>
                                     </div>
                                 </td>
@@ -404,8 +423,7 @@ const lastVisibleColIndex = computed(() => {
                                     <td
                                         v-if="selectable"
                                         :class="[
-                                            'sticky z-10 px-4 py-3 text-center w-[48px]',
-                                            dir === 'rtl' ? 'right-0' : 'left-0',
+                                            'sticky start-0 z-10 px-4 py-3 text-center w-[48px]',
                                             rowIndex % 2 === 1 ? 'bg-mistral-surface/30' : 'bg-white',
                                             table.selectedIds.value.includes(row.id) ? 'bg-mistral-primary/5' : '',
                                         ]"
@@ -414,6 +432,7 @@ const lastVisibleColIndex = computed(() => {
                                             <input
                                                 type="checkbox"
                                                 :checked="table.selectedIds.value.includes(row.id)"
+                                                :aria-label="t('common.select_row')"
                                                 class="w-4 h-4 rounded border-mistral-hairline-strong text-mistral-primary focus:ring-mistral-primary/20 cursor-pointer"
                                                 @change="table.selectRow(row.id)"
                                             />
@@ -425,8 +444,7 @@ const lastVisibleColIndex = computed(() => {
                                     :class="[
                                         'px-4 py-3 text-[13px] text-mistral-ink align-middle',
                                         col.cellClass,
-                                        col.key === 'actions' ? 'sticky z-10 text-center' : '',
-                                        col.key === 'actions' ? (dir === 'rtl' ? 'right-0' : 'left-0') : '',
+                                        col.key === 'actions' ? 'sticky start-0 z-10 text-center' : '',
                                         col.key === 'actions' ? (rowIndex % 2 === 1 ? 'bg-mistral-surface/30' : 'bg-white') : '',
                                         col.key === 'actions' && table.selectedIds.value.includes(row.id) ? 'bg-mistral-primary/5' : '',
                                     ]"
@@ -448,7 +466,7 @@ const lastVisibleColIndex = computed(() => {
                                             </span>
                                             <span v-else-if="col.tooltip" class="relative group/tooltip">
                                                 {{ cellValue(row, col) }}
-                                                <span class="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-[11px] text-white bg-mistral-ink rounded-lg opacity-0 group-hover/tooltip:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-20">
+                                                <span class="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-[11px] text-white bg-mistral-ink rounded-lg opacity-0 group-hover/tooltip:opacity-100 group-focus-within/tooltip:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-20">
                                                     {{ col.tooltip(row) }}
                                                 </span>
                                             </span>

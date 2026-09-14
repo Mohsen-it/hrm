@@ -109,13 +109,37 @@ onUnmounted(() => {
 });
 
 function punchVariant(type) {
-    return type === 'check_in' ? 'active' : 'pending';
+    return { check_in: 'active', check_out: 'info', extra: 'inactive' }[type] || 'pending';
 }
 
 function punchLabel(punch) {
     if (punch.punch_type === 'check_in') return t('fingerprint_devices.live_punch_in');
     if (punch.punch_type === 'check_out') return t('fingerprint_devices.live_punch_out');
+    if (punch.punch_type === 'extra') return t('attendance.punch_type.extra');
     return t('fingerprint_devices.live_punch_unknown');
+}
+
+function verifyMethod(punch) {
+    return punch.verify_method || punch.verify_type || null;
+}
+
+function verifyLabel(punch) {
+    const method = verifyMethod(punch);
+    if (method === 'fingerprint') return t('fingerprint_devices.verify_fingerprint');
+    if (method === 'face') return t('fingerprint_devices.verify_face');
+    if (method === 'card') return t('fingerprint_devices.verify_card');
+    if (method === 'password') return t('fingerprint_devices.verify_password');
+    if (method) return t('fingerprint_devices.verify_unknown');
+    return null;
+}
+
+function verifyIcon(punch) {
+    return {
+        fingerprint: 'fas fa-fingerprint',
+        face: 'fas fa-face-smile',
+        card: 'fas fa-id-card',
+        password: 'fas fa-keyboard',
+    }[verifyMethod(punch)] || 'fas fa-circle-question';
 }
 
 
@@ -223,10 +247,20 @@ usePageTitle(t('fingerprint_devices.live_scan'));
                         </p>
                     </div>
                     <div class="text-end shrink-0">
-                        <Badge
-                            :text="punchLabel(punch)"
-                            :variant="punchVariant(punch.punch_type)"
-                        />
+                        <div class="flex items-center justify-end gap-1.5 flex-wrap">
+                            <Badge
+                                :text="punchLabel(punch)"
+                                :variant="punchVariant(punch.punch_type)"
+                            />
+                            <span
+                                v-if="verifyLabel(punch)"
+                                class="inline-flex items-center gap-1 rounded-full font-medium leading-none whitespace-nowrap h-5.5 text-[11px] px-2 bg-mistral-surface text-mistral-steel"
+                                :title="t('fingerprint_devices.verify_method')"
+                            >
+                                <i :class="verifyIcon(punch)" class="text-[10px]"></i>
+                                {{ verifyLabel(punch) }}
+                            </span>
+                        </div>
                         <p class="text-[12px] text-mistral-steel mt-1">
                             {{ formatTime(punch.punched_at) }}
                             <span class="text-mistral-stone">({{ formatRelative(punch.punched_at) }})</span>

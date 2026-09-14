@@ -73,13 +73,8 @@ onUnmounted(() => {
 });
 
 const mainPadding = computed(() => {
-    if (isMobile.value) {
-        return isRtl.value ? 'mr-0' : 'ml-0';
-    }
-    if (isRtl.value) {
-        return isSidebarCollapsed.value ? 'md:mr-[68px]' : 'md:mr-[268px]';
-    }
-    return isSidebarCollapsed.value ? 'md:ml-[68px]' : 'md:ml-[268px]';
+    if (isMobile.value) return '';
+    return isSidebarCollapsed.value ? 'md:ms-[68px]' : 'md:ms-[268px]';
 });
 
 // Keep the notification away from the fixed sidebar on both RTL and LTR layouts.
@@ -195,16 +190,16 @@ watch(() => page.url, () => {
                 </span>
                 <span class="min-w-0 flex-1">
                     <span class="block truncate text-[13px] font-semibold text-mistral-ink">
-                        {{ livePunchNotification.user?.name || livePunchNotification.user?.employee_code || 'موظف' }}
+                        {{ livePunchNotification.user?.name || livePunchNotification.user?.employee_code || t('dashboard.live_punch_employee') }}
                     </span>
                     <span class="block text-[11px] text-mistral-steel">
-                        {{ livePunchNotification.punch_type === 'check_out' ? 'تم تسجيل انصراف' : 'تم تسجيل حضور' }}
+                        {{ livePunchNotification.punch_type === 'check_out' ? t('dashboard.live_punch_check_out') : t('dashboard.live_punch_check_in') }}
                         <span v-if="livePunchNotification.device?.name" class="text-mistral-stone"> · {{ livePunchNotification.device.name }}</span>
                     </span>
                 </span>
                 <IconButton
                     icon="fas fa-xmark"
-                    aria-label="إخفاء إشعار تسجيل البصمة"
+                    :aria-label="t('dashboard.live_punch_dismiss')"
                     variant="ghost"
                     size="sm"
                     @click="livePunchNotification = null"

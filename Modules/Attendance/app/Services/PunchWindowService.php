@@ -21,6 +21,13 @@ class PunchWindowService
     /**
      * Determine whether a punch belongs to the check-in or check-out window.
      *
+     * Strict window rule (mirrors SchedulePunchClassifierService):
+     *  - inside one window → that type ('check_in' / 'check_out')
+     *  - inside both (overlap) → open session disambiguates, never automatic
+     *  - outside every window but windows exist → 'extra' (بصمة إضافية:
+     *    stored for audit, never opens/closes a session)
+     *  - no windows at all → null (caller falls back to the device value)
+     *
      * @return array{type: ?string, has_configured_window: bool}
      */
     public function classify(int $employeeId, DateTimeInterface $punchAt, bool $preferCheckOut = false): array
@@ -79,8 +86,8 @@ class PunchWindowService
 
         if ($matchingTypes !== []) {
             // Some legacy schedules have intentionally overlapping windows.
-            // An open session makes the same punch a checkout; otherwise it
-            // is the employee's first check-in for that duty period.
+            // A punch inside BOTH windows is disambiguated by the open
+            // session only — a second punch is never an automatic check-out.
             $type = $preferCheckOut && in_array('check_out', $matchingTypes, true)
                 ? 'check_out'
                 : (in_array('check_in', $matchingTypes, true) ? 'check_in' : 'check_out');
@@ -115,7 +122,9 @@ class PunchWindowService
             }
         }
 
-        return ['type' => null, 'has_configured_window' => $hasConfiguredWindow];
+        // A punch outside every configured window is an Extra punch
+        // (بصمة إضافية): kept for audit, never a phantom session.
+        return ['type' => $hasConfiguredWindow ? 'extra' : null, 'has_configured_window' => $hasConfiguredWindow];
     }
 
     /**

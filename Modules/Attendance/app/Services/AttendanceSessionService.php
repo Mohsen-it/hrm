@@ -343,7 +343,12 @@ class AttendanceSessionService
     /**
      * Convert one raw attendance log into (or onto) a session.
      *
-     * Returns null when the log has an unknown punch type (no action taken).
+     * Only window-classified check_in / check_out punches create or close
+     * sessions. Extra punches (بصمة إضافية — accidental / mid-duty punches
+     * outside every window) and unknown punches are retained in raw logs for
+     * audit but deliberately never converted into sessions.
+     *
+     * Returns null when the log yields no session (no action taken).
      */
     public function processRawLog(RawAttendanceLog $log): ?AttendanceSession
     {
@@ -369,14 +374,24 @@ class AttendanceSessionService
         $punchType = $classification['type']
             ?? (! $classification['has_configured_window'] ? $log->punch_type : null);
 
+        // Self-healing stored type: when rotation windows exist, the window
+        // classification is the truth (device values and legacy 'unknown'
+        // rows are corrected in place). Without windows the device value is
+        // kept untouched.
+        if ($classification['has_configured_window'] && $punchType !== null && $log->punch_type !== $punchType) {
+            $log->forceFill(['punch_type' => $punchType])->save();
+            $log->refresh();
+        }
+
         $session = match ($punchType) {
             'check_in' => $this->checkIn($log->user_id, $at, $context),
             'check_out' => $this->checkOut($log->user_id, $at, $context),
+            // 'extra' / 'break_*' / 'unknown' / null → audit only, no session.
             default => null,
         };
 
-        // A punch outside configured windows is retained in raw logs but is
-        // deliberately not converted into a misleading attendance session.
+        // Every punch is retained in raw logs; extra/unknown punches are
+        // deliberately not converted into misleading attendance sessions.
         $this->rawLogRepository->markProcessed([$log->id], $at);
 
         return $session;

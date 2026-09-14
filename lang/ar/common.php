@@ -94,4 +94,28 @@ return [
     'close' => 'إغلاق',
     'notes' => 'ملاحظات',
     'total' => 'الإجمالي',
+    'error_occurred' => 'حدث خطأ',
+
+    // DataTable toolbar
+    'search_placeholder' => 'بحث...',
+    'filters_btn' => 'فلاتر',
+    'selected_count' => ':count محدد',
+    'bulk_delete' => 'حذف',
+    'bulk_export' => 'تصدير',
+    'columns_btn' => 'الأعمدة',
+    'export_btn' => 'تصدير',
+    'saved_btn' => 'المحفوظة',
+    'saved_filters' => 'الفلاتر المحفوظة',
+    'no_saved_filters' => 'لا توجد فلاتر محفوظة',
+    'filter_all' => 'الكل',
+    'filter_placeholder' => 'فلتر...',
+    'clear' => 'مسح',
+    'filter_name_placeholder' => 'اسم الفلتر',
+    'remove_item' => 'إزالة :item',
+
+    // إمكانية الوصول (a11y)
+    'select_all' => 'تحديد كل الصفوف',
+    'select_row' => 'تحديد الصف',
+    'menu_opened' => 'تم فتح القائمة',
+    'print' => 'طباعة',
 ];

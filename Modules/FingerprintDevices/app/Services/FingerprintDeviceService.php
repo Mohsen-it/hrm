@@ -5,6 +5,7 @@ namespace Modules\FingerprintDevices\Services;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
+use Modules\Attendance\Services\AttendanceSessionService;
 use Modules\Attendance\Services\RawAttendanceLogService;
 use Modules\AttendanceIntegration\Contracts\DeviceAdapterInterface;
 use Modules\AttendanceIntegration\DTOs\PunchType;
@@ -23,6 +24,7 @@ class FingerprintDeviceService
         private DeviceAdapterResolver $adapterResolver,
         private RawAttendanceLogService $rawLogService,
         private SchedulePunchClassifierService $schedulePunchClassifier,
+        private AttendanceSessionService $sessionService,
     ) {}
 
     private function resolveAdapter(FingerprintDevice $device): DeviceAdapterInterface
@@ -147,6 +149,7 @@ class FingerprintDeviceService
                 $userPk,
                 new \DateTimeImmutable($timestamp),
                 $devicePunchType,
+                $userPk !== null && $this->sessionService->getOpenSessionForUser($userPk) !== null,
             );
 
             $rows[] = [
@@ -193,6 +196,7 @@ class FingerprintDeviceService
             0, 1 => 'fingerprint',
             2, 3 => 'card',
             4 => 'password',
+            5, 6, 15 => 'face',
             default => 'fingerprint',
         };
     }

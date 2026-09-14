@@ -71,7 +71,7 @@ defineExpose({ focus });
                 :aria-invalid="!!error"
                 :aria-describedby="error ? `${inputId}-error` : hint ? `${inputId}-hint` : undefined"
                 :class="[
-                    'peer w-full pt-3 pb-2 px-3 text-[14px] text-mistral-ink bg-white border rounded-lg transition-all duration-200 resize-y min-h-[80px]',
+                    'peer w-full pt-3 pb-2 px-3 text-[14px] text-mistral-ink bg-mistral-canvas border rounded-md transition-all duration-200 resize-y min-h-[80px]',
                     'placeholder:text-transparent',
                     'focus:outline-none focus:ring-2 focus:ring-mistral-primary/20 focus:border-mistral-primary',
                     'disabled:bg-mistral-surface disabled:text-mistral-muted disabled:cursor-not-allowed',
@@ -89,8 +89,8 @@ defineExpose({ focus });
                 :class="[
                     'absolute text-[13px] font-medium pointer-events-none transition-all duration-200 origin-top-start z-10',
                     isFloating
-                        ? (dir === 'rtl' ? 'top-1.5 right-3 text-[11px]' : 'top-1.5 left-3 text-[11px]')
-                        : (dir === 'rtl' ? 'top-3 right-3 text-[14px]' : 'top-3 left-3 text-[14px]'),
+                        ? 'top-1.5 start-3 text-[11px]'
+                        : 'top-3 start-3 text-[14px]',
                     isFloating && 'text-mistral-steel',
                     !isFloating && 'text-mistral-muted',
                     isFocused && !error && 'text-mistral-primary',

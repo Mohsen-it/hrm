@@ -392,13 +392,13 @@ usePageTitle(t('attendance.summaries'));
                 <table class="w-full text-sm">
                     <thead>
                         <tr class="border-b border-mistral-border bg-mistral-cream/30">
-                            <th class="px-4 py-3 text-start font-semibold text-mistral-ink">#</th>
-                            <th class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.employee_name') }}</th>
-                            <th class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.fields.department') }}</th>
-                            <th class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.date') }}</th>
-                            <th class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.check_in_time') }}</th>
-                            <th class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.cutoff') }}</th>
-                            <th class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.late_minutes') }}</th>
+                            <th scope="col" class="px-4 py-3 text-start font-semibold text-mistral-ink">#</th>
+                            <th scope="col" class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.employee_name') }}</th>
+                            <th scope="col" class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.fields.department') }}</th>
+                            <th scope="col" class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.date') }}</th>
+                            <th scope="col" class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.check_in_time') }}</th>
+                            <th scope="col" class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.cutoff') }}</th>
+                            <th scope="col" class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.late_minutes') }}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -475,13 +475,13 @@ usePageTitle(t('attendance.summaries'));
                 <table class="w-full text-sm">
                     <thead>
                         <tr class="border-b border-mistral-border bg-mistral-cream/30">
-                            <th class="px-4 py-3 text-start font-semibold text-mistral-ink">#</th>
-                            <th class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.employee_name') }}</th>
-                            <th class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.fields.department') }}</th>
-                            <th class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.date') }}</th>
-                            <th class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.check_in_time') }}</th>
-                            <th class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.expected_check_out') }}</th>
-                            <th class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.missing_checkout_duration') }}</th>
+                            <th scope="col" class="px-4 py-3 text-start font-semibold text-mistral-ink">#</th>
+                            <th scope="col" class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.employee_name') }}</th>
+                            <th scope="col" class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.fields.department') }}</th>
+                            <th scope="col" class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.date') }}</th>
+                            <th scope="col" class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.check_in_time') }}</th>
+                            <th scope="col" class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.expected_check_out') }}</th>
+                            <th scope="col" class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.missing_checkout_duration') }}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -558,13 +558,13 @@ usePageTitle(t('attendance.summaries'));
                 <table class="w-full text-sm">
                     <thead>
                         <tr class="border-b border-mistral-border bg-mistral-cream/30">
-                            <th class="px-4 py-3 text-start font-semibold text-mistral-ink">#</th>
-                            <th class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.employee_name') }}</th>
-                            <th class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.fields.department') }}</th>
-                            <th class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.date') }}</th>
-                            <th class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.check_in_time') }}</th>
-                            <th class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.cutoff') }}</th>
-                            <th class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.late_minutes') }}</th>
+                            <th scope="col" class="px-4 py-3 text-start font-semibold text-mistral-ink">#</th>
+                            <th scope="col" class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.employee_name') }}</th>
+                            <th scope="col" class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.fields.department') }}</th>
+                            <th scope="col" class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.date') }}</th>
+                            <th scope="col" class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.check_in_time') }}</th>
+                            <th scope="col" class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.cutoff') }}</th>
+                            <th scope="col" class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.late_minutes') }}</th>
                         </tr>
                     </thead>
                     <tbody>

@@ -49,6 +49,7 @@ final class NormalizedPunch
             'uid' => $this->uid,
             'work_code' => $this->workCode,
             'raw_status' => $this->rawStatus,
+            'raw_data' => $this->rawData,
         ];
     }
 }

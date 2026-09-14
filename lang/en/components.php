@@ -34,4 +34,8 @@ return [
     'settings' => 'Settings',
     'breadcrumb' => 'Breadcrumb',
     'pagination' => 'Pagination',
+    'first_page' => 'First page',
+    'last_page' => 'Last page',
+    'page_number' => 'Page :number',
+    'dialog' => 'Dialog',
 ];

@@ -1,4 +1,8 @@
 <script setup>
+import { useTranslations } from '@/composables/useTranslations';
+
+const { t } = useTranslations();
+
 const props = defineProps({
     items: { type: Array, required: true },
     dir: { type: String, default: 'rtl' },
@@ -8,7 +12,7 @@ const isLast = (index) => index === props.items.length - 1;
 </script>
 
 <template>
-    <nav :aria-label="dir === 'rtl' ? 'مسار التنقل' : 'Breadcrumb'" :dir="dir">
+    <nav :aria-label="t('common.navigation')" :dir="dir">
         <ol class="flex items-center flex-wrap gap-1 text-[13px]">
             <li v-for="(item, index) in items" :key="index" class="flex items-center gap-1">
                 <a

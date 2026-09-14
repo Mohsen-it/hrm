@@ -1095,13 +1095,20 @@ body {
     z-index: 50;
 }
 
-/* Sunset Stripe Band */
+/* Sunset Stripe Band
+   GOVERNANCE (specs/012 — Phase 5): the 3px height is a locked administrative
+   decision. Change it only via the variable below AND update
+   specs/012-ui-ux-improvement/PROGRESS.md in the same commit. */
+:root {
+    --sunset-stripe-height: 3px;
+}
+
 .sunset-stripe-band {
     position: fixed;
     bottom: 0;
     left: 0;
     right: 0;
-    height: 3px;
+    height: var(--sunset-stripe-height);
     background: linear-gradient(
         to right,
         var(--color-mistral-primary) 0%,

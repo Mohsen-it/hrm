@@ -27,8 +27,8 @@ const iconColorClass = computed(() => {
         danger: 'bg-mistral-danger/10 text-mistral-danger',
         warning: 'bg-mistral-warning/10 text-mistral-warning',
         info: 'bg-mistral-info/10 text-mistral-info',
-        vacation: 'bg-cyan-50 text-cyan-600',
-        purple: 'bg-purple-50 text-purple-600',
+        vacation: 'bg-mistral-info/10 text-mistral-info',
+        purple: 'bg-mistral-cream-deeper text-mistral-primary',
     };
     return map[props.iconColor] || map.primary;
 });

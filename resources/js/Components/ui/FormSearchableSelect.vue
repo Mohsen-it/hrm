@@ -99,7 +99,7 @@ onBeforeUnmount(() => {
                 @focus="isFocused = true"
                 @blur="isFocused = false"
                 :class="[
-                    'peer w-full h-11 pt-3 pb-1 px-3 text-start text-[14px] bg-white border rounded-lg transition-all duration-200',
+                    'peer w-full h-11 pt-3 pb-1 px-3 text-start text-[14px] bg-mistral-canvas border rounded-md transition-all duration-200',
                     'focus:outline-none focus:ring-2 focus:ring-mistral-primary/20 focus:border-mistral-primary',
                     'disabled:bg-mistral-surface disabled:text-mistral-muted disabled:cursor-not-allowed',
                     error
@@ -118,8 +118,8 @@ onBeforeUnmount(() => {
                 :class="[
                     'absolute text-[13px] font-medium pointer-events-none transition-all duration-200 origin-top-start z-10',
                     isFloating
-                        ? (dir === 'rtl' ? 'top-1.5 right-3 text-[11px]' : 'top-1.5 left-3 text-[11px]')
-                        : (dir === 'rtl' ? 'top-2.5 right-3 text-[14px]' : 'top-2.5 left-3 text-[14px]'),
+                        ? 'top-1.5 start-3 text-[11px]'
+                        : 'top-2.5 start-3 text-[14px]',
                     isFloating && 'text-mistral-steel',
                     !isFloating && 'text-mistral-muted',
                     isFocused && !error && 'text-mistral-primary',
@@ -130,7 +130,7 @@ onBeforeUnmount(() => {
                 <span v-if="required" class="text-mistral-danger ms-0.5" aria-hidden="true">*</span>
             </label>
 
-            <div class="absolute top-0 bottom-0 flex items-center gap-1" :class="dir === 'rtl' ? 'left-2' : 'right-2'">
+            <div class="absolute top-0 bottom-0 end-2 flex items-center gap-1">
                 <span class="text-mistral-muted pointer-events-none" :class="isOpen ? 'rotate-180' : ''" style="transition: transform 0.2s">
                     <i class="fas fa-chevron-down text-[10px]"></i>
                 </span>
@@ -140,17 +140,16 @@ onBeforeUnmount(() => {
                 v-if="isOpen"
                 ref="dropdownRef"
                 :style="dropdownStyle"
-                class="fixed z-[9999] bg-white border border-mistral-hairline-strong rounded-lg shadow-xl overflow-hidden"
+                class="fixed z-[9999] bg-mistral-canvas border border-mistral-hairline-strong rounded-lg shadow-xl overflow-hidden"
             >
                 <div class="p-2 border-b border-mistral-hairline-soft">
                     <div class="relative">
-                        <i class="fas fa-search absolute top-1/2 -translate-y-1/2 text-mistral-muted text-[12px]" :class="dir === 'rtl' ? 'right-2.5' : 'left-2.5'"></i>
+                        <i class="fas fa-search absolute start-2.5 top-1/2 -translate-y-1/2 text-mistral-muted text-[12px]"></i>
                         <input
                             v-model="search"
                             type="text"
                             :placeholder="searchPlaceholder"
-                            class="w-full h-9 text-[13px] bg-mistral-surface/40 border border-mistral-hairline rounded-md focus:outline-none focus:border-mistral-primary"
-                            :class="dir === 'rtl' ? 'pr-8 pl-2' : 'pl-8 pr-2'"
+                            class="w-full h-9 text-[13px] bg-mistral-surface/40 border border-mistral-hairline rounded-md focus:outline-none focus:border-mistral-primary ps-8 pe-2"
                         />
                     </div>
                 </div>

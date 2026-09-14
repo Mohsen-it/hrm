@@ -8,6 +8,9 @@ export default {
 
 <script setup>
 import { usePageTitle } from '@/composables/usePageTitle';
+import { useTranslations } from '@/composables/useTranslations';
+
+const { t } = useTranslations();
 
 import { ref, computed } from 'vue';
 import { router } from '@inertiajs/vue3';
@@ -31,20 +34,28 @@ const departmentIds = ref(
 );
 const userId = ref(props.filters.user_id || '');
 const status = ref(props.filters.status || '');
-const statusOptions = [
-    { value: '', label: 'كل الحالات' }, { value: 'absent', label: 'الغياب' },
-    { value: 'awaiting', label: 'بانتظار الوصول' },
-    { value: 'late', label: 'التأخر' }, { value: 'leave', label: 'الإجازات' },
-    { value: 'mission', label: 'المهمات' }, { value: 'no_fingerprint', label: 'غير المسجلين بالبصمة' },
-    { value: 'incomplete', label: 'عدم الالتزام بالبصمة' }, { value: 'holiday', label: 'إجازة رسمية' },
-];
+const statusOptions = computed(() => [
+    { value: '', label: t('attendance.daily_report.status_all') },
+    { value: 'absent', label: t('attendance.daily_report.status_absent') },
+    { value: 'awaiting', label: t('attendance.daily_report.status_awaiting') },
+    { value: 'late', label: t('attendance.daily_report.status_late') },
+    { value: 'leave', label: t('attendance.daily_report.status_leave') },
+    { value: 'mission', label: t('attendance.daily_report.status_mission') },
+    { value: 'no_fingerprint', label: t('attendance.daily_report.status_no_fingerprint') },
+    { value: 'incomplete', label: t('attendance.daily_report.status_incomplete') },
+    { value: 'holiday', label: t('attendance.daily_report.status_holiday') },
+]);
 const data = computed(() => ({ data: props.report.rows || [], links: [] }));
-const columns = [
-    { key: 'name', label: 'الاسم الثلاثي' }, { key: 'employee_code', label: 'رمز الموظف' },
-    { key: 'department_name', label: 'القسم' }, { key: 'status_label', label: 'الحالة' },
-    { key: 'check_in', label: 'الدخول' }, { key: 'check_out', label: 'الخروج' },
-    { key: 'late_minutes', label: 'دقائق التأخر' }, { key: 'notes', label: 'الملاحظات' },
-];
+const columns = computed(() => [
+    { key: 'name', label: t('attendance.daily_report.col_name') },
+    { key: 'employee_code', label: t('attendance.daily_report.col_employee_code') },
+    { key: 'department_name', label: t('attendance.daily_report.col_department') },
+    { key: 'status_label', label: t('attendance.daily_report.col_status') },
+    { key: 'check_in', label: t('attendance.daily_report.col_check_in') },
+    { key: 'check_out', label: t('attendance.daily_report.col_check_out') },
+    { key: 'late_minutes', label: t('attendance.daily_report.col_late_minutes') },
+    { key: 'notes', label: t('attendance.daily_report.col_notes') },
+]);
 
 function filterParams() { return { date: date.value, cutoff_time: cutoffTime.value, branch_id: branchId.value || undefined, department_ids: departmentIds.value.length ? departmentIds.value : undefined, user_id: userId.value || undefined, status: status.value || undefined }; }
 function applyFilters() { router.get(route('attendance.daily-summaries.daily-report'), filterParams(), { preserveState: true, replace: true }); }
@@ -52,41 +63,41 @@ function exportReport() { window.location.href = route('attendance.daily-summari
 function badgeVariant(status) { return ({ present: 'active', late: 'warning', absent: 'absent', awaiting: 'pending', leave: 'info', mission: 'primary', incomplete: 'warning', no_fingerprint: 'neutral', rest: 'neutral', holiday: 'neutral' }[status] || 'neutral'); }
 
 
-usePageTitle('التقرير اليومي');
+usePageTitle(t('attendance.daily_report.title'));
 </script>
 
 <template>
     
-        <PageHeader title="التقرير اليومي" description="ملخص الحضور والغياب والإجازات والمهمات وحالات البصمة حسب اليوم المحدد">
-            <template #actions><Button variant="primary" icon="fas fa-file-word" @click="exportReport">تصدير Word</Button></template>
+        <PageHeader :title="t('attendance.daily_report.title')" :description="t('attendance.daily_report.description')">
+            <template #actions><Button variant="primary" icon="fas fa-file-word" @click="exportReport">{{ t('attendance.daily_report.export_word') }}</Button></template>
         </PageHeader>
 
         <Card variant="cream-soft" class="mb-5">
             <div class="flex flex-wrap items-end gap-4">
-                <FormInput v-model="date" type="date" label="تاريخ التقرير" />
-                <FormInput v-model="cutoffTime" type="time" label="ساعة اعتبار التأخر" />
-                <FormSelect v-model="branchId" label="الفرع" :options="[{ value: '', label: 'كل الفروع' }, ...branches]" />
-                <FormMultiSelect v-model="departmentIds" label="الأقسام" placeholder="كل الأقسام" :options="departments" />
-                <FormSelect v-model="userId" label="الموظف" :options="[{ value: '', label: 'كل الموظفين' }, ...users]" />
-                <FormSelect v-model="status" label="نوع التقرير" :options="statusOptions" />
-                <Button variant="primary" icon="fas fa-search" @click="applyFilters">عرض التقرير</Button>
+                <FormInput v-model="date" type="date" :label="t('attendance.daily_report.report_date')" />
+                <FormInput v-model="cutoffTime" type="time" :label="t('attendance.daily_report.cutoff_time')" />
+                <FormSelect v-model="branchId" :label="t('attendance.daily_report.branch')" :options="[{ value: '', label: t('attendance.daily_report.all_branches') }, ...branches]" />
+                <FormMultiSelect v-model="departmentIds" :label="t('attendance.daily_report.departments')" :placeholder="t('attendance.daily_report.all_departments')" :options="departments" />
+                <FormSelect v-model="userId" :label="t('attendance.daily_report.employee')" :options="[{ value: '', label: t('attendance.daily_report.all_employees') }, ...users]" />
+                <FormSelect v-model="status" :label="t('attendance.daily_report.report_type')" :options="statusOptions" />
+                <Button variant="primary" icon="fas fa-search" @click="applyFilters">{{ t('attendance.daily_report.view_report') }}</Button>
             </div>
         </Card>
 
         <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
-            <StatCard label="الإجمالي" :value="report.stats.total || 0" color="info" icon="fas fa-users" />
-            <StatCard label="حاضرون" :value="report.stats.present || 0" color="success" icon="fas fa-user-check" />
-            <StatCard label="متأخرون" :value="report.stats.late || 0" color="warning" icon="fas fa-clock" />
-            <StatCard label="غياب" :value="report.stats.absent || 0" color="danger" icon="fas fa-user-xmark" />
-            <StatCard label="بانتظار الوصول" :value="report.stats.awaiting || 0" color="warning" icon="fas fa-hourglass-half" />
-            <StatCard label="إجازات" :value="report.stats.leave || 0" color="info" icon="fas fa-umbrella-beach" />
-            <StatCard label="مهمات سفر" :value="report.stats.mission || 0" color="warning" icon="fas fa-briefcase" />
-            <StatCard label="بصمة ناقصة" :value="report.stats.incomplete || 0" color="warning" icon="fas fa-fingerprint" />
+            <StatCard :label="t('attendance.daily_report.total')" :value="report.stats.total || 0" color="info" icon="fas fa-users" />
+            <StatCard :label="t('attendance.daily_report.present')" :value="report.stats.present || 0" color="success" icon="fas fa-user-check" />
+            <StatCard :label="t('attendance.daily_report.late')" :value="report.stats.late || 0" color="warning" icon="fas fa-clock" />
+            <StatCard :label="t('attendance.daily_report.absent')" :value="report.stats.absent || 0" color="danger" icon="fas fa-user-xmark" />
+            <StatCard :label="t('attendance.daily_report.awaiting')" :value="report.stats.awaiting || 0" color="warning" icon="fas fa-hourglass-half" />
+            <StatCard :label="t('attendance.daily_report.leave')" :value="report.stats.leave || 0" color="info" icon="fas fa-umbrella-beach" />
+            <StatCard :label="t('attendance.daily_report.mission')" :value="report.stats.mission || 0" color="warning" icon="fas fa-briefcase" />
+            <StatCard :label="t('attendance.daily_report.incomplete')" :value="report.stats.incomplete || 0" color="warning" icon="fas fa-fingerprint" />
         </div>
 
         <Card variant="base" padding="none" class="overflow-hidden">
             <div class="px-5 py-3 text-[12px] text-mistral-steel border-b border-mistral-hairline-soft">
-                عدم تسجيل بصمة الخروج يظهر للموظف المتوقع دوامه والمسجّل بصمة، بعد انتهاء موعد الخروج المتوقع حسب جدول الوقت لدوريته (وقت الانصراف + هامش السماح) في يوم التقرير أو اليوم السابق له.
+                {{ t('attendance.daily_report.checkout_note') }}
             </div>
             <DataTable :columns="columns" :data="data" storage-key="attendance-daily-report" :enable-search="true" :enable-filters="false" :enable-export="false" :enable-pagination="false">
                 <template #cell-status_label="{ row }"><Badge :text="row.status_label" :variant="badgeVariant(row.status)" dot /></template>

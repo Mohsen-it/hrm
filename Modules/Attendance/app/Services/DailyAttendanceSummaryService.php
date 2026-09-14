@@ -176,10 +176,18 @@ class DailyAttendanceSummaryService
             'updated_at' => now(),
         ]);
 
-        DailyAttendanceSummary::updateOrCreate(
-            ['user_id' => $userId, 'summary_date' => $date],
-            $payload,
-        );
+        // Upsert by calendar day with whereDate(): Eloquent serializes the
+        // `date`-cast summary_date with a time component on save while the
+        // lookup would use a bare Y-m-d string, so a plain updateOrCreate
+        // misses the existing row on SQLite and dies on the
+        // (user_id, summary_date) unique index. whereDate() matches on every
+        // driver (same pattern as scopeBetweenDates()).
+        $summary = DailyAttendanceSummary::query()
+            ->where('user_id', $userId)
+            ->whereDate('summary_date', $date)
+            ->first() ?? new DailyAttendanceSummary;
+
+        $summary->forceFill($payload)->save();
 
         $this->cache->flush();
 

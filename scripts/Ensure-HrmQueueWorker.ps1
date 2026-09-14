@@ -4,10 +4,12 @@
     HRM queue-worker watchdog (idempotent, safe to run every 5 minutes).
 
 .DESCRIPTION
-    Starts `php artisan queue:work` (queues: device-push,default) ONLY when no
-    such worker is currently running. Never touches devices, never deletes
-    anything, never restarts running processes. Intended for Windows Task
-    Scheduler:
+    Starts `php artisan queue:work` (queues: attendance,notifications,default)
+    ONLY when no such worker is currently running. The `attendance` queue
+    carries punch-ingestion chunks and must come first so a default backlog
+    can never starve morning/evening bursts. Never touches devices, never
+    deletes anything, never restarts running processes. Intended for Windows
+    Task Scheduler:
 
       schtasks /Create /TN "HRM Queue Worker Watchdog" /TR "powershell -NoProfile -ExecutionPolicy Bypass -File D:\hrm\scripts\Ensure-HrmQueueWorker.ps1" /SC MINUTE /MO 5 /F
 
@@ -17,9 +19,9 @@
 [CmdletBinding()]
 param(
     [string]$Root = 'D:\hrm',
-    [string]$Queues = 'device-push,default',
+    [string]$Queues = 'attendance,notifications,default',
     [int]$Tries = 6,
-    [int]$Timeout = 180,
+    [int]$Timeout = 200,
     [int]$MaxJobs = 3000,
     [int]$MaxTime = 3600
 )

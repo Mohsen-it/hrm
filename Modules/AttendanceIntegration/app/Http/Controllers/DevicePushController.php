@@ -125,12 +125,31 @@ class DevicePushController extends Controller
 
         $deviceId = $device instanceof AttendanceDeviceInterface ? $device->getId() : null;
 
-        AttendanceIngestionJob::dispatch(
-            $deviceId,
-            (string) ($serialNumber ?? 'unknown'),
-            $normalizedPunches,
-            $correlationId,
-        );
+        // Burst protection: split a morning/evening spike (hundreds of punches
+        // from all devices at once) into small parallel jobs on the shared
+        // `attendance` queue. One giant job with timeout=600 blocked the single
+        // default worker and looked like a "long queue". Chunking lets the
+        // attendance workers drain the spike concurrently. Biodata/userpic and
+        // FingerprintDevices device_commands flows are intentionally untouched.
+        $queue = (string) config('attendanceintegration.queues.queue', 'attendance');
+        $chunkSize = max(1, (int) config('attendanceintegration.queues.chunk_size', 100));
+        $chunks = array_chunk($normalizedPunches, $chunkSize);
+        $dispatched = 0;
+
+        foreach ($chunks as $chunkIndex => $chunk) {
+            $chunkCorrelationId = count($chunks) > 1
+                ? "{$correlationId}#{$chunkIndex}"
+                : $correlationId;
+
+            AttendanceIngestionJob::dispatch(
+                $deviceId,
+                (string) ($serialNumber ?? 'unknown'),
+                $chunk,
+                $chunkCorrelationId,
+            )->onQueue($queue);
+
+            $dispatched++;
+        }
 
         return response()->json([
             'success' => true,
@@ -142,6 +161,8 @@ class DevicePushController extends Controller
             'duplicates' => 0,
             'dead_lettered' => 0,
             'queued' => true,
+            'queued_jobs' => $dispatched,
+            'queue' => $queue,
         ]);
     }
 

@@ -38,4 +38,13 @@ return [
         'max_items' => (int) env('ATTENDANCE_LIVE_FEED_MAX', 100),
         'cache_ttl_hours' => (int) env('ATTENDANCE_LIVE_FEED_TTL', 6),
     ],
+
+    'queues' => [
+        // Punch ingestion shares the established `attendance` queue (same one
+        // Vacations listeners use and Start-HRM-Windows.ps1 already consumes).
+        // Biodata/userpic and FingerprintDevices device_commands distribution
+        // stay untouched on their current queues.
+        'queue' => env('ATTENDANCE_QUEUE', 'attendance'),
+        'chunk_size' => (int) env('ATTENDANCE_QUEUE_CHUNK', 100),
+    ],
 ];

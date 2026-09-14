@@ -133,6 +133,15 @@ function verifyLabel(punch) {
     return null;
 }
 
+function verifyVariant(punch) {
+    return {
+        fingerprint: 'orange',
+        face: 'info',
+        card: 'pending',
+        password: 'dark',
+    }[verifyMethod(punch)] || 'inactive';
+}
+
 function verifyIcon(punch) {
     return {
         fingerprint: 'fas fa-fingerprint',
@@ -251,15 +260,16 @@ usePageTitle(t('fingerprint_devices.live_scan'));
                             <Badge
                                 :text="punchLabel(punch)"
                                 :variant="punchVariant(punch.punch_type)"
+                                size="lg"
                             />
-                            <span
+                            <Badge
                                 v-if="verifyLabel(punch)"
-                                class="inline-flex items-center gap-1 rounded-full font-medium leading-none whitespace-nowrap h-5.5 text-[11px] px-2 bg-mistral-surface text-mistral-steel"
+                                :text="verifyLabel(punch)"
+                                :variant="verifyVariant(punch)"
+                                :icon="verifyIcon(punch)"
+                                size="lg"
                                 :title="t('fingerprint_devices.verify_method')"
-                            >
-                                <i :class="verifyIcon(punch)" class="text-[10px]"></i>
-                                {{ verifyLabel(punch) }}
-                            </span>
+                            />
                         </div>
                         <p class="text-[12px] text-mistral-steel mt-1">
                             {{ formatTime(punch.punched_at) }}

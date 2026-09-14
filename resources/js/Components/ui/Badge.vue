@@ -5,6 +5,8 @@ const props = defineProps({
     text: { type: [String, Number], required: true },
     variant: { type: String, default: 'active' },
     dot: { type: Boolean, default: false },
+    icon: { type: String, default: '' },
+    iconClass: { type: String, default: '' },
     size: { type: String, default: 'md' },
     dir: { type: String, default: 'rtl' },
 });
@@ -58,6 +60,7 @@ const sizeClasses = computed(() => {
         :dir="dir"
     >
         <span v-if="dot" :class="['w-1.5 h-1.5 rounded-full shrink-0', dotClasses]"></span>
+        <i v-if="icon" :class="[icon, iconClass || 'text-[1.1em]']"></i>
         {{ text }}
     </span>
 </template>

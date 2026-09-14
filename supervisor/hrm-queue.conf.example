@@ -1,0 +1,39 @@
+; HRM queue workers — production example (copy to /etc/supervisor/conf.d/hrm-queue.conf).
+; Punch bursts (morning/evening) drain via the shared `attendance` queue
+; (AttendanceIngestionJob chunks, timeout=180 — worker --timeout must stay above it).
+; FingerprintDevices device_commands distribution is DB-polled by ADMS and is
+; intentionally NOT routed through these workers — do not add its queues here.
+;
+; Consume order matters: attendance workers take attendance first, then
+; notifications/default, so a default backlog can never starve punch processing.
+
+[program:hrm-queue-attendance]
+process_name=%(program_name)s_%(process_num)02d
+command=php /var/www/hrm/artisan queue:work --queue=attendance,notifications,default --tries=3 --timeout=200 --sleep=0 --max-jobs=1000 --max-time=3600
+directory=/var/www/hrm
+autostart=true
+autorestart=true
+numprocs=2
+user=www-data
+redirect_stderr=true
+stdout_logfile=/var/www/hrm/storage/logs/queue-attendance.log
+stopwaitsecs=220
+
+[program:hrm-queue-default]
+process_name=%(program_name)s_%(process_num)02d
+command=php /var/www/hrm/artisan queue:work --queue=default --tries=3 --timeout=300 --sleep=1 --max-jobs=1000 --max-time=3600
+directory=/var/www/hrm
+autostart=true
+autorestart=true
+numprocs=1
+user=www-data
+redirect_stderr=true
+stdout_logfile=/var/www/hrm/storage/logs/queue-default.log
+stopwaitsecs=320
+
+; Windows production (NSSM) equivalent — one service per line:
+; nssm install HRM-Queue-Attendance "C:\php\php.exe" "D:\hrm\artisan queue:work --queue=attendance,notifications,default --tries=3 --timeout=200 --sleep=0"
+; nssm install HRM-Queue-Default    "C:\php\php.exe" "D:\hrm\artisan queue:work --queue=default --tries=3 --timeout=300 --sleep=1"
+; NOTE: on this machine autostart is handled by scripts/Start-HRM-Windows.bat
+; (Task Scheduler at logon) — NSSM is only for headless-service setups.
+; Monitor: php artisan queue:monitor attendance,notifications,default --max=200

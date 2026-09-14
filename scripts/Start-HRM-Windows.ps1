@@ -339,7 +339,7 @@ $HrmLogRotateThresholdMB = 50
 # 2,142,043 lines, 0 errors -- real errors live in daily laravel-*.log).
 # Keep archives one retention cycle, then auto-delete. Matches LOG_DAILY_DAYS.
 $HrmLogArchiveRetentionDays = 14
-foreach ($logName in @('hrm-laravel-server.log', 'hrm-queue.log', 'hrm-scheduler.log')) {
+foreach ($logName in @('hrm-laravel-server.log', 'hrm-queue.log', 'hrm-queue-attendance.log', 'hrm-queue-attendance-2.log', 'hrm-scheduler.log')) {
     $logFile = Join-Path $Root ("storage\logs\$logName")
     if (Test-Path -LiteralPath $logFile) {
         $sizeMB = ((Get-Item -LiteralPath $logFile).Length / 1MB)
@@ -412,7 +412,13 @@ try {
     Wait-HrmPort -Port $LaravelPort -Name 'Laravel'
 
     $services.Add((Start-HrmProcess -Job $job -Name 'Queue worker (default)' -WorkingDirectory $Root -Command 'php artisan queue:work --queue=default --tries=3 --timeout=180 --sleep=1 --memory=512 --max-jobs=1000 --max-time=3600 --backoff=10' -LogPath (Join-Path $Root 'storage\logs\hrm-queue.log')))
-    $services.Add((Start-HrmProcess -Job $job -Name 'Queue worker (attendance)' -WorkingDirectory $Root -Command 'php artisan queue:work --queue=attendance,notifications --tries=3 --timeout=60 --sleep=1 --memory=512 --max-jobs=1000 --max-time=3600 --backoff=10' -LogPath (Join-Path $Root 'storage\logs\hrm-queue-attendance.log')))
+    # Punch bursts (morning/evening): AttendanceIngestionJob chunks (100 punches
+    # each, timeout=180) land on the `attendance` queue. Two workers drain the
+    # spike in parallel; --timeout must stay above the job timeout and --sleep=0
+    # avoids a 1s idle pause between burst jobs. device_commands distribution
+    # is DB-polled by ADMS and never goes through these workers.
+    $services.Add((Start-HrmProcess -Job $job -Name 'Queue worker (attendance 1)' -WorkingDirectory $Root -Command 'php artisan queue:work --queue=attendance,notifications --tries=3 --timeout=200 --sleep=0 --memory=512 --max-jobs=1000 --max-time=3600 --backoff=10' -LogPath (Join-Path $Root 'storage\logs\hrm-queue-attendance.log')))
+    $services.Add((Start-HrmProcess -Job $job -Name 'Queue worker (attendance 2)' -WorkingDirectory $Root -Command 'php artisan queue:work --queue=attendance,notifications --tries=3 --timeout=200 --sleep=0 --memory=512 --max-jobs=1000 --max-time=3600 --backoff=10' -LogPath (Join-Path $Root 'storage\logs\hrm-queue-attendance-2.log')))
 
     $services.Add((Start-HrmProcess -Job $job -Name 'Reverb' -WorkingDirectory $Root -Command "php artisan reverb:start --host=0.0.0.0 --port=$ReverbPort" -LogPath (Join-Path $Root 'storage\logs\hrm-reverb.log')))
     Wait-HrmPort -Port $ReverbPort -Name 'Reverb'

@@ -25,14 +25,20 @@ class AttendanceIngestionJob implements ShouldQueue
 
     public int $backoff = 10;
 
-    public int $timeout = 600;
+    public int $timeout = 180;
 
     public function __construct(
         private ?int $deviceId,
         private string $deviceSerial,
         private array $normalizedPunches,
         private string $correlationId,
-    ) {}
+    ) {
+        // Shared `attendance` queue (matches Start-HRM-Windows.ps1 workers).
+        // Resolved here (not as a static $queue property) so tests / env
+        // overrides via config keep working, and so FingerprintDevices
+        // device_commands queues stay untouched.
+        $this->queue = (string) config('attendanceintegration.queues.queue', 'attendance');
+    }
 
     public function handle(
         DeviceRepositoryInterface $deviceRepository,

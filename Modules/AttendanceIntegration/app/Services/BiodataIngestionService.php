@@ -215,11 +215,8 @@ class BiodataIngestionService
 
         $userIds = array_map(fn (User $u) => $u->id, $userMap);
         $hashes = array_map(fn (array $r) => hash('sha256', $r['tmp']), $faceRecords);
-        $deviceSerial = $device?->serial_number ?? 'unknown';
-
         $existing = UserFingerprint::query()
             ->whereIn('user_id', $userIds)
-            ->where('device_serial', $deviceSerial)
             ->whereIn('template_hash', $hashes)
             ->get()
             ->keyBy(fn (UserFingerprint $f) => "{$f->user_id}:{$f->template_hash}");
@@ -286,6 +283,8 @@ class BiodataIngestionService
         $type = $record['type'];
         $tmpData = $record['tmp'];
 
+        // NOTE: never log $tmpData itself (biometric payload). extra_fields
+        // holds only scalar protocol fields (No/Index/Valid/...).
         Log::channel('biodata')->info('BIODATA_RECORD_RECEIVED', [
             'correlation_id' => $correlationId,
             'device_serial' => $device?->serial_number,
@@ -295,6 +294,8 @@ class BiodataIngestionService
             'template_length' => strlen($tmpData),
             'major_ver' => $record['major_ver'],
             'minor_ver' => $record['minor_ver'],
+            'format' => $record['format'] ?? null,
+            'extra_fields' => $record['extra_fields'] ?? [],
         ]);
 
         if ($tmpData === '') {
@@ -443,9 +444,13 @@ class BiodataIngestionService
             'MajorVer' => $record['major_ver'],
             'MinorVer' => $record['minor_ver'],
         ]);
-        $templateIndex = isset($extra['Index']) && is_numeric($extra['Index'])
-            ? max(0, min(9, (int) $extra['Index']))
-            : 0;
+        // Fingerprint slot (FID 0-9) arrives in the BIODATA `No` field, NOT
+        // `Index`: on this fleet `Index` is always 0 for Type=1 records while
+        // `No` carries the real finger slot (verified 2026-09-14: PIN 20716
+        // uploaded No=3 + No=6 with Index=0 on both, and both collapsed to a
+        // single FID=0 command downstream). Accept FID/Index spellings as
+        // fallback for other firmware variants.
+        $templateIndex = $this->fingerprintSlot($extra);
 
         UserFingerprint::create([
             'user_id' => $user->id,
@@ -488,6 +493,31 @@ class BiodataIngestionService
         }
 
         return 'saved';
+    }
+
+    /**
+     * Resolve the finger slot (FID 0-9) of a Type=1 BIODATA record.
+     *
+     * Key lookup is case-insensitive because BiodataParser preserves the
+     * device's original casing (`No`, `Index`, `FID`, ...).
+     */
+    private function fingerprintSlot(array $extra): int
+    {
+        $lowered = [];
+        foreach ($extra as $key => $value) {
+            $lowered[strtolower((string) $key)] = $value;
+        }
+
+        foreach (['no', 'fid', 'index'] as $key) {
+            if (isset($lowered[$key]) && is_numeric($lowered[$key])) {
+                $slot = (int) $lowered[$key];
+                if ($slot >= 0 && $slot <= 9) {
+                    return $slot;
+                }
+            }
+        }
+
+        return 0;
     }
 
     /**

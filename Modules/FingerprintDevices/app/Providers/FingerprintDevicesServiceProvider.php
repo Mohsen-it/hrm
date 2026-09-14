@@ -10,6 +10,7 @@ use Modules\FingerprintDevices\Console\Commands\DistributeAllFaces;
 use Modules\FingerprintDevices\Console\Commands\DistributeMissingFaceSets;
 use Modules\FingerprintDevices\Console\Commands\ExportFacePhotosToUsb;
 use Modules\FingerprintDevices\Console\Commands\FullSyncAllDevices;
+use Modules\FingerprintDevices\Console\Commands\ImportBiotemplateFromUsb;
 use Modules\FingerprintDevices\Console\Commands\ImportFacePhotosFromUsb;
 use Modules\FingerprintDevices\Console\Commands\ImportHikvisionEmployees;
 use Modules\FingerprintDevices\Console\Commands\PullTemplatesDirect;
@@ -61,6 +62,7 @@ class FingerprintDevicesServiceProvider extends ServiceProvider
             DistributeMissingFaceSets::class,
             FullSyncAllDevices::class,
             ImportFacePhotosFromUsb::class,
+            ImportBiotemplateFromUsb::class,
             ExportFacePhotosToUsb::class,
             PushFacesAllDevices::class,
             ProcessSkippedDeletes::class,

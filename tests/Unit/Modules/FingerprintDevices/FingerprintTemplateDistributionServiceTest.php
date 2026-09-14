@@ -194,8 +194,8 @@ class FingerprintTemplateDistributionServiceTest extends TestCase
             'template_index' => $index,
             'template_version' => 100,
             'template_metadata' => [
-                'No' => 0,
-                'Index' => $index,
+                'No' => $index,
+                'Index' => 0,
                 'Valid' => 1,
                 'Duress' => 0,
                 'MajorVer' => 10,

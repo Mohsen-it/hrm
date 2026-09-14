@@ -102,6 +102,34 @@ class BiodataIngestionServiceTest extends TestCase
         Queue::assertPushed(DistributeFingerprintJob::class, 2);
     }
 
+    public function test_it_treats_the_same_fingerprint_from_another_device_as_duplicate(): void
+    {
+        Queue::fake();
+        [$user, $source] = $this->makeUserAndDevice();
+        $target = FingerprintDevice::create([
+            'device_type_id' => $source->device_type_id,
+            'name' => 'Target 20010',
+            'serial_number' => 'TARGET-20010',
+            'ip_address' => '192.168.40.11',
+            'port' => 4370,
+            'comm_key' => '0',
+            'timeout' => 30,
+            'status' => 'online',
+            'is_push_enabled' => true,
+        ]);
+        $records = $this->fingerprintRecords($user->employee_code, [0, 1]);
+        $service = app(BiodataIngestionService::class);
+
+        $first = $service->ingest($source, $records, 'fp-source');
+        $second = $service->ingest($target, $records, 'fp-target');
+
+        $this->assertSame(2, $first['saved']);
+        $this->assertSame(0, $second['saved']);
+        $this->assertSame(2, $second['duplicates']);
+        $this->assertDatabaseCount('user_fingerprints', 2);
+        Queue::assertPushed(DistributeFingerprintSetJob::class, 1);
+    }
+
     public function test_it_skips_bridge_job_when_bridge_disabled(): void
     {
         config()->set('fingerprintdevices.distribute_fingerprint_via_bridge', false);
@@ -216,6 +244,8 @@ class BiodataIngestionServiceTest extends TestCase
     /** @param array<int, int> $indices */
     private function fingerprintRecords(string $pin, array $indices): array
     {
+        // Real-device shape for Type=1: the finger slot (FID 0-9) arrives in
+        // `No` while `Index` is always 0 (captured 2026-09-14, PIN 20716).
         return array_map(fn (int $index) => [
             'pin' => $pin,
             'type' => 1,
@@ -224,12 +254,12 @@ class BiodataIngestionServiceTest extends TestCase
             'minor_ver' => 0,
             'format' => 0,
             'extra_fields' => [
-                'No' => 0,
-                'Index' => $index,
+                'No' => $index,
+                'Index' => 0,
                 'Valid' => 1,
                 'Duress' => 0,
             ],
-            'raw' => "BIODATA Pin={$pin} Index={$index}",
+            'raw' => "BIODATA Pin={$pin} No={$index} Index=0",
         ], $indices);
     }
 }

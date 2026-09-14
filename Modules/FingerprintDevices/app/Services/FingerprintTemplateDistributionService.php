@@ -177,6 +177,11 @@ class FingerprintTemplateDistributionService
     /**
      * Normalize a stored row to a finger index in 0-9, or null when the
      * row carries no usable index.
+     *
+     * For Type=1 BIODATA rows the device sends the finger slot in `No`
+     * (with `Index` always 0), so `No`/`FID` metadata is checked before the
+     * columns: rows stored before the ingestion fix carry finger_id=0 /
+     * template_index=0 with the real slot only in metadata.
      */
     private function normalizeIndex(UserFingerprint $row): ?int
     {
@@ -184,7 +189,14 @@ class FingerprintTemplateDistributionService
             ? $row->template_metadata
             : (json_decode((string) $row->template_metadata, true) ?: []);
 
+        $lowered = [];
+        foreach ($metadata as $key => $value) {
+            $lowered[strtolower((string) $key)] = $value;
+        }
+
         $candidates = [
+            $lowered['no'] ?? null,
+            $lowered['fid'] ?? null,
             $metadata['Index'] ?? null,
             $metadata['index'] ?? null,
             $row->template_index,

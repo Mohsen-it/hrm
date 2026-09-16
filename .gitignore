@@ -41,3 +41,41 @@ baseline_counts.json
 *.sqlite3-wal
 *.sqlite3-journal
 /zkteco-service/logs/
+# Runtime / local data - never commit
+/storage/app/backups/
+/storage/app/debug/
+# Python venvs
+/venv/
+/scripts/.venv/
+__pycache__/
+*.pyc
+*.pyo
+# Local debug archives
+/backups/
+/logs/
+/temp/
+/.freebuff/
+# Device dumps & binaries
+*.zip
+*.rar
+*.dat
+*.dll
+*.db
+*.sqlite3
+# One-off debug scripts & logs
+c.php
+out.txt
+test_out.txt
+test_output.txt
+test_result.txt
+test-output.txt
+_test_output.txt
+build.txt
+check.txt
+mig_status.txt
+push_log.txt
+pint_output.txt
+routes.txt
+routes-list-ascii.json
+.phpunit.tmp
+/New folder/

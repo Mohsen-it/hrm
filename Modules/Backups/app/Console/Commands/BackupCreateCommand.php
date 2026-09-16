@@ -3,6 +3,7 @@
 namespace Modules\Backups\Console\Commands;
 
 use Illuminate\Console\Command;
+use Modules\Backups\Models\BackupConfig;
 use Modules\Backups\Services\BackupService;
 use Throwable;
 
@@ -22,7 +23,7 @@ class BackupCreateCommand extends Command
     {
         // Read live config from DB so schedule changes take effect immediately
         // without restarting the scheduler process.
-        $dbConfig = \Modules\Backups\Models\BackupConfig::first();
+        $dbConfig = BackupConfig::first();
         if ($dbConfig) {
             config(['backups.schedule.daily_time' => $dbConfig->scheduled_time ?? '02:00']);
             config(['backups.timezone' => $dbConfig->timezone ?? config('backups.timezone', 'Asia/Damascus')]);

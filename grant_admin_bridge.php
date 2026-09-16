@@ -33,7 +33,7 @@ if (! in_array($privilege, [0, 14], true)) {
 $bridgeUrl = rtrim((string) config('attendanceintegration.drivers.zkteco.bridge_url'), '/');
 try {
     $health = Http::timeout(10)->get($bridgeUrl.'/health')->json();
-} catch (\Throwable $e) {
+} catch (Throwable $e) {
     echo 'ERROR: bridge unreachable at '.$bridgeUrl.' ('.$e->getMessage().").\n";
     echo "Start it first, then re-run this script.\n";
     exit(1);

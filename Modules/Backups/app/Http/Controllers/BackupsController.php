@@ -5,9 +5,11 @@ namespace Modules\Backups\Http\Controllers;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Inertia\Inertia;
 use Inertia\Response;
 use Modules\Backups\Http\Requests\RestoreBackupRequest;
+use Modules\Backups\Models\BackupConfig;
 use Modules\Backups\Repositories\BackupRunRepository;
 use Modules\Backups\Services\BackupHealthService;
 use Modules\Backups\Services\BackupRestoreService;
@@ -50,7 +52,7 @@ class BackupsController extends Controller
         $this->authorize('manage-backup-settings');
 
         // Use the first (or default) config row; create if missing.
-        $config = \Modules\Backups\Models\BackupConfig::firstOrCreate(
+        $config = BackupConfig::firstOrCreate(
             ['name' => 'default'],
             [
                 'frequency' => 'daily',
@@ -73,7 +75,7 @@ class BackupsController extends Controller
         ]);
     }
 
-    public function updateSettings(\Illuminate\Http\Request $request): RedirectResponse
+    public function updateSettings(Request $request): RedirectResponse
     {
         $this->authorize('manage-backup-settings');
 
@@ -91,7 +93,7 @@ class BackupsController extends Controller
             'include_files' => ['boolean'],
         ]);
 
-        $config = \Modules\Backups\Models\BackupConfig::firstOrCreate(
+        $config = BackupConfig::firstOrCreate(
             ['name' => 'default'],
             [
                 'is_enabled' => true,
@@ -136,7 +138,7 @@ class BackupsController extends Controller
         $fresh['notify_on_failure'] = $validated['notify_on_failure'] ?? true;
         $fresh['include_files'] = $validated['include_files'] ?? false;
         config(['backups' => $fresh]);
-        \Illuminate\Support\Facades\Cache::forget('backups.config');
+        Cache::forget('backups.config');
 
         return redirect()->route('backups.settings')->with('success', __('backups.settings_saved'));
     }
@@ -166,7 +168,7 @@ class BackupsController extends Controller
         ];
     }
 
-    private function getConfigArray(\Modules\Backups\Models\BackupConfig $config): array
+    private function getConfigArray(BackupConfig $config): array
     {
         return [
             'id' => $config->id ?? null,

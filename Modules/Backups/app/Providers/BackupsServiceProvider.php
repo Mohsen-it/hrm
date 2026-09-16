@@ -13,6 +13,7 @@ use Modules\Backups\Console\Commands\BackupRestoreCommand;
 use Modules\Backups\Console\Commands\BackupRestoreTestCommand;
 use Modules\Backups\Console\Commands\BackupStatusCommand;
 use Modules\Backups\Console\Commands\BackupVerifyCommand;
+use Modules\Backups\Models\BackupConfig;
 use Nwidart\Modules\Traits\PathNamespace;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
@@ -81,8 +82,8 @@ class BackupsServiceProvider extends ServiceProvider
             $tz = (string) config('backups.timezone', 'Asia/Damascus');
             $weekDay = 0;
             try {
-                /** @var \Modules\Backups\Models\BackupConfig|null $dbConfig */
-                $dbConfig = \Modules\Backups\Models\BackupConfig::query()->first();
+                /** @var BackupConfig|null $dbConfig */
+                $dbConfig = BackupConfig::query()->first();
                 if ($dbConfig) {
                     $dailyTime = (string) ($dbConfig->scheduled_time ?: '02:00');
                     $tz = (string) ($dbConfig->timezone ?: config('backups.timezone', 'Asia/Damascus'));

@@ -64,7 +64,7 @@ class ImportBiotemplateFromUsb extends Command
         // Collect all hashes first? File is ~37MB / 14k lines — stream it, lazy-check DB per 500.
         $pending = [];
 
-        $flush = function () use (&$pending, &$totals, &$existingCache, $usersByPin, $deviceId, $serial, $dryRun): void {
+        $flush = function () use (&$pending, &$totals, &$existingCache, $dryRun): void {
             if (empty($pending)) {
                 return;
             }
@@ -91,6 +91,7 @@ class ImportBiotemplateFromUsb extends Command
                 $key = $rec['user_id'].':'.$rec['hash'];
                 if (isset($existingCache[$key])) {
                     $totals['duplicate']++;
+
                     continue;
                 }
                 $existingCache[$key] = true;
@@ -115,12 +116,14 @@ class ImportBiotemplateFromUsb extends Command
             $rec = $this->parseLine($line);
             if ($rec === null || ($rec['tmp'] ?? '') === '') {
                 $totals['empty_tmp']++;
+
                 continue;
             }
 
             $pin = strtolower(trim((string) ($rec['pin'] ?? '')));
             if ($pin === '') {
                 $totals['empty_tmp']++;
+
                 continue;
             }
 
@@ -128,6 +131,7 @@ class ImportBiotemplateFromUsb extends Command
             if (! $user) {
                 $totals['no_user']++;
                 $noUserPins[$pin] = ($noUserPins[$pin] ?? 0) + 1;
+
                 continue;
             }
 
@@ -136,6 +140,7 @@ class ImportBiotemplateFromUsb extends Command
             $userKey = $user->id.':'.$hash;
             if (isset($batchHashes[$userKey])) {
                 $totals['duplicate']++;
+
                 continue;
             }
             $batchHashes[$userKey] = true;

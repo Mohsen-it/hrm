@@ -292,7 +292,8 @@ class DailyReportDocxExport
         }
     }
 
-    /** Fill visible text in a Word table row without changing its formatting. */    private function fillRow(DOMXPath $xpath, DOMElement $row, array $values): void
+    /** Fill visible text in a Word table row without changing its formatting. */
+    private function fillRow(DOMXPath $xpath, DOMElement $row, array $values): void
     {
         $cells = $xpath->query('./w:tc', $row);
         foreach ($values as $index => $value) {

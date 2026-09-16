@@ -2,6 +2,7 @@
 
 namespace Modules\Backups\Repositories;
 
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Modules\Backups\Models\BackupAuditLog;
 use Modules\Backups\Models\BackupRestoreAttempt;
@@ -95,7 +96,7 @@ class BackupAuditRepository
     public function createRestoreAttempt(array $data): BackupRestoreAttempt
     {
         foreach (['started_at', 'completed_at'] as $ts) {
-            if (isset($data[$ts]) && $data[$ts] instanceof \Illuminate\Support\Carbon) {
+            if (isset($data[$ts]) && $data[$ts] instanceof Carbon) {
                 $data[$ts] = $data[$ts]->toDateTimeString();
             }
         }

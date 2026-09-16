@@ -64,6 +64,8 @@ __pycache__/
 *.sqlite3
 # One-off debug scripts & logs
 c.php
+clean_log.txt
+restore_out.txt
 out.txt
 test_out.txt
 test_output.txt

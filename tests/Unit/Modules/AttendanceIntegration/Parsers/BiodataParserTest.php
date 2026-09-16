@@ -130,9 +130,14 @@ class BiodataParserTest extends TestCase
         $this->assertSame('face', BiodataParser::typeLabel(2));
     }
 
+    /**
+     * Phase 1: wire type 1 = fingerprint (device-verified 2026-09-10);
+     * type 0 means "no Type line" and is unknown, skipped by ingestion.
+     */
     public function test_type_label_fingerprint(): void
     {
-        $this->assertSame('fingerprint', BiodataParser::typeLabel(0));
+        $this->assertSame('fingerprint', BiodataParser::typeLabel(1));
+        $this->assertSame('unknown_type_0', BiodataParser::typeLabel(0));
     }
 
     public function test_type_label_unknown(): void

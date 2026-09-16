@@ -54,12 +54,16 @@ class StoreDevicePunchRequestTest extends TestCase
         $this->assertSame('max:500', $rules['punches'][2]);
     }
 
+    /**
+     * Phase 1: Body cap raised 512KB → 1MB for batched BIODATA (large face
+     * templates); validation message confirms "must not exceed 1 MB".
+     */
     public function test_body_max_size(): void
     {
         $request = new StoreDevicePunchRequest;
         $rules = $request->rules();
 
-        $this->assertSame('max:524288', $rules['Body'][2]);
+        $this->assertSame('max:1048576', $rules['Body'][2]);
     }
 
     public function test_work_code_range(): void

@@ -52,4 +52,6 @@ return [
     'unregistered_employees' => 'الموظفون غير المسجلين للبصمة',
     'role_assignments' => 'إسناد أدوار الموظفين',
     'activity_log' => 'سجل نشاط المستخدمين',
+    'backups' => 'النسخ الاحتياطي',
+    'backup_settings' => 'إعدادات النسخ',
 ];

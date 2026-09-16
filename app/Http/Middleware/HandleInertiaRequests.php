@@ -69,6 +69,14 @@ class HandleInertiaRequests extends Middleware
             ],
             'locale' => $locale,
             'direction' => $direction,
+            'realtime' => [
+                // Only drivers with a real authenticator (reverb/pusher/ably/redis)
+                // can answer POST /broadcasting/auth with JSON. The `log` and
+                // `null` drivers return an empty 200 body, which makes pusher-js
+                // throw "JSON returned from channel-authorization endpoint was
+                // invalid". The frontend skips private subscriptions when false.
+                'enabled' => in_array(config('broadcasting.default'), ['reverb', 'pusher', 'ably', 'redis'], true),
+            ],
             'translations' => $this->loadTranslations($locale),
             'ziggy' => fn () => [
                 ...(new Ziggy)->toArray(),

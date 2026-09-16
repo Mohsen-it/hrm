@@ -11,7 +11,7 @@ import { usePageTitle } from '@/composables/usePageTitle';
 
 import { ref, reactive, computed, watch } from 'vue';
 import { router, Head } from '@inertiajs/vue3';
-import { PageHeader, Button, Card, FormInput, FormSelect, Badge, DataTable, EmptyState, ErrorSummary, FormModal } from '@/Components/ui';
+import { PageHeader, Button, Card, FormInput, FormSelect, Badge, DataTable, EmptyState, ErrorSummary, FormModal, LoadingSpinner } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
@@ -557,7 +557,7 @@ usePageTitle(t('shifts.manage_assignments'));
             </div>
 
             <div v-if="loading" class="p-8 text-center">
-                <i class="fas fa-spinner fa-spin text-mistral-primary text-xl"></i>
+                <LoadingSpinner size="lg" />
                 <p class="text-[13px] text-mistral-muted mt-2">{{ t('common.loading') }}...</p>
             </div>
 

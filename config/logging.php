@@ -149,6 +149,14 @@ return [
             'replace_placeholders' => true,
         ],
 
+        'backup' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/backup.log'),
+            'level' => env('BACKUP_LOG_LEVEL', 'info'),
+            'days' => (int) env('BACKUP_LOG_DAYS', 90),
+            'replace_placeholders' => true,
+        ],
+
         'emergency' => [
             'path' => storage_path('logs/laravel.log'),
         ],

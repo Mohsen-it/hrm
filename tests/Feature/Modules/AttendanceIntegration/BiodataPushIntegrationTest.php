@@ -93,6 +93,13 @@ class BiodataPushIntegrationTest extends TestCase
         }
     }
 
+    /**
+     * Phase 1: the generic ADMS route ingests BIODATA asynchronously
+     * (BiodataIngestionJob, burst protection) — response is {received,
+     * queued:true}, not the sync {saved} shape of the dedicated biodata
+     * route. Under the sync test driver the job runs inline, so the DB
+     * assertions below prove end-to-end ingestion with no data loss.
+     */
     public function test_biodata_via_adms_push_detected_automatically(): void
     {
         $response = $this->postJson(route('attendance-integration.push.adms'), [
@@ -104,7 +111,7 @@ class BiodataPushIntegrationTest extends TestCase
             ->assertJson([
                 'success' => true,
                 'received' => 1,
-                'saved' => 1,
+                'queued' => true,
             ]);
 
         $this->assertDatabaseHas('user_fingerprints', [
@@ -124,8 +131,14 @@ class BiodataPushIntegrationTest extends TestCase
             ->assertJson([
                 'success' => true,
                 'received' => 1,
-                'saved' => 1,
+                'queued' => true,
             ]);
+
+        $this->assertDatabaseHas('user_fingerprints', [
+            'user_id' => $this->employee->id,
+            'template_format' => 'zkteco-face-push',
+            'template_data' => 'QUERY_PARAM_TEMPLATE',
+        ]);
     }
 
     public function test_biodata_multiple_face_templates(): void
@@ -308,11 +321,13 @@ class BiodataPushIntegrationTest extends TestCase
             'Body' => "BIODATA\nPin=20079\nType=2\nMajorVer=12\nMinorVer=0\nFormat=0\nTmp=DETECTED_VIA_ADM\n",
         ]);
 
+        // Async ADMS contract: queued:true (see note on
+        // test_biodata_via_adms_push_detected_automatically).
         $response->assertOk()
             ->assertJson([
                 'success' => true,
                 'received' => 1,
-                'saved' => 1,
+                'queued' => true,
             ]);
 
         $this->assertDatabaseHas('user_fingerprints', [
@@ -431,12 +446,19 @@ class BiodataPushIntegrationTest extends TestCase
             'Body' => "BIODATA\nPin=20079\nType=2\nMajorVer=12\nMinorVer=0\nFormat=0\nTmp=MIXED_FACE\n",
         ]);
 
+        // Async ADMS contract: queued:true (see note on
+        // test_biodata_via_adms_push_detected_automatically).
         $response->assertOk()
             ->assertJson([
                 'success' => true,
                 'received' => 1,
-                'saved' => 1,
+                'queued' => true,
             ]);
+
+        $this->assertDatabaseHas('user_fingerprints', [
+            'user_id' => $this->employee->id,
+            'template_data' => 'MIXED_FACE',
+        ]);
     }
 
     public function test_biodata_employee_resolved_by_numeric_id(): void

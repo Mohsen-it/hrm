@@ -1,0 +1,30 @@
+{
+    "name": "nwidart/backups",
+    "description": "",
+    "authors": [
+        {
+            "name": "Nicolas Widart",
+            "email": "n.widart@gmail.com"
+        }
+    ],
+    "extra": {
+        "laravel": {
+            "providers": [],
+            "aliases": {
+
+            }
+        }
+    },
+    "autoload": {
+        "psr-4": {
+            "Modules\\Backups\\": "app/",
+            "Modules\\Backups\\Database\\Factories\\": "database/factories/",
+            "Modules\\Backups\\Database\\Seeders\\": "database/seeders/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Modules\\Backups\\Tests\\": "tests/"
+        }
+    }
+}

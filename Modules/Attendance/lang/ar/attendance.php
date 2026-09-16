@@ -397,6 +397,12 @@ return [
         'print' => 'طباعة فورية',
         'export_date' => 'تاريخ التصدير',
         'export_subtitle' => 'الموظف: :employee | الشهر: :month',
+        'late_minutes' => 'تأخير الدخول (دقيقة)',
+        'early_leave' => 'الخروج المبكر (دقيقة)',
+        'total_late' => 'إجمالي ساعات التأخير',
+        'show_late' => 'إظهار التأخير حسب السماحية',
+        'hours' => 'ساعة',
+        'minutes' => 'دقيقة',
         'schedule_statuses' => [
             'work' => 'دوام',
             'rest' => 'يوم راحة',

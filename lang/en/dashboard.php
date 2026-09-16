@@ -134,4 +134,6 @@ return [
     'live_punch_check_in' => 'Check-in recorded',
     'live_punch_check_out' => 'Check-out recorded',
     'live_punch_dismiss' => 'Dismiss fingerprint notification',
+    'backup_health' => 'Backup Health',
+    'backup_no_data' => 'No backup data available yet.',
 ];

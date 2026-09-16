@@ -17,7 +17,13 @@ class DistributeFaceTemplateSetJobTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_queues_the_employee_before_every_component_on_each_target(): void
+    /**
+     * Phase 1: identity is handled by EmployeeAdmsObserver/bridge (push
+     * USERINFO corrupts Arabic names on this firmware) — the job queues
+     * face components only, excluding the source device. Pins: 15 faces,
+     * none on source, index order preserved.
+     */
+    public function test_queues_face_components_on_each_target_excluding_source(): void
     {
         [$source, $target] = $this->makeDevices();
         $user = $this->makeUser();
@@ -48,8 +54,9 @@ class DistributeFaceTemplateSetJobTest extends TestCase
             ]);
         }
 
-        // Clear any commands queued by the EmployeeAdmsObserver during User creation
-        DeviceCommand::query()->where('device_id', $target->id)->delete();
+        // Clear any commands queued by the EmployeeAdmsObserver during User
+        // creation (both devices) for a deterministic baseline.
+        DeviceCommand::query()->delete();
 
         $job = new DistributeFaceTemplateSetJob(
             $user->id,
@@ -68,9 +75,7 @@ class DistributeFaceTemplateSetJobTest extends TestCase
             ->orderBy('created_at')
             ->get();
 
-        $this->assertCount(16, $commands);
-        $this->assertSame(DeviceCommand::TYPE_USER_UPDATE, $commands->first()->command_type);
-        $this->assertSame(3, $commands->first()->priority);
+        $this->assertCount(15, $commands);
         $this->assertCount(15, $commands->where('command_type', DeviceCommand::TYPE_FACE_TEMPLATE));
         $this->assertSame(range(0, 14), $commands
             ->where('command_type', DeviceCommand::TYPE_FACE_TEMPLATE)

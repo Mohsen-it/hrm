@@ -18,6 +18,7 @@ class MonthlyEmployeeAttendanceLogExport
         private string $employeeName,
         private string $monthLabel,
         private array $rows,
+        private bool $withLate = true,
     ) {}
 
     /**
@@ -40,6 +41,12 @@ class MonthlyEmployeeAttendanceLogExport
             'check_out_window' => ['header' => $this->t('monthly_employee_log.check_out_window'), 'type' => 'string', 'width' => 18],
             'last_check_out_at' => ['header' => $this->t('fields.last_check_out_at'), 'type' => 'string', 'width' => 20],
         ];
+
+        if ($this->withLate) {
+            $columns['late_minutes'] = ['header' => $this->t('monthly_employee_log.late_minutes'), 'type' => 'string', 'width' => 16];
+            $columns['early_leave_minutes'] = ['header' => $this->t('monthly_employee_log.early_leave'), 'type' => 'string', 'width' => 16];
+        }
+
         $currentRow = $this->exporter->writeTitle(
             $sheet,
             $this->t('monthly_employee_log.title'),
@@ -49,10 +56,38 @@ class MonthlyEmployeeAttendanceLogExport
         );
         $currentRow++;
         $this->exporter->writeHeaders($sheet, array_column($columns, 'header'), $currentRow);
-        $this->exporter->writeRows($sheet, $this->translatedRows(), $columns, $currentRow + 1);
+        $nextRow = $this->exporter->writeRows($sheet, $this->translatedRows(), $columns, $currentRow + 1);
+
+        if ($this->withLate) {
+            $totalLate = array_sum(array_map(fn (array $row) => (int) ($row['late_minutes'] ?? 0), $this->rows));
+            $totalEarly = array_sum(array_map(fn (array $row) => (int) ($row['early_leave_minutes'] ?? 0), $this->rows));
+            $grandTotal = $totalLate + $totalEarly;
+            $grandHuman = $this->t('monthly_employee_log.total_late').': '.$this->humanHours($grandTotal);
+            // صف الإجمالي: الإجمالي الموحد (دخول + خروج مبكر) في التسمية،
+            // وتفصيل كل نوع في عموده.
+            $values = array_fill(0, count($columns) - 1, '');
+            $values[count($values) - 2] = $this->humanHours($totalLate);
+            $values[count($values) - 1] = $this->humanHours($totalEarly);
+            $this->exporter->writeSummaryRow(
+                $sheet,
+                ['label' => $grandHuman, 'values' => $values],
+                $nextRow + 1,
+                1,
+                count($columns),
+            );
+        }
+
         $this->exporter->autoSizeColumns($sheet, $columns);
 
         return $sheet->getParent();
+    }
+
+    /**
+     * تنسيق الدقائق بصيغة "ساعة (دقيقة)" للإجماليات.
+     */
+    private function humanHours(int $minutes): string
+    {
+        return number_format($minutes / 60, 2).' '.$this->t('monthly_employee_log.hours').' ('.$minutes.' '.$this->t('monthly_employee_log.minutes').')';
     }
 
     /**
@@ -63,6 +98,12 @@ class MonthlyEmployeeAttendanceLogExport
     private function translatedRows(): array
     {
         return array_map(function (array $row): array {
+            $row['late_minutes'] = (string) ((int) ($row['late_minutes'] ?? 0));
+            $row['early_leave_minutes'] = (string) ((int) ($row['early_leave_minutes'] ?? 0));
+            // وسم الخروج الليلي (+1): البصمة بتاريخ اليوم التالي لكنها محسوبة لوردية هذا الصف.
+            if (! empty($row['is_overnight_checkout']) && is_string($row['last_check_out_at'] ?? null)) {
+                $row['last_check_out_at'] .= ' (+1)';
+            }
             $row['schedule_status'] = match ($row['schedule_status'] ?? null) {
                 'work' => 'دوام',
                 'rest' => 'يوم راحة',

@@ -143,6 +143,7 @@ class ReportsController extends Controller
 
         $year = (int) $request->input('year', now()->year);
         $month = (int) $request->input('month', now()->month);
+        $withLate = $request->boolean('with_late', true);
         $employee = $this->userService->getUserById($userId);
         $monthDate = now()->setDate($year, $month, 1);
         $export = new MonthlyEmployeeAttendanceLogExport(
@@ -150,6 +151,7 @@ class ReportsController extends Controller
             $employee?->name ?? (string) $userId,
             $monthDate->translatedFormat('F Y'),
             $this->monthlyEmployeeLogService->getMonthlyLog($userId, $year, $month),
+            $withLate,
         );
 
         return response($this->excelExporter->toBinary($export->build()), 200, [

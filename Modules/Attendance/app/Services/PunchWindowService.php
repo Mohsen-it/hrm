@@ -97,8 +97,18 @@ class PunchWindowService
 
         // بصمة بعد منتصف الليل (00:00-05:00) بعد يوم عمل تُحتسب كخروج إضافي
         // لليوم السابق بدل دخول لليوم التالي — تحل مشكلة 20010 يوم 10/08
+        //
+        // التوسعة الذكية: حتى بداية نافذة دخول اليوم (07:00 غالباً) تُحتسب
+        // خروجاً لليوم السابق فقط عند وجود جلسة مفتوحة تُغلقها (انصراف ليلي
+        // متأخر)، وإلا تبقى بصمة إضافية فلا تُخلق جلسات وهمية من بصمات الفجر.
         $hour = (int) $punchAt->format('H');
-        if ($hour < 5) {
+        $nightCapHour = 5;
+        $todayInStart = $this->schedule($employeeId, $punchAt->toDateString())['in_ahead_margin'] ?? null;
+        if ($todayInStart && preg_match('/^(\d{1,2}):/', (string) $todayInStart, $matches) === 1) {
+            $nightCapHour = max(5, (int) $matches[1]);
+        }
+        $isExtendedNightPunch = $hour >= 5 && $hour < $nightCapHour && $preferCheckOut;
+        if ($hour < 5 || $isExtendedNightPunch) {
             $prevDate = $punchAt->subDay()->toDateString();
             $prevSchedule = $this->schedule($employeeId, $prevDate);
             if (($prevSchedule['is_work_day'] ?? false) && ($prevSchedule['expected_check_out'] ?? null)) {
@@ -107,7 +117,11 @@ class PunchWindowService
                 if (($prevSchedule['is_overnight'] ?? false) && $expectedOut) {
                     $expectedOut = $expectedOut->addDay();
                 }
-                if ($expectedOut && $punchAt->greaterThan($expectedOut) && $punchAt->lessThan($expectedOut->addHours(14))) {
+                // الشريحة الموسعة (بعد 05:00) يحدها سقف النافذة ووجود جلسة
+                // مفتوحة، فلا حاجة لحد الـ14 ساعة المصمم للشريحة الأساسية.
+                $withinBounds = $isExtendedNightPunch
+                    || $punchAt->lessThan($expectedOut->addHours(14));
+                if ($expectedOut && $punchAt->greaterThan($expectedOut) && $withinBounds) {
                     // تأكد أن البصمة ليست داخل نافذة دخول اليوم التالي
                     $nextInStart = $this->schedule($employeeId, $punchAt->toDateString())['in_ahead_margin'] ?? null;
                     $isInNextWindow = false;

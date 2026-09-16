@@ -83,6 +83,16 @@ class PermissionSeeder extends Seeder
         'create-group-schedules',
         'edit-group-schedules',
         'delete-group-schedules',
+        // Database backup & restore (specs/database-backup-restore-plan.md §18).
+        'view-backups',
+        'create-backups',
+        'verify-backups',
+        'download-backups',
+        'delete-backups',
+        'restore-backups',
+        'restore-backups-production',
+        'manage-backup-settings',
+        'view-backup-audit',
     ];
 
     /**

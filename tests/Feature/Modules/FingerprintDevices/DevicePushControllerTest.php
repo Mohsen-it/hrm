@@ -17,6 +17,10 @@ class DevicePushControllerTest extends TestCase
     {
         parent::setUp();
 
+        // Seed the permission catalogue first: givePermissionTo() requires
+        // the permission row to exist in the in-memory DB (Phase 1 fix).
+        $this->seedPermissions();
+
         // Create a test user with permission
         $user = User::create([
             'employee_code' => 'ADMIN-001',
@@ -53,12 +57,18 @@ class DevicePushControllerTest extends TestCase
         ]);
     }
 
+    /**
+     * App contract (bootstrap/app.php shouldRenderJsonWhen): web routes
+     * redirect on validation failure (302 + session errors), JSON 422 is
+     * only for api/* URIs. These tests pin that contract; changing it to
+     * 422-on-web is a deferred product decision (Inertia forms rely on 302).
+     */
     public function test_push_validates_device_id_required(): void
     {
         $this->postJson(route('fingerprint-devices.sync.push'), [
             'options' => ['push_users' => true],
-        ])->assertStatus(422)
-            ->assertJsonValidationErrors(['device_id']);
+        ])->assertStatus(302)
+            ->assertSessionHasErrors(['device_id']);
     }
 
     public function test_push_validates_options_required(): void
@@ -67,8 +77,8 @@ class DevicePushControllerTest extends TestCase
 
         $this->postJson(route('fingerprint-devices.sync.push'), [
             'device_id' => $device->id,
-        ])->assertStatus(422)
-            ->assertJsonValidationErrors(['options']);
+        ])->assertStatus(302)
+            ->assertSessionHasErrors(['options']);
     }
 
     public function test_push_validates_at_least_one_option(): void
@@ -82,8 +92,8 @@ class DevicePushControllerTest extends TestCase
                 'push_fingerprints' => false,
                 'push_face_photos' => false,
             ],
-        ])->assertStatus(422)
-            ->assertJsonValidationErrors(['options']);
+        ])->assertStatus(302)
+            ->assertSessionHasErrors(['options']);
     }
 
     public function test_log_status_returns_404_for_missing_log(): void

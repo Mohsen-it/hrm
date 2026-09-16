@@ -17,6 +17,7 @@ use Modules\Attendance\Services\AttendanceMonitoringService;
 use Modules\Attendance\Services\AttendanceReportService;
 use Modules\Attendance\Services\MonthlyReportService;
 use Modules\AttendanceIntegration\Services\LivePunchFeedService;
+use Modules\Backups\Services\BackupHealthService;
 use Modules\Departments\Models\Department;
 use Modules\FingerprintDevices\Models\FingerprintDevice;
 use Modules\FingerprintDevices\Models\UserFingerprint;
@@ -325,6 +326,15 @@ class DashboardController extends Controller
                 'missing_fingerprints' => $missingFingerprints,
             ];
 
+            // Backup health (last verified + DB table count)
+            $backupHealth = [];
+            try {
+                $backupHealth = app(BackupHealthService::class)->check();
+            } catch (\Throwable) {
+                // Dashboard must never break because backups are misconfigured.
+                $backupHealth = ['ok' => false, 'failures' => ['backup_probe_failed'], 'checks' => []];
+            }
+
             return [
                 'today' => $today,
                 'liveCounters' => $liveCounters,
@@ -346,6 +356,7 @@ class DashboardController extends Controller
                 'massAbsence' => $massAbsence,
                 'activeDevices' => $activeDevices,
                 'totalDevices' => $totalDevices,
+                'backupHealth' => $backupHealth,
             ];
         });
     }

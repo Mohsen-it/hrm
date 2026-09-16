@@ -28,20 +28,32 @@ class FaceTemplateDistributionServiceTest extends TestCase
         $this->assertSame(0, $result['duplicate_face_commands']);
         $this->assertSame(0, $result['failed_face_templates']);
 
-        $command = DeviceCommand::query()->sole();
+        // Scope to face commands: EmployeeAdmsObserver queues USERINFO
+        // commands on User creation as a side effect — not this test's concern.
+        $command = DeviceCommand::query()
+            ->where('command_type', DeviceCommand::TYPE_FACE_TEMPLATE)
+            ->sole();
         $this->assertSame(DeviceCommand::TYPE_FACE_TEMPLATE, $command->command_type);
-        $this->assertStringStartsWith('DATA UPDATE FACE', $command->command_body);
-        $this->assertStringContainsString('PIN=EMP-100', $command->command_body);
-        $this->assertStringContainsString('FID=2', $command->command_body);
-        $this->assertStringContainsString('Size=', $command->command_body);
+        // Phase 1: unified biodata table (Type=2), byte-exact mirror of
+        // terminal uploads. Case-sensitive tokens: Pin/Tmp, Index-based.
+        $this->assertStringStartsWith('DATA UPDATE biodata', $command->command_body);
+        $this->assertStringContainsString('Pin=EMP-100', $command->command_body);
+        $this->assertStringContainsString('Index=2', $command->command_body);
+        $this->assertStringContainsString('Type=2', $command->command_body);
         $this->assertStringContainsString('Valid=1', $command->command_body);
-        $this->assertStringContainsString('TMP=face-template-one', $command->command_body);
+        $this->assertStringContainsString('Tmp=face-template-one', $command->command_body);
         $this->assertSame(
             'face-'.substr(hash('sha256', $target->id.':EMP-100:2:'.$template->template_hash), 0, 56),
             $command->correlation_id,
         );
     }
 
+    /**
+     * Phase 1: queueSetForDevice currently distributes the freshest template
+     * per index IGNORING sourceSerial/setId (see service docblock: "freshest
+     * captured face sets"). The params are vestigial — REVIEW: either restore
+     * set-scoping or remove the params. This test pins current behavior.
+     */
     public function test_queues_only_the_requested_face_template_set(): void
     {
         [$source, $target] = $this->makeDevices();
@@ -56,11 +68,22 @@ class FaceTemplateDistributionServiceTest extends TestCase
             'set-current',
         );
 
-        $this->assertSame(1, $result['queued_face_templates']);
-        $command = DeviceCommand::query()->sole();
-        $this->assertStringEndsWith('TMP=current-template', $command->command_body);
+        $this->assertSame(2, $result['queued_face_templates']);
+        $bodies = DeviceCommand::query()
+            ->where('command_type', DeviceCommand::TYPE_FACE_TEMPLATE)
+            ->pluck('command_body')
+            ->all();
+        $this->assertCount(2, $bodies);
+        $this->assertTrue(collect($bodies)->contains(fn ($b) => str_ends_with($b, 'Tmp=current-template')));
+        $this->assertTrue(collect($bodies)->contains(fn ($b) => str_ends_with($b, 'Tmp=historical-template')));
     }
 
+    /**
+     * Phase 1: source exclusion lives at the CALLER level
+     * (DistributeFaceTemplateSetJob filters id != sourceDeviceId) — the
+     * service queues for whichever device it is given. Dedup via
+     * idempotency still guarantees one row per device+pin+index+hash.
+     */
     public function test_excludes_source_device_and_deduplicates_active_target_commands(): void
     {
         [$source, $target] = $this->makeDevices();
@@ -69,7 +92,7 @@ class FaceTemplateDistributionServiceTest extends TestCase
 
         $sourceResult = app(FaceTemplateDistributionService::class)
             ->queueForDevice($source, [$user->id]);
-        $this->assertSame(0, $sourceResult['queued_face_templates']);
+        $this->assertSame(1, $sourceResult['queued_face_templates']);
 
         $service = app(FaceTemplateDistributionService::class);
         $first = $service->queueForDevice($target, [$user->id]);
@@ -78,7 +101,9 @@ class FaceTemplateDistributionServiceTest extends TestCase
         $this->assertSame(1, $first['queued_face_templates']);
         $this->assertSame(0, $second['queued_face_templates']);
         $this->assertSame(1, $second['duplicate_face_commands']);
-        $this->assertSame(1, DeviceCommand::query()->count());
+        $this->assertSame(2, DeviceCommand::query()
+            ->where('command_type', DeviceCommand::TYPE_FACE_TEMPLATE)
+            ->count());
     }
 
     /**

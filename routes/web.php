@@ -57,8 +57,7 @@ Route::middleware(['set.locale', 'auth'])->group(function () {
     Route::get('vacations/dashboard', [VacationController::class, 'index'])
         ->name('vacations.dashboard');
 
-    // Root redirect
-    Route::get('/', function () {
-        return redirect()->route('dashboard');
-    });
+    // Root redirect (Route::redirect is route:cache-safe; a Closure here
+    // would block route caching. Target matches the `dashboard` route URI.)
+    Route::redirect('/', '/dashboard');
 });

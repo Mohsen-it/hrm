@@ -990,6 +990,26 @@ usePageTitle(t('dashboard.title'));
                 </DashboardWidget>
             </div>
 
+            <!-- ===== BACKUP HEALTH ===== -->
+            <DashboardWidget
+                :title="t('dashboard.backup_health')"
+                icon="fas fa-database"
+                :icon-color="data.backupHealth?.ok ? 'success' : 'danger'"
+            >
+                <div class="space-y-2 text-[13px]">
+                    <div v-for="(check, i) in data.backupHealth?.checks || []" :key="i" class="flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-mistral-surface/60">
+                        <span class="text-mistral-ink">
+                            <i :class="check.ok ? 'fas fa-check-circle text-mistral-success' : 'fas fa-times-circle text-mistral-danger'" class="text-[11px] ms-1" aria-hidden="true"></i>
+                            {{ check.name }}
+                        </span>
+                        <span class="font-mono text-mistral-steel text-[11px]" dir="ltr">{{ check.detail || '—' }}</span>
+                    </div>
+                    <div v-if="!data.backupHealth?.checks?.length" class="px-3 py-4 text-center text-mistral-stone text-[13px]">
+                        {{ t('dashboard.backup_no_data') }}
+                    </div>
+                </div>
+            </DashboardWidget>
+
             <!-- ===== LIVE ATTENDANCE FEED ===== -->
             <DashboardWidget
                 :title="t('dashboard.live_attendance_feed')"

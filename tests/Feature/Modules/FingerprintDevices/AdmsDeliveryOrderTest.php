@@ -131,10 +131,12 @@ class AdmsDeliveryOrderTest extends TestCase
         $updated = $service->queueUserUpdate($device->id, '29083', 'شادي ابراهيم محلا', 0);
         $deleted = $service->queueUserDelete($device->id, '29083');
 
-        $this->assertStringStartsWith('C:10#', $created->command_body);
-        $this->assertStringContainsString('29083', $created->command_body);
-        $this->assertStringStartsWith('C:10#', $updated->command_body);
-        $this->assertStringStartsWith('C:11#', $deleted->command_body);
+        // Phase 1: Push SDK v2 formats — legacy C:10#/C:11# rejected by
+        // iFace firmware (C:11#PIN returns -1002). See DeviceCommandService.
+        $this->assertStringStartsWith('DATA UPDATE USERINFO', $created->command_body);
+        $this->assertStringContainsString('PIN=29083', $created->command_body);
+        $this->assertStringStartsWith('DATA UPDATE USERINFO', $updated->command_body);
+        $this->assertStringStartsWith('DATA DELETE USERINFO', $deleted->command_body);
         $this->assertStringContainsString('29083', $deleted->command_body);
     }
 
@@ -152,12 +154,16 @@ class AdmsDeliveryOrderTest extends TestCase
             hash('sha256', $template),
         );
 
-        $this->assertStringStartsWith('DATA UPDATE FACE', $command->command_body);
-        $this->assertStringContainsString('PIN=29083', $command->command_body);
-        $this->assertStringContainsString('FID=3', $command->command_body);
-        $this->assertStringContainsString('Size=2016', $command->command_body);
+        // Phase 1: unified biodata table (Type=2) — iFace rejects DATA
+        // UPDATE FACE intermittently. Pin-cased, Index-based, no Size token
+        // (Size is FINGERTMP-only). See DeviceCommandService::queueFaceTemplate.
+        $this->assertStringStartsWith('DATA UPDATE biodata', $command->command_body);
+        $this->assertStringContainsString('Pin=29083', $command->command_body);
+        $this->assertStringContainsString('Index=3', $command->command_body);
+        $this->assertStringContainsString('Type=2', $command->command_body);
         $this->assertStringContainsString('Valid=1', $command->command_body);
-        $this->assertStringContainsString('TMP=', $command->command_body);
+        // Case-sensitive: firmware requires capital-T/lowercase-mp (Tmp=).
+        $this->assertStringContainsString('Tmp=', $command->command_body);
     }
 
     private function userinfoBody(string $pin, string $name): string

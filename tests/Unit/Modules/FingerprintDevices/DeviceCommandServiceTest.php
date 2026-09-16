@@ -78,7 +78,12 @@ class DeviceCommandServiceTest extends TestCase
         $this->assertTrue($command->fresh()->status === DeviceCommand::STATUS_FAILED);
     }
 
-    public function test_failed_user_update_is_not_requeued(): void
+    /**
+     * Phase 1: user create/update failures ARE retried (bounded) — the
+     * terminal refuses templates with Return=-3 while the user record is
+     * missing, so a failed user write would cascade. See handleFailure().
+     */
+    public function test_failed_user_update_is_requeued_with_backoff(): void
     {
         [$target] = $this->makeDevices();
         $service = app(DeviceCommandService::class);
@@ -91,7 +96,29 @@ class DeviceCommandServiceTest extends TestCase
         ]);
 
         $this->assertTrue($service->reportResult($command->id, $target->id, 'failed', 'Device returned -1'));
-        $this->assertTrue($command->fresh()->status === DeviceCommand::STATUS_FAILED);
+
+        $fresh = $command->fresh();
+        $this->assertSame(DeviceCommand::STATUS_PENDING, $fresh->status);
+        $this->assertSame(1, $fresh->retry_count);
+        $this->assertNotNull($fresh->available_at);
+    }
+
+    public function test_failed_user_update_gives_up_after_max_retries(): void
+    {
+        [$target] = $this->makeDevices();
+        $service = app(DeviceCommandService::class);
+
+        $command = $service->queueUserUpdate($target->id, '101', 'Layla');
+        $command->markSending();
+        $command->update([
+            'status' => DeviceCommand::STATUS_FAILED,
+            'retry_count' => 10,
+            'max_retries' => 10,
+            'error_message' => 'Device returned -1',
+        ]);
+
+        $this->assertTrue($service->reportResult($command->id, $target->id, 'failed', 'Device returned -1'));
+        $this->assertSame(DeviceCommand::STATUS_FAILED, $command->fresh()->status);
     }
 
     public function test_retry_failed_face_commands_resets_to_pending(): void
@@ -238,10 +265,14 @@ class DeviceCommandServiceTest extends TestCase
             hash('sha256', 'test-template-data'),
         );
 
-        $this->assertStringStartsWith('DATA UPDATE FACE', $command->command_body);
-        $this->assertStringContainsString('PIN=20079', $command->command_body);
-        $this->assertStringContainsString('FID=0', $command->command_body);
-        $this->assertSame(15, $command->max_retries);
+        // Phase 1: face templates use the unified biodata table (Type=2),
+        // byte-exact mirror of terminal uploads — iFace firmware rejects
+        // DATA UPDATE FACE intermittently. FID belongs to FINGERTMP only.
+        $this->assertStringStartsWith('DATA UPDATE biodata', $command->command_body);
+        $this->assertStringContainsString('Pin=20079', $command->command_body);
+        $this->assertStringContainsString('Type=2', $command->command_body);
+        $this->assertStringContainsString('Index=0', $command->command_body);
+        $this->assertSame(30, $command->max_retries);
     }
 
     /** @return array{FingerprintDevice, FingerprintDevice} */

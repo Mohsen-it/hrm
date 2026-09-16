@@ -19,6 +19,7 @@ import Badge from '@/Components/ui/Badge.vue';
 import StatCard from '@/Components/ui/StatCard.vue';
 import Alert from '@/Components/ui/Alert.vue';
 import SearchInput from '@/Components/ui/SearchInput.vue';
+import ReportTable from '@/Components/ui/ReportTable.vue';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
@@ -72,6 +73,44 @@ const fullySyncedEmployees = computed(() =>
 const devicesWithIssues = computed(() =>
     devices.value.filter((d) => d.failed_commands > 0 || d.pending_commands > 0 || d.status === 'offline'),
 );
+
+// Devices-tab report columns (labels mirror the legacy thead exactly;
+// first column uses logical start instead of physical text-left for RTL).
+const deviceColumns = computed(() => [
+    { key: 'device', label: t('fingerprint_devices.device_name') || 'Device', align: 'start' },
+    { key: 'status', label: t('fingerprint_devices.status') || 'Status', align: 'center' },
+    { key: 'faces', label: t('fingerprint_devices.faces') || 'Faces', align: 'center' },
+    { key: 'employees', label: t('fingerprint_devices.employees') || 'Employees', align: 'center' },
+    { key: 'pending', label: t('fingerprint_devices.pending') || 'Pending', align: 'center' },
+    { key: 'sending', label: t('fingerprint_devices.sending') || 'Sending', align: 'center' },
+    { key: 'failed', label: t('fingerprint_devices.failed') || 'Failed', align: 'center' },
+    { key: 'completed', label: t('fingerprint_devices.completed') || 'Done', align: 'center' },
+    { key: 'health', label: t('fingerprint_devices.health') || 'Health', align: 'center' },
+    { key: 'last_push', label: t('fingerprint_devices.last_pushed') || 'Last Push', align: 'center' },
+    { key: 'actions', label: '', align: 'center' },
+]);
+
+// Employees-tab report columns (labels mirror the legacy thead exactly).
+const employeeColumns = computed(() => [
+    { key: 'employee', label: t('fingerprint_devices.employee') || 'Employee', align: 'start' },
+    { key: 'code', label: t('fingerprint_devices.code') || 'Code', align: 'center' },
+    { key: 'templates', label: t('fingerprint_devices.total_templates') || 'Templates', align: 'center' },
+    { key: 'synced', label: t('fingerprint_devices.synced_devices_count') || 'Synced Devices', align: 'center' },
+    { key: 'missing', label: t('fingerprint_devices.missing_devices_count') || 'Missing', align: 'center' },
+    { key: 'coverage', label: t('fingerprint_devices.coverage') || 'Coverage', align: 'center' },
+    { key: 'status', label: t('fingerprint_devices.status') || 'Status', align: 'center' },
+    { key: 'source', label: t('fingerprint_devices.source') || 'Source', align: 'center' },
+]);
+
+// Failed-commands report columns (compact density mirrors the legacy
+// py-2 table; the retry column intentionally has no header, as before).
+const failedColumns = computed(() => [
+    { key: 'device', label: 'Device', align: 'start' },
+    { key: 'error', label: 'Error', align: 'start' },
+    { key: 'retries', label: 'Retries', align: 'center' },
+    { key: 'time', label: 'Time', align: 'center' },
+    { key: 'retry', label: '', align: 'center' },
+]);
 
 // Status badge
 function statusVariant(status) {
@@ -180,14 +219,14 @@ usePageTitle(t('fingerprint_devices.face_sync_dashboard') || 'Face Sync Dashboar
     >
         <div
             v-if="retryToast"
-            class="fixed top-4 right-4 z-50 px-4 py-3 rounded-xl shadow-lg border text-[13px] font-medium"
+            class="fixed top-4 end-4 z-50 px-4 py-3 rounded-xl shadow-lg border text-[13px] font-medium"
             :class="
                 retryToast.type === 'success'
                     ? 'bg-mistral-success/10 border-mistral-success/30 text-mistral-success'
                     : 'bg-mistral-danger/10 border-mistral-danger/30 text-mistral-danger'
             "
         >
-            <i :class="retryToast.type === 'success' ? 'fas fa-check-circle mr-2' : 'fas fa-times-circle mr-2'"></i>
+            <i :class="retryToast.type === 'success' ? 'fas fa-check-circle me-2' : 'fas fa-times-circle me-2'"></i>
             {{ retryToast.message }}
         </div>
     </Transition>
@@ -327,22 +366,22 @@ usePageTitle(t('fingerprint_devices.face_sync_dashboard') || 'Face Sync Dashboar
                         <!-- Command status pills -->
                         <div class="flex gap-2 flex-wrap text-[10px]">
                             <span v-if="device.pending_commands > 0" class="px-2 py-0.5 rounded-full bg-mistral-warning/15 text-mistral-warning font-medium">
-                                <i class="fas fa-hourglass-half mr-1"></i>{{ device.pending_commands }} pending
+                                <i class="fas fa-hourglass-half me-1"></i>{{ device.pending_commands }} pending
                             </span>
                             <span v-if="device.sending_commands > 0" class="px-2 py-0.5 rounded-full bg-mistral-info/15 text-mistral-info font-medium">
-                                <i class="fas fa-paper-plane mr-1"></i>{{ device.sending_commands }} sending
+                                <i class="fas fa-paper-plane me-1"></i>{{ device.sending_commands }} sending
                             </span>
                             <span v-if="device.failed_commands > 0" class="px-2 py-0.5 rounded-full bg-mistral-danger/15 text-mistral-danger font-medium">
-                                <i class="fas fa-times-circle mr-1"></i>{{ device.failed_commands }} failed
+                                <i class="fas fa-times-circle me-1"></i>{{ device.failed_commands }} failed
                             </span>
                             <span v-if="device.completed_commands > 0" class="px-2 py-0.5 rounded-full bg-mistral-success/15 text-mistral-success font-medium">
-                                <i class="fas fa-check-circle mr-1"></i>{{ device.completed_commands }} done
+                                <i class="fas fa-check-circle me-1"></i>{{ device.completed_commands }} done
                             </span>
                         </div>
 
                         <div class="flex items-center justify-between mt-2">
                             <p v-if="device.last_pushed_at" class="text-[10px] text-mistral-stone">
-                                <i class="fas fa-clock mr-1"></i>{{ t('fingerprint_devices.last_pushed') || 'Last push' }}: {{ formatDateTime(device.last_pushed_at) }}
+                                <i class="fas fa-clock me-1"></i>{{ t('fingerprint_devices.last_pushed') || 'Last push' }}: {{ formatDateTime(device.last_pushed_at) }}
                             </p>
                             <button
                                 v-if="device.failed_commands > 0"
@@ -350,7 +389,7 @@ usePageTitle(t('fingerprint_devices.face_sync_dashboard') || 'Face Sync Dashboar
                                 :disabled="retryingDeviceId === device.id"
                                 @click="retryDeviceFailed(device.id)"
                             >
-                                <i :class="retryingDeviceId === device.id ? 'fas fa-spinner fa-spin mr-1' : 'fas fa-redo mr-1'"></i>
+                                <i :class="retryingDeviceId === device.id ? 'fas fa-spinner fa-spin me-1' : 'fas fa-redo me-1'"></i>
                                 {{ t('fingerprint_devices.retry') || 'Retry' }}
                             </button>
                         </div>
@@ -443,112 +482,100 @@ usePageTitle(t('fingerprint_devices.face_sync_dashboard') || 'Face Sync Dashboar
                     {{ t('fingerprint_devices.device_face_sync_detail') || 'Device Face Sync Detail' }}
                 </h3>
 
-                <div class="overflow-x-auto">
-                    <table class="w-full text-[13px]">
-                        <thead>
-                            <tr class="border-b border-mistral-hairline-soft">
-                                <th class="text-left py-3 px-3 font-semibold text-mistral-steel">{{ t('fingerprint_devices.device_name') || 'Device' }}</th>
-                                <th class="text-center py-3 px-3 font-semibold text-mistral-steel">{{ t('fingerprint_devices.status') || 'Status' }}</th>
-                                <th class="text-center py-3 px-3 font-semibold text-mistral-steel">{{ t('fingerprint_devices.faces') || 'Faces' }}</th>
-                                <th class="text-center py-3 px-3 font-semibold text-mistral-steel">{{ t('fingerprint_devices.employees') || 'Employees' }}</th>
-                                <th class="text-center py-3 px-3 font-semibold text-mistral-steel">{{ t('fingerprint_devices.pending') || 'Pending' }}</th>
-                                <th class="text-center py-3 px-3 font-semibold text-mistral-steel">{{ t('fingerprint_devices.sending') || 'Sending' }}</th>
-                                <th class="text-center py-3 px-3 font-semibold text-mistral-steel">{{ t('fingerprint_devices.failed') || 'Failed' }}</th>
-                                <th class="text-center py-3 px-3 font-semibold text-mistral-steel">{{ t('fingerprint_devices.completed') || 'Done' }}</th>
-                                <th class="text-center py-3 px-3 font-semibold text-mistral-steel">{{ t('fingerprint_devices.health') || 'Health' }}</th>
-                                <th class="text-center py-3 px-3 font-semibold text-mistral-steel">{{ t('fingerprint_devices.last_pushed') || 'Last Push' }}</th>
-                                <th class="text-center py-3 px-3 font-semibold text-mistral-steel"></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr
-                                v-for="device in devices"
-                                :key="device.id"
-                                class="border-b border-mistral-hairline-soft hover:bg-mistral-canvas/50 transition-colors"
+                <ReportTable
+                    :columns="deviceColumns"
+                    :items="devices"
+                    :empty-title="t('common.no_data')"
+                    empty-icon="fas fa-server"
+                >
+                    <template #cell-device="{ row }">
+                        <div>
+                            <Link
+                                :href="route('fingerprint-devices.show', row.id)"
+                                class="font-medium text-mistral-ink hover:text-mistral-primary transition-colors"
                             >
-                                <td class="py-3 px-3">
-                                    <div>
-                                        <Link
-                                            :href="route('fingerprint-devices.show', device.id)"
-                                            class="font-medium text-mistral-ink hover:text-mistral-primary transition-colors"
-                                        >
-                                            {{ device.name }}
-                                        </Link>
-                                        <p class="text-[11px] text-mistral-stone">{{ device.ip_address }}:{{ device.port }}</p>
-                                    </div>
-                                </td>
-                                <td class="py-3 px-3 text-center">
-                                    <Badge :text="device.status" :variant="statusVariant(device.status)" />
-                                </td>
-                                <td class="py-3 px-3 text-center font-semibold text-mistral-primary">{{ device.face_count }}</td>
-                                <td class="py-3 px-3 text-center font-semibold text-mistral-info">{{ device.employee_count }}</td>
-                                <td class="py-3 px-3 text-center">
-                                    <span v-if="device.pending_commands > 0" class="text-mistral-warning font-semibold">
-                                        {{ device.pending_commands }}
-                                    </span>
-                                    <span v-else class="text-mistral-stone">0</span>
-                                </td>
-                                <td class="py-3 px-3 text-center">
-                                    <span v-if="device.sending_commands > 0" class="text-mistral-info font-semibold">
-                                        {{ device.sending_commands }}
-                                    </span>
-                                    <span v-else class="text-mistral-stone">0</span>
-                                </td>
-                                <td class="py-3 px-3 text-center">
-                                    <span v-if="device.failed_commands > 0" class="text-mistral-danger font-semibold">
-                                        {{ device.failed_commands }}
-                                    </span>
-                                    <span v-else class="text-mistral-stone">0</span>
-                                </td>
-                                <td class="py-3 px-3 text-center font-semibold text-mistral-success">{{ device.completed_commands }}</td>
-                                <td class="py-3 px-3 text-center">
-                                    <div class="flex items-center justify-center gap-2">
-                                        <div class="w-16 h-2 bg-mistral-canvas rounded-full overflow-hidden">
-                                            <div
-                                                class="h-full rounded-full transition-all"
-                                                :class="{
-                                                    'bg-mistral-success': device.health_percent >= 95,
-                                                    'bg-mistral-warning': device.health_percent >= 50 && device.health_percent < 95,
-                                                    'bg-mistral-danger': device.health_percent < 50,
-                                                }"
-                                                :style="{ width: device.health_percent + '%' }"
-                                            ></div>
-                                        </div>
-                                        <span class="text-[11px] font-semibold" :class="{
-                                            'text-mistral-success': device.health_percent >= 95,
-                                            'text-mistral-warning': device.health_percent >= 50 && device.health_percent < 95,
-                                            'text-mistral-danger': device.health_percent < 50,
-                                        }">
-                                            {{ formatPercent(device.health_percent) }}
-                                        </span>
-                                    </div>
-                                </td>
-                                <td class="py-3 px-3 text-center text-[11px] text-mistral-stone">
-                                    {{ formatDateTime(device.last_pushed_at) }}
-                                </td>
-                                <td class="py-3 px-3 text-center">
-                                    <div class="flex items-center justify-center gap-2">
-                                        <Link
-                                            :href="route('fingerprint-devices.sync', { device_id: device.id })"
-                                            class="text-mistral-primary hover:text-mistral-primary/80 text-[12px] font-medium"
-                                        >
-                                            <i class="fas fa-sync-alt"></i>
-                                        </Link>
-                                        <button
-                                            v-if="device.failed_commands > 0"
-                                            class="text-mistral-danger hover:text-mistral-danger/80 text-[12px] font-medium disabled:opacity-50"
-                                            :disabled="retryingDeviceId === device.id"
-                                            :title="t('fingerprint_devices.retry_device_failed') || 'Retry failed commands for this device'"
-                                            @click="retryDeviceFailed(device.id)"
-                                        >
-                                            <i :class="retryingDeviceId === device.id ? 'fas fa-spinner fa-spin' : 'fas fa-redo'"></i>
-                                        </button>
-                                    </div>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
+                                {{ row.name }}
+                            </Link>
+                            <p class="text-[11px] text-mistral-stone">{{ row.ip_address }}:{{ row.port }}</p>
+                        </div>
+                    </template>
+                    <template #cell-status="{ row }">
+                        <Badge :text="row.status" :variant="statusVariant(row.status)" />
+                    </template>
+                    <template #cell-faces="{ row }">
+                        <span class="font-semibold text-mistral-primary">{{ row.face_count }}</span>
+                    </template>
+                    <template #cell-employees="{ row }">
+                        <span class="font-semibold text-mistral-info">{{ row.employee_count }}</span>
+                    </template>
+                    <template #cell-pending="{ row }">
+                        <span v-if="row.pending_commands > 0" class="text-mistral-warning font-semibold">
+                            {{ row.pending_commands }}
+                        </span>
+                        <span v-else class="text-mistral-stone">0</span>
+                    </template>
+                    <template #cell-sending="{ row }">
+                        <span v-if="row.sending_commands > 0" class="text-mistral-info font-semibold">
+                            {{ row.sending_commands }}
+                        </span>
+                        <span v-else class="text-mistral-stone">0</span>
+                    </template>
+                    <template #cell-failed="{ row }">
+                        <span v-if="row.failed_commands > 0" class="text-mistral-danger font-semibold">
+                            {{ row.failed_commands }}
+                        </span>
+                        <span v-else class="text-mistral-stone">0</span>
+                    </template>
+                    <template #cell-completed="{ row }">
+                        <span class="font-semibold text-mistral-success">{{ row.completed_commands }}</span>
+                    </template>
+                    <template #cell-health="{ row }">
+                        <div class="flex items-center justify-center gap-2">
+                            <div class="w-16 h-2 bg-mistral-canvas rounded-full overflow-hidden">
+                                <div
+                                    class="h-full rounded-full transition-all"
+                                    :class="{
+                                        'bg-mistral-success': row.health_percent >= 95,
+                                        'bg-mistral-warning': row.health_percent >= 50 && row.health_percent < 95,
+                                        'bg-mistral-danger': row.health_percent < 50,
+                                    }"
+                                    :style="{ width: row.health_percent + '%' }"
+                                ></div>
+                            </div>
+                            <span class="text-[11px] font-semibold" :class="{
+                                'text-mistral-success': row.health_percent >= 95,
+                                'text-mistral-warning': row.health_percent >= 50 && row.health_percent < 95,
+                                'text-mistral-danger': row.health_percent < 50,
+                            }">
+                                {{ formatPercent(row.health_percent) }}
+                            </span>
+                        </div>
+                    </template>
+                    <template #cell-last_push="{ row }">
+                        <span class="text-[11px] text-mistral-stone">
+                            {{ formatDateTime(row.last_pushed_at) }}
+                        </span>
+                    </template>
+                    <template #cell-actions="{ row }">
+                        <div class="flex items-center justify-center gap-2">
+                            <Link
+                                :href="route('fingerprint-devices.sync', { device_id: row.id })"
+                                class="text-mistral-primary hover:text-mistral-primary/80 text-[12px] font-medium"
+                            >
+                                <i class="fas fa-sync-alt"></i>
+                            </Link>
+                            <button
+                                v-if="row.failed_commands > 0"
+                                class="text-mistral-danger hover:text-mistral-danger/80 text-[12px] font-medium disabled:opacity-50"
+                                :disabled="retryingDeviceId === row.id"
+                                :title="t('fingerprint_devices.retry_device_failed') || 'Retry failed commands for this device'"
+                                @click="retryDeviceFailed(row.id)"
+                            >
+                                <i :class="retryingDeviceId === row.id ? 'fas fa-spinner fa-spin' : 'fas fa-redo'"></i>
+                            </button>
+                        </div>
+                    </template>
+                </ReportTable>
             </div>
         </Card>
     </div>
@@ -570,93 +597,80 @@ usePageTitle(t('fingerprint_devices.face_sync_dashboard') || 'Face Sync Dashboar
                     </div>
                 </div>
 
-                <div class="overflow-x-auto">
-                    <table class="w-full text-[13px]">
-                        <thead>
-                            <tr class="border-b border-mistral-hairline-soft">
-                                <th scope="col" class="text-start py-3 px-3 font-semibold text-mistral-steel">{{ t('fingerprint_devices.employee') || 'Employee' }}</th>
-                                <th scope="col" class="text-center py-3 px-3 font-semibold text-mistral-steel">{{ t('fingerprint_devices.code') || 'Code' }}</th>
-                                <th scope="col" class="text-center py-3 px-3 font-semibold text-mistral-steel">{{ t('fingerprint_devices.total_templates') || 'Templates' }}</th>
-                                <th scope="col" class="text-center py-3 px-3 font-semibold text-mistral-steel">{{ t('fingerprint_devices.synced_devices_count') || 'Synced Devices' }}</th>
-                                <th scope="col" class="text-center py-3 px-3 font-semibold text-mistral-steel">{{ t('fingerprint_devices.missing_devices_count') || 'Missing' }}</th>
-                                <th scope="col" class="text-center py-3 px-3 font-semibold text-mistral-steel">{{ t('fingerprint_devices.coverage') || 'Coverage' }}</th>
-                                <th scope="col" class="text-center py-3 px-3 font-semibold text-mistral-steel">{{ t('fingerprint_devices.status') || 'Status' }}</th>
-                                <th scope="col" class="text-center py-3 px-3 font-semibold text-mistral-steel">{{ t('fingerprint_devices.source') || 'Source' }}</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr
-                                v-for="emp in filteredEmployees"
-                                :key="emp.id"
-                                class="border-b border-mistral-hairline-soft hover:bg-mistral-canvas/50 transition-colors cursor-pointer"
-                                @click="openEmployeeDetail(emp)"
-                            >
-                                <td class="py-3 px-3">
-                                    <span class="font-medium text-mistral-ink">{{ emp.name }}</span>
-                                </td>
-                                <td class="py-3 px-3 text-center text-mistral-stone">{{ emp.employee_code }}</td>
-                                <td class="py-3 px-3 text-center font-semibold text-mistral-primary">{{ emp.total_templates }}</td>
-                                <td class="py-3 px-3 text-center">
-                                    <span class="font-semibold" :class="emp.synced_devices > 0 ? 'text-mistral-success' : 'text-mistral-stone'">
-                                        {{ emp.synced_devices }} / {{ emp.total_active_devices }}
-                                    </span>
-                                </td>
-                                <td class="py-3 px-3 text-center">
-                                    <span v-if="emp.missing_devices > 0" class="font-semibold text-mistral-danger">
-                                        {{ emp.missing_devices }}
-                                    </span>
-                                    <span v-else class="text-mistral-success">
-                                        <i class="fas fa-check"></i>
-                                    </span>
-                                </td>
-                                <td class="py-3 px-3 text-center">
-                                    <div class="flex items-center justify-center gap-2">
-                                        <div class="w-16 h-2 bg-mistral-canvas rounded-full overflow-hidden">
-                                            <div
-                                                class="h-full rounded-full transition-all"
-                                                :class="{
-                                                    'bg-mistral-success': emp.coverage_percent >= 95,
-                                                    'bg-mistral-warning': emp.coverage_percent >= 50 && emp.coverage_percent < 95,
-                                                    'bg-mistral-danger': emp.coverage_percent < 50,
-                                                }"
-                                                :style="{ width: emp.coverage_percent + '%' }"
-                                            ></div>
-                                        </div>
-                                        <span class="text-[11px] font-semibold">{{ formatPercent(emp.coverage_percent) }}</span>
-                                    </div>
-                                </td>
-                                <td class="py-3 px-3 text-center">
-                                    <Badge
-                                        v-if="emp.is_fully_synced"
-                                        :text="t('fingerprint_devices.synced') || 'Synced'"
-                                        variant="active"
-                                    />
-                                    <Badge
-                                        v-else-if="emp.total_templates === 0"
-                                        :text="t('fingerprint_devices.no_data') || 'No Data'"
-                                        variant="absent"
-                                    />
-                                    <Badge
-                                        v-else
-                                        :text="t('fingerprint_devices.partial') || 'Partial'"
-                                        variant="pending"
-                                    />
-                                </td>
-                                <td class="py-3 px-3 text-center">
-                                    <span v-if="emp.source_devices.length" class="text-[11px] text-mistral-stone">
-                                        {{ emp.source_devices.join(', ') }}
-                                    </span>
-                                    <span v-else class="text-mistral-stone">—</span>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-
-                    <div v-if="filteredEmployees.length === 0" class="text-center py-12 text-mistral-steel">
-                        <i class="fas fa-search text-[32px] mb-2"></i>
-                        <p>{{ t('common.no_results') || 'No results found' }}</p>
-                    </div>
-                </div>
+                <ReportTable
+                    :columns="employeeColumns"
+                    :items="filteredEmployees"
+                    clickable
+                    @row-click="openEmployeeDetail"
+                >
+                    <template #empty>
+                        <div class="text-center py-12 text-mistral-steel">
+                            <i class="fas fa-search text-[32px] mb-2"></i>
+                            <p>{{ t('common.no_results') || 'No results found' }}</p>
+                        </div>
+                    </template>
+                    <template #cell-employee="{ row }">
+                        <span class="font-medium text-mistral-ink">{{ row.name }}</span>
+                    </template>
+                    <template #cell-code="{ row }">
+                        <span class="text-mistral-stone">{{ row.employee_code }}</span>
+                    </template>
+                    <template #cell-templates="{ row }">
+                        <span class="font-semibold text-mistral-primary">{{ row.total_templates }}</span>
+                    </template>
+                    <template #cell-synced="{ row }">
+                        <span class="font-semibold" :class="row.synced_devices > 0 ? 'text-mistral-success' : 'text-mistral-stone'">
+                            {{ row.synced_devices }} / {{ row.total_active_devices }}
+                        </span>
+                    </template>
+                    <template #cell-missing="{ row }">
+                        <span v-if="row.missing_devices > 0" class="font-semibold text-mistral-danger">
+                            {{ row.missing_devices }}
+                        </span>
+                        <span v-else class="text-mistral-success">
+                            <i class="fas fa-check"></i>
+                        </span>
+                    </template>
+                    <template #cell-coverage="{ row }">
+                        <div class="flex items-center justify-center gap-2">
+                            <div class="w-16 h-2 bg-mistral-canvas rounded-full overflow-hidden">
+                                <div
+                                    class="h-full rounded-full transition-all"
+                                    :class="{
+                                        'bg-mistral-success': row.coverage_percent >= 95,
+                                        'bg-mistral-warning': row.coverage_percent >= 50 && row.coverage_percent < 95,
+                                        'bg-mistral-danger': row.coverage_percent < 50,
+                                    }"
+                                    :style="{ width: row.coverage_percent + '%' }"
+                                ></div>
+                            </div>
+                            <span class="text-[11px] font-semibold">{{ formatPercent(row.coverage_percent) }}</span>
+                        </div>
+                    </template>
+                    <template #cell-status="{ row }">
+                        <Badge
+                            v-if="row.is_fully_synced"
+                            :text="t('fingerprint_devices.synced') || 'Synced'"
+                            variant="active"
+                        />
+                        <Badge
+                            v-else-if="row.total_templates === 0"
+                            :text="t('fingerprint_devices.no_data') || 'No Data'"
+                            variant="absent"
+                        />
+                        <Badge
+                            v-else
+                            :text="t('fingerprint_devices.partial') || 'Partial'"
+                            variant="pending"
+                        />
+                    </template>
+                    <template #cell-source="{ row }">
+                        <span v-if="row.source_devices.length" class="text-[11px] text-mistral-stone">
+                            {{ row.source_devices.join(', ') }}
+                        </span>
+                        <span v-else class="text-mistral-stone">—</span>
+                    </template>
+                </ReportTable>
             </div>
         </Card>
 
@@ -780,7 +794,7 @@ usePageTitle(t('fingerprint_devices.face_sync_dashboard') || 'Face Sync Dashboar
                                 />
                             </div>
                             <div class="flex items-center gap-3 text-[11px] text-mistral-stone">
-                                <span><i class="fas fa-arrow-right mr-1"></i>{{ log.direction }}</span>
+                                <span><i class="fas fa-arrow-right me-1 rtl-flip"></i>{{ log.direction }}</span>
                                 <span v-if="log.duration_seconds">{{ parseFloat(log.duration_seconds).toFixed(1) }}s</span>
                                 <span>{{ formatDateTime(log.started_at) }}</span>
                             </div>
@@ -814,63 +828,56 @@ usePageTitle(t('fingerprint_devices.face_sync_dashboard') || 'Face Sync Dashboar
                         :disabled="retryingFailed"
                         @click="retryAllFailed"
                     >
-                        <i v-if="retryingFailed" class="fas fa-spinner fa-spin mr-1"></i>
+                        <i v-if="retryingFailed" class="fas fa-spinner fa-spin me-1"></i>
                         {{ retryingFailed ? (t('common.please_wait') || 'Please wait...') : (t('fingerprint_devices.retry_all_failed') || 'Retry All Failed') }}
                     </Button>
                 </div>
 
-                <div v-if="failedCommands.length === 0" class="text-center py-8 text-mistral-stone">
-                    <i class="fas fa-check-circle text-[32px] text-mistral-success mb-2"></i>
-                    <p class="text-[13px]">{{ t('fingerprint_devices.no_failed_commands') || 'No failed face commands' }}</p>
-                </div>
-
-                <div v-else class="overflow-x-auto">
-                    <table class="w-full text-[12px]">
-                        <thead>
-                            <tr class="border-b border-mistral-hairline-soft">
-                                <th class="text-left py-2 px-3 font-semibold text-mistral-steel">Device</th>
-                                <th class="text-left py-2 px-3 font-semibold text-mistral-steel">Error</th>
-                                <th class="text-center py-2 px-3 font-semibold text-mistral-steel">Retries</th>
-                                <th class="text-center py-2 px-3 font-semibold text-mistral-steel">Time</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr
-                                v-for="cmd in failedCommands"
-                                :key="cmd.id"
-                                class="border-b border-mistral-hairline-soft"
-                            >
-                                <td class="py-2 px-3">
-                                    <Link
-                                        :href="route('fingerprint-devices.show', cmd.device_id)"
-                                        class="text-mistral-ink hover:text-mistral-primary font-medium"
-                                    >
-                                        {{ cmd.device_name }}
-                                    </Link>
-                                </td>
-                                <td class="py-2 px-3 text-mistral-danger max-w-[300px] truncate" :title="cmd.error_message">
-                                    {{ cmd.error_message || '—' }}
-                                </td>
-                                <td class="py-2 px-3 text-center">
-                                    {{ cmd.retry_count }} / {{ cmd.max_retries }}
-                                </td>
-                                <td class="py-2 px-3 text-center text-mistral-stone">
-                                    {{ formatDateTime(cmd.updated_at) }}
-                                </td>
-                                <td class="py-2 px-3 text-center">
-                                    <button
-                                        class="text-mistral-primary hover:text-mistral-primary/80 text-[12px] font-medium disabled:opacity-50"
-                                        :disabled="retryingDeviceId === cmd.device_id"
-                                        :title="t('fingerprint_devices.retry_device') || 'Retry this device'"
-                                        @click="retryDeviceFailed(cmd.device_id)"
-                                    >
-                                        <i :class="retryingDeviceId === cmd.device_id ? 'fas fa-spinner fa-spin' : 'fas fa-redo'"></i>
-                                    </button>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
+                <ReportTable
+                    :columns="failedColumns"
+                    :items="failedCommands"
+                    compact
+                    table-class="text-[12px]"
+                    :hover="false"
+                >
+                    <template #empty>
+                        <div class="text-center py-8 text-mistral-stone">
+                            <i class="fas fa-check-circle text-[32px] text-mistral-success mb-2"></i>
+                            <p class="text-[13px]">{{ t('fingerprint_devices.no_failed_commands') || 'No failed face commands' }}</p>
+                        </div>
+                    </template>
+                    <template #cell-device="{ row }">
+                        <Link
+                            :href="route('fingerprint-devices.show', row.device_id)"
+                            class="text-mistral-ink hover:text-mistral-primary font-medium"
+                        >
+                            {{ row.device_name }}
+                        </Link>
+                    </template>
+                    <template #cell-error="{ row }">
+                        <span class="text-mistral-danger max-w-[300px] truncate block" :title="row.error_message">
+                            {{ row.error_message || '—' }}
+                        </span>
+                    </template>
+                    <template #cell-retries="{ row }">
+                        {{ row.retry_count }} / {{ row.max_retries }}
+                    </template>
+                    <template #cell-time="{ row }">
+                        <span class="text-mistral-stone">
+                            {{ formatDateTime(row.updated_at) }}
+                        </span>
+                    </template>
+                    <template #cell-retry="{ row }">
+                        <button
+                            class="text-mistral-primary hover:text-mistral-primary/80 text-[12px] font-medium disabled:opacity-50"
+                            :disabled="retryingDeviceId === row.device_id"
+                            :title="t('fingerprint_devices.retry_device') || 'Retry this device'"
+                            @click="retryDeviceFailed(row.device_id)"
+                        >
+                            <i :class="retryingDeviceId === row.device_id ? 'fas fa-spinner fa-spin' : 'fas fa-redo'"></i>
+                        </button>
+                    </template>
+                </ReportTable>
             </div>
         </Card>
     </div>

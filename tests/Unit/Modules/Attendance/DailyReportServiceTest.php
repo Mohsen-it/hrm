@@ -1073,9 +1073,10 @@ class DailyReportServiceTest extends TestCase
     /** 3-day duty rotation: works the start day and the two following days, rests on the fourth morning. */
     private function assignThreeDayDuty(User $user, string $start): RotationAssignment
     {
-        // The engine indexes the pattern backward from the anchor: position 0 is
-        // the anchor day, positions 11 and 10 are the +1 and +2 days.
-        return $this->assignOpenRotation($user, [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1], $start);
+        // Phase 1: RotationEngine indexes FORWARD — position N is anchor+N
+        // days (see engine docblock). The old backward-index comment/pattern
+        // produced a 1-day duty, which broke both 3-day scenarios.
+        return $this->assignOpenRotation($user, [1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0], $start);
     }
 
     private function assignOpenRotation(User $user, array $pattern, string $anchor): RotationAssignment

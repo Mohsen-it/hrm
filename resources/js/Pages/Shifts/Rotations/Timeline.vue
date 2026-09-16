@@ -9,7 +9,7 @@ export default {
 <script setup>
 import { ref, computed, watch } from 'vue';
 import { Head, Link, router } from '@inertiajs/vue3';
-import { PageHeader, Button, Card, Badge, StatCard, SearchInput, FormSelect, FormInput, FormModal, ErrorSummary, Alert } from '@/Components/ui';
+import { PageHeader, Button, Card, Badge, StatCard, SearchInput, FormSelect, FormInput, FormModal, ErrorSummary, Alert, EmptyState } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
@@ -402,13 +402,12 @@ const submitQuickTransfer = async () => {
             <!-- Timeline Table -->
             <Card>
                 <div class="p-0">
-                    <div v-if="timeline.length === 0" class="text-center py-16">
-                        <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-mistral-surface flex items-center justify-center">
-                            <i class="fas fa-users text-mistral-muted text-xl"></i>
-                        </div>
-                        <h3 class="text-lg font-semibold text-mistral-ink mb-1">{{ t('shifts.no_assignments') }}</h3>
-                        <p class="text-sm text-mistral-steel">{{ t('shifts.no_assignments_description') }}</p>
-                    </div>
+                    <EmptyState
+                        v-if="timeline.length === 0"
+                        icon="fas fa-users"
+                        :title="t('shifts.no_assignments')"
+                        :description="t('shifts.no_assignments_description')"
+                    />
 
                     <div v-else class="overflow-auto border-t border-mistral-hairline-soft" ref="scrollContainer" style="max-height: 650px;">
                         <table class="border-collapse min-w-max w-full">

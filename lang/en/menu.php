@@ -52,4 +52,6 @@ return [
     'time_schedules' => 'Time Schedules',
     'unregistered_employees' => 'Unregistered Employees',
     'activity_log' => 'User Activity Log',
+    'backups' => 'Backups',
+    'backup_settings' => 'Backup Settings',
 ];

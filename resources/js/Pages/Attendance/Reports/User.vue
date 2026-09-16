@@ -11,7 +11,7 @@ import { usePageTitle } from '@/composables/usePageTitle';
 
 import { ref, computed, nextTick, watch } from 'vue';
 import { router } from '@inertiajs/vue3';
-import { PageHeader, Button, Card, StatCard, Badge, FormInput, FormSelect, DataTable } from '@/Components/ui';
+import { PageHeader, Button, Card, StatCard, Badge, FormInput, FormSelect, FormSwitch, DataTable } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
@@ -66,11 +66,14 @@ function applyMonthlyLogFilters() {
     );
 }
 
+const showLate = ref(true);
+
 function exportMonthlyLog() {
     window.location.href = route('attendance.reports.user.monthly-log.export', {
         user: props.userId,
         year: monthlyYear.value,
         month: monthlyMonth.value,
+        with_late: showLate.value ? 1 : 0,
     });
 }
 
@@ -229,7 +232,7 @@ const scheduleStatusLabels = {
     unassigned: 'بدون إسناد',
 };
 const scheduleStatusLabel = (status) => scheduleStatusLabels[status] || status;
-const monthlyLogColumns = [
+const baseMonthlyLogColumns = [
     { key: 'date', label: t('attendance.fields.date') },
     { key: 'day_name', label: t('attendance.monthly_employee_log.day') },
     { key: 'schedule_status', label: t('attendance.monthly_employee_log.schedule_status') },
@@ -240,6 +243,29 @@ const monthlyLogColumns = [
     { key: 'check_out_window', label: t('attendance.monthly_employee_log.check_out_window') },
     { key: 'last_check_out_at', label: t('attendance.fields.last_check_out_at') },
 ];
+
+const monthlyLogColumns = computed(() => {
+    if (!showLate.value) return baseMonthlyLogColumns;
+    return [
+        ...baseMonthlyLogColumns,
+        { key: 'late_minutes', label: t('attendance.monthly_employee_log.late_minutes') },
+        { key: 'early_leave_minutes', label: t('attendance.monthly_employee_log.early_leave') },
+    ];
+});
+
+const totalEntryLateMinutes = computed(() =>
+    (props.monthlyLog || []).reduce((sum, row) => sum + (Number(row.late_minutes) || 0), 0),
+);
+
+const totalEarlyLeaveMinutes = computed(() =>
+    (props.monthlyLog || []).reduce((sum, row) => sum + (Number(row.early_leave_minutes) || 0), 0),
+);
+
+const humanHours = (mins) => `${(mins / 60).toFixed(2)} ${t('attendance.monthly_employee_log.hours')} (${mins} ${t('attendance.monthly_employee_log.minutes')})`;
+
+const totalLateHuman = computed(() => humanHours(totalEntryLateMinutes.value + totalEarlyLeaveMinutes.value));
+const totalEntryLateHuman = computed(() => humanHours(totalEntryLateMinutes.value));
+const totalEarlyLeaveHuman = computed(() => humanHours(totalEarlyLeaveMinutes.value));
 
 const overtimeColumns = [
     { key: 'date', label: t('attendance.fields.date') },
@@ -378,6 +404,11 @@ usePageTitle(t('attendance.user_report') + ' #' + props.userId);
                         <Button variant="primary" icon="fas fa-search" @click="applyMonthlyLogFilters" class="self-end">
                             {{ t('common.search') }}
                         </Button>
+                        <FormSwitch
+                            v-model="showLate"
+                            :label="t('attendance.monthly_employee_log.show_late')"
+                            class="self-end ms-2"
+                        />
                     </div>
                 </div>
                 <DataTable
@@ -394,6 +425,22 @@ usePageTitle(t('attendance.user_report') + ' #' + props.userId);
                 >
                     <template #cell-schedule_status="{ row }">
                         {{ scheduleStatusLabel(row.schedule_status) }}
+                    </template>
+                    <template #cell-last_check_out_at="{ row }">
+                        {{ row.last_check_out_at }}<span v-if="row.is_overnight_checkout" class="font-bold"> (+1)</span>
+                    </template>
+                    <template #cell-late_minutes="{ row }">
+                        {{ row.late_minutes || 0 }}
+                    </template>
+                    <template #cell-early_leave_minutes="{ row }">
+                        {{ row.early_leave_minutes || 0 }}
+                    </template>
+                    <template #footer>
+                        <tr v-if="showLate" class="monthly-log-late-total">
+                            <td :colspan="monthlyLogColumns.length - 2" class="text-center font-bold">{{ t('attendance.monthly_employee_log.total_late') }}: {{ totalLateHuman }}</td>
+                            <td class="font-bold text-center">{{ totalEntryLateHuman }}</td>
+                            <td class="font-bold text-center">{{ totalEarlyLeaveHuman }}</td>
+                        </tr>
                     </template>
                 </DataTable>
             </Card>
@@ -613,26 +660,39 @@ usePageTitle(t('attendance.user_report') + ' #' + props.userId);
     }
 
     .monthly-log-print th:nth-child(1),
-    .monthly-log-print td:nth-child(1) { width: 12.1%; }
+    .monthly-log-print td:nth-child(1) { width: 10.5%; }
     .monthly-log-print th:nth-child(2),
-    .monthly-log-print td:nth-child(2) { width: 6.6%; }
+    .monthly-log-print td:nth-child(2) { width: 5.5%; }
     .monthly-log-print th:nth-child(3),
-    .monthly-log-print td:nth-child(3) { width: 9.9%; }
+    .monthly-log-print td:nth-child(3) { width: 8.5%; }
     .monthly-log-print th:nth-child(4),
-    .monthly-log-print td:nth-child(4) { width: 12.6%; }
+    .monthly-log-print td:nth-child(4) { width: 10%; }
     .monthly-log-print th:nth-child(5),
-    .monthly-log-print td:nth-child(5) { width: 13.6%; }
+    .monthly-log-print td:nth-child(5) { width: 10.5%; }
     .monthly-log-print th:nth-child(6),
-    .monthly-log-print td:nth-child(6) { width: 13.8%; }
+    .monthly-log-print td:nth-child(6) { width: 11%; }
     .monthly-log-print th:nth-child(7),
-    .monthly-log-print td:nth-child(7) { width: 8.4%; }
+    .monthly-log-print td:nth-child(7) { width: 7.5%; }
     .monthly-log-print th:nth-child(8),
-    .monthly-log-print td:nth-child(8) { width: 13.8%; }
+    .monthly-log-print td:nth-child(8) { width: 11%; }
     .monthly-log-print th:nth-child(9),
-    .monthly-log-print td:nth-child(9) { width: 9.2%; }
+    .monthly-log-print td:nth-child(9) { width: 7.5%; }
+    .monthly-log-print th:nth-child(10),
+    .monthly-log-print td:nth-child(10) { width: 9%; }
+    .monthly-log-print th:nth-child(11),
+    .monthly-log-print td:nth-child(11) { width: 9%; }
 
     .monthly-log-print tr {
         break-inside: avoid;
+    }
+
+    .monthly-log-late-total td {
+        background: #fa520f !important;
+        color: #fff !important;
+        font-size: 11px !important;
+        font-weight: 800 !important;
+        padding: 5px 3px !important;
+        border: 1px solid #ddd !important;
     }
 }
 

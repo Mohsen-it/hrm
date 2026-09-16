@@ -12,7 +12,7 @@ import { usePageTitle } from '@/composables/usePageTitle';
 import { ref, computed } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
-import { PageHeader, DataTable, SearchInput, ConfirmDialog, Badge, Button, Card, IconButton, FormSelect, Alert, AvatarWithPreview, FormModal, PunchTypeBadge } from '@/Components/ui';
+import { PageHeader, DataTable, SearchInput, ConfirmDialog, Badge, Button, Card, IconButton, FormSelect, Alert, AvatarWithPreview, FormModal, PunchTypeBadge, LoadingSpinner, EmptyState } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
@@ -357,12 +357,13 @@ usePageTitle(t('users.title'));
 
         <FormModal v-model="showFingerprintHistory" :title="t('users.fingerprint_history') + ' — ' + (fingerprintUser?.name || '')" size="lg">
             <div v-if="fingerprintLoading" class="flex items-center justify-center py-12">
-                <i class="fas fa-spinner fa-spin text-2xl text-mistral-primary"></i>
+                <LoadingSpinner size="lg" />
             </div>
-            <div v-else-if="fingerprintLogs.length === 0" class="text-center py-12 text-mistral-steel">
-                <i class="fas fa-fingerprint text-4xl mb-3 block text-mistral-hairline"></i>
-                <p>{{ t('common.no_data') }}</p>
-            </div>
+            <EmptyState
+                v-else-if="fingerprintLogs.length === 0"
+                icon="fas fa-fingerprint"
+                :title="t('common.no_data')"
+            />
             <div v-else class="max-h-[60vh] overflow-y-auto">
                 <table class="w-full text-[13px]">
                     <thead class="sticky top-0 bg-white z-10">

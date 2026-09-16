@@ -21,9 +21,18 @@ export const navigationGroups = [
     ],
   },
   {
+    // Phase 4: ordered by daily task frequency (users first), not by org
+    // hierarchy. Order-only change: ids, routes and permissions untouched.
     key: 'people',
     label: 'common.people',
     items: [
+      {
+        id: 'users',
+        label: 'menu.users',
+        route: 'users.index',
+        icon: 'fa-solid fa-users',
+        permissions: ['view-users'],
+      },
       {
         id: 'companies',
         label: 'menu.companies',
@@ -65,13 +74,6 @@ export const navigationGroups = [
         route: 'subordinations.index',
         icon: 'fa-solid fa-map-location-dot',
         permissions: ['view-subordinations'],
-      },
-      {
-        id: 'users',
-        label: 'menu.users',
-        route: 'users.index',
-        icon: 'fa-solid fa-users',
-        permissions: ['view-users'],
       },
     ],
   },
@@ -378,6 +380,20 @@ export const navigationGroups = [
         icon: 'fa-solid fa-user-clock',
         permissions: ['view-activity-logs'],
       },
+      {
+        id: 'admin.backups',
+        label: 'menu.backups',
+        route: 'backups.index',
+        icon: 'fa-solid fa-database',
+        permissions: ['view-backups'],
+      },
+      {
+        id: 'admin.backup-settings',
+        label: 'menu.backup_settings',
+        route: 'backups.settings',
+        icon: 'fa-solid fa-sliders',
+        permissions: ['manage-backup-settings'],
+      },
     ],
   },
 ];
@@ -400,7 +416,7 @@ export const navigationModules = [
     id: 'people',
     label: 'common.people',
     icon: 'fa-solid fa-users',
-    color: 'bg-blue-50 text-blue-600',
+    color: 'bg-mistral-info/10 text-mistral-info',
     groupKeys: ['people'],
     route: 'companies.index',
     permissions: ['view-companies', 'view-branches', 'view-departments', 'view-positions', 'view-grades', 'view-users'],
@@ -436,7 +452,7 @@ export const navigationModules = [
     id: 'devices',
     label: 'common.devices',
     icon: 'fa-solid fa-microchip',
-    color: 'bg-purple-50 text-purple-600',
+    color: 'bg-mistral-status-overtime/10 text-mistral-status-overtime',
     groupKeys: ['devices'],
     route: 'fingerprint-devices.index',
     permissions: ['view-fingerprint-devices'],
@@ -445,7 +461,7 @@ export const navigationModules = [
     id: 'zones',
     label: 'zones.title',
     icon: 'fa-solid fa-earth-americas',
-    color: 'bg-cyan-50 text-cyan-600',
+    color: 'bg-mistral-status-vacation/10 text-mistral-status-vacation',
     groupKeys: ['zones'],
     route: 'zones.index',
     permissions: ['view-zones'],

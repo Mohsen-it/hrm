@@ -6,7 +6,6 @@ use DateTimeImmutable;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Validation\ValidationException;
-use InvalidArgumentException;
 use Modules\Users\Models\User;
 use Modules\Vacations\Events\VacationApproved;
 use Modules\Vacations\Events\VacationCancelled;
@@ -80,55 +79,50 @@ class VacationRequestService
         $end = (string) ($data['end_date'] ?? '');
 
         if ($userId <= 0 || $typeId <= 0 || $start === '' || $end === '') {
-            throw new InvalidArgumentException(
-                __('vacations.missing_required_fields')
-            );
+            throw ValidationException::withMessages([
+                'user_id' => __('vacations.missing_required_fields'),
+            ]);
         }
 
         $user = User::find($userId);
         if (! $user) {
-            throw new InvalidArgumentException(
-                __('vacations.user_not_found', ['id' => $userId])
-            );
+            throw ValidationException::withMessages([
+                'user_id' => __('vacations.user_not_found', ['id' => $userId]),
+            ]);
         }
         if ($user->isSuperAdmin()) {
-            throw new InvalidArgumentException(
-                __('vacations.super_admin_cannot_request')
-            );
+            throw ValidationException::withMessages([
+                'user_id' => __('vacations.super_admin_cannot_request'),
+            ]);
         }
 
         $type = $this->typeService->findType($typeId);
         if (! $type || ! $type->is_active) {
-            throw new InvalidArgumentException(
-                __('vacations.type_not_found', ['id' => $typeId])
-            );
+            throw ValidationException::withMessages([
+                'vacation_type_id' => __('vacations.type_not_found', ['id' => $typeId]),
+            ]);
         }
 
         $startDt = new DateTimeImmutable($start);
         $endDt = new DateTimeImmutable($end);
         if ($endDt < $startDt) {
-            throw new InvalidArgumentException(
-                __('vacations.end_date_must_be_after_start')
-            );
+            throw ValidationException::withMessages([
+                'end_date' => __('vacations.end_date_must_be_after_start'),
+            ]);
         }
 
         $this->ensureNoOverlappingActiveRequest($userId, $start, $end);
 
-        // $today = new DateTimeImmutable('today');
-        // if ($startDt < $today) {
-        //     throw new InvalidArgumentException(
-        //         __('vacations.start_date_must_be_today_or_later')
-        //     );
-        // }
+        $today = new DateTimeImmutable('today');
 
         if ($type->advance_notice_days > 0) {
             $earliest = $today->modify("+{$type->advance_notice_days} days");
             if ($startDt < $earliest) {
-                throw new InvalidArgumentException(
-                    __('vacations.advance_notice_required', [
+                throw ValidationException::withMessages([
+                    'start_date' => __('vacations.advance_notice_required', [
                         'days' => $type->advance_notice_days,
-                    ])
-                );
+                    ]),
+                ]);
             }
         }
 
@@ -136,11 +130,11 @@ class VacationRequestService
         $workingDays = $this->balanceService->projectDays($type, $start, $end, $this->holidayLookup);
 
         if ($type->max_days_per_request > 0 && $workingDays > $type->max_days_per_request) {
-            throw new InvalidArgumentException(
-                __('vacations.exceeds_max_per_request', [
+            throw ValidationException::withMessages([
+                'start_date' => __('vacations.exceeds_max_per_request', [
                     'max' => $type->max_days_per_request,
-                ])
-            );
+                ]),
+            ]);
         }
 
         // Reserve pending days on the balance (always — even for non-deducting
@@ -161,9 +155,9 @@ class VacationRequestService
         }
 
         if ($type->requires_attachment && empty($data['attachments'])) {
-            throw new InvalidArgumentException(
-                __('vacations.attachment_required')
-            );
+            throw ValidationException::withMessages([
+                'attachments' => __('vacations.attachment_required'),
+            ]);
         }
 
         $balanceAfter = $type->deducts_from_balance
@@ -201,9 +195,9 @@ class VacationRequestService
     public function updateRequest(UserVacationRequest $request, array $data): UserVacationRequest
     {
         if (! $request->isPending()) {
-            throw new InvalidArgumentException(
-                __('vacations.only_pending_can_be_edited')
-            );
+            throw ValidationException::withMessages([
+                'status' => __('vacations.only_pending_can_be_edited'),
+            ]);
         }
 
         $payload = [
@@ -235,9 +229,9 @@ class VacationRequestService
 
         $type = $this->typeService->findType($payload['vacation_type_id']);
         if (! $type) {
-            throw new InvalidArgumentException(
-                __('vacations.type_not_found', ['id' => $payload['vacation_type_id']])
-            );
+            throw ValidationException::withMessages([
+                'vacation_type_id' => __('vacations.type_not_found', ['id' => $payload['vacation_type_id']]),
+            ]);
         }
 
         $newDays = $this->balanceService->projectDays(
@@ -289,9 +283,9 @@ class VacationRequestService
     public function approveRequest(UserVacationRequest $request, ?int $decidedBy = null, ?string $note = null): UserVacationRequest
     {
         if (! $request->isPending()) {
-            throw new InvalidArgumentException(
-                __('vacations.only_pending_can_be_approved')
-            );
+            throw ValidationException::withMessages([
+                'status' => __('vacations.only_pending_can_be_approved'),
+            ]);
         }
 
         $type = $this->typeService->findType((int) $request->vacation_type_id);
@@ -331,9 +325,9 @@ class VacationRequestService
     public function rejectRequest(UserVacationRequest $request, ?int $decidedBy = null, ?string $note = null): UserVacationRequest
     {
         if (! $request->isPending()) {
-            throw new InvalidArgumentException(
-                __('vacations.only_pending_can_be_rejected')
-            );
+            throw ValidationException::withMessages([
+                'status' => __('vacations.only_pending_can_be_rejected'),
+            ]);
         }
 
         $type = $this->typeService->findType((int) $request->vacation_type_id);

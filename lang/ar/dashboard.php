@@ -134,4 +134,6 @@ return [
     'live_punch_check_in' => 'تم تسجيل حضور',
     'live_punch_check_out' => 'تم تسجيل انصراف',
     'live_punch_dismiss' => 'إخفاء إشعار تسجيل البصمة',
+    'backup_health' => 'حالة النسخ الاحتياطي',
+    'backup_no_data' => 'لا توجد بيانات نسخ احتياطية بعد.',
 ];

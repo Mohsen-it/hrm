@@ -18,6 +18,10 @@ class BidirectionalSyncTest extends TestCase
     {
         parent::setUp();
 
+        // Seed the permission catalogue first: givePermissionTo() requires
+        // the permission row to exist in the in-memory DB (Phase 1 fix).
+        $this->seedPermissions();
+
         $user = User::create([
             'employee_code' => 'ADMIN-001',
             'name' => 'Admin',

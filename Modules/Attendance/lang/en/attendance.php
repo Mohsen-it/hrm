@@ -397,6 +397,12 @@ return [
         'print' => 'Print',
         'export_date' => 'Export date',
         'export_subtitle' => 'Employee: :employee | Month: :month',
+        'late_minutes' => 'Late arrival (min)',
+        'early_leave' => 'Early leave (min)',
+        'total_late' => 'Total late hours',
+        'show_late' => 'Show lateness with grace',
+        'hours' => 'h',
+        'minutes' => 'min',
         'schedule_statuses' => [
             'work' => 'Work',
             'rest' => 'Rest Day',

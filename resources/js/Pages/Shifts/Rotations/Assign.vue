@@ -11,7 +11,7 @@ import { usePageTitle } from '@/composables/usePageTitle';
 
 import { ref, reactive, computed, watch, onBeforeUnmount } from 'vue';
 import { router, Head, usePage } from '@inertiajs/vue3';
-import { PageHeader, Button, Card, FormInput, FormSelect, Badge, DataTable, ErrorSummary, FormSection, FormActions, Alert } from '@/Components/ui';
+import { PageHeader, Button, Card, FormInput, FormSelect, Badge, DataTable, ErrorSummary, FormSection, FormActions, Alert, LoadingSpinner, EmptyState } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
@@ -312,7 +312,7 @@ usePageTitle(t('shifts.assign_rotation'));
                     </div>
 
                     <div v-if="loadingEmployees" class="p-8 text-center">
-                        <i class="fas fa-spinner fa-spin text-mistral-primary text-xl"></i>
+                        <LoadingSpinner size="lg" />
                         <p class="text-[13px] text-mistral-muted mt-2">{{ t('common.loading') }}...</p>
                     </div>
 
@@ -320,9 +320,11 @@ usePageTitle(t('shifts.assign_rotation'));
                         {{ t('shifts.search_employee_to_begin') }}
                     </div>
 
-                    <div v-else-if="filteredEmployees.length === 0 && form.rotation_id" class="p-8 text-center text-[13px] text-mistral-muted">
-                        {{ t('shifts.no_employees_found') }}
-                    </div>
+                    <EmptyState
+                        v-else-if="filteredEmployees.length === 0 && form.rotation_id"
+                        icon="fas fa-users"
+                        :title="t('shifts.no_employees_found')"
+                    />
 
                     <div v-else-if="!form.rotation_id" class="p-8 text-center text-[13px] text-mistral-muted">
                         {{ t('shifts.select_rotation_first') }}

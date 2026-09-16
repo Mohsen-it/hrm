@@ -2,6 +2,7 @@
 import { useForm, usePage } from '@inertiajs/vue3';
 import { useTranslations } from '@/composables/useTranslations';
 import LanguageSwitcher from '@/Components/LanguageSwitcher.vue';
+import SunsetStripeBand from '@/Components/layout/SunsetStripeBand.vue';
 import { Button, FormInput, FormCheckbox } from '@/Components/ui';
 
 const { t, direction } = useTranslations();
@@ -27,7 +28,7 @@ function submit() {
 <template>
     <div :dir="direction" class="min-h-screen flex items-center justify-center bg-mistral-surface p-4 relative">
         <!-- Language switcher -->
-        <div class="absolute top-4" :class="direction === 'rtl' ? 'left-4' : 'right-4'">
+        <div class="absolute top-4 end-4">
             <LanguageSwitcher :dir="direction" />
         </div>
 
@@ -93,5 +94,8 @@ function submit() {
                 {{ t('common.copyright') }}
             </p>
         </div>
+
+        <!-- Brand signature on the standalone auth page (AppLayout has its own) -->
+        <SunsetStripeBand :dir="direction" />
     </div>
 </template>

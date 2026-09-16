@@ -4,6 +4,15 @@
 @source '../../storage/framework/views/*.php';
 @source '../js/**/*.{vue,js}';
 
+/* Docs, specs, build-kit notes and one-off migration scripts contain
+   class-like strings (e.g. text-[var(--color-ink-*)]) that Tailwind's
+   automatic content detection would otherwise turn into dead -- or invalid
+   (build warning) -- CSS. None of them ship UI code. */
+@source not '../../docs';
+@source not '../../specs';
+@source not '../../hrm-build-kit';
+@source not '../../tools';
+
 /*
 |--------------------------------------------------------------------------
 | HRM Design System — Mistral-Inspired (single source of truth)

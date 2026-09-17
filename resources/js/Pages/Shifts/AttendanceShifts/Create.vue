@@ -114,7 +114,7 @@ export default {
 </script>
 
 <script setup>
-import { useForm } from '@inertiajs/vue3'
+import { useForm, router } from '@inertiajs/vue3'
 import { PageHeader, Button, Card, FormInput, FormSelect, FormSwitch, FormSection, FormActions, ErrorSummary } from '@/Components/ui'
 import { useTranslations } from '@/composables/useTranslations'
 

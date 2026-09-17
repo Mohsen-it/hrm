@@ -208,7 +208,7 @@ class UsersController extends Controller
             throw $e;
         }
 
-        return redirect()->route('users.edit', $id)
+        return redirect()->route('users.index')
             ->with('success', __('users.updated_successfully'));
     }
 

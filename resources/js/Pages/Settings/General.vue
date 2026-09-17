@@ -53,6 +53,7 @@ function saveAll() {
     }));
     router.post(route('settings.bulk-update'), { settings }, {
         preserveScroll: true,
+        onError: (err) => { /* validation errors are rendered by the page */ },
         onFinish: () => { processing.value = false; },
     });
 }

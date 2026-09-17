@@ -109,4 +109,7 @@ return [
     'request_info' => 'Request Information',
     'settings' => 'Settings',
     'type_info' => 'Type Information',
+    'justification_created_successfully' => 'Attendance justification recorded and rotation window result calculated successfully.',
+    'justification_updated_successfully' => 'Justification updated and related rotation data recalculated successfully.',
+    'justification_deleted_successfully' => 'Justification deleted successfully.',
 ];

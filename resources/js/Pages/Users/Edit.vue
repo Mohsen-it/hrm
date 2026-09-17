@@ -11,10 +11,14 @@ import { usePageTitle } from '@/composables/usePageTitle';
 
 import { computed, watch } from 'vue';
 import { useForm } from '@inertiajs/vue3';
-import { PageHeader, Button, Card, FormInput, FormTextarea, FormSelect, FormCheckbox, FormFileUpload, FormSection, FormActions, ErrorSummary } from '@/Components/ui';
+import { PageHeader, Button, Card, FormInput, FormTextarea, FormSelect, FormCheckbox, FormFileUpload, FormSection, FormActions, ErrorSummary, Alert } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
+import { usePage } from '@inertiajs/vue3';
 
 const { t } = useTranslations();
+const page = usePage();
+
+const flashSuccess = computed(() => page.props.flash?.success);
 
 const props = defineProps({
     user: { type: Object, required: true },
@@ -251,6 +255,8 @@ usePageTitle(t('users.edit_user'));
                 <Button variant="secondary" icon="fas fa-arrow-right rtl-flip" :href="route('users.index')">{{ t('common.back') }}</Button>
             </template>
         </PageHeader>
+
+        <Alert v-if="flashSuccess" type="success" :message="flashSuccess" class="mb-4" dismissible />
 
         <ErrorSummary :errors="form.errors" />
 

@@ -169,6 +169,8 @@ const removeDetail = (index) => {
 }
 
 const submit = () => {
-  form.put(route('attendance.shifts.update', props.shift.id))
+  form.put(route('attendance.shifts.update', props.shift.id), {
+    preserveScroll: true
+  })
 }
 </script>

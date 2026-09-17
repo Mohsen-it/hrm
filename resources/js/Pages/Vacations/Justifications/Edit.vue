@@ -18,7 +18,7 @@ const props = defineProps({ request: { type: Object, required: true }, users: { 
 const form = reactive({ user_id: props.request.user_id, attendance_date: props.request.attendance_date, arrival_time: props.request.arrival_time?.slice(0, 5) || '', missing_check_in: props.request.missing_check_in, missing_check_out: props.request.missing_check_out, late_arrival: props.request.late_arrival, reason: props.request.reason || '' }); const errors = ref({}); const saving = ref(false);
 const { schedule, loading: scheduleLoading } = useJustificationSchedule(form);
 const options = computed(() => props.users.map(u => ({ value: u.id, label: u.employee_code ? `${u.employee_code} - ${u.name}` : u.name })));
-function submit() { saving.value = true; errors.value = {}; router.put(route('vacations.justifications.update', props.request.id), form, { onError: e => errors.value = e, onFinish: () => saving.value = false }); }
+function submit() { saving.value = true; errors.value = {}; router.put(route('vacations.justifications.update', props.request.id), form, { preserveScroll: true, onError: e => errors.value = e, onFinish: () => saving.value = false }); }
 
 
 usePageTitle('تعديل تبرير');

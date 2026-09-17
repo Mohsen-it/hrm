@@ -30,7 +30,9 @@ const form = useForm({
 });
 
 const submit = () => {
-    form.put(route('attendance.group-schedules.update', props.schedule.id));
+    form.put(route('attendance.group-schedules.update', props.schedule.id), {
+        preserveScroll: true,
+    });
 };
 
 

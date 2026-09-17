@@ -109,4 +109,7 @@ return [
     'request_info' => 'معلومات الطلب',
     'settings' => 'الإعدادات',
     'type_info' => 'معلومات النوع',
+    'justification_created_successfully' => 'تم تسجيل طلب التبرير وحساب النتيجة وفق نافذة الدورية.',
+    'justification_updated_successfully' => 'تم تحديث التبرير وإعادة احتساب البيانات المرتبطة بالدورية.',
+    'justification_deleted_successfully' => 'تم حذف التبرير.',
 ];

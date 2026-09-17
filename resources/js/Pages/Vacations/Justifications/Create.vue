@@ -18,7 +18,7 @@ const props = defineProps({ users: { type: Array, default: () => [] } });
 const form = reactive({ user_id: '', attendance_date: '', arrival_time: '', missing_check_in: false, missing_check_out: false, late_arrival: false, reason: '' }); const errors = ref({}); const saving = ref(false);
 const { schedule, loading: scheduleLoading } = useJustificationSchedule(form);
 const options = computed(() => props.users.map(u => ({ value: u.id, label: u.employee_code ? `${u.employee_code} - ${u.name}` : u.name })));
-function submit() { saving.value = true; errors.value = {}; router.post(route('vacations.justifications.store'), form, { onError: e => errors.value = e, onFinish: () => saving.value = false }); }
+function submit() { saving.value = true; errors.value = {}; router.post(route('vacations.justifications.store'), form, { preserveScroll: true, onError: e => errors.value = e, onFinish: () => saving.value = false }); }
 
 
 usePageTitle('تسجيل تبرير');

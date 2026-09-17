@@ -54,7 +54,7 @@ class AttendanceJustificationRequestsController extends Controller
         $this->authorize('create-vacation-requests');
         $this->service->create($request->validated());
 
-        return redirect()->route('vacations.justifications.index')->with('success', 'تم تسجيل طلب التبرير وحساب النتيجة وفق نافذة الدورية.');
+        return redirect()->route('vacations.justifications.index')->with('success', __('vacations.justification_created_successfully'));
     }
 
     /** Display an existing justification for editing. */
@@ -73,7 +73,7 @@ class AttendanceJustificationRequestsController extends Controller
         $record = $this->service->find($justification) ?? abort(404);
         $this->service->update($record, $request->validated());
 
-        return redirect()->route('vacations.justifications.index')->with('success', 'تم تحديث التبرير وإعادة احتساب البيانات المرتبطة بالدورية.');
+        return redirect()->route('vacations.justifications.index')->with('success', __('vacations.justification_updated_successfully'));
     }
 
     /** Soft-delete a justification. */
@@ -83,7 +83,7 @@ class AttendanceJustificationRequestsController extends Controller
         $record = $this->service->find($justification) ?? abort(404);
         $this->service->delete($record);
 
-        return redirect()->route('vacations.justifications.index')->with('success', 'تم حذف التبرير.');
+        return redirect()->route('vacations.justifications.index')->with('success', __('vacations.justification_deleted_successfully'));
     }
 
     /** Download the currently filtered justification queue as Excel. */

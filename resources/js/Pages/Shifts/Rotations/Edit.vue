@@ -145,6 +145,14 @@ usePageTitle(t('shifts.edit_rotation'));
             </div>
 
             <FormSection :title="t('shifts.basic_info')" icon="fas fa-info-circle" :collapsible="true" :default-open="true">
+                <div class="p-4 mb-4 bg-mistral-cream-soft border border-mistral-primary/20 rounded-lg text-sm text-mistral-ink leading-relaxed">
+                    <p class="font-semibold mb-2">ما هذا القسم؟</p>
+                    <ul class="list-disc list-inside space-y-1">
+                        <li><strong>اسم الدورية:</strong> اسم يُميّز هذه الدورية عن غيرها (مثال: خطوط السوريا، دورية 4-12).</li>
+                        <li><strong>مرجع الدورة (تاريخ البداية):</strong> التاريخ الذي تبدأ منه الدورة. يُستخدم كنقطة انطلاق لحساب أيام العمل والراحة. مثال: إذا كان التاريخ 09/09/2026 والنمط 4 عمل / 12 راحة، فأول يوم عمل هو 09/09.</li>
+                        <li><strong>الوصف:</strong> وصف اختياري لتفاصيل الدورية (يظهر في التقارير).</li>
+                    </ul>
+                </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormInput
                         v-model="form.name"
@@ -175,6 +183,17 @@ usePageTitle(t('shifts.edit_rotation'));
             </FormSection>
 
             <FormSection :title="t('shifts.pattern_builder')" icon="fas fa-th" :collapsible="true" :default-open="true">
+                <div class="p-4 mb-4 bg-mistral-cream-soft border border-mistral-primary/20 rounded-lg text-sm text-mistral-ink leading-relaxed">
+                    <p class="font-semibold mb-2">ما هذا القسم؟</p>
+                    <p class="mb-2">هنا تُنشئ نمط العمل والراحة للدورية. كل رقم يمثل يوماً واحداً في الدورة.</p>
+                    <ul class="list-disc list-inside space-y-1">
+                        <li><strong>الأرقام الخضراء (1):</strong> أيام عمل (الموظف يدوام فيها).</li>
+                        <li><strong>الأرقام الرمادية (0):</strong> أيام راحة (الموظف لا يدوام فيها).</li>
+                        <li><strong>مدة الدورة:</strong> مجموع جميع الأيام في الدورة (عمل + راحة).</li>
+                        <li><strong>عدد المجموعات:</strong> عدد فرق العمل التي تتناوب على نفس النمط. مثال: 4 مجموعات تعني كل مجموعة تبدأ الدورة بأسبوع إزاحة عن التي قبلها.</li>
+                    </ul>
+                    <p class="mt-2 text-mistral-slate text-[13px]">اضغط على أي يوم للتبديل بين العمل والراحة. استخدم أزرار + و - لإضافة أو إزالة أيام.</p>
+                </div>
                 <div class="mb-4">
                     <label class="block text-[13px] text-mistral-slate mb-2">{{ t('shifts.pattern_visual') }}</label>
                     <div class="flex flex-wrap gap-1 p-3 bg-mistral-surface rounded-md">
@@ -237,6 +256,16 @@ usePageTitle(t('shifts.edit_rotation'));
             </FormSection>
 
             <FormSection :title="t('shifts.options')" icon="fas fa-cog" :collapsible="true" :default-open="true">
+                <div class="p-4 mb-4 bg-mistral-cream-soft border border-mistral-primary/20 rounded-lg text-sm text-mistral-ink leading-relaxed">
+                    <p class="font-semibold mb-2">ما هذا القسم؟</p>
+                    <ul class="list-disc list-inside space-y-1">
+                        <li><strong>جدول الوقت:</strong> الجدول الذي يحدد أوقات الحضور والانصراف والاستراحات. يجب اختياره لتفعيل بصمات الحضور والانصراف.</li>
+                        <li><strong>تفعيل العمل الإضافي:</strong> عند التفعيل، يمكن للموظفين تسجيل ساعات عمل إضافية خارج الدوام الرسمي مع حسابها في الرواتب.</li>
+                        <li><strong>العمل في العطل الرسمية:</strong> عند التفعيل، يُتوقع من الموظفين العمل في الأيام الرسمية العطلة (كالعيد والأعياد).</li>
+                        <li><strong>دقائق السماح:</strong> عدد الدقائق المسموح بالتأخير فيها بعد وقت الحضور دون احتسابها كمخالفة. مثال: إذا كانت 30，则任何在 8:00 到 8:30 之间 的打卡都会被视为迟到.</li>
+                        <li><strong>اللون:</strong> لون تمييز الدورية في الجداول والتقارير.</li>
+                    </ul>
+                </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <FormSelect
                         v-model="form.time_schedule_id"

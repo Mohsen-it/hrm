@@ -36,8 +36,26 @@ function Write-WatchdogLog([string]$message) {
 }
 
 try {
+    # 012/STABILITY: supervisor-aware -- when the HRM supervisor is alive it
+    # owns every queue worker inside its Job Object (default, attendance x2,
+    # biometrics) and heals them itself with backoff. A watchdog launch in
+    # that state would create an UNMANAGED orphan: invisible to cleanup,
+    # duplicating work and fighting the next restart. Only act when the
+    # supervisor is genuinely gone.
+    $supervisor = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -match '^powershell(\.exe)?$' -and $_.CommandLine -match 'Start-HRM-Windows\.ps1' } |
+        Select-Object -First 1
+
+    if ($supervisor) {
+        Write-WatchdogLog "OK - supervisor alive (PID $($supervisor.ProcessId)). Workers are managed. Nothing to do."
+        exit 0
+    }
+
+    # Supervisor is down: rescue only if no managed-queue worker survives.
+    # (A lone `biometrics` orphan must not block the rescue of the
+    # attendance/default queues.)
     $existing = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
-        Where-Object { $_.Name -eq 'php.exe' -and $_.CommandLine -match 'artisan\s+queue:work' } |
+        Where-Object { $_.Name -eq 'php.exe' -and $_.CommandLine -match 'artisan\s+queue:work' -and $_.CommandLine -match 'default|attendance' } |
         Select-Object -First 1
 
     if ($existing) {

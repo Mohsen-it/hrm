@@ -82,24 +82,10 @@ export const navigationGroups = [
     label: 'common.attendance',
     items: [
       {
-        id: 'attendance.live',
-        label: 'menu.attendance_live',
-        route: 'attendance.live.index',
-        icon: 'fa-solid fa-satellite-dish',
-        permissions: ['view-attendance'],
-      },
-      {
         id: 'attendance.sessions',
         label: 'menu.attendance_sessions',
         route: 'attendance.sessions.index',
         icon: 'fa-solid fa-calendar-check',
-        permissions: ['view-attendance'],
-      },
-      {
-        id: 'attendance.daily-summaries',
-        label: 'menu.attendance_daily_summaries',
-        route: 'attendance.daily-summaries.index',
-        icon: 'fa-solid fa-calendar-day',
         permissions: ['view-attendance'],
       },
       {
@@ -117,39 +103,11 @@ export const navigationGroups = [
         permissions: ['view-attendance'],
       },
       {
-        id: 'attendance.reports',
-        label: 'menu.attendance_reports',
-        route: 'attendance.reports.index',
-        icon: 'fa-solid fa-chart-line',
-        permissions: ['view-attendance'],
-      },
-      {
         id: 'attendance.monthly-employee-report',
         label: 'menu.attendance_monthly_employee_report',
         route: 'attendance.reports.user.index',
         icon: 'fa-solid fa-user-clock',
         permissions: ['view-attendance'],
-      },
-      {
-        id: 'attendance.groups',
-        label: 'menu.attendance_groups',
-        route: 'attendance.groups.index',
-        icon: 'fa-solid fa-users-rectangle',
-        permissions: ['view-attendance-groups'],
-      },
-      {
-        id: 'attendance.shifts',
-        label: 'menu.attendance_shifts',
-        route: 'attendance.shifts.index',
-        icon: 'fa-solid fa-clock',
-        permissions: ['view-attendance-shifts'],
-      },
-      {
-        id: 'attendance.group-schedules',
-        label: 'menu.group_schedules',
-        route: 'attendance.group-schedules.index',
-        icon: 'fa-solid fa-table-cells',
-        permissions: ['view-group-schedules'],
       },
       {
         id: 'attendance.smart-absence',
@@ -261,13 +219,6 @@ export const navigationGroups = [
         label: 'menu.device_dashboard',
         route: 'fingerprint-devices.dashboard',
         icon: 'fa-solid fa-gauge',
-        permissions: ['view-fingerprint-devices'],
-      },
-      {
-        id: 'devices.face-sync',
-        label: 'menu.face_sync_dashboard',
-        route: 'fingerprint-devices.face-sync',
-        icon: 'fa-solid fa-face-smile',
         permissions: ['view-fingerprint-devices'],
       },
       {

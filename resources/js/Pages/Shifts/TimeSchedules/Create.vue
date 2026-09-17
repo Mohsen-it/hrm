@@ -85,6 +85,15 @@ usePageTitle(t('shifts.add_schedule'));
             <ErrorSummary :errors="errors" />
 
             <FormSection :title="t('shifts.basic_info')" icon="fas fa-info-circle" :collapsible="true" :default-open="true">
+                <div class="p-4 mb-4 bg-mistral-cream-soft border border-mistral-primary/20 rounded-lg text-sm text-mistral-ink leading-relaxed">
+                    <p class="font-semibold mb-2">ما هذا القسم؟</p>
+                    <ul class="list-disc list-inside space-y-1">
+                        <li><strong>اسم الجدول:</strong> اسم يُميّز هذا الجدول عن غيره (مثال: دورية إدارية، دورية مصانع).</li>
+                        <li><strong>وقت الحضور:</strong> الوقت الرسمي لبدء الدوام. أي بصمة بعد هذا الوقت + هامش التأخير تُحسب كتأخير.</li>
+                        <li><strong>وقت الانصراف:</strong> الوقت الرسمي لانتهاء الدوام. أي بصمة قبل هذا الوقت - هامش المغادرة تُحسب كانصراف مبكر.</li>
+                        <li><strong>دوام متواصل:</strong> فعّله إذا كان الدوام يمتد لأكثر من يوم (مثل 48 ساعة متواصلة ثم 48 ساعة راحة). عند التفعيل، يُحسب الانصراف صباح أول يوم راحة.</li>
+                    </ul>
+                </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormInput
                         v-model="form.name"
@@ -121,6 +130,18 @@ usePageTitle(t('shifts.add_schedule'));
             </FormSection>
 
             <FormSection :title="t('shifts.margins')" icon="fas fa-arrows-alt-h" :collapsible="true" :default-open="true">
+                <div class="p-4 mb-4 bg-mistral-cream-soft border border-mistral-primary/20 rounded-lg text-sm text-mistral-ink leading-relaxed">
+                    <p class="font-semibold mb-2">ما هذا القسم؟</p>
+                    <p class="mb-2">هذه الإعدادات تحدد السماحية الزمنية للموظف عند التأخير أو المغادرة المبكرة.</p>
+                    <ul class="list-disc list-inside space-y-1">
+                        <li><strong>هامش التأخير:</strong>عدد الدقائق المسموح بالتأخير فيها بعد وقت الحضور دون احتسابها كمخالفة. مثال: إذا كان الحضور 8:00 والهامش 30，则任何在 8:00 到 8:30 之间的打卡都会被视为迟到.</li>
+                        <li><strong>هامش المغادرة المبكرة:</strong>عدد الدقائق المسموح بالمغادرة فيها قبل وقت الانصراف دون احتسابها كمخالفة. مثال: إذا كان الانصراف 3:00 والهامش 30，فأي بصمة بين 2:30 و 3:00 تُحسب كخروج عادي (ليست مغادرة مبكرة).</li>
+                        <li><strong>بداية نافذة الدخول:</strong>كم دقيقة قبل وقت الحضور تبدأ نافذة قبول البصمة (البصمة قبلها لا تُسجل).</li>
+                        <li><strong>نهاية نافذة الدخول:</strong>كم دقيقة بعد وقت الحضور تنتهي نافذة قبول بصمة الدخول.</li>
+                        <li><strong>بداية نافذة الخروج:</strong>كم دقيقة بعد وقت الانصراف تبدأ نافذة قبول بصمة الخروج.</li>
+                        <li><strong>نهاية نافذة الخروج:</strong>كم دقيقة بعد الانصراف تنتهي نافذة قبول بصمة الخروج (مهم للدوام المتواصل).</li>
+                    </ul>
+                </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormInput
                         v-model="form.late_margin"
@@ -185,6 +206,11 @@ usePageTitle(t('shifts.add_schedule'));
                         {{ t('shifts.add_break') }}
                     </Button>
                 </template>
+
+                <div class="p-4 mb-4 bg-mistral-cream-soft border border-mistral-primary/20 rounded-lg text-sm text-mistral-ink leading-relaxed">
+                    <p class="font-semibold mb-1">ما هذا القسم؟</p>
+                    <p>حدد أوقات الاستراحات خلال الدوام. الاستراحة تُخصَم من ساعات العمل الرسمية ولا تُحسب كوقت عمل. يمكنك إضافة عدة استراحات أو ترك هذا القسم فارغاً إذا لم تكن هناك استراحات رسمية.</p>
+                </div>
 
                 <div
                     v-for="(brk, index) in breaks"

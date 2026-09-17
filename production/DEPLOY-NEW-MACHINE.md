@@ -6,9 +6,19 @@ Goal: the new machine boots the full stack by itself — no CMD, no manual steps
 
 | Layer | What | Autostart |
 |---|---|---|
-| MySQL, Nginx, PHP-CGI pool, queue worker | NSSM Windows services (`HRM-*`, Automatic) | At boot, no logon |
-| Laravel, Reverb, ADMS, bridge, scheduler, queue workers | Supervisor `scripts\Start-HRM-Windows.ps1` via `HRM-AutoStart.vbs` in the user Startup folder | At logon, hidden window |
-| Queue-worker safety net | Task `HRM Queue Worker Watchdog` (every 5 min) | Always |
+| MySQL, Nginx, PHP-CGI pool, queue worker, **Reverb 8080** | NSSM Windows services (`HRM-*`, Automatic) | At boot, no logon |
+| Laravel (`serve :8000`), ADMS (`:8081`), bridge (`:5000`), queue workers (default/attendance x2/biometrics) | Supervisor `scripts\Start-HRM-Windows.ps1` via SYSTEM task `HRM-Startup` | At boot, hidden, restart-on-failure |
+| Scheduler (`schedule:run` every minute) | Task `HRM Scheduler` (SYSTEM) | Always |
+| Queue-worker safety net | Task `HRM Queue Worker Watchdog` (every 5 min, supervisor-aware) | Always |
+
+Ownership rule (012/STABILITY): **exactly one owner per port/process.**
+`schedule:work` and supervisor-owned `reverb:start` were removed because
+they duplicated the `HRM Scheduler` task and the `HRM-Reverb` service
+(Reverb double-bound 8080 via SO_REUSEADDR and split WebSocket clients).
+The supervisor guards itself with the `Global\HRM-Supervisor` mutex, so a
+second copy exits instead of fighting. Queue duplication is the one
+blessed exception: NSSM `HRM-Queue` + supervised workers share the DB
+queues, and atomic reservation prevents double-processing.
 
 Copy this project directory to the new machine (same path recommended,
 e.g. `D:\hrm`), then follow the steps below IN ORDER.
@@ -47,12 +57,17 @@ pass `-ServerIp x.x.x.x` only to override it.
 For a TRUE standalone server (works after power loss with nobody logging
 on), register the NSSM layer as on the current machine
 (see `C:\nssm\install-hrm-production.ps1` for the exact commands):
-`HRM-MySQL`, `HRM-Nginx`, `HRM-PHP-Pool`, `HRM-Queue` (all Automatic).
-The VBS logon starter remains as the second layer for the artisan stack.
+`HRM-MySQL`, `HRM-Nginx`, `HRM-PHP-Pool`, `HRM-Queue`, `HRM-Reverb`
+(all Automatic). The artisan stack runs headless under the SYSTEM task
+`HRM-Startup` (see `HRM-Startup.xml` + `Register-Headless-Startup.bat`).
+Legacy logon starters (`HRM AutoStart` task, `HRM-AutoStart.vbs`) must NOT
+coexist with it -- duplicate supervisors fight over the same ports.
 
 ## 5. Verify after first reboot (nobody touches anything)
 
-- `netstat -ano | findstr "LISTENING"` shows 8000 / 8080 / 8081 / 5000.
+- `netstat -ano | findstr "LISTENING"` shows 8000 / 8080 (exactly ONE
+  listener each -- two on 8080 means a duplicate Reverb is splitting
+  clients) / 8081 / 5000.
 - `http://SERVER-IP/login` returns 200.
 - `storage\logs\hrm-startup.log` has a fresh `Starting...` line
   (only when the SYSTEM/task path is used).

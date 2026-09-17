@@ -19,11 +19,12 @@ trait PaginatesResults
         int|string $perPage = 20,
         string $pageName = 'page',
     ): LengthAwarePaginator {
-        if ($perPage === 'all' || $perPage === -1) {
+        $normalized = is_string($perPage) ? strtolower(trim($perPage)) : $perPage;
+        if ($normalized === 'all' || $normalized === '-1' || $normalized === -1) {
             // Indexed-safe guard: `per_page=all` on large tables is capped to
             // 1000 rows to prevent OOM. Uses the same indexed ordering as the
             // caller query — output is the first 1000 ordered rows.
-            $largeTables = ['attendance_sessions', 'raw_attendance_logs', 'daily_attendance_summaries', 'iclock_transaction', 'device_sync_logs', 'users', 'schedule_entries', 'user_vacation_requests', 'fingerprint_devices', 'attendance_justification_requests'];
+            $largeTables = ['attendance_sessions', 'raw_attendance_logs', 'daily_attendance_summaries', 'iclock_transaction', 'device_sync_logs', 'users', 'schedule_entries', 'user_vacation_requests', 'fingerprint_devices', 'attendance_justification_requests', 'user_fingerprints'];
             $table = $query->getModel()->getTable();
 
             if (in_array($table, $largeTables, true)) {

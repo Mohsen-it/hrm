@@ -6,7 +6,7 @@
 -->
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <RegistrationInfo>
-    <Description>HRM full stack, headless: Laravel, queue workers, Reverb, ADMS, bridge, scheduler. No console, no logon required.</Description>
+      <Description>HRM artisan stack, headless: Laravel, queue workers (default/attendance/biometrics), ADMS, bridge. Scheduler runs as Task Scheduler 'HRM Scheduler' (schedule:run every minute). Reverb on 8080 owned by NSSM service 'HRM-Reverb'. No console, no logon required.</Description>
   </RegistrationInfo>
   <Triggers>
     <BootTrigger>

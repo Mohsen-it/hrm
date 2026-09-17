@@ -173,6 +173,10 @@ class UserFingerprintRepository
             $q->where('finger_id', $fingerId);
         });
 
+        $query->when($filters['search'] ?? null, function (Builder $q, string $term): void {
+            $q->whereHas('user', fn ($u) => $u->where('name', 'like', "%{$term}%")->orWhere('email', 'like', "%{$term}%"));
+        });
+
         return $query;
     }
 }

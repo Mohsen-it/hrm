@@ -19,6 +19,7 @@ return [
 
     'login' => 'Login',
     'login_subtitle' => 'Human Resource Management',
+    'brand_subtitle' => 'Aleppo International Airport',
     'login_failed' => 'Invalid credentials',
     'login_success' => 'Logged in successfully',
     'logout' => 'Logout',

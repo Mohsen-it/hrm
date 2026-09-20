@@ -80,10 +80,13 @@ const visibilityClass = computed(() => {
     <div class="nav-sidebar__header">
       <div class="nav-sidebar__brand">
         <div class="nav-sidebar__logo">
-          <img :src="emblemWhite" alt="" aria-hidden="true" class="h-[26px] w-[26px] object-contain" />
+          <img :src="emblemWhite" alt="" aria-hidden="true" class="h-[36px] w-[36px] object-contain" />
         </div>
         <transition name="nav-fade">
-          <span v-if="!isCollapsed" class="nav-sidebar__brand-text">HRM</span>
+          <div v-if="!isCollapsed" class="nav-sidebar__brand-info">
+            <span class="nav-sidebar__brand-text">HRM</span>
+            <span class="nav-sidebar__brand-sub">{{ t('common.brand_subtitle') }}</span>
+          </div>
         </transition>
       </div>
     </div>

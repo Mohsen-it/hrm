@@ -58,8 +58,8 @@ class CompaniesExport
                 'width' => 12,
                 'map' => [1 => 'نشط', 0 => 'غير نشط'],
                 'status_color' => [
-                    1 => ['text' => '16A34A', 'bg' => 'DCFCE7'],
-                    0 => ['text' => 'DC2626', 'bg' => 'FEE2E2'],
+                    1 => ['text' => '007A3D', 'bg' => 'E3F2E9'],
+                    0 => ['text' => 'CE1126', 'bg' => 'FBE7E9'],
                 ],
             ],
         ];
@@ -87,3 +87,4 @@ class CompaniesExport
         return $this->exporter->toResponse($this->build(), 'companies');
     }
 }
+

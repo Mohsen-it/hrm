@@ -15,46 +15,101 @@
 
 /*
 |--------------------------------------------------------------------------
-| HRM Design System — Mistral-Inspired (single source of truth)
+| HRM Design System — Syrian Zone SyID-Inspired (single source of truth)
 |--------------------------------------------------------------------------
-| Canonical reference: mistral.ai\DESIGN.md
+| Canonical reference: mistral.ai\DESIGN.md (legacy structure, token names
+| kept for backward compatibility — values re-skinned to Syrian identity:
+| deep Syrian green #054239 as primary, eagle gold #C9A227 as accent,
+| flag green #007A3D / flag red #CE1126 as semantic anchors).
+| Typography: ITF Qomra Arabic (local) with Tajawal/Cairo fallback.
 */
+
+/* --- ITF Qomra Arabic (local, RTL-first) --- */
+@font-face {
+    font-family: 'ITF Qomra Arabic';
+    src: url('../itf_qomra_arabic_fonts/itfQomraArabic-Light.woff2') format('woff2'),
+        url('../itf_qomra_arabic_fonts/itfQomraArabic-Light.woff') format('woff'),
+        url('../itf_qomra_arabic_fonts/itfQomraArabic-Light.ttf') format('truetype');
+    font-weight: 300;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'ITF Qomra Arabic';
+    src: url('../itf_qomra_arabic_fonts/itfQomraArabic-Regular.woff2') format('woff2'),
+        url('../itf_qomra_arabic_fonts/itfQomraArabic-Regular.woff') format('woff'),
+        url('../itf_qomra_arabic_fonts/itfQomraArabic-Regular.ttf') format('truetype');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'ITF Qomra Arabic';
+    src: url('../itf_qomra_arabic_fonts/itfQomraArabic-Medium.woff2') format('woff2'),
+        url('../itf_qomra_arabic_fonts/itfQomraArabic-Medium.woff') format('woff'),
+        url('../itf_qomra_arabic_fonts/itfQomraArabic-Medium.ttf') format('truetype');
+    font-weight: 500;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'ITF Qomra Arabic';
+    src: url('../itf_qomra_arabic_fonts/itfQomraArabic-Bold.woff2') format('woff2'),
+        url('../itf_qomra_arabic_fonts/itfQomraArabic-Bold.woff') format('woff'),
+        url('../itf_qomra_arabic_fonts/itfQomraArabic-Bold.ttf') format('truetype');
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'ITF Qomra Arabic';
+    src: url('../itf_qomra_arabic_fonts/itfQomraArabic-Black.woff2') format('woff2'),
+        url('../itf_qomra_arabic_fonts/itfQomraArabic-Black.woff') format('woff'),
+        url('../itf_qomra_arabic_fonts/itfQomraArabic-Black.ttf') format('truetype');
+    font-weight: 900;
+    font-style: normal;
+    font-display: swap;
+}
 
 @theme {
     /* --- Fonts --- */
-    --font-display: 'Georgia', 'Times New Roman', serif;
-    --font-sans: 'Tajawal', 'Cairo', 'Noto Sans Arabic', 'Inter', sans-serif;
+    --font-display: 'ITF Qomra Arabic', 'Tajawal', 'Cairo', 'Noto Sans Arabic', serif;
+    --font-sans: 'ITF Qomra Arabic', 'Tajawal', 'Cairo', 'Noto Sans Arabic', 'Inter', sans-serif;
     --font-latin: 'Inter', 'SF Pro Display', -apple-system, sans-serif;
     --font-monospace: 'IBM Plex Mono', 'JetBrains Mono', 'Courier New', monospace;
 
-    /* --- Brand & Accent (Mistral) --- */
-    --color-mistral-primary: #fa520f;
-    --color-mistral-primary-deep: #cc3a05;
+    /* --- Brand & Accent (Syrian Zone SyID: deep Syrian green) --- */
+    --color-mistral-primary: #054239;
+    --color-mistral-primary-deep: #03362e;
     --color-mistral-on-primary: #ffffff;
 
-    /* --- Sunset gradient stops --- */
-    --color-mistral-sunshine-300: #ffd06a;
-    --color-mistral-sunshine-500: #ffb83e;
-    --color-mistral-sunshine-700: #ffa110;
-    --color-mistral-sunshine-800: #ff8105;
-    --color-mistral-sunshine-900: #ff8a00;
-    --color-mistral-yellow-saturated: #ffd900;
-    --color-mistral-block-5: #ffe295;
-    --color-mistral-block-6: #ffd900;
-    --color-mistral-block-7: #ff8105;
+    /* --- Syrian gradient stops (sage ramp + eagle gold) --- */
+    --color-mistral-sunshine-300: #c7e0d3;
+    --color-mistral-sunshine-500: #8fbea3;
+    --color-mistral-sunshine-700: #428177;
+    --color-mistral-sunshine-800: #146c50;
+    --color-mistral-sunshine-900: #054239;
+    --color-mistral-yellow-saturated: #c9a227;
+    --color-mistral-block-5: #e8dcc0;
+    --color-mistral-block-6: #c9a227;
+    --color-mistral-block-7: #428177;
 
-    /* --- Cream / Neutral warm --- */
-    --color-mistral-cream: #fff8e0;
-    --color-mistral-cream-light: #fffaeb;
-    --color-mistral-cream-deeper: #fff0c2;
-    --color-mistral-beige-deep: #e6d5a8;
-    --color-mistral-footer-cream: #fff8e0;
+    /* --- Paper / Neutral with sage hint (harmonised with green identity) --- */
+    --color-mistral-cream: #f3f6f2;
+    --color-mistral-cream-light: #f8faf8;
+    --color-mistral-cream-deeper: #e4ede6;
+    --color-mistral-beige-deep: #cbd8cf;
+    --color-mistral-footer-cream: #f3f6f2;
 
     /* --- Surface --- */
     --color-mistral-canvas: #ffffff;
-    --color-mistral-surface: #f7f7f8;
-    --color-mistral-surface-cream: #fff8e0;
-    --color-mistral-surface-cream-soft: #fffaeb;
+    --color-mistral-surface: #f2f5f3;
+    --color-mistral-surface-cream: #f3f6f2;
+    --color-mistral-surface-cream-soft: #f8faf8;
     --color-mistral-surface-code: #1c1c1e;
 
     /* --- Hairlines --- */
@@ -73,23 +128,23 @@
     --color-mistral-on-dark: #ffffff;
     --color-mistral-on-dark-muted: #a3a3a3;
     --color-mistral-on-cream: #171717;
-    --color-mistral-link: #fa520f;
+    --color-mistral-link: #054239;
 
-    /* --- Semantic --- */
-    --color-mistral-success: #16a34a;
-    --color-mistral-success-bg: #dcfce7;
+    /* --- Semantic (anchored to Syrian flag green/red) --- */
+    --color-mistral-success: #007a3d;
+    --color-mistral-success-bg: #e3f2e9;
     --color-mistral-warning: #d97706;
     --color-mistral-warning-bg: #fef3c7;
-    --color-mistral-danger: #dc2626;
-    --color-mistral-danger-bg: #fee2e2;
+    --color-mistral-danger: #ce1126;
+    --color-mistral-danger-bg: #fbe7e9;
     --color-mistral-info: #2563eb;
     --color-mistral-info-bg: #dbeafe;
 
     /* --- Status Badge --- */
-    --color-mistral-status-active: #16a34a;
+    --color-mistral-status-active: #007a3d;
     --color-mistral-status-inactive: #94a3b8;
     --color-mistral-status-pending: #d97706;
-    --color-mistral-status-absent: #dc2626;
+    --color-mistral-status-absent: #ce1126;
     --color-mistral-status-overtime: #7c3aed;
     --color-mistral-status-vacation: #0891b2;
 
@@ -400,7 +455,7 @@ body {
 .form-input:focus {
     outline: none;
     border-color: var(--color-mistral-primary);
-    box-shadow: 0 0 0 3px rgba(250, 82, 15, 0.1);
+    box-shadow: 0 0 0 3px rgba(5, 66, 57, 0.1);
 }
 
 .form-input:disabled {
@@ -451,7 +506,7 @@ body {
 }
 
 .badge-orange {
-    background-color: rgba(250, 82, 15, 0.1);
+    background-color: rgba(5, 66, 57, 0.1);
     color: var(--color-mistral-primary);
 }
 
@@ -466,7 +521,7 @@ body {
 }
 
 .badge-success {
-    background-color: rgba(22, 163, 74, 0.1);
+    background-color: rgba(0, 122, 61, 0.1);
     color: var(--color-mistral-success);
 }
 
@@ -481,13 +536,60 @@ body {
 }
 
 .badge-danger {
-    background-color: rgba(220, 38, 38, 0.1);
+    background-color: rgba(206, 17, 38, 0.1);
     color: var(--color-mistral-danger);
 }
 
 .badge-info {
     background-color: rgba(37, 99, 235, 0.1);
     color: var(--color-mistral-info);
+}
+
+/*
+|--------------------------------------------------------------------------
+| Syrian Identity Polish — RTL Arabic typography + gold accent
+|--------------------------------------------------------------------------
+| 1. Latin letter-spacing/text-transform breaks Arabic letter joining,
+|    so section labels render without tracking in RTL.
+| 2. Negative tracking (tracking-tight) is reset in RTL for the same reason.
+| 3. Tabular numerals keep table/stat columns from jittering.
+| 4. Eagle-gold edge marks the active navigation item (restrained accent).
+*/
+
+[dir='rtl'] .nav-group__label,
+[dir='rtl'] .sidebar-section-title,
+[dir='rtl'] .navbar-dropdown__heading,
+[dir='rtl'] .cp-group-heading,
+[dir='rtl'] .nav-favorites__title {
+    letter-spacing: 0;
+    text-transform: none;
+}
+
+[dir='rtl'] .tracking-tight {
+    letter-spacing: 0;
+}
+
+table tbody td,
+.dt-default td,
+.dt-compact td,
+.dt-comfortable td {
+    font-variant-numeric: tabular-nums;
+}
+
+.nav-item--active {
+    box-shadow: inset 3px 0 0 var(--color-mistral-yellow-saturated), 0 1px 3px rgba(5, 66, 57, 0.3);
+}
+
+[dir='rtl'] .nav-item--active {
+    box-shadow: inset -3px 0 0 var(--color-mistral-yellow-saturated), 0 1px 3px rgba(5, 66, 57, 0.3);
+}
+
+.sidebar-item-active {
+    box-shadow: inset 3px 0 0 var(--color-mistral-yellow-saturated);
+}
+
+[dir='rtl'] .sidebar-item-active {
+    box-shadow: inset -3px 0 0 var(--color-mistral-yellow-saturated);
 }
 
 /*
@@ -524,15 +626,14 @@ body {
     width: 34px;
     height: 34px;
     border-radius: var(--radius-lg);
-    background: linear-gradient(135deg, var(--color-mistral-primary), var(--color-mistral-primary-deep));
+    background: #ffffff;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: white;
-    font-weight: 700;
-    font-size: 16px;
     flex-shrink: 0;
-    box-shadow: 0 2px 6px rgba(250, 82, 15, 0.25);
+    border: 1px solid var(--color-mistral-hairline-soft);
+    box-shadow: 0 2px 6px rgba(5, 66, 57, 0.18), inset 0 0 0 1px rgba(201, 162, 39, 0.35);
+    overflow: hidden;
 }
 
 .nav-sidebar__brand-text {
@@ -705,7 +806,7 @@ body {
     background-color: var(--color-mistral-primary);
     color: white;
     font-weight: 600;
-    box-shadow: 0 1px 3px rgba(250, 82, 15, 0.3);
+    box-shadow: 0 1px 3px rgba(5, 66, 57, 0.3);
 }
 
 .nav-item--active:hover {
@@ -1072,7 +1173,7 @@ body {
 }
 
 .alert-success {
-    background-color: rgba(22, 163, 74, 0.08);
+    background-color: rgba(0, 122, 61, 0.08);
     border-color: var(--color-mistral-success);
     color: var(--color-mistral-success);
 }
@@ -1084,7 +1185,7 @@ body {
 }
 
 .alert-danger {
-    background-color: rgba(220, 38, 38, 0.08);
+    background-color: rgba(206, 17, 38, 0.08);
     border-color: var(--color-mistral-danger);
     color: var(--color-mistral-danger);
 }
@@ -1121,9 +1222,9 @@ body {
     background: linear-gradient(
         to right,
         var(--color-mistral-primary) 0%,
-        var(--color-mistral-sunshine-700) 33%,
+        #007a3d 33%,
         var(--color-mistral-yellow-saturated) 66%,
-        var(--color-mistral-cream) 100%
+        #ce1126 100%
     );
     z-index: 30;
     pointer-events: none;
@@ -1243,7 +1344,7 @@ table tbody tr {
     background: linear-gradient(
         90deg,
         transparent 0%,
-        rgba(250, 82, 15, 0.02) 50%,
+        rgba(5, 66, 57, 0.02) 50%,
         transparent 100%
     );
     background-size: 200% 100%;
@@ -1281,11 +1382,11 @@ table tbody tr {
 @keyframes dt-page-active {
     0% {
         transform: scale(0.85);
-        box-shadow: 0 0 0 0 rgba(250, 82, 15, 0.4);
+        box-shadow: 0 0 0 0 rgba(5, 66, 57, 0.4);
     }
     60% {
         transform: scale(1.08);
-        box-shadow: 0 0 0 6px rgba(250, 82, 15, 0);
+        box-shadow: 0 0 0 6px rgba(5, 66, 57, 0);
     }
     100% {
         transform: scale(1.05);
@@ -1305,7 +1406,7 @@ table tbody tr {
     border-radius: inherit;
     background: radial-gradient(
         circle at center,
-        rgba(250, 82, 15, 0.3) 0%,
+        rgba(5, 66, 57, 0.3) 0%,
         transparent 70%
     );
     opacity: 0;
@@ -1334,7 +1435,7 @@ table tbody tr {
     background: linear-gradient(
         90deg,
         var(--color-mistral-primary) 0%,
-        var(--color-mistral-sunshine-700, #ffa110) 50%,
+        var(--color-mistral-sunshine-700, #428177) 50%,
         var(--color-mistral-primary) 100%
     );
     background-size: 200% 100%;
@@ -1349,7 +1450,7 @@ table tbody tr {
 
 .dt-jump-input:focus {
     transform: scale(1.05);
-    box-shadow: 0 0 0 3px rgba(250, 82, 15, 0.15);
+    box-shadow: 0 0 0 3px rgba(5, 66, 57, 0.15);
 }
 
 /* Spinner for inline use */
@@ -1385,8 +1486,8 @@ table tbody tr {
 
 /* Selection highlight pulse */
 @keyframes dt-select-pulse {
-    0% { background-color: rgba(250, 82, 15, 0.08); }
-    100% { background-color: rgba(250, 82, 15, 0.03); }
+    0% { background-color: rgba(5, 66, 57, 0.08); }
+    100% { background-color: rgba(5, 66, 57, 0.03); }
 }
 
 /* Sort indicator animation */

@@ -4,6 +4,7 @@ import { useTranslations } from '@/composables/useTranslations';
 import LanguageSwitcher from '@/Components/LanguageSwitcher.vue';
 import SunsetStripeBand from '@/Components/layout/SunsetStripeBand.vue';
 import { Button, FormInput, FormCheckbox } from '@/Components/ui';
+import emblemWhite from '../../../images/aleppo-logo-wide.webp';
 
 const { t, direction } = useTranslations();
 const page = usePage();
@@ -35,11 +36,7 @@ function submit() {
         <div class="w-full max-w-[400px]">
             <!-- Logo -->
             <div class="flex flex-col items-center mb-8">
-                <div
-                    class="w-14 h-14 rounded-2xl bg-mistral-primary flex items-center justify-center text-white font-bold text-[26px] shadow-lg shadow-mistral-primary/20"
-                >
-                    H
-                </div>
+                <img :src="emblemWhite" alt="" aria-hidden="true" class="h-14 object-contain" />
                 <h1 class="mt-4 text-[24px] font-bold text-mistral-ink tracking-tight">HRM</h1>
                 <p class="mt-1 text-[14px] text-mistral-stone">{{ t('common.login_subtitle') }}</p>
             </div>

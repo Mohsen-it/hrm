@@ -44,7 +44,7 @@ const trendIcon = computed(() => {
                 <i :class="[icon, 'text-[14px]']" aria-hidden="true"></i>
             </div>
         </div>
-        <div class="text-[26px] font-bold text-mistral-ink leading-none tracking-tight">
+        <div class="text-[26px] font-bold text-mistral-ink leading-none tracking-tight tabular-nums">
             {{ typeof value === 'number' ? value.toLocaleString() : value }}
         </div>
         <div v-if="trend" :class="['flex items-center gap-1 mt-2 text-[12px] font-medium', trendClass]">

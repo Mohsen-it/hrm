@@ -72,9 +72,9 @@ class LiveAttendanceExport
                 'map' => ['open' => 'مفتوح', 'closed' => 'مغلق', 'late' => 'متأخر', 'absent' => 'غائب'],
                 'status_color' => [
                     'open' => ['text' => '2563EB', 'bg' => 'DBEAFE'],
-                    'closed' => ['text' => '16A34A', 'bg' => 'DCFCE7'],
+                    'closed' => ['text' => '007A3D', 'bg' => 'E3F2E9'],
                     'late' => ['text' => 'D97706', 'bg' => 'FEF3C7'],
-                    'absent' => ['text' => 'DC2626', 'bg' => 'FEE2E2'],
+                    'absent' => ['text' => 'CE1126', 'bg' => 'FBE7E9'],
                 ],
             ],
             'notes' => ['key' => 'notes', 'type' => 'string', 'width' => 30],
@@ -91,3 +91,4 @@ class LiveAttendanceExport
         return $this->exporter->toBinary($this->build());
     }
 }
+

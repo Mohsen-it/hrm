@@ -77,7 +77,7 @@ class VacationTypesExport
                 'width' => 10,
                 'map' => [true => 'مدفوعة', false => 'غير مدفوعة'],
                 'status_color' => [
-                    true => ['text' => '16A34A', 'bg' => 'DCFCE7'],
+                    true => ['text' => '007A3D', 'bg' => 'E3F2E9'],
                     false => ['text' => '666666', 'bg' => 'F3F4F6'],
                 ],
             ],
@@ -94,8 +94,8 @@ class VacationTypesExport
                 'width' => 10,
                 'map' => [true => 'نشط', false => 'غير نشط'],
                 'status_color' => [
-                    true => ['text' => '16A34A', 'bg' => 'DCFCE7'],
-                    false => ['text' => 'DC2626', 'bg' => 'FEE2E2'],
+                    true => ['text' => '007A3D', 'bg' => 'E3F2E9'],
+                    false => ['text' => 'CE1126', 'bg' => 'FBE7E9'],
                 ],
             ],
         ];
@@ -111,3 +111,4 @@ class VacationTypesExport
         return $this->exporter->toBinary($this->build());
     }
 }
+

@@ -130,7 +130,7 @@ class AttendanceReportExport
         }
         $sheet->getStyle('A'.$row.':'.$this->col($lastColumn).$row)->applyFromArray([
             'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
-            'fill' => ['fillType' => Fill::FILL_SOLID, 'color' => ['rgb' => 'FA520F']],
+            'fill' => ['fillType' => Fill::FILL_SOLID, 'color' => ['rgb' => '054239']],
             'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
         ]);
         $row++;
@@ -180,7 +180,7 @@ class AttendanceReportExport
         }
         $sheet->getStyle('A'.$row.':'.$this->col($lastColumn).$row)->applyFromArray([
             'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
-            'fill' => ['fillType' => Fill::FILL_SOLID, 'color' => ['rgb' => 'FA520F']],
+            'fill' => ['fillType' => Fill::FILL_SOLID, 'color' => ['rgb' => '054239']],
             'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
         ]);
         $row++;
@@ -230,7 +230,7 @@ class AttendanceReportExport
         }
         $sheet->getStyle('A'.$row.':'.$this->col($lastColumn).$row)->applyFromArray([
             'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
-            'fill' => ['fillType' => Fill::FILL_SOLID, 'color' => ['rgb' => 'FA520F']],
+            'fill' => ['fillType' => Fill::FILL_SOLID, 'color' => ['rgb' => '054239']],
             'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
         ]);
         $row++;
@@ -270,3 +270,4 @@ class AttendanceReportExport
         return $this->exporter->toBinary($this->build());
     }
 }
+

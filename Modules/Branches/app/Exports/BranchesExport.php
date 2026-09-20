@@ -68,7 +68,7 @@ class BranchesExport
                 'width' => 10,
                 'map' => [true => 'رئيسي', false => 'فرع'],
                 'status_color' => [
-                    true => ['text' => 'FA520F', 'bg' => 'FFF3ED'],
+                    true => ['text' => '054239', 'bg' => 'E6EFE9'],
                     false => ['text' => '666666', 'bg' => 'F3F4F6'],
                 ],
             ],
@@ -78,8 +78,8 @@ class BranchesExport
                 'width' => 12,
                 'map' => [1 => 'نشط', 0 => 'غير نشط'],
                 'status_color' => [
-                    1 => ['text' => '16A34A', 'bg' => 'DCFCE7'],
-                    0 => ['text' => 'DC2626', 'bg' => 'FEE2E2'],
+                    1 => ['text' => '007A3D', 'bg' => 'E3F2E9'],
+                    0 => ['text' => 'CE1126', 'bg' => 'FBE7E9'],
                 ],
             ],
         ];
@@ -95,3 +95,4 @@ class BranchesExport
         return $this->exporter->toBinary($this->build());
     }
 }
+

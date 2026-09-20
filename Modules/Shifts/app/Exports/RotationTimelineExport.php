@@ -116,7 +116,7 @@ class RotationTimelineExport
             ],
             'fill' => [
                 'fillType' => Fill::FILL_SOLID,
-                'color' => ['rgb' => 'FA520F'],
+                'color' => ['rgb' => '054239'],
             ],
             'alignment' => [
                 'horizontal' => Alignment::HORIZONTAL_CENTER,
@@ -154,10 +154,10 @@ class RotationTimelineExport
                 if ($day['is_work_day']) {
                     $sheet->setCellValue($coord, '●');
                     $sheet->getStyle($coord)->applyFromArray([
-                        'font' => ['color' => ['rgb' => '16A34A'], 'bold' => true],
+                        'font' => ['color' => ['rgb' => '007A3D'], 'bold' => true],
                         'fill' => [
                             'fillType' => Fill::FILL_SOLID,
-                            'color' => ['rgb' => 'DCFCE7'],
+                            'color' => ['rgb' => 'E3F2E9'],
                         ],
                     ]);
                 } else {
@@ -199,7 +199,7 @@ class RotationTimelineExport
                 $sheet->getStyle($range)->applyFromArray([
                     'fill' => [
                         'fillType' => Fill::FILL_SOLID,
-                        'color' => ['rgb' => 'F7F2EC'],
+                        'color' => ['rgb' => 'EEF3F0'],
                     ],
                 ]);
             }
@@ -225,3 +225,4 @@ class RotationTimelineExport
         }
     }
 }
+

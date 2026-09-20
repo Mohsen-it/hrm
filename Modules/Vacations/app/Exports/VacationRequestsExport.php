@@ -85,8 +85,8 @@ class VacationRequestsExport
                 ],
                 'status_color' => [
                     'pending' => ['text' => 'D97706', 'bg' => 'FEF3C7'],
-                    'approved' => ['text' => '16A34A', 'bg' => 'DCFCE7'],
-                    'rejected' => ['text' => 'DC2626', 'bg' => 'FEE2E2'],
+                    'approved' => ['text' => '007A3D', 'bg' => 'E3F2E9'],
+                    'rejected' => ['text' => 'CE1126', 'bg' => 'FBE7E9'],
                     'cancelled' => ['text' => '6B7280', 'bg' => 'F3F4F6'],
                 ],
             ],
@@ -103,3 +103,4 @@ class VacationRequestsExport
         return $this->exporter->toBinary($this->build());
     }
 }
+

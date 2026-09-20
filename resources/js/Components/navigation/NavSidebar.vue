@@ -6,6 +6,7 @@ import NavSearch from './NavSearch.vue';
 import NavFavorites from './NavFavorites.vue';
 import NavGroup from './NavGroup.vue';
 import NavUser from './NavUser.vue';
+import emblemWhite from '../../../images/aleppo-emblem.png';
 
 const props = defineProps({
   isOpen: { type: Boolean, default: true },
@@ -79,7 +80,7 @@ const visibilityClass = computed(() => {
     <div class="nav-sidebar__header">
       <div class="nav-sidebar__brand">
         <div class="nav-sidebar__logo">
-          <span>H</span>
+          <img :src="emblemWhite" alt="" aria-hidden="true" class="h-[26px] w-[26px] object-contain" />
         </div>
         <transition name="nav-fade">
           <span v-if="!isCollapsed" class="nav-sidebar__brand-text">HRM</span>

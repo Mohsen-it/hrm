@@ -326,8 +326,8 @@ class FingerprintDevicesController extends Controller
                 'width' => 12,
                 'map' => ['active' => 'نشط', 'inactive' => 'غير نشط', 'maintenance' => 'صيانة'],
                 'status_color' => [
-                    'active' => ['text' => '16A34A', 'bg' => 'DCFCE7'],
-                    'inactive' => ['text' => 'DC2626', 'bg' => 'FEE2E2'],
+                    'active' => ['text' => '007A3D', 'bg' => 'E3F2E9'],
+                    'inactive' => ['text' => 'CE1126', 'bg' => 'FBE7E9'],
                     'maintenance' => ['text' => 'D97706', 'bg' => 'FEF3C7'],
                 ],
             ],
@@ -336,3 +336,4 @@ class FingerprintDevicesController extends Controller
         return $this->quickExcelExport('قائمة أجهزة البصمة', $headers, $devices->getCollection(), $columns, 'fingerprint-devices');
     }
 }
+

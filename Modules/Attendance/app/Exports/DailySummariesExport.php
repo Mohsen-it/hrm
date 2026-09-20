@@ -92,8 +92,8 @@ class DailySummariesExport
                 'width' => 12,
                 'map' => ['present' => 'حاضر', 'absent' => 'غائب', 'leave' => 'إجازة', 'holiday' => 'عطلة', 'weekend' => 'عطلة أسبوع'],
                 'status_color' => [
-                    'present' => ['text' => '16A34A', 'bg' => 'DCFCE7'],
-                    'absent' => ['text' => 'DC2626', 'bg' => 'FEE2E2'],
+                    'present' => ['text' => '007A3D', 'bg' => 'E3F2E9'],
+                    'absent' => ['text' => 'CE1126', 'bg' => 'FBE7E9'],
                     'leave' => ['text' => '2563EB', 'bg' => 'DBEAFE'],
                     'holiday' => ['text' => 'D97706', 'bg' => 'FEF3C7'],
                     'weekend' => ['text' => '6B7280', 'bg' => 'F3F4F6'],
@@ -112,3 +112,4 @@ class DailySummariesExport
         return $this->exporter->toBinary($this->build());
     }
 }
+

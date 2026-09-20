@@ -100,7 +100,7 @@ const dailyActionsData = computed(() => ({
     datasets: [{
         label: t('useractivity.daily_actions'),
         data: (props.detail.daily || []).map((d) => d.actions),
-        backgroundColor: '#fa520f',
+        backgroundColor: '#054239',
         borderRadius: 6,
         barPercentage: 0.6,
     }],
@@ -112,8 +112,8 @@ const dailyHoursData = computed(() => ({
     datasets: [{
         label: t('useractivity.daily_hours'),
         data: (props.detail.daily || []).map((d) => Math.round((d.active_minutes / 60) * 10) / 10),
-        borderColor: '#16a34a',
-        backgroundColor: 'rgba(22,163,74,0.1)',
+        borderColor: '#007a3d',
+        backgroundColor: 'rgba(0,122,61,0.1)',
         fill: true,
         tension: 0.4,
         pointRadius: 3,
@@ -132,7 +132,7 @@ const actionBreakdownData = computed(() => {
         labels: entries.map(([action]) => actionLabel(action)),
         datasets: [{
             data: entries.map(([, count]) => count),
-            backgroundColor: ['#fa520f', '#16a34a', '#2563eb', '#d97706', '#9333ea', '#0891b2', '#dc2626', '#78716c'],
+            backgroundColor: ['#054239', '#007a3d', '#2563eb', '#d97706', '#9333ea', '#0891b2', '#ce1126', '#78716c'],
             borderWidth: 0,
             hoverOffset: 6,
         }],

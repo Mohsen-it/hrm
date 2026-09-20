@@ -20,7 +20,7 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
  *
  * الميزات:
  * - دعم RTL كامل
- * - تنسيق احترافي مع ألوان المشروع (Mistral)
+ * - تنسيق احترافي مع ألوان المشروع (Syrian)
  * - دعم الخطوط العربية
  * - تصدير سريع مع headers جاهزة
  * - دعم الأعمدة المخصصة
@@ -30,19 +30,19 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 class ExcelExportService
 {
     /**
-     * ألوان المشروع (Mistral Design System)
+     * ألوان المشروع (Syrian Design System)
      */
-    private const COLOR_PRIMARY = 'FA520F';
+    private const COLOR_PRIMARY = '054239';
 
-    private const COLOR_PRIMARY_LIGHT = 'FFF3ED';
+    private const COLOR_PRIMARY_LIGHT = 'E6EFE9';
 
     private const COLOR_SECONDARY = '2C3E50';
 
-    private const COLOR_HEADER_BG = 'FA520F';
+    private const COLOR_HEADER_BG = '054239';
 
     private const COLOR_HEADER_TEXT = 'FFFFFF';
 
-    private const COLOR_ROW_ALT = 'F7F2EC';
+    private const COLOR_ROW_ALT = 'EEF3F0';
 
     private const COLOR_ROW_WHITE = 'FFFFFF';
 
@@ -50,13 +50,13 @@ class ExcelExportService
 
     private const COLOR_BORDER_LIGHT = 'EEEEEE';
 
-    private const COLOR_SUCCESS = '16A34A';
+    private const COLOR_SUCCESS = '007A3D';
 
-    private const COLOR_SUCCESS_BG = 'DCFCE7';
+    private const COLOR_SUCCESS_BG = 'E3F2E9';
 
-    private const COLOR_DANGER = 'DC2626';
+    private const COLOR_DANGER = 'CE1126';
 
-    private const COLOR_DANGER_BG = 'FEE2E2';
+    private const COLOR_DANGER_BG = 'FBE7E9';
 
     private const COLOR_WARNING = 'D97706';
 
@@ -624,3 +624,4 @@ class ExcelExportService
         return $this->toResponse($spreadsheet, $fileName);
     }
 }
+

@@ -65,7 +65,7 @@ function handleSubmit() {
 <template>
     <form @submit.prevent="handleSubmit" class="space-y-6">
         <FormSection :title="t('shifts.basic_info')">
-            <div class="p-4 mb-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800 leading-relaxed">
+            <div class="p-4 mb-4 bg-mistral-info-bg border border-mistral-info rounded-lg text-sm text-mistral-info leading-relaxed">
                 <p class="font-semibold mb-1">معلومات أساسية</p>
                 <ul class="list-disc list-inside space-y-1">
                     <li><strong>اسم الجدول:</strong> اسم يُميّز هذا الجدول عن غيره (مثال: دورية إدارية، دورية مصانع).</li>
@@ -112,7 +112,7 @@ function handleSubmit() {
         </FormSection>
 
         <FormSection :title="t('shifts.margins')">
-            <div class="p-4 mb-4 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800 leading-relaxed">
+            <div class="p-4 mb-4 bg-mistral-warning-bg border border-mistral-warning rounded-lg text-sm text-mistral-warning leading-relaxed">
                 <p class="font-semibold mb-1">هوامش التأخير والانصراف المبكر</p>
                 <p class="mb-2">هذه الإعدادات تحدد السماحية الزمنية للموظف عند التأخير أو المغادرة المبكرة.</p>
                 <ul class="list-disc list-inside space-y-1">
@@ -194,7 +194,7 @@ function handleSubmit() {
                 </Button>
             </template>
 
-            <div class="p-4 mb-4 bg-green-50 border border-green-200 rounded-lg text-sm text-green-800 leading-relaxed">
+            <div class="p-4 mb-4 bg-mistral-success-bg border border-mistral-success rounded-lg text-sm text-mistral-success leading-relaxed">
                 <p class="font-semibold mb-1">الاستراحات</p>
                 <p>حدد أوقات الاستراحات خلال الدوام. الاستراحة تُخصَم من ساعات العمل الرسمية ولا تُحسب كوقت عمل. يمكنك إضافة عدة استراحات أو ترك هذا القسم فارغاً إذا لم تكن هناك استراحات رسمية.</p>
             </div>

@@ -128,12 +128,12 @@ class SmartAbsenceMonthlyExport
      * Per-status font colors used inside the day-details cell.
      */
     private const DAY_STATUS_COLORS = [
-        'present' => '16A34A',   // green
+        'present' => '007A3D',   // green
         'vacation' => '2563EB',  // blue
         'exception' => 'D97706', // orange
         'holiday' => '64748B',   // slate
         'incomplete' => '9333EA', // purple
-        'absent' => 'DC2626',    // red
+        'absent' => 'CE1126',    // red
     ];
 
     /**
@@ -226,3 +226,4 @@ class SmartAbsenceMonthlyExport
         return $richText;
     }
 }
+

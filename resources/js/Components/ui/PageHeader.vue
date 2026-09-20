@@ -9,7 +9,7 @@ defineProps({
 <template>
     <div class="flex items-start justify-between mb-6 flex-wrap gap-4" :dir="dir">
         <div class="text-start">
-            <h1 class="text-[20px] sm:text-[24px] text-mistral-ink font-bold leading-tight tracking-tight">
+            <h1 class="text-[20px] sm:text-[24px] text-mistral-ink font-black leading-tight tracking-tight">
                 {{ title }}
             </h1>
             <p v-if="description" class="text-[13px] sm:text-[14px] text-mistral-steel mt-1.5 leading-relaxed">

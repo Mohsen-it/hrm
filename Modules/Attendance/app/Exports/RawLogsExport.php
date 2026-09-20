@@ -92,7 +92,7 @@ class RawLogsExport
                 'width' => 12,
                 'map' => [true => 'معالج', false => 'غير معالج'],
                 'status_color' => [
-                    true => ['text' => '16A34A', 'bg' => 'DCFCE7'],
+                    true => ['text' => '007A3D', 'bg' => 'E3F2E9'],
                     false => ['text' => 'D97706', 'bg' => 'FEF3C7'],
                 ],
             ],
@@ -109,3 +109,4 @@ class RawLogsExport
         return $this->exporter->toBinary($this->build());
     }
 }
+

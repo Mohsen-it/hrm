@@ -38,8 +38,8 @@ class ExcelExportExampleController extends Controller
                 'width' => 15,
                 'map' => ['active' => 'نشط', 'inactive' => 'غير نشط'],
                 'status_color' => [
-                    'active' => ['text' => '16A34A', 'bg' => 'DCFCE7'],
-                    'inactive' => ['text' => 'DC2626', 'bg' => 'FEE2E2'],
+                    'active' => ['text' => '007A3D', 'bg' => 'E3F2E9'],
+                    'inactive' => ['text' => 'CE1126', 'bg' => 'FBE7E9'],
                 ],
             ],
         ];
@@ -148,3 +148,4 @@ class ExcelExportExampleController extends Controller
         return $this->downloadExcel($spreadsheet, 'custom-report');
     }
 }
+

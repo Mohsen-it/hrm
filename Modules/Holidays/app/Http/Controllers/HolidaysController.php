@@ -284,8 +284,8 @@ class HolidaysController extends Controller
                 'width' => 10,
                 'map' => [true => 'نشط', false => 'غير نشط'],
                 'status_color' => [
-                    true => ['text' => '16A34A', 'bg' => 'DCFCE7'],
-                    false => ['text' => 'DC2626', 'bg' => 'FEE2E2'],
+                    true => ['text' => '007A3D', 'bg' => 'E3F2E9'],
+                    false => ['text' => 'CE1126', 'bg' => 'FBE7E9'],
                 ],
             ],
         ];
@@ -293,3 +293,4 @@ class HolidaysController extends Controller
         return $this->quickExcelExport('قائمة الإجازات', $headers, $holidays->getCollection(), $columns, 'holidays');
     }
 }
+

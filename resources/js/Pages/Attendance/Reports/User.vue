@@ -598,12 +598,12 @@ usePageTitle(t('attendance.user_report') + ' #' + props.userId);
         display: block;
         margin: 0 0 4mm;
         text-align: center;
-        font-family: Cairo, sans-serif;
+        font-family: 'ITF Qomra Arabic', Cairo, sans-serif;
     }
 
     .monthly-log-print-heading h1 {
         margin: 0 0 2mm;
-        color: #fa520f;
+        color: #054239;
         font-size: 18px;
         font-weight: 700;
     }
@@ -632,7 +632,7 @@ usePageTitle(t('attendance.user_report') + ' #' + props.userId);
     .monthly-log-print table {
         width: 100% !important;
         table-layout: fixed;
-        font-family: Cairo, sans-serif;
+        font-family: 'ITF Qomra Arabic', Cairo, sans-serif;
         font-size: 6px !important;
     }
 
@@ -648,7 +648,7 @@ usePageTitle(t('attendance.user_report') + ' #' + props.userId);
     }
 
     .monthly-log-print th {
-        background: #fa520f !important;
+        background: #054239 !important;
         color: #fff !important;
         padding: 4px 1.5px !important;
         font-size: 10px !important;
@@ -656,7 +656,7 @@ usePageTitle(t('attendance.user_report') + ' #' + props.userId);
     }
 
     .monthly-log-print tbody tr:nth-child(even) td {
-        background: #f7f2ec !important;
+        background: #eef3f0 !important;
     }
 
     .monthly-log-print th:nth-child(1),
@@ -687,7 +687,7 @@ usePageTitle(t('attendance.user_report') + ' #' + props.userId);
     }
 
     .monthly-log-late-total td {
-        background: #fa520f !important;
+        background: #054239 !important;
         color: #fff !important;
         font-size: 11px !important;
         font-weight: 800 !important;
@@ -724,12 +724,12 @@ usePageTitle(t('attendance.user_report') + ' #' + props.userId);
         display: block;
         margin: 0 0 4mm;
         text-align: center;
-        font-family: Cairo, sans-serif;
+        font-family: 'ITF Qomra Arabic', Cairo, sans-serif;
     }
 
     .overtime-report-print-heading h1 {
         margin: 0 0 2mm;
-        color: #fa520f;
+        color: #054239;
         font-size: 18px;
         font-weight: 700;
     }
@@ -758,7 +758,7 @@ usePageTitle(t('attendance.user_report') + ' #' + props.userId);
     .overtime-report-print table {
         width: 100% !important;
         table-layout: fixed;
-        font-family: Cairo, sans-serif;
+        font-family: 'ITF Qomra Arabic', Cairo, sans-serif;
         font-size: 11px !important;
     }
 
@@ -774,7 +774,7 @@ usePageTitle(t('attendance.user_report') + ' #' + props.userId);
     }
 
     .overtime-report-print th {
-        background: #fa520f !important;
+        background: #054239 !important;
         color: #fff !important;
         padding: 7px 3px !important;
         font-size: 13px !important;
@@ -782,7 +782,7 @@ usePageTitle(t('attendance.user_report') + ' #' + props.userId);
     }
 
     .overtime-report-print tbody tr:nth-child(even) td {
-        background: #f7f2ec !important;
+        background: #eef3f0 !important;
     }
 
     /* إخفاء عمودي الحضور المتوقع/الانصراف المتوقع في نسخة الطباعة فقط - لا يؤثر على الفوتر */
@@ -814,7 +814,7 @@ usePageTitle(t('attendance.user_report') + ' #' + props.userId);
     }
 
     .overtime-summary-row td {
-        background: #fa520f !important;
+        background: #054239 !important;
         color: #fff !important;
         font-size: 13px !important;
         font-weight: 800 !important;

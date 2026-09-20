@@ -29,7 +29,7 @@ class ShiftCategoryFactory extends Factory
             'fingerprint_enabled' => true,
             'work_on_holidays' => false,
             'work_on_weekends' => false,
-            'color' => '#fa520f',
+            'color' => '#054239',
         ];
     }
 
@@ -72,3 +72,4 @@ class ShiftCategoryFactory extends Factory
         ]);
     }
 }
+

@@ -302,7 +302,7 @@ class User extends Authenticatable
      */
     public function scopeWithoutSuperAdmin(Builder $query): Builder
     {
-        return $query->where('id', '!=', self::SUPER_ADMIN_ID);
+        return $query->where($this->getTable() . '.id', '!=', self::SUPER_ADMIN_ID);
     }
 
     /**

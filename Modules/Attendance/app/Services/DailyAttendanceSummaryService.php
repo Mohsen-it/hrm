@@ -305,6 +305,14 @@ class DailyAttendanceSummaryService
      */
     protected function resolveExternalStatus(int $userId, string $date, ?User $employee = null, array $resolved = []): ?string
     {
+        // A vacation / holiday on a rotation rest day is meaningless: the day
+        // must stay "rest" (same rule as the daily operational report and the
+        // ScheduleResolver). Defense in depth in case the resolver contract
+        // ever carries leave_excused on a rest day again.
+        if (($resolved['status'] ?? null) === ScheduleResolverService::STATUS_REST) {
+            return null;
+        }
+
         // Skip holiday status when the rotation is configured to work on holidays
         $workOnHolidays = $resolved['work_on_holidays'] ?? false;
 

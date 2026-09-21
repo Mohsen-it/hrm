@@ -110,14 +110,46 @@ class DailyReportService
             ->orderBy('check_in_at')->get()->groupBy('user_id');
         // Count only the preceding days; the selected report day is added below
         // whenever the employee is absent, even if its daily summary is not yet rebuilt.
-        $monthlyAbsenceCounts = DailyAttendanceSummary::query()
+        // Only rotation WORK days count: a stale summary that marks a rest day
+        // as absent/vacation (e.g. a leave recorded on a Friday-Saturday rest)
+        // must never inflate the monthly counter. Each absent date is verified
+        // against the historically active assignment via RotationEngine.
+        $monthAssignments = $this->rotationAssignmentRepository->getAssignmentsOverlapping($monthFrom, $date)
+            ->whereIn('employee_id', $userIds->all())
+            ->groupBy('employee_id');
+        $assignmentForDate = function (int $employeeId, string $day) use ($monthAssignments): mixed {
+            foreach ($monthAssignments->get($employeeId, collect()) as $candidate) {
+                $start = substr((string) $candidate->start_date, 0, 10);
+                $end = $candidate->end_date === null ? null : substr((string) $candidate->end_date, 0, 10);
+                if ($start <= $day && ($end === null || $end >= $day)) {
+                    return $candidate;
+                }
+            }
+
+            return null;
+        };
+        $isWorkDayOn = function (int $employeeId, string $day) use ($assignmentForDate): bool {
+            $candidate = $assignmentForDate($employeeId, $day);
+            if (! $candidate || ! $candidate->rotation || ! $candidate->rotationGroup) {
+                return false;
+            }
+
+            return $this->rotationEngine->isWorkDay($candidate->rotation, $candidate->rotationGroup, $day);
+        };
+        $monthlyAbsentDates = DailyAttendanceSummary::query()
             ->whereIn('user_id', $userIds)
             ->where('status', 'absent')
             ->whereDate('summary_date', '>=', $monthFrom)
             ->whereDate('summary_date', '<', $date)
-            ->selectRaw('user_id, COUNT(DISTINCT DATE(summary_date)) as absence_count')
-            ->groupBy('user_id')
-            ->pluck('absence_count', 'user_id');
+            ->get(['user_id', 'summary_date'])
+            ->groupBy('user_id');
+        $monthlyAbsenceCounts = $monthlyAbsentDates->map(
+            fn (Collection $rows, int $userId) => $rows
+                ->map(fn ($row) => substr((string) $row->summary_date, 0, 10))
+                ->unique()
+                ->filter(fn (string $day) => $isWorkDayOn((int) $userId, $day))
+                ->count()
+        );
         // Use the same source as the "Unregistered Employees" fingerprint
         // page so this report cannot silently omit employees without templates.
         $unregisteredFingerprintIds = User::query()
@@ -132,8 +164,8 @@ class DailyReportService
             ->overlapping($monthFrom, $date)
             ->get()
             ->groupBy('user_id')
-            ->map(fn (Collection $requests) => $requests->sum(
-                fn (UserVacationRequest $request) => $this->daysOverlappingPeriod($request, $monthFrom, $date)
+            ->map(fn (Collection $requests, int $userId) => $requests->sum(
+                fn (UserVacationRequest $request) => $this->workDaysOverlappingPeriod($request, $monthFrom, $date, (int) $userId, $isWorkDayOn)
             ));
         $exceptions = ShiftException::active()->whereIn('employee_id', $userIds)
             ->whereIn('exception_type', ['leave', 'mission', 'training', 'swap'])
@@ -359,6 +391,45 @@ class DailyReportService
         }
 
         return $start->gt($end) ? 0 : (int) $start->diffInDays($end) + 1;
+    }
+
+    /**
+     * Count only the rotation WORK days of a vacation within a report period.
+     *
+     * A leave recorded on a rest day (e.g. a Friday-Saturday rest covered by a
+     * mission) is meaningless and must not inflate "عدد أيام الإجازة خلال
+     * الشهر" — same rule as the daily status itself.
+     *
+     * @param  callable(int, string):bool  $isWorkDayOn
+     */
+    private function workDaysOverlappingPeriod(UserVacationRequest $request, string $from, string $to, int $userId, callable $isWorkDayOn): int
+    {
+        $periodStart = Carbon::parse($from)->startOfDay();
+        $periodEnd = Carbon::parse($to)->startOfDay();
+        $start = Carbon::parse($request->start_date)->startOfDay();
+        $end = Carbon::parse($request->end_date)->startOfDay();
+
+        if ($start->lt($periodStart)) {
+            $start = $periodStart;
+        }
+        if ($end->gt($periodEnd)) {
+            $end = $periodEnd;
+        }
+
+        if ($start->gt($end)) {
+            return 0;
+        }
+
+        $count = 0;
+        $cursor = $start->copy();
+        while ($cursor->lte($end)) {
+            if ($isWorkDayOn($userId, $cursor->toDateString())) {
+                $count++;
+            }
+            $cursor->addDay();
+        }
+
+        return $count;
     }
 
     /** Format a count as an Arabic numeral and keep it in RTL text order. */

@@ -38,6 +38,33 @@ if ($NoBridge) { $flags += '-NoBridge' }
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 Write-StartupLog "Starting HRM stack headless in-process (SkipBuild=$($SkipBuild.IsPresent), Elevated=$isAdmin)."
 
+# Redis is queue infrastructure (QUEUE_CONNECTION=redis) — like MySQL it
+# lives OUTSIDE the supervisor Job Object so a task/supervisor restart never
+# drops the queue. Idempotent: if the hrm-redis service (or anything else)
+# already listens on 6379, this is a no-op.
+try {
+    $redisUp = Test-NetConnection -ComputerName '127.0.0.1' -Port 6379 -WarningAction SilentlyContinue | Select-Object -ExpandProperty TcpTestSucceeded
+}
+catch {
+    $redisUp = $false
+}
+if (-not $redisUp) {
+    $redisExe = 'C:\laragon\bin\redis\redis-x64-5.0.14.1\redis-server.exe'
+    $redisConf = 'C:\laragon\bin\redis\redis-x64-5.0.14.1\redis.windows.conf'
+    if (Test-Path -LiteralPath $redisExe) {
+        Write-StartupLog 'Redis 6379 not listening — starting redis-server detached.'
+        Start-Process -FilePath $redisExe -ArgumentList $redisConf -WindowStyle Hidden
+        Start-Sleep -Seconds 3
+    }
+    else {
+        Write-StartupLog "FATAL: redis-server not found at $redisExe. Queue (redis) cannot start."
+        exit 1
+    }
+}
+else {
+    Write-StartupLog 'Redis 6379 already listening — nothing to do.'
+}
+
 try {
     & $supervisor -NonInteractive @flags
     $code = $LASTEXITCODE

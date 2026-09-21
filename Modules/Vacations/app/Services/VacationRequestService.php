@@ -4,6 +4,7 @@ namespace Modules\Vacations\Services;
 
 use DateTimeImmutable;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Validation\ValidationException;
 use Modules\Users\Models\User;
@@ -160,27 +161,32 @@ class VacationRequestService
             ]);
         }
 
-        $balanceAfter = $type->deducts_from_balance
-            ? $this->balanceService->reserveDays($userId, $typeId, $year, $workingDays, null, $createdBy)
-            : $balance;
+        // Reserve + create atomically: if the create fails after the
+        // reservation, the whole transaction rolls back instead of leaving
+        // orphaned `days_pending` on the balance.
+        $request = DB::transaction(function () use ($userId, $typeId, $year, $workingDays, $createdBy, $balance, $type, $user, $data, $start, $end, $daysCount) {
+            $balanceAfter = $type->deducts_from_balance
+                ? $this->balanceService->reserveDays($userId, $typeId, $year, $workingDays, null, $createdBy)
+                : $balance;
 
-        $managerId = $data['manager_id'] ?? $user->manager_id;
+            $managerId = $data['manager_id'] ?? $user->manager_id;
 
-        $request = $this->repository->create([
-            'user_id' => $userId,
-            'vacation_type_id' => $typeId,
-            'manager_id' => $managerId,
-            'balance_id' => $balanceAfter->id,
-            'start_date' => $start,
-            'end_date' => $end,
-            'days_count' => $daysCount,
-            'working_days_count' => $workingDays,
-            'status' => UserVacationRequest::STATUS_PENDING,
-            'reason' => $data['reason'] ?? null,
-            'attachments' => $data['attachments'] ?? null,
-            'metadata' => $data['metadata'] ?? null,
-            'requested_at' => new DateTimeImmutable,
-        ]);
+            return $this->repository->create([
+                'user_id' => $userId,
+                'vacation_type_id' => $typeId,
+                'manager_id' => $managerId,
+                'balance_id' => $balanceAfter->id,
+                'start_date' => $start,
+                'end_date' => $end,
+                'days_count' => $daysCount,
+                'working_days_count' => $workingDays,
+                'status' => UserVacationRequest::STATUS_PENDING,
+                'reason' => $data['reason'] ?? null,
+                'attachments' => $data['attachments'] ?? null,
+                'metadata' => $data['metadata'] ?? null,
+                'requested_at' => new DateTimeImmutable,
+            ]);
+        });
 
         Event::dispatch(new VacationRequested($request));
 
@@ -216,65 +222,68 @@ class VacationRequestService
             $request->id,
         );
 
-        // Refund the previously reserved days before re-reserving.
-        $oldDays = (int) $request->working_days_count;
-        $oldYear = (int) $request->start_date->format('Y');
-        $this->balanceService->releasePending(
-            (int) $request->user_id,
-            (int) $request->vacation_type_id,
-            $oldYear,
-            $oldDays,
-            $request->id,
-        );
+        // Release-then-re-reserve atomically: any failure after the
+        // release (unknown type, insufficient balance, failed update)
+        // rolls back, so the original reservation is never lost.
+        return DB::transaction(function () use ($request, $payload) {
+            // Refund the previously reserved days before re-reserving.
+            $oldDays = (int) $request->working_days_count;
+            $oldYear = (int) $request->start_date->format('Y');
+            $this->balanceService->releasePending(
+                (int) $request->user_id,
+                (int) $request->vacation_type_id,
+                $oldYear,
+                $oldDays,
+                $request->id,
+            );
 
-        $type = $this->typeService->findType($payload['vacation_type_id']);
-        if (! $type) {
-            throw ValidationException::withMessages([
-                'vacation_type_id' => __('vacations.type_not_found', ['id' => $payload['vacation_type_id']]),
-            ]);
-        }
-
-        $newDays = $this->balanceService->projectDays(
-            $type,
-            $payload['start_date'],
-            $payload['end_date'],
-            $this->holidayLookup,
-        );
-
-        $newYear = (int) (new DateTimeImmutable($payload['start_date']))->format('Y');
-        $balance = $this->balanceService->resolveBalance(
-            (int) $request->user_id,
-            (int) $payload['vacation_type_id'],
-            $newYear,
-        );
-
-        if ($type->deducts_from_balance) {
-            $remaining = $balance->daysRemaining();
-            if ($newDays > $remaining) {
+            $type = $this->typeService->findType($payload['vacation_type_id']);
+            if (! $type) {
                 throw ValidationException::withMessages([
-                    'vacation_type_id' => __('vacations.insufficient_balance', [
-                        'remaining' => $remaining,
-                        'requested' => $newDays,
-                    ]),
+                    'vacation_type_id' => __('vacations.type_not_found', ['id' => $payload['vacation_type_id']]),
                 ]);
             }
-            $balance = $this->balanceService->reserveDays(
+
+            $newDays = $this->balanceService->projectDays(
+                $type,
+                $payload['start_date'],
+                $payload['end_date'],
+                $this->holidayLookup,
+            );
+
+            $newYear = (int) (new DateTimeImmutable($payload['start_date']))->format('Y');
+            $balance = $this->balanceService->resolveBalance(
                 (int) $request->user_id,
                 (int) $payload['vacation_type_id'],
                 $newYear,
-                $newDays,
-                $request->id,
             );
-        }
 
-        $payload['working_days_count'] = $newDays;
-        $payload['days_count'] = (int) (new DateTimeImmutable($payload['start_date']))
-            ->diff(new DateTimeImmutable($payload['end_date']))->days + 1;
-        $payload['balance_id'] = $balance->id;
+            if ($type->deducts_from_balance) {
+                $remaining = $balance->daysRemaining();
+                if ($newDays > $remaining) {
+                    throw ValidationException::withMessages([
+                        'vacation_type_id' => __('vacations.insufficient_balance', [
+                            'remaining' => $remaining,
+                            'requested' => $newDays,
+                        ]),
+                    ]);
+                }
+                $balance = $this->balanceService->reserveDays(
+                    (int) $request->user_id,
+                    (int) $payload['vacation_type_id'],
+                    $newYear,
+                    $newDays,
+                    $request->id,
+                );
+            }
 
-        $updated = $this->repository->update($request, $payload);
+            $payload['working_days_count'] = $newDays;
+            $payload['days_count'] = (int) (new DateTimeImmutable($payload['start_date']))
+                ->diff(new DateTimeImmutable($payload['end_date']))->days + 1;
+            $payload['balance_id'] = $balance->id;
 
-        return $updated;
+            return $this->repository->update($request, $payload);
+        });
     }
 
     /**
@@ -288,31 +297,33 @@ class VacationRequestService
             ]);
         }
 
-        $type = $this->typeService->findType((int) $request->vacation_type_id);
-        $year = (int) $request->start_date->format('Y');
-        $days = (int) $request->working_days_count;
+        $updated = DB::transaction(function () use ($request, $decidedBy, $note) {
+            $type = $this->typeService->findType((int) $request->vacation_type_id);
+            $year = (int) $request->start_date->format('Y');
+            $days = (int) $request->working_days_count;
 
-        $balance = $type && $type->deducts_from_balance
-            ? $this->balanceService->consumeDays(
-                (int) $request->user_id,
-                (int) $request->vacation_type_id,
-                $year,
-                $days,
-                $request->id,
-                $decidedBy,
-            )
-            : $this->balanceService->resolveBalance(
-                (int) $request->user_id,
-                (int) $request->vacation_type_id,
-                $year,
-            );
+            $balance = $type && $type->deducts_from_balance
+                ? $this->balanceService->consumeDays(
+                    (int) $request->user_id,
+                    (int) $request->vacation_type_id,
+                    $year,
+                    $days,
+                    $request->id,
+                    $decidedBy,
+                )
+                : $this->balanceService->resolveBalance(
+                    (int) $request->user_id,
+                    (int) $request->vacation_type_id,
+                    $year,
+                );
 
-        $updated = $this->repository->update($request, [
-            'status' => UserVacationRequest::STATUS_APPROVED,
-            'decided_at' => new DateTimeImmutable,
-            'manager_note' => $note,
-            'balance_id' => $balance->id,
-        ]);
+            return $this->repository->update($request, [
+                'status' => UserVacationRequest::STATUS_APPROVED,
+                'decided_at' => new DateTimeImmutable,
+                'manager_note' => $note,
+                'balance_id' => $balance->id,
+            ]);
+        });
 
         Event::dispatch(new VacationApproved($updated));
 
@@ -330,31 +341,33 @@ class VacationRequestService
             ]);
         }
 
-        $type = $this->typeService->findType((int) $request->vacation_type_id);
-        $year = (int) $request->start_date->format('Y');
-        $days = (int) $request->working_days_count;
+        $updated = DB::transaction(function () use ($request, $decidedBy, $note) {
+            $type = $this->typeService->findType((int) $request->vacation_type_id);
+            $year = (int) $request->start_date->format('Y');
+            $days = (int) $request->working_days_count;
 
-        $balance = $type && $type->deducts_from_balance
-            ? $this->balanceService->releasePending(
-                (int) $request->user_id,
-                (int) $request->vacation_type_id,
-                $year,
-                $days,
-                $request->id,
-                $decidedBy,
-            )
-            : $this->balanceService->resolveBalance(
-                (int) $request->user_id,
-                (int) $request->vacation_type_id,
-                $year,
-            );
+            $balance = $type && $type->deducts_from_balance
+                ? $this->balanceService->releasePending(
+                    (int) $request->user_id,
+                    (int) $request->vacation_type_id,
+                    $year,
+                    $days,
+                    $request->id,
+                    $decidedBy,
+                )
+                : $this->balanceService->resolveBalance(
+                    (int) $request->user_id,
+                    (int) $request->vacation_type_id,
+                    $year,
+                );
 
-        $updated = $this->repository->update($request, [
-            'status' => UserVacationRequest::STATUS_REJECTED,
-            'decided_at' => new DateTimeImmutable,
-            'manager_note' => $note,
-            'balance_id' => $balance->id,
-        ]);
+            return $this->repository->update($request, [
+                'status' => UserVacationRequest::STATUS_REJECTED,
+                'decided_at' => new DateTimeImmutable,
+                'manager_note' => $note,
+                'balance_id' => $balance->id,
+            ]);
+        });
 
         Event::dispatch(new VacationRejected($updated));
 
@@ -371,37 +384,39 @@ class VacationRequestService
             return $request;
         }
 
-        $type = $this->typeService->findType((int) $request->vacation_type_id);
-        $year = (int) $request->start_date->format('Y');
-        $days = (int) $request->working_days_count;
-        $balance = null;
+        $updated = DB::transaction(function () use ($request, $cancelledBy, $note) {
+            $type = $this->typeService->findType((int) $request->vacation_type_id);
+            $year = (int) $request->start_date->format('Y');
+            $days = (int) $request->working_days_count;
+            $balance = null;
 
-        if ($type && $type->deducts_from_balance && $days > 0) {
-            $balance = $request->isPending()
-                ? $this->balanceService->releasePending(
-                    (int) $request->user_id,
-                    (int) $request->vacation_type_id,
-                    $year,
-                    $days,
-                    $request->id,
-                    $cancelledBy,
-                )
-                : $this->balanceService->refundUsed(
-                    (int) $request->user_id,
-                    (int) $request->vacation_type_id,
-                    $year,
-                    $days,
-                    $request->id,
-                    $cancelledBy,
-                );
-        }
+            if ($type && $type->deducts_from_balance && $days > 0) {
+                $balance = $request->isPending()
+                    ? $this->balanceService->releasePending(
+                        (int) $request->user_id,
+                        (int) $request->vacation_type_id,
+                        $year,
+                        $days,
+                        $request->id,
+                        $cancelledBy,
+                    )
+                    : $this->balanceService->refundUsed(
+                        (int) $request->user_id,
+                        (int) $request->vacation_type_id,
+                        $year,
+                        $days,
+                        $request->id,
+                        $cancelledBy,
+                    );
+            }
 
-        $updated = $this->repository->update($request, [
-            'status' => UserVacationRequest::STATUS_CANCELLED,
-            'cancelled_at' => new DateTimeImmutable,
-            'manager_note' => $note ?? $request->manager_note,
-            'balance_id' => $balance?->id ?? $request->balance_id,
-        ]);
+            return $this->repository->update($request, [
+                'status' => UserVacationRequest::STATUS_CANCELLED,
+                'cancelled_at' => new DateTimeImmutable,
+                'manager_note' => $note ?? $request->manager_note,
+                'balance_id' => $balance?->id ?? $request->balance_id,
+            ]);
+        });
 
         Event::dispatch(new VacationCancelled($updated));
 

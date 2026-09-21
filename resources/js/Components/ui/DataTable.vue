@@ -399,7 +399,9 @@ const lastVisibleColIndex = computed(() => {
                             <tr v-else-if="sortedItems.length === 0">
                                 <td :colspan="table.visibleColumns.value.length + (selectable ? 1 : 0)" class="p-0">
                                     <slot name="empty">
-                                        <EmptyState :title="emptyTitle || t('common.no_data')" :description="emptyDescription" />
+                                        <EmptyState :title="emptyTitle || t('common.no_data')" :description="emptyDescription">
+                                            <slot name="empty-actions" />
+                                        </EmptyState>
                                     </slot>
                                 </td>
                             </tr>

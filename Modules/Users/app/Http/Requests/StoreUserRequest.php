@@ -72,7 +72,7 @@ class StoreUserRequest extends FormRequest
             'full_name_ar' => ['nullable', 'string', 'max:255'],
             'full_name_en' => ['nullable', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
-            'password' => ['required', 'string', 'min:8', 'max:255'],
+            'password' => ['nullable', 'string', 'min:8', 'max:255'],
             'national_id' => ['nullable', 'string', 'max:30'],
             'phone' => ['nullable', 'string', 'max:20'],
             'phone2' => ['nullable', 'string', 'max:20'],
@@ -131,6 +131,12 @@ class StoreUserRequest extends FormRequest
             'shifts.*.effective_to' => ['nullable', 'date', 'after_or_equal:shifts.*.effective_from'],
             'shifts.*.is_primary' => ['nullable', 'boolean'],
             'zones' => ['nullable', 'array'],
+            'rotation_assignment' => ['nullable', 'array'],
+            'rotation_assignment.action' => ['nullable', 'in:assign'],
+            'rotation_assignment.rotation_id' => ['required_with:rotation_assignment', 'integer', 'exists:att_rotations,id'],
+            'rotation_assignment.rotation_group_id' => ['required_if:rotation_assignment.action,assign', 'integer', 'exists:att_rotation_groups,id'],
+            'rotation_assignment.start_date' => ['required_if:rotation_assignment.action,assign', 'date'],
+            'rotation_assignment.end_date' => ['nullable', 'date'],
         ];
     }
 

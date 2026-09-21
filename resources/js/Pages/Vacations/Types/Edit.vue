@@ -13,6 +13,7 @@ import { reactive, ref } from 'vue';
 import { router } from '@inertiajs/vue3';
 import { PageHeader, Button, FormInput, FormTextarea, FormSelect, FormSection, FormActions, ErrorSummary } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
+import { CHART_INFO as DEFAULT_TYPE_COLOR } from '@/utils/chartPalette';
 
 const { t } = useTranslations();
 
@@ -31,7 +32,7 @@ const form = reactive({
     advance_notice_days: props.type.advance_notice_days ?? 7,
     is_paid: !!props.type.is_paid,
     requires_approval: !!props.type.requires_approval,
-    color: props.type.color || '#2563eb',
+    color: props.type.color || DEFAULT_TYPE_COLOR,
     description: props.type.description || '',
     is_active: !!props.type.is_active,
 });

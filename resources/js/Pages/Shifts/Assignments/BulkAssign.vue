@@ -186,13 +186,13 @@ usePageTitle(t('shifts.bulk_assign'));
                         />
                         <div
                             v-if="searching"
-                            class="absolute top-full left-0 right-0 mt-1 p-2 bg-mistral-canvas border border-mistral-hairline rounded-md text-[13px] text-mistral-muted z-10"
+                            class="absolute top-full inset-x-0 mt-1 p-2 bg-mistral-canvas border border-mistral-hairline rounded-md text-[13px] text-mistral-muted z-10"
                         >
                             <i class="fas fa-spinner fa-spin"></i> {{ t('common.search') }}...
                         </div>
                         <div
                             v-else-if="employees.length > 0"
-                            class="absolute top-full left-0 right-0 mt-1 bg-mistral-canvas border border-mistral-hairline rounded-md shadow-level-2 max-h-[240px] overflow-y-auto z-10"
+                            class="absolute top-full inset-x-0 mt-1 bg-mistral-canvas border border-mistral-hairline rounded-md shadow-level-2 max-h-[240px] overflow-y-auto z-10"
                         >
                             <button
                                 v-for="emp in employees"
@@ -210,7 +210,7 @@ usePageTitle(t('shifts.bulk_assign'));
                         </div>
                         <div
                             v-else-if="employeeSearch.length >= 2 && !searching"
-                            class="absolute top-full left-0 right-0 mt-1 p-2 bg-mistral-canvas border border-mistral-hairline rounded-md text-[13px] text-mistral-muted z-10"
+                            class="absolute top-full inset-x-0 mt-1 p-2 bg-mistral-canvas border border-mistral-hairline rounded-md text-[13px] text-mistral-muted z-10"
                         >
                             {{ t('shifts.no_employees_found') }}
                         </div>

@@ -80,7 +80,7 @@ usePageTitle(t('vacations.my_vacations'));
                         <p class="text-[20px] font-bold text-mistral-ink">{{ balance.remaining_days || 0 }}</p>
                         <p class="text-[11px] text-mistral-stone">{{ t('vacations.remaining') }}</p>
                     </div>
-                    <div class="text-left">
+                    <div class="text-start">
                         <p class="text-[14px] text-mistral-steel">{{ balance.total_days || 0 }}</p>
                         <p class="text-[11px] text-mistral-stone">{{ t('vacations.total') }}</p>
                     </div>

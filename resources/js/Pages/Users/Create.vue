@@ -9,12 +9,48 @@ export default {
 <script setup>
 import { usePageTitle } from '@/composables/usePageTitle';
 
-import { computed, watch } from 'vue';
-import { useForm } from '@inertiajs/vue3';
-import { PageHeader, Button, Card, FormInput, FormTextarea, FormSelect, FormCheckbox, FormFileUpload, FormSection, FormActions, ErrorSummary } from '@/Components/ui';
+import { computed, nextTick, ref, watch } from 'vue';
+import { useForm, usePage } from '@inertiajs/vue3';
+import { PageHeader, Button, Card, FormInput, FormTextarea, FormSelect, FormCheckbox, FormFileUpload, FormSection, FormActions, ErrorSummary, Alert, Tabs } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
+
+// Speedy entry: remember the operator's last picks (company/branch/...)
+// so the next create opens pre-filled. Gender falls back to male.
+const QUICK_DEFAULTS_KEY = 'hrm-user-quick-defaults';
+
+function loadQuickDefaults() {
+    try {
+        const raw = localStorage.getItem(QUICK_DEFAULTS_KEY);
+        return raw ? JSON.parse(raw) : {};
+    } catch {
+        return {};
+    }
+}
+
+function saveQuickDefaults() {
+    try {
+        localStorage.setItem(QUICK_DEFAULTS_KEY, JSON.stringify({
+            gender: form.gender,
+            company_id: form.company_id,
+            branch_id: form.branch_id,
+            department_id: form.department_id,
+            position_id: form.position_id,
+            rotation_id: form.rotation_assignment.rotation_id,
+            rotation_group_id: form.rotation_assignment.rotation_group_id,
+        }));
+    } catch {
+        // Storage unavailable (private mode) — creation still works.
+    }
+}
+
+// Form mode: quick (essential fields) vs full. Same toggle exists in Edit.vue.
+const mode = ref('quick');
+const modeTabs = computed(() => [
+    { value: 'quick', label: t('users.form_mode_quick') },
+    { value: 'full', label: t('users.form_mode_full') },
+]);
 
 const props = defineProps({
     companies: { type: Array, default: () => [] },
@@ -28,6 +64,7 @@ const props = defineProps({
     roles: { type: Array, default: () => [] },
     permissions: { type: Array, default: () => [] },
     attendanceGroups: { type: Array, default: () => [] },
+    rotations: { type: Array, default: () => [] },
 });
 
 const form = useForm({
@@ -82,6 +119,13 @@ const form = useForm({
     attendance_group_id: '',
     roles: [],
     permissions: [],
+    rotation_assignment: {
+        action: '',
+        rotation_id: '',
+        rotation_group_id: '',
+        start_date: new Date().toISOString().slice(0, 10),
+        end_date: '',
+    },
 });
 
 const statusOptions = [
@@ -115,6 +159,11 @@ const employmentOptions = [
     { value: 'intern', label: t('users.employment_intern') },
 ];
 
+const positionOptions = computed(() => [
+    { value: '', label: t('users.no_position') },
+    ...props.positions.map((p) => ({ value: p.id, label: p.position_name })),
+]);
+
 const attendanceExemptionOptions = [
     { value: '', label: t('users.select_attendance_exemption') },
     { value: 'resignation', label: t('users.attendance_exemption_resignation') },
@@ -133,6 +182,29 @@ const filteredDepartments = computed(() => {
     return props.departments.filter((department) => String(department.branch_id) === String(form.branch_id));
 });
 
+const availableRotationGroups = computed(() => {
+    const selectedId = String(form.rotation_assignment.rotation_id);
+    if (!selectedId) return [];
+    const rotation = (props.rotations || []).find((r) => r && String(r.id) === selectedId);
+    return Array.isArray(rotation?.groups) ? rotation.groups : [];
+});
+
+const rotationOptions = computed(() => [
+    { value: '', label: t('users.select_rotation') },
+    ...(props.rotations || []).map((r) => ({
+        value: String(r.id),
+        label: r.name || 'Unnamed Rotation',
+    })),
+]);
+
+const rotationGroupOptions = computed(() => [
+    { value: '', label: t('users.select_rotation_group') },
+    ...(availableRotationGroups.value || []).map((g) => ({
+        value: String(g.id),
+        label: g.name || 'Unnamed Group',
+    })),
+]);
+
 watch(
     () => form.company_id,
     () => { form.branch_id = ''; form.department_id = ''; },
@@ -144,6 +216,61 @@ watch(
 );
 
 watch(
+    () => form.rotation_assignment.rotation_id,
+    () => { form.rotation_assignment.rotation_group_id = ''; },
+);
+
+// Apply instant defaults. Priority: remembered last picks → my own org
+// scope → empty. In Vue the selection IS the v-model value (equivalent of
+// the native `selected` attribute), so prefilling here = preselected UI.
+// Cascading selects need a tick between levels because the company/branch
+// watchers reset their children on change.
+{
+    const saved = loadQuickDefaults();
+    const page = usePage();
+    const me = page.props.auth?.user || {};
+    const idIn = (list, id) => (list || []).some((o) => String(o.id ?? o.value) === String(id));
+    // Remembered → mine → the only option (when a list has a single choice
+    // it is deterministic, like the static gender default) → empty.
+    const pick = (savedId, myId, list) => {
+        if (savedId && idIn(list, savedId)) return savedId;
+        if (myId && idIn(list, myId)) return myId;
+        if ((list || []).length === 1) return list[0].id ?? list[0].value;
+        return '';
+    };
+
+    form.gender = saved.gender || 'male';
+
+    const defaultCompany = pick(saved.company_id, me.company_id, props.companies);
+    if (defaultCompany) {
+        form.company_id = defaultCompany;
+        nextTick(() => {
+            const defaultBranch = pick(saved.branch_id, me.branch_id, filteredBranches.value);
+            if (defaultBranch) {
+                form.branch_id = defaultBranch;
+                nextTick(() => {
+                    const defaultDept = pick(saved.department_id, me.department_id, filteredDepartments.value);
+                    if (defaultDept) {
+                        form.department_id = defaultDept;
+                    }
+                });
+            }
+        });
+    }
+    if (saved.position_id && idIn(props.positions, saved.position_id)) {
+        form.position_id = saved.position_id;
+    }
+    if (saved.rotation_id && idIn(props.rotations, saved.rotation_id)) {
+        form.rotation_assignment.rotation_id = String(saved.rotation_id);
+        nextTick(() => {
+            if (saved.rotation_group_id && idIn(availableRotationGroups.value, saved.rotation_group_id)) {
+                form.rotation_assignment.rotation_group_id = String(saved.rotation_group_id);
+            }
+        });
+    }
+}
+
+watch(
     () => form.employee_code,
     (employeeCode) => {
         const normalizedCode = String(employeeCode ?? '').trim().toLowerCase();
@@ -152,12 +279,21 @@ watch(
 );
 
 function submit() {
+    saveQuickDefaults();
     form.transform((data) => {
         const payload = { ...data };
         if (payload.device_privilege === '' || payload.device_privilege === null) {
             payload.device_privilege = null;
         } else {
             payload.device_privilege = Number(payload.device_privilege);
+        }
+        // New users can only be assigned (no transfer/unassign yet): infer the
+        // action from the picked rotation, otherwise drop the block entirely.
+        const ra = payload.rotation_assignment || {};
+        if (ra.rotation_id && ra.rotation_group_id && ra.start_date) {
+            ra.action = 'assign';
+        } else {
+            delete payload.rotation_assignment;
         }
         return payload;
     }).post(route('users.store'), {
@@ -182,7 +318,136 @@ usePageTitle(t('users.add_new'));
 
         <ErrorSummary :errors="form.errors" />
 
+        <Alert type="info" :message="t('users.required_note')" class="mb-4" />
+
+        <Tabs :tabs="modeTabs" v-model="mode" variant="pill" class="mb-4" />
+
         <form class="space-y-6" @submit.prevent="submit">
+            <!-- Quick create: essential fields only -->
+            <FormSection
+                v-if="mode === 'quick'"
+                :title="t('users.quick_section_title')"
+                :description="t('users.quick_section_description')"
+                icon="fas fa-bolt"
+                :collapsible="false"
+                :default-open="true"
+                :count="14"
+            >
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <FormInput
+                        v-model="form.employee_code"
+                        :label="t('users.employee_code')"
+                        name="employee_code"
+                        required
+                        autofocus
+                        autocomplete="off"
+                        :error="form.errors.employee_code"
+                    />
+                    <FormInput
+                        v-model="form.name"
+                        :label="t('users.name')"
+                        name="name"
+                        required
+                        autocomplete="off"
+                        :error="form.errors.name"
+                    />
+                    <FormInput
+                        v-model="form.email"
+                        :label="t('users.email')"
+                        name="email"
+                        type="email"
+                        readonly
+                        :hint="t('users.email_generated_from_employee_code')"
+                        :error="form.errors.email"
+                    />
+                    <FormInput
+                        v-model="form.password"
+                        :label="t('users.password')"
+                        name="password"
+                        type="password"
+                        autocomplete="new-password"
+                        :hint="t('users.password_auto_hint')"
+                        :error="form.errors.password"
+                    />
+                    <FormInput
+                        v-model="form.phone"
+                        :label="t('users.phone')"
+                        name="phone"
+                        :error="form.errors.phone"
+                    />
+                    <FormSelect
+                        v-model="form.gender"
+                        :label="t('users.gender')"
+                        name="gender"
+                        :options="genderOptions"
+                        :placeholder="t('users.select_gender')"
+                        :error="form.errors.gender"
+                    />
+                    <FormSelect
+                        v-model="form.company_id"
+                        :label="t('users.company')"
+                        name="company_id"
+                        :options="companies.map((c) => ({ value: c.id, label: c.company_name }))"
+                        :placeholder="t('users.select_company')"
+                        :error="form.errors.company_id"
+                    />
+                    <FormSelect
+                        v-model="form.branch_id"
+                        :label="t('users.branch')"
+                        name="branch_id"
+                        :options="filteredBranches.map((b) => ({ value: b.id, label: b.branch_name }))"
+                        :placeholder="t('users.select_branch')"
+                        :error="form.errors.branch_id"
+                    />
+                    <FormSelect
+                        v-model="form.department_id"
+                        :label="t('users.department')"
+                        name="department_id"
+                        :options="filteredDepartments.map((d) => ({ value: d.id, label: d.department_name }))"
+                        :placeholder="t('users.select_department')"
+                        :error="form.errors.department_id"
+                    />
+                    <FormSelect
+                        v-model="form.position_id"
+                        :label="t('users.position')"
+                        name="position_id"
+                        :options="positionOptions"
+                        :error="form.errors.position_id"
+                    />
+                    <FormSelect
+                        v-model="form.rotation_assignment.rotation_id"
+                        :label="t('users.rotation')"
+                        name="rotation_id"
+                        :options="rotationOptions"
+                        :placeholder="t('users.select_rotation')"
+                        :error="form.errors['rotation_assignment.rotation_id']"
+                    />
+                    <FormSelect
+                        v-model="form.rotation_assignment.rotation_group_id"
+                        :label="t('users.rotation_group')"
+                        name="rotation_group_id"
+                        :options="rotationGroupOptions"
+                        :placeholder="t('users.select_rotation_group')"
+                        :error="form.errors['rotation_assignment.rotation_group_id']"
+                    />
+                    <FormInput
+                        v-model="form.rotation_assignment.start_date"
+                        :label="t('users.rotation_start_date')"
+                        name="rotation_start_date"
+                        type="date"
+                        :error="form.errors['rotation_assignment.start_date']"
+                    />
+                    <FormInput
+                        v-model="form.hire_date"
+                        :label="t('users.hire_date')"
+                        name="hire_date"
+                        type="date"
+                        :error="form.errors.hire_date"
+                    />
+                </div>
+            </FormSection>
+
+            <div v-if="mode === 'full'" class="space-y-6">
             <!-- Personal Information -->
             <FormSection
                 :title="t('users.personal_info')"
@@ -196,6 +461,8 @@ usePageTitle(t('users.add_new'));
                         v-model="form.employee_code"
                         :label="t('users.employee_code')"
                         name="employee_code"
+                        required
+                        autocomplete="off"
                         :error="form.errors.employee_code"
                     />
                     <FormInput
@@ -217,11 +484,22 @@ usePageTitle(t('users.add_new'));
                         :error="form.errors.email"
                     />
                     <FormInput
+                        v-model="form.email"
+                        :label="t('users.email')"
+                        name="email"
+                        type="email"
+                        required
+                        readonly
+                        :hint="t('users.email_generated_from_employee_code')"
+                        :error="form.errors.email"
+                    />
+                    <FormInput
                         v-model="form.password"
                         :label="t('users.password')"
                         name="password"
                         type="password"
-                        required
+                        autocomplete="new-password"
+                        :hint="t('users.password_auto_hint')"
                         :error="form.errors.password"
                     />
                     <FormInput
@@ -309,7 +587,7 @@ usePageTitle(t('users.add_new'));
                 :title="t('users.employment_info')"
                 icon="fas fa-briefcase"
                 :collapsible="true"
-                :default-open="true"
+                :default-open="false"
                 :count="6"
             >
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -391,7 +669,7 @@ usePageTitle(t('users.add_new'));
                 :title="t('users.organizational_info')"
                 icon="fas fa-sitemap"
                 :collapsible="true"
-                :default-open="true"
+                :default-open="false"
                 :count="9"
             >
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -423,8 +701,7 @@ usePageTitle(t('users.add_new'));
                         v-model="form.position_id"
                         :label="t('users.position')"
                         name="position_id"
-                        :options="positions.map((p) => ({ value: p.id, label: p.position_name }))"
-                        :placeholder="t('users.select_position')"
+                        :options="positionOptions"
                         :error="form.errors.position_id"
                     />
                     <FormSelect
@@ -475,7 +752,7 @@ usePageTitle(t('users.add_new'));
                 :title="t('users.contact_info')"
                 icon="fas fa-location-dot"
                 :collapsible="true"
-                :default-open="true"
+                :default-open="false"
                 :count="5"
             >
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -517,7 +794,7 @@ usePageTitle(t('users.add_new'));
                 :title="t('users.emergency_info')"
                 icon="fas fa-phone-volume"
                 :collapsible="true"
-                :default-open="true"
+                :default-open="false"
                 :count="3"
             >
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -547,7 +824,7 @@ usePageTitle(t('users.add_new'));
                 :title="t('users.banking_info')"
                 icon="fas fa-landmark"
                 :collapsible="true"
-                :default-open="true"
+                :default-open="false"
                 :count="3"
             >
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -593,6 +870,8 @@ usePageTitle(t('users.add_new'));
                     </div>
                 </div>
             </FormSection>
+
+            </div><!-- /full form sections -->
 
             <FormActions
                 :save-label="t('common.save')"

@@ -118,10 +118,11 @@ class UsersController extends Controller
      */
     public function store(StoreUserRequest $request): RedirectResponse
     {
-        $this->userService->createUser($request->validated());
+        $user = $this->userService->createUser($request->validated());
 
         return redirect()->route('users.index')
-            ->with('success', __('users.created_successfully'));
+            ->with('success', __('users.created_successfully'))
+            ->with('generated_password', $user->getAttribute('generated_password'));
     }
 
     /**
@@ -516,6 +517,7 @@ class UsersController extends Controller
             'attendanceGroups' => fn () => $this->attendanceGroupService->getAllGroups([], 100)
                 ->getCollection()
                 ->map(fn ($g) => ['id' => $g->id, 'name' => $g->name, 'code' => $g->code]),
+            'rotations' => fn () => $this->rotationService->getAllList(),
         ];
     }
 

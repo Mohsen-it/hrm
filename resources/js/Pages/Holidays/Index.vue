@@ -74,6 +74,12 @@ function performDelete() {
 
 const flashSuccess = computed(() => page.props.flash?.success);
 
+// Learnability: empty-state CTA only when truly empty, not when filters hide rows.
+const hasActiveFilters = computed(() => {
+    const f = props.filters || {};
+    return Object.entries(f).some(([k, v]) => k !== 'page' && v !== '' && v !== null && v !== undefined);
+});
+
 
 usePageTitle(t('holidays.title'));
 </script>
@@ -123,10 +129,17 @@ usePageTitle(t('holidays.title'));
             :route-name="'holidays.index'"
             :only="['holidays', 'filters']"
             storage-key="holidays"
+            :empty-title="t('holidays.no_holidays_title')"
+            :empty-description="t('holidays.no_holidays_description')"
             @search="onSearch"
             @filter-change="onFilterChange"
             @export="onExport"
         >
+            <template #empty-actions>
+                <Button v-if="!hasActiveFilters" variant="primary" icon="fas fa-plus" :href="route('holidays.create')">
+                    {{ t('holidays.add_holiday') }}
+                </Button>
+            </template>
             <template #cell-is_recurring="{ row }">
                 <Badge v-if="row.is_recurring" :text="t('holidays.yes_recurring')" variant="info" />
                 <span v-else class="text-mistral-stone">—</span>

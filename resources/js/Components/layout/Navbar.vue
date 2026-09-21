@@ -323,15 +323,16 @@ onUnmounted(() => {
 
       <!-- Right section -->
       <div class="navbar__right">
-        <!-- Search trigger (Ctrl+K) -->
+        <!-- Search trigger (Ctrl+K) — label visible from sm up so new operators discover global search -->
         <button
           type="button"
           class="navbar__search-trigger"
           @click.stop="emit('open-command-palette')"
           :title="t('common.search') + ' (Ctrl+K)'"
+          :aria-label="t('common.search') + ' (Ctrl+K)'"
         >
           <i class="fas fa-search text-[13px] text-mistral-steel" aria-hidden="true"></i>
-          <span class="navbar__search-label hidden lg:inline">{{ t('common.search') }}</span>
+          <span class="navbar__search-label hidden sm:inline">{{ t('common.search') }}</span>
           <kbd class="navbar__kbd hidden lg:inline">Ctrl+K</kbd>
         </button>
 

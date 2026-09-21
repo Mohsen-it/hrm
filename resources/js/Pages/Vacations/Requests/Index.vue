@@ -90,6 +90,12 @@ function deleteRequest() {
 
 const flashSuccess = computed(() => page.props.flash?.success);
 
+// Learnability: empty-state CTA only when truly empty, not when filters hide rows.
+const hasActiveFilters = computed(() => {
+    const f = props.filters || {};
+    return Object.entries(f).some(([k, v]) => k !== 'page' && v !== '' && v !== null && v !== undefined);
+});
+
 
 usePageTitle(t('vacations.vacation_requests'));
 </script>
@@ -118,10 +124,17 @@ usePageTitle(t('vacations.vacation_requests'));
             :route-name="'vacations.requests.index'"
             :only="['requests', 'filters']"
             storage-key="vacation-requests"
+            :empty-title="t('vacations.no_requests_title')"
+            :empty-description="t('vacations.no_requests_description')"
             @search="onSearch"
             @filter-change="onFilterChange"
             @export="onExport"
         >
+            <template #empty-actions>
+                <Button v-if="!hasActiveFilters" variant="primary" icon="fas fa-plus" :href="route('vacations.requests.create')">
+                    {{ t('vacations.new_request') }}
+                </Button>
+            </template>
             <template #cell-status="{ row }">
                 <Badge :text="t('vacations.' + row.status)" :variant="statusVariant(row.status)" />
             </template>

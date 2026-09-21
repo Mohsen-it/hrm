@@ -269,6 +269,11 @@ return [
         'late_days' => 'أيام التأخير',
         'avg_work_minutes' => 'متوسط دقائق العمل',
         'overtime_minutes' => 'دقائق العمل الإضافي',
+        'filter_kpi_day' => 'يوم المؤشرات',
+        'filter_kpi_day_hint' => 'يحدد بطاقات المؤشرات أعلاه فقط',
+        'filter_range' => 'النطاق الزمني',
+        'filter_range_hint' => 'يحدد الاتجاه والمقارنات وملف التصدير',
+        'exporting' => 'جاري التصدير...',
     ],
 
     'monthly_page' => [
@@ -442,6 +447,7 @@ return [
         'late_minutes' => 'دقائق التأخير',
         'missing_checkout_duration' => 'مدة بدون انصراف',
         'expected_check_out' => 'الانصراف المتوقع',
+        'recalc_missing_only' => 'إعادة حساب المفقود فقط',
     ],
 
     // Daily Report

@@ -11,7 +11,7 @@ import { usePageTitle } from '@/composables/usePageTitle';
 
 import { reactive, ref, computed, watch } from 'vue';
 import { router, Head } from '@inertiajs/vue3';
-import { PageHeader, Button, Card, FormInput, FormSelect, FormSwitch, FormTextarea, FormSection, FormActions, ErrorSummary } from '@/Components/ui';
+import { PageHeader, Button, Card, FormInput, FormSelect, FormSwitch, FormTextarea, FormSection, FormActions, ErrorSummary, ContextHelp } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
@@ -140,19 +140,18 @@ usePageTitle(t('shifts.edit_rotation'));
             <ErrorSummary :errors="errors" />
 
             <div v-if="generalError" class="p-3 bg-mistral-danger/10 border border-mistral-danger/20 rounded-md text-[13px] text-mistral-danger">
-                <i class="fas fa-exclamation-circle mr-1"></i>
+                <i class="fas fa-exclamation-circle me-1"></i>
                 {{ generalError }}
             </div>
 
             <FormSection :title="t('shifts.basic_info')" icon="fas fa-info-circle" :collapsible="true" :default-open="true">
-                <div class="p-4 mb-4 bg-mistral-cream-soft border border-mistral-primary/20 rounded-lg text-sm text-mistral-ink leading-relaxed">
-                    <p class="font-semibold mb-2">ما هذا القسم؟</p>
+                <ContextHelp>
                     <ul class="list-disc list-inside space-y-1">
-                        <li><strong>اسم الدورية:</strong> اسم يُميّز هذه الدورية عن غيرها (مثال: خطوط السوريا، دورية 4-12).</li>
-                        <li><strong>مرجع الدورة (تاريخ البداية):</strong> التاريخ الذي تبدأ منه الدورة. يُستخدم كنقطة انطلاق لحساب أيام العمل والراحة. مثال: إذا كان التاريخ 09/09/2026 والنمط 4 عمل / 12 راحة، فأول يوم عمل هو 09/09.</li>
-                        <li><strong>الوصف:</strong> وصف اختياري لتفاصيل الدورية (يظهر في التقارير).</li>
+                        <li><strong>{{ t('shifts.help_rot_basic_name_t') }}</strong> {{ t('shifts.help_rot_basic_name_d') }}</li>
+                        <li><strong>{{ t('shifts.help_rot_basic_anchor_t') }}</strong> {{ t('shifts.help_rot_basic_anchor_d') }}</li>
+                        <li><strong>{{ t('shifts.help_rot_basic_desc_t') }}</strong> {{ t('shifts.help_rot_basic_desc_d') }}</li>
                     </ul>
-                </div>
+                </ContextHelp>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormInput
                         v-model="form.name"
@@ -183,17 +182,16 @@ usePageTitle(t('shifts.edit_rotation'));
             </FormSection>
 
             <FormSection :title="t('shifts.pattern_builder')" icon="fas fa-th" :collapsible="true" :default-open="true">
-                <div class="p-4 mb-4 bg-mistral-cream-soft border border-mistral-primary/20 rounded-lg text-sm text-mistral-ink leading-relaxed">
-                    <p class="font-semibold mb-2">ما هذا القسم؟</p>
-                    <p class="mb-2">هنا تُنشئ نمط العمل والراحة للدورية. كل رقم يمثل يوماً واحداً في الدورة.</p>
+                <ContextHelp>
+                    <p class="mb-2">{{ t('shifts.help_rot_pattern_intro') }}</p>
                     <ul class="list-disc list-inside space-y-1">
-                        <li><strong>الأرقام الخضراء (1):</strong> أيام عمل (الموظف يدوام فيها).</li>
-                        <li><strong>الأرقام الرمادية (0):</strong> أيام راحة (الموظف لا يدوام فيها).</li>
-                        <li><strong>مدة الدورة:</strong> مجموع جميع الأيام في الدورة (عمل + راحة).</li>
-                        <li><strong>عدد المجموعات:</strong> عدد فرق العمل التي تتناوب على نفس النمط. مثال: 4 مجموعات تعني كل مجموعة تبدأ الدورة بأسبوع إزاحة عن التي قبلها.</li>
+                        <li><strong>{{ t('shifts.help_rot_pattern_work_t') }}</strong> {{ t('shifts.help_rot_pattern_work_d') }}</li>
+                        <li><strong>{{ t('shifts.help_rot_pattern_rest_t') }}</strong> {{ t('shifts.help_rot_pattern_rest_d') }}</li>
+                        <li><strong>{{ t('shifts.help_rot_pattern_duration_t') }}</strong> {{ t('shifts.help_rot_pattern_duration_d') }}</li>
+                        <li><strong>{{ t('shifts.help_rot_pattern_groups_t') }}</strong> {{ t('shifts.help_rot_pattern_groups_d') }}</li>
                     </ul>
-                    <p class="mt-2 text-mistral-slate text-[13px]">اضغط على أي يوم للتبديل بين العمل والراحة. استخدم أزرار + و - لإضافة أو إزالة أيام.</p>
-                </div>
+                    <p class="mt-2 text-mistral-slate text-[13px]">{{ t('shifts.help_rot_pattern_tip') }}</p>
+                </ContextHelp>
                 <div class="mb-4">
                     <label class="block text-[13px] text-mistral-slate mb-2">{{ t('shifts.pattern_visual') }}</label>
                     <div class="flex flex-wrap gap-1 p-3 bg-mistral-surface rounded-md">
@@ -256,16 +254,15 @@ usePageTitle(t('shifts.edit_rotation'));
             </FormSection>
 
             <FormSection :title="t('shifts.options')" icon="fas fa-cog" :collapsible="true" :default-open="true">
-                <div class="p-4 mb-4 bg-mistral-cream-soft border border-mistral-primary/20 rounded-lg text-sm text-mistral-ink leading-relaxed">
-                    <p class="font-semibold mb-2">ما هذا القسم؟</p>
+                <ContextHelp>
                     <ul class="list-disc list-inside space-y-1">
-                        <li><strong>جدول الوقت:</strong> الجدول الذي يحدد أوقات الحضور والانصراف والاستراحات. يجب اختياره لتفعيل بصمات الحضور والانصراف.</li>
-                        <li><strong>تفعيل العمل الإضافي:</strong> عند التفعيل، يمكن للموظفين تسجيل ساعات عمل إضافية خارج الدوام الرسمي مع حسابها في الرواتب.</li>
-                        <li><strong>العمل في العطل الرسمية:</strong> عند التفعيل، يُتوقع من الموظفين العمل في الأيام الرسمية العطلة (كالعيد والأعياد).</li>
-                        <li><strong>دقائق السماح:</strong> عدد الدقائق المسموح بالتأخير فيها بعد وقت الحضور دون احتسابها كمخالفة. مثال: إذا كانت 30，则任何在 8:00 到 8:30 之间 的打卡都会被视为迟到.</li>
-                        <li><strong>اللون:</strong> لون تمييز الدورية في الجداول والتقارير.</li>
+                        <li><strong>{{ t('shifts.help_rot_options_schedule_t') }}</strong> {{ t('shifts.help_rot_options_schedule_d') }}</li>
+                        <li><strong>{{ t('shifts.help_rot_options_overtime_t') }}</strong> {{ t('shifts.help_rot_options_overtime_d') }}</li>
+                        <li><strong>{{ t('shifts.help_rot_options_holidays_t') }}</strong> {{ t('shifts.help_rot_options_holidays_d') }}</li>
+                        <li><strong>{{ t('shifts.help_rot_options_grace_t') }}</strong> {{ t('shifts.help_rot_options_grace_d') }}</li>
+                        <li><strong>{{ t('shifts.help_rot_options_color_t') }}</strong> {{ t('shifts.help_rot_options_color_d') }}</li>
                     </ul>
-                </div>
+                </ContextHelp>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <FormSelect
                         v-model="form.time_schedule_id"

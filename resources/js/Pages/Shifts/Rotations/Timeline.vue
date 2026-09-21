@@ -11,6 +11,7 @@ import { ref, computed, watch } from 'vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { PageHeader, Button, Card, Badge, StatCard, SearchInput, FormSelect, FormInput, FormModal, ErrorSummary, Alert, EmptyState } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
+import { CHART_STONE } from '@/utils/chartPalette';
 
 const { t } = useTranslations();
 
@@ -415,7 +416,7 @@ const submitQuickTransfer = async () => {
                                 <!-- Month Header Row -->
                                 <tr>
                                     <th
-                                        class="sticky right-0 z-30 bg-mistral-surface border-b border-l border-mistral-hairline px-4 py-2 text-right text-sm font-bold min-w-[240px]"
+                                        class="sticky start-0 z-30 bg-mistral-surface border-b border-l border-mistral-hairline px-4 py-2 text-start text-sm font-bold min-w-[240px]"
                                         colspan="1"
                                         rowspan="2"
                                     >
@@ -425,7 +426,7 @@ const submitQuickTransfer = async () => {
                                         </div>
                                     </th>
                                     <th
-                                        class="sticky right-[240px] z-30 bg-mistral-surface border-b border-l border-mistral-hairline px-3 py-2 text-center text-sm font-bold min-w-[70px]"
+                                        class="sticky start-[240px] z-30 bg-mistral-surface border-b border-l border-mistral-hairline px-3 py-2 text-center text-sm font-bold min-w-[70px]"
                                         rowspan="2"
                                     >
                                         <div class="flex items-center justify-center gap-1">
@@ -480,7 +481,7 @@ const submitQuickTransfer = async () => {
                                     :class="rowIdx % 2 === 0 ? 'bg-white' : 'bg-mistral-surface/30'"
                                 >
                                     <!-- Employee Name -->
-                                    <td class="sticky right-0 z-10 border-b border-l border-mistral-hairline px-4 py-2.5 min-w-[240px]"
+                                    <td class="sticky start-0 z-10 border-b border-l border-mistral-hairline px-4 py-2.5 min-w-[240px]"
                                         :class="rowIdx % 2 === 0 ? 'bg-white' : 'bg-mistral-surface/30'"
                                     >
                                         <div class="flex items-center gap-3">
@@ -506,12 +507,12 @@ const submitQuickTransfer = async () => {
                                     </td>
 
                                     <!-- Group Badge -->
-                                    <td class="sticky right-[240px] z-10 border-b border-l border-mistral-hairline px-3 py-2.5 text-center min-w-[70px]"
+                                    <td class="sticky start-[240px] z-10 border-b border-l border-mistral-hairline px-3 py-2.5 text-center min-w-[70px]"
                                         :class="rowIdx % 2 === 0 ? 'bg-white' : 'bg-mistral-surface/30'"
                                     >
                                         <span
                                             class="inline-flex items-center justify-center w-8 h-8 rounded-lg text-xs font-bold text-white shadow-sm"
-                                            :style="{ backgroundColor: groupColors[emp.group_index % groupColors.length]?.dot || '#6b7280' }"
+                                            :style="{ backgroundColor: groupColors[emp.group_index % groupColors.length]?.dot || CHART_STONE }"
                                         >
                                             {{ emp.group_name }}
                                         </span>

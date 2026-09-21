@@ -2,6 +2,7 @@
 
 return [
     'title' => 'Operational Control Center',
+    'subtitle' => 'Track attendance, rotations and quick actions from one place',
     'welcome' => 'Welcome to your operational dashboard',
     'today' => 'Today',
     'refresh' => 'Refresh',

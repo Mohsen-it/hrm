@@ -146,6 +146,12 @@ function performDelete() {
 const flashSuccess = computed(() => page.props.flash?.success);
 const flashError = computed(() => page.props.flash?.error);
 
+// Learnability: empty-state CTA only when truly empty, not when filters hide rows.
+const hasActiveFilters = computed(() => {
+    const f = props.filters || {};
+    return Object.entries(f).some(([k, v]) => k !== 'page' && v !== '' && v !== null && v !== undefined);
+});
+
 async function syncAllDevices() {
     syncingAll.value = true;
     syncResult.value = null;
@@ -223,6 +229,11 @@ usePageTitle(t('fingerprint_devices.title'));
             @filter-change="onFilterChange"
             @export="onExport"
         >
+            <template #empty-actions>
+                <Button v-if="!hasActiveFilters" variant="primary" icon="fas fa-plus" :href="route('fingerprint-devices.create')">
+                    {{ t('fingerprint_devices.add_device') }}
+                </Button>
+            </template>
             <template #cell-device_type="{ row }">
                 <span v-if="row.device_type">{{ row.device_type.name }}</span>
                 <span v-else class="text-mistral-stone">—</span>

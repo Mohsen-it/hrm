@@ -25,7 +25,9 @@ const form = reactive({
     user_id: '',
     shift_id: '',
     attendance_date: new Date().toISOString().slice(0, 10),
-    check_in_at: new Date().toISOString().slice(0, 19).replace('T', ' '),
+    // datetime-local requires a "T" separator (YYYY-MM-DDTHH:MM); a space
+    // leaves the field visually empty in the browser.
+    check_in_at: new Date().toISOString().slice(0, 16),
     check_out_at: '',
     session_type: 'normal',
     source: 'manual',

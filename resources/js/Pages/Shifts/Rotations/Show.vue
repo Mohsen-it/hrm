@@ -44,7 +44,10 @@ const shortDayNames = computed(() => [
     t('shifts.sat_short')
 ]);
 
-const groupColors = ['#22c55e', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#14b8a6'];
+import { CHART_CATEGORICAL } from '@/utils/chartPalette';
+
+// Group dots reuse the central categorical chart palette (mistral tokens).
+const groupColors = CHART_CATEGORICAL;
 
 // Punch windows sourced from the linked time schedule (minutes around in/out times).
 function windowEdge(anchor, margin, ahead) {
@@ -479,7 +482,7 @@ usePageTitle(t('shifts.rotation_details') + ': ' + props.rotation.name);
                 <table class="w-full text-center text-[13px]">
                     <thead>
                         <tr class="border-b border-mistral-hairline">
-                            <th v-for="(name, i) in shortDayNames" :key="i" class="px-3 py-2 text-mistral-slate">
+                            <th v-for="(name, i) in shortDayNames" :key="i" scope="col" class="px-3 py-2 text-mistral-slate">
                                 {{ name }}
                             </th>
                         </tr>

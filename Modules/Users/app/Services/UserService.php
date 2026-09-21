@@ -8,6 +8,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Modules\Attendance\Models\AttendanceEmployee;
 use Modules\Shifts\Services\RotationService;
@@ -162,6 +163,17 @@ class UserService
         $zones = $validated['zones'] ?? null;
         $password = $validated['password'] ?? null;
         $attendanceGroupId = $validated['attendance_group_id'] ?? null;
+        $rotationAssignment = $validated['rotation_assignment'] ?? null;
+
+        // Empty password = auto-generate a secure one. The plain value is
+        // attached to the returned model (runtime attribute, never persisted)
+        // so the controller can show it once to the operator.
+        $generatedPassword = null;
+        if (empty($password)) {
+            $generatedPassword = Str::random(12);
+            $validated['password'] = $generatedPassword;
+            $password = $generatedPassword;
+        }
 
         unset(
             $validated['roles'],
@@ -169,9 +181,10 @@ class UserService
             $validated['shifts'],
             $validated['zones'],
             $validated['attendance_group_id'],
+            $validated['rotation_assignment'],
         );
 
-        return DB::transaction(function () use ($validated, $roles, $permissions, $shifts, $zones, $password, $attendanceGroupId) {
+        return DB::transaction(function () use ($validated, $roles, $permissions, $shifts, $zones, $password, $attendanceGroupId, $rotationAssignment, $generatedPassword) {
             if (! empty($validated['name']) && (empty($validated['first_name']) || empty($validated['last_name']))) {
                 $parts = explode(' ', trim((string) $validated['name']), 2);
                 $validated['first_name'] ??= $parts[0] ?? null;
@@ -212,10 +225,20 @@ class UserService
                 ]);
             }
 
-            return $user->fresh([
+            if (is_array($rotationAssignment)) {
+                $this->handleRotationAssignment($user->id, $rotationAssignment);
+            }
+
+            $fresh = $user->fresh([
                 ...['company', 'branch', 'department', 'position', 'grade', 'shift', 'manager'],
                 'shifts', 'roles', 'permissions',
             ]);
+
+            if ($generatedPassword !== null) {
+                $fresh->setAttribute('generated_password', $generatedPassword);
+            }
+
+            return $fresh;
         });
     }
 

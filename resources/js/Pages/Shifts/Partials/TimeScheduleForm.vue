@@ -1,6 +1,6 @@
 <script setup>
 import { reactive, ref } from 'vue'
-import { FormInput, FormSwitch, Button, IconButton, FormSection, FormActions } from '@/Components/ui'
+import { FormInput, FormSwitch, Button, IconButton, FormSection, FormActions, ContextHelp } from '@/Components/ui'
 import { useTranslations } from '@/composables/useTranslations'
 
 const { t } = useTranslations()
@@ -65,15 +65,14 @@ function handleSubmit() {
 <template>
     <form @submit.prevent="handleSubmit" class="space-y-6">
         <FormSection :title="t('shifts.basic_info')">
-            <div class="p-4 mb-4 bg-mistral-info-bg border border-mistral-info rounded-lg text-sm text-mistral-info leading-relaxed">
-                <p class="font-semibold mb-1">معلومات أساسية</p>
+            <ContextHelp>
                 <ul class="list-disc list-inside space-y-1">
-                    <li><strong>اسم الجدول:</strong> اسم يُميّز هذا الجدول عن غيره (مثال: دورية إدارية، دورية مصانع).</li>
-                    <li><strong>وقت الحضور:</strong> الوقت الرسمي لبدء الدوام. أي بصمة بعد هذا الوقت + هامش التأخير تُحسب كتأخير.</li>
-                    <li><strong>وقت الانصراف:</strong> الوقت الرسمي لانتهاء الدوام. أي بصمة قبل هذا الوقت - هامش المغادرة تُحسب كانصراف مبكر.</li>
-                    <li><strong>دوام متواصل:</strong> فعّله إذا كان الدوام يمتد لأكثر من يوم (مثل 48 ساعة متواصلة ثم 48 ساعة راحة). عند التفعيل، يُحسب الانصراف صباح أول يوم راحة.</li>
+                    <li><strong>{{ t('shifts.help_ts_basic_name_t') }}</strong> {{ t('shifts.help_ts_basic_name_d') }}</li>
+                    <li><strong>{{ t('shifts.help_ts_basic_in_t') }}</strong> {{ t('shifts.help_ts_basic_in_d') }}</li>
+                    <li><strong>{{ t('shifts.help_ts_basic_out_t') }}</strong> {{ t('shifts.help_ts_basic_out_d') }}</li>
+                    <li><strong>{{ t('shifts.help_ts_basic_multiday_t') }}</strong> {{ t('shifts.help_ts_basic_multiday_d') }}</li>
                 </ul>
-            </div>
+            </ContextHelp>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FormInput
                     v-model="form.name"
@@ -112,18 +111,17 @@ function handleSubmit() {
         </FormSection>
 
         <FormSection :title="t('shifts.margins')">
-            <div class="p-4 mb-4 bg-mistral-warning-bg border border-mistral-warning rounded-lg text-sm text-mistral-warning leading-relaxed">
-                <p class="font-semibold mb-1">هوامش التأخير والانصراف المبكر</p>
-                <p class="mb-2">هذه الإعدادات تحدد السماحية الزمنية للموظف عند التأخير أو المغادرة المبكرة.</p>
+            <ContextHelp>
+                <p class="mb-2">{{ t('shifts.help_ts_margins_intro') }}</p>
                 <ul class="list-disc list-inside space-y-1">
-                    <li><strong>هامش التأخير:</strong>عدد الدقائق المسموح بالتأخير فيها بعد وقت الحضور دون احتسابها كمخالفة. مثال: إذا كان الحضور 8:00 والهامش 30. فأي بصمة بين 8:00 و 8:30 تُحسب كحضور عادي (ليست تأخيراً).</li>
-                    <li><strong>هامش المغادرة المبكرة:</strong>عدد الدقائق المسموح بالمغادرة فيها قبل وقت الانصراف دون احتسابها كمخالفة. مثال: إذا كان الانصراف 3:00 والهامش 30. فأي بصمة بين 2:30 و 3:00 تُحسب كخروج عادي (ليست مغادرة مبكرة).</li>
-                    <li><strong>بداية نافذة الدخول:</strong>كم دقيقة قبل وقت الحضور تبدأ نافذة قبول البصمة (البصمة قبلها لا تُسجل).</li>
-                    <li><strong>نهاية نافذة الدخول:</strong>كم دقيقة بعد وقت الحضور تنتهي نافذة قبول بصمة الدخول.</li>
-                    <li><strong>بداية نافذة الخروج:</strong>كم دقيقة بعد وقت الانصراف تبدأ نافذة قبول بصمة الخروج.</li>
-                    <li><strong>نهاية نافذة الخروج:</strong>كم دقيقة بعد الانصراف تنتهي نافذة قبول بصمة الخروج (مهم للدوام المتواصل).</li>
+                    <li><strong>{{ t('shifts.help_ts_margins_late_t') }}</strong> {{ t('shifts.help_ts_margins_late_d') }}</li>
+                    <li><strong>{{ t('shifts.help_ts_margins_early_t') }}</strong> {{ t('shifts.help_ts_margins_early_d') }}</li>
+                    <li><strong>{{ t('shifts.help_ts_margins_win_in_start_t') }}</strong> {{ t('shifts.help_ts_margins_win_in_start_d') }}</li>
+                    <li><strong>{{ t('shifts.help_ts_margins_win_in_end_t') }}</strong> {{ t('shifts.help_ts_margins_win_in_end_d') }}</li>
+                    <li><strong>{{ t('shifts.help_ts_margins_win_out_start_t') }}</strong> {{ t('shifts.help_ts_margins_win_out_start_d') }}</li>
+                    <li><strong>{{ t('shifts.help_ts_margins_win_out_end_t') }}</strong> {{ t('shifts.help_ts_margins_win_out_end_d') }}</li>
                 </ul>
-            </div>
+            </ContextHelp>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FormInput
                     v-model="form.late_margin"
@@ -194,10 +192,9 @@ function handleSubmit() {
                 </Button>
             </template>
 
-            <div class="p-4 mb-4 bg-mistral-success-bg border border-mistral-success rounded-lg text-sm text-mistral-success leading-relaxed">
-                <p class="font-semibold mb-1">الاستراحات</p>
-                <p>حدد أوقات الاستراحات خلال الدوام. الاستراحة تُخصَم من ساعات العمل الرسمية ولا تُحسب كوقت عمل. يمكنك إضافة عدة استراحات أو ترك هذا القسم فارغاً إذا لم تكن هناك استراحات رسمية.</p>
-            </div>
+            <ContextHelp :collapsible="false">
+                <p>{{ t('shifts.help_ts_breaks') }}</p>
+            </ContextHelp>
 
             <div
                 v-for="(brk, index) in breaks"

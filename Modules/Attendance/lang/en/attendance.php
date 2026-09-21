@@ -269,6 +269,11 @@ return [
         'late_days' => 'Late Days',
         'avg_work_minutes' => 'Avg Work Minutes',
         'overtime_minutes' => 'Overtime Minutes',
+        'filter_kpi_day' => 'KPI day',
+        'filter_kpi_day_hint' => 'Drives the KPI cards above only',
+        'filter_range' => 'Date range',
+        'filter_range_hint' => 'Drives the trend, comparisons and the export file',
+        'exporting' => 'Exporting...',
     ],
 
     'monthly_page' => [
@@ -442,6 +447,7 @@ return [
         'late_minutes' => 'Late Minutes',
         'missing_checkout_duration' => 'Duration Without Checkout',
         'expected_check_out' => 'Expected Check-Out',
+        'recalc_missing_only' => 'Recalculate missing only',
     ],
 
     // Daily Report

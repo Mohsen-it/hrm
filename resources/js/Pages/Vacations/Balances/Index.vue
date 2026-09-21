@@ -215,12 +215,13 @@ usePageTitle(t('vacations.vacation_balances'));
                 <table class="w-full text-[13px] min-w-[720px]">
                     <thead>
                         <tr class="text-mistral-steel border-b border-mistral-hairline-soft bg-mistral-surface/50">
-                            <th class="py-3 px-4 text-start sticky start-0 bg-mistral-surface/95 z-10">
+                            <th scope="col" class="py-3 px-4 text-start sticky start-0 bg-mistral-surface/95 z-10">
                                 {{ t('vacations.employee') }}
                             </th>
                             <th
                                 v-for="type in types"
                                 :key="type.id"
+                                scope="col"
                                 class="py-3 px-2 text-center align-bottom min-w-[110px]"
                             >
                                 <div class="flex items-center justify-center gap-1.5">
@@ -236,7 +237,7 @@ usePageTitle(t('vacations.vacation_balances'));
                                     {{ t('vacations.default_value') }}: {{ type.default_days_per_year }}
                                 </div>
                             </th>
-                            <th class="py-3 px-3 text-center min-w-[100px]">
+                            <th scope="col" class="py-3 px-3 text-center min-w-[100px]">
                                 <span class="text-[12px] font-semibold text-mistral-ink">{{ t('vacations.total_entitled') }}</span>
                             </th>
                         </tr>
@@ -277,6 +278,7 @@ usePageTitle(t('vacations.vacation_balances'));
                                         min="0"
                                         max="366"
                                         autofocus
+                                        :aria-label="t('vacations.edit_entitled_for', { name: employee.name })"
                                         class="w-16 rounded-md border border-mistral-primary bg-white text-center text-[13px] px-1 py-1 outline-none shadow-sm"
                                         @keyup.enter="commitEdit"
                                         @keyup.esc="cancelEdit"

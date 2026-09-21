@@ -603,14 +603,14 @@ usePageTitle(t('attendance.user_report') + ' #' + props.userId);
 
     .monthly-log-print-heading h1 {
         margin: 0 0 2mm;
-        color: #054239;
+        color: var(--color-mistral-primary);
         font-size: 18px;
         font-weight: 700;
     }
 
     .monthly-log-print-heading p {
         margin: 1mm 0;
-        color: #2c3e50;
+        color: var(--color-mistral-charcoal);
         font-size: 10px;
         font-weight: 700;
     }
@@ -620,7 +620,7 @@ usePageTitle(t('attendance.user_report') + ' #' + props.userId);
     }
 
     .monthly-log-print-heading p:last-child {
-        color: #666;
+        color: var(--color-mistral-steel);
         font-size: 8px;
         font-weight: 400;
     }
@@ -642,21 +642,21 @@ usePageTitle(t('attendance.user_report') + ' #' + props.userId);
         line-height: 1.15 !important;
         white-space: normal !important;
         overflow-wrap: anywhere;
-        border: 1px solid #ddd !important;
+        border: 1px solid var(--color-mistral-hairline-strong) !important;
         text-align: center !important;
         vertical-align: middle;
     }
 
     .monthly-log-print th {
-        background: #054239 !important;
-        color: #fff !important;
+        background: var(--color-mistral-primary) !important;
+        color: var(--color-mistral-on-primary) !important;
         padding: 4px 1.5px !important;
         font-size: 10px !important;
         font-weight: 700;
     }
 
     .monthly-log-print tbody tr:nth-child(even) td {
-        background: #eef3f0 !important;
+        background: var(--color-mistral-surface-cream) !important;
     }
 
     .monthly-log-print th:nth-child(1),
@@ -687,12 +687,12 @@ usePageTitle(t('attendance.user_report') + ' #' + props.userId);
     }
 
     .monthly-log-late-total td {
-        background: #054239 !important;
-        color: #fff !important;
+        background: var(--color-mistral-primary) !important;
+        color: var(--color-mistral-on-primary) !important;
         font-size: 11px !important;
         font-weight: 800 !important;
         padding: 5px 3px !important;
-        border: 1px solid #ddd !important;
+        border: 1px solid var(--color-mistral-hairline-strong) !important;
     }
 }
 
@@ -729,14 +729,14 @@ usePageTitle(t('attendance.user_report') + ' #' + props.userId);
 
     .overtime-report-print-heading h1 {
         margin: 0 0 2mm;
-        color: #054239;
+        color: var(--color-mistral-primary);
         font-size: 18px;
         font-weight: 700;
     }
 
     .overtime-report-print-heading p {
         margin: 1mm 0;
-        color: #2c3e50;
+        color: var(--color-mistral-charcoal);
         font-size: 10px;
         font-weight: 700;
     }
@@ -746,7 +746,7 @@ usePageTitle(t('attendance.user_report') + ' #' + props.userId);
     }
 
     .overtime-report-print-heading p:last-child {
-        color: #666;
+        color: var(--color-mistral-steel);
         font-size: 8px;
         font-weight: 400;
     }
@@ -768,21 +768,21 @@ usePageTitle(t('attendance.user_report') + ' #' + props.userId);
         line-height: 1.4 !important;
         white-space: normal !important;
         overflow-wrap: anywhere;
-        border: 1px solid #ddd !important;
+        border: 1px solid var(--color-mistral-hairline-strong) !important;
         text-align: center !important;
         vertical-align: middle;
     }
 
     .overtime-report-print th {
-        background: #054239 !important;
-        color: #fff !important;
+        background: var(--color-mistral-primary) !important;
+        color: var(--color-mistral-on-primary) !important;
         padding: 7px 3px !important;
         font-size: 13px !important;
         font-weight: 700;
     }
 
     .overtime-report-print tbody tr:nth-child(even) td {
-        background: #eef3f0 !important;
+        background: var(--color-mistral-surface-cream) !important;
     }
 
     /* إخفاء عمودي الحضور المتوقع/الانصراف المتوقع في نسخة الطباعة فقط - لا يؤثر على الفوتر */
@@ -814,12 +814,12 @@ usePageTitle(t('attendance.user_report') + ' #' + props.userId);
     }
 
     .overtime-summary-row td {
-        background: #054239 !important;
-        color: #fff !important;
+        background: var(--color-mistral-primary) !important;
+        color: var(--color-mistral-on-primary) !important;
         font-size: 13px !important;
         font-weight: 800 !important;
         padding: 7px 3px !important;
-        border: 1px solid #ddd !important;
+        border: 1px solid var(--color-mistral-hairline-strong) !important;
     }
 }
 </style>

@@ -36,10 +36,33 @@ const columns = computed(() => [
     { key: 'in_time', label: t('shifts.in_time') },
     { key: 'out_time', label: t('shifts.out_time') },
     { key: 'is_multi_day', label: t('shifts.is_multi_day'), cellClass: 'text-center' },
-    { key: 'late_margin', label: t('shifts.late_margin'), cellClass: 'text-center' },
-    { key: 'early_margin', label: t('shifts.early_margin'), cellClass: 'text-center' },
+    { key: 'late_margin', label: t('shifts.late_until'), cellClass: 'text-center' },
+    { key: 'early_margin', label: t('shifts.early_from'), cellClass: 'text-center' },
     { key: 'actions', label: t('common.actions'), cellClass: 'text-center w-[180px]' },
 ]);
+
+function toMinutes(time) {
+    if (!time || !/^\d{1,2}:\d{2}/.test(String(time))) return null
+    const [h, m] = String(time).split(':').map(Number)
+    return h * 60 + m
+}
+
+function fmtClock(mins) {
+    const m = ((mins % 1440) + 1440) % 1440
+    return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0')
+}
+
+function lateUntil(row) {
+    const anchor = toMinutes(row.in_time)
+    if (anchor === null) return '—'
+    return fmtClock(anchor + (Number(row.late_margin) || 0))
+}
+
+function earlyFrom(row) {
+    const anchor = toMinutes(row.out_time)
+    if (anchor === null) return '—'
+    return fmtClock(anchor - (Number(row.early_margin) || 0))
+}
 
 function onSearch(value) {
     router.get(
@@ -129,11 +152,13 @@ usePageTitle(t('shifts.time_schedules_title'));
             </template>
 
             <template #cell-late_margin="{ row }">
-                <span>{{ row.late_margin ?? 0 }}</span>
+                <span dir="ltr">{{ lateUntil(row) }}</span>
+                <span class="text-mistral-muted text-[11px]">({{ row.late_margin ?? 0 }} {{ t('shifts.minutes') }})</span>
             </template>
 
             <template #cell-early_margin="{ row }">
-                <span>{{ row.early_margin ?? 0 }}</span>
+                <span dir="ltr">{{ earlyFrom(row) }}</span>
+                <span class="text-mistral-muted text-[11px]">({{ row.early_margin ?? 0 }} {{ t('shifts.minutes') }})</span>
             </template>
 
             <template #cell-actions="{ row }">

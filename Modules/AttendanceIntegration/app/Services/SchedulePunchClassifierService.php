@@ -5,6 +5,8 @@ namespace Modules\AttendanceIntegration\Services;
 use DateTimeImmutable;
 use DateTimeInterface;
 use Modules\AttendanceIntegration\DTOs\PunchType;
+use Modules\Shifts\Repositories\RotationAssignmentRepository;
+use Modules\Shifts\Services\RotationEngine;
 use Modules\Shifts\Services\ScheduleResolverService;
 
 /**
@@ -19,8 +21,13 @@ class SchedulePunchClassifierService
     /** @var array<string, array<string, mixed>> */
     private array $scheduleCache = [];
 
+    /** @var array<string, bool> */
+    private array $lastBlockDayCache = [];
+
     public function __construct(
         private ScheduleResolverService $scheduleResolver,
+        private RotationAssignmentRepository $assignmentRepository,
+        private RotationEngine $rotationEngine,
     ) {}
 
     /**
@@ -70,11 +77,19 @@ class SchedulePunchClassifierService
                 continue;
             }
 
+            // Last work day of an overnight duty block: the duty ends on the
+            // departure morning, so a same-day evening punch is presence proof
+            // only (extra) and must never close the session. Mid-block days
+            // keep their same-evening checkout window. Mirrors
+            // PunchWindowService so both ingestion paths behave identically.
+            $suppressSameDayCheckout = ($schedule['is_overnight'] ?? false)
+                && $this->isLastWorkDayOfBlock($userId, $date);
+
             if ($this->isWithinWindow($timestamp, $date, $schedule['in_ahead_margin'] ?? null, $schedule['in_above_margin'] ?? null)) {
                 $matches[] = PunchType::CheckIn;
             }
 
-            if ($this->isWithinWindow($timestamp, $date, $schedule['out_ahead_margin'] ?? null, $schedule['out_above_margin'] ?? null)) {
+            if (! $suppressSameDayCheckout && $this->isWithinWindow($timestamp, $date, $schedule['out_ahead_margin'] ?? null, $schedule['out_above_margin'] ?? null)) {
                 $matches[] = PunchType::CheckOut;
             }
 
@@ -123,6 +138,28 @@ class SchedulePunchClassifierService
         $key = "{$userId}:{$date}";
 
         return $this->scheduleCache[$key] ??= $this->scheduleResolver->resolve($userId, $date);
+    }
+
+    /**
+     * Whether the roster date is the last work day of the employee's current
+     * overnight duty block (the day before the departure/rest morning).
+     */
+    private function isLastWorkDayOfBlock(int $userId, string $date): bool
+    {
+        $key = "{$userId}:{$date}";
+        if (array_key_exists($key, $this->lastBlockDayCache)) {
+            return $this->lastBlockDayCache[$key];
+        }
+
+        $result = false;
+        $assignment = $this->assignmentRepository->getAssignmentForDate($userId, $date);
+        $rotation = $assignment?->rotation;
+        $group = $assignment?->rotationGroup;
+        if ($rotation && $group) {
+            $result = $this->rotationEngine->isLastWorkDayOfBlock($rotation, $group, $date);
+        }
+
+        return $this->lastBlockDayCache[$key] = $result;
     }
 
     private function isWithinWindow(DateTimeImmutable $timestamp, string $date, ?string $start, ?string $end): bool

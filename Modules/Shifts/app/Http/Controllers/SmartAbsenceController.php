@@ -504,9 +504,9 @@ class SmartAbsenceController extends Controller
                 'positions.position_name',
             ]);
 
-        $utcBounds = [
-            $date->copy()->startOfDay()->setTimezone('UTC')->format('Y-m-d H:i:s'),
-            $date->copy()->endOfDay()->setTimezone('UTC')->format('Y-m-d H:i:s'),
+        $dayBounds = [
+            $date->copy()->startOfDay()->format('Y-m-d H:i:s'),
+            $date->copy()->endOfDay()->format('Y-m-d H:i:s'),
         ];
         $punchedIds = AttendanceSession::onDate($dateStr)
             ->whereIn('user_id', $ids->toArray())
@@ -515,7 +515,7 @@ class SmartAbsenceController extends Controller
             ->merge(
                 RawAttendanceLog::query()
                     ->whereIn('user_id', $ids->toArray())
-                    ->whereBetween('punch_time', $utcBounds)
+                    ->whereBetween('punch_time', $dayBounds)
                     ->distinct()
                     ->pluck('user_id')
             )

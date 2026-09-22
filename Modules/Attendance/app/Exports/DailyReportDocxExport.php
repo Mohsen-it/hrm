@@ -13,7 +13,7 @@ use ZipArchive;
  * Produces the daily report from the approved Word template.
  *
  * The template owns every visual detail; this class only replaces its date
- * and the data rows within its six existing report tables.
+ * and the data rows within its seven existing report tables.
  */
 class DailyReportDocxExport
 {
@@ -64,7 +64,7 @@ class DailyReportDocxExport
         }
     }
 
-    /** Replace the date and the six template tables. */
+    /** Replace the date and the seven template tables. */
     private function replaceContent(string $xml): string
     {
         $document = new DOMDocument('1.0', 'UTF-8');
@@ -76,14 +76,24 @@ class DailyReportDocxExport
         $date = Carbon::parse($this->report['date']);
         $this->replaceParagraph($xpath, 'التاريخ:', 'التاريخ:    '.$date->format('d / m /Y'));
 
+        // The missing-checkout and missing-evening tables describe the day
+        // BEFORE the report date: stamp it on their titles so nobody reads
+        // them as today's violations next to report-day columns.
+        $previousLabel = $date->copy()->subDay()->format('d / m /Y');
+        $this->appendToParagraph($xpath, 'تقرير عدم تسجيل بصمة الخروج حسب جداول الوقت', ' — عن يوم أمس ('.$previousLabel.')');
+        $this->appendToParagraph($xpath, 'تقرير عدم تسجيل البصمة المسائية', ' — عن يوم أمس ('.$previousLabel.')');
+
         $groups = [
-            'absent', 'late', 'incomplete', 'leave', 'no_fingerprint', 'mission',
+            'absent', 'late', 'incomplete', 'leave', 'no_fingerprint', 'mission', 'evening',
         ];
         $tables = $xpath->query('//w:tbl');
         foreach ($groups as $index => $status) {
             $table = $tables?->item($index);
             if ($table instanceof DOMElement) {
-                $hasCheckIn = in_array($status, ['late', 'incomplete'], true);
+                // The evening-punch table mirrors the lateness table: rotation
+                // + morning check-in + notes (the missing evening punch is
+                // described in the notes column).
+                $hasCheckIn = in_array($status, ['late', 'incomplete', 'evening'], true);
                 // The missing-checkout table carries the expected exit time
                 // from the rotation's time table as an extra column.
                 $hasExpectedExit = $status === 'incomplete';
@@ -131,6 +141,7 @@ class DailyReportDocxExport
                 // absentees.
                 'absent' => in_array($row['status'] ?? null, ['absent', 'awaiting'], true) && ! ($row['has_no_fingerprint'] ?? false),
                 'incomplete' => (bool) ($row['has_incomplete_punch'] ?? false),
+                'evening' => (bool) ($row['has_missing_evening_punch'] ?? false),
                 default => ($row['status'] ?? null) === $status,
             })
             ->values()
@@ -243,7 +254,19 @@ class DailyReportDocxExport
                     $values[] = $exitTime
                         .(($exitTime !== '' && (bool) ($row['expected_check_out_next_day'] ?? false)) ? ' (اليوم التالي)' : '');
                 }
-                $values[] = (string) ($row['notes'] ?? '');
+                $notes = (string) ($row['notes'] ?? '');
+                // The lateness table owns the check-in column: surface the
+                // evening presence punch (24h duties) next to the notes since
+                // the fixed template has no dedicated column for it.
+                if ($hasCheckIn && ! $hasExpectedExit && ! empty($row['evening_punch'])) {
+                    $notes .= ($notes !== '' ? '، ' : '').'بصمة مسائية: '.$row['evening_punch'];
+                }
+                // An overnight checkout lands on the next calendar day: mark it
+                // so a time earlier than the check-in is never misread.
+                if (! empty($row['check_out']) && ! empty($row['check_out_next_day'])) {
+                    $notes .= ($notes !== '' ? '، ' : '').'الخروج صباح اليوم التالي';
+                }
+                $values[] = $notes;
                 $this->fillRow($xpath, $clone, $values);
                 $table->appendChild($clone);
             }
@@ -310,6 +333,22 @@ class DailyReportDocxExport
         foreach ($xpath->query('//w:body/w:p') as $paragraph) {
             if ($paragraph instanceof DOMElement && str_starts_with($paragraph->textContent, $startsWith)) {
                 $this->setElementText($xpath, $paragraph, $replacement);
+
+                return;
+            }
+        }
+    }
+
+    /** Locate the paragraph that starts with a label and append a suffix to it. */
+    private function appendToParagraph(DOMXPath $xpath, string $startsWith, string $suffix): void
+    {
+        foreach ($xpath->query('//w:body/w:p') as $paragraph) {
+            if ($paragraph instanceof DOMElement && str_starts_with(trim($paragraph->textContent), $startsWith)) {
+                $texts = $xpath->query('.//w:t', $paragraph);
+                $last = $texts?->item($texts->length - 1);
+                if ($last instanceof DOMElement) {
+                    $last->nodeValue .= $suffix;
+                }
 
                 return;
             }

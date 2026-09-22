@@ -11,7 +11,7 @@ import { usePageTitle } from '@/composables/usePageTitle';
 
 import { computed } from 'vue';
 import { router } from '@inertiajs/vue3';
-import { Badge, Button, Card, DataTable, IconButton, PageHeader } from '@/Components/ui';
+import { Badge, Card, DataTable, IconButton, PageHeader } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
@@ -51,13 +51,7 @@ usePageTitle(t('attendance.monthly_employee_report'));
         <PageHeader
             :title="t('attendance.monthly_employee_report')"
             :description="t('attendance.user_report')"
-        >
-            <template #actions>
-                <Button variant="secondary" icon="fas fa-chart-line" :href="route('attendance.reports.index')">
-                    {{ t('attendance.reports') }}
-                </Button>
-            </template>
-        </PageHeader>
+        />
 
         <Card variant="base" padding="none">
             <DataTable

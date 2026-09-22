@@ -211,6 +211,27 @@ class RotationEngine
     }
 
     /**
+     * Whether the given date is the last work day of its duty block.
+     *
+     * A duty block is a run of consecutive work days (1 day for a 1-3
+     * rotation, 3 days for 3-9, 7 days for 7-21). The last day of the block
+     * is followed by a rest day: its checkout happens on the departure
+     * morning, so a same-day evening punch is presence proof only and must
+     * never close the session. Mid-block days close their own session with
+     * the same-evening checkout punch instead.
+     */
+    public function isLastWorkDayOfBlock(Rotation $rotation, RotationGroup $group, Carbon|string $date): bool
+    {
+        $day = Carbon::parse($date)->startOfDay();
+
+        if (! $this->isWorkDay($rotation, $group, $day)) {
+            return false;
+        }
+
+        return ! $this->isWorkDay($rotation, $group, $day->copy()->addDay());
+    }
+
+    /**
      * Build the standard resolver contract for a rotation employee.
      *
      * @return array{

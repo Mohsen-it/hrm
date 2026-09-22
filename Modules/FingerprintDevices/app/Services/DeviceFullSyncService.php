@@ -1064,7 +1064,7 @@ class DeviceFullSyncService
             $userPk,
             $stamp,
             $fallback,
-            $userPk !== null && $this->sessionService->getOpenSessionForUser($userPk) !== null,
+            $userPk !== null && $this->sessionService->hasRecentOpenSession($userPk, $stamp),
         )->value;
     }
 

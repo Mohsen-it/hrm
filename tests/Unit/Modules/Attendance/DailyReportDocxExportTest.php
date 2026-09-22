@@ -20,6 +20,7 @@ class DailyReportDocxExportTest extends TestCase
                 ['status' => 'rest', 'name' => 'موظف راحة بلا بصمة', 'department_name' => 'القسم', 'has_no_fingerprint' => true, 'notes' => 'الموظف غير مسجل في جهاز البصمة'],
                 ['status' => 'absent', 'name' => 'موظف غياب مسجل بالبصمة', 'department_name' => 'القسم', 'has_no_fingerprint' => false],
                 ['status' => 'present', 'name' => 'موظف دخول دون خروج', 'department_name' => 'القسم', 'rotation' => 'دورية النقل (ب)', 'check_in' => '08:30', 'has_incomplete_punch' => true, 'expected_check_in' => '08:00', 'expected_check_out' => '08:00', 'expected_check_out_next_day' => true, 'notes' => 'لم يسجل بصمة الخروج حتى نهاية نافذة الخروج 10:00'],
+                ['status' => 'present', 'name' => 'موظف بلا مسائية', 'department_name' => 'القسم', 'rotation' => 'دورية 1-3 (أ)', 'check_in' => '08:05', 'has_missing_evening_punch' => true, 'notes' => 'لم يسجل البصمة المسائية أمس'],
             ],
         ]);
 
@@ -61,7 +62,7 @@ class DailyReportDocxExportTest extends TestCase
         $xpath = new \DOMXPath($document);
         $xpath->registerNamespace('w', 'http://schemas.openxmlformats.org/wordprocessingml/2006/main');
         $tables = $xpath->query('//w:tbl');
-        $this->assertSame(6, $tables->length);
+        $this->assertSame(7, $tables->length);
 
         // The "عدم تسجيل البصمة على الجهاز" table (index 4) lists every
         // employee without a fingerprint template — including rest-day
@@ -84,7 +85,7 @@ class DailyReportDocxExportTest extends TestCase
         // القسم prototype cell of the no-fingerprint table (and the الدورية
         // cells of the lateness/missing-checkout tables) LTR, so multi-word
         // Arabic rendered with flipped word order.
-        foreach ([0, 1, 2, 3, 4, 5] as $tableIndex) {
+        foreach ([0, 1, 2, 3, 4, 5, 6] as $tableIndex) {
             $table = $tables->item($tableIndex);
             $this->assertInstanceOf(\DOMElement::class, $table);
             $firstDataRow = $xpath->query('./w:tr[2]', $table)->item(0);
@@ -114,6 +115,18 @@ class DailyReportDocxExportTest extends TestCase
         $this->assertStringContainsString('الدورية', $header->item(3)->textContent);
         $this->assertStringContainsString('وقت الدخول المتوقع', $header->item(4)->textContent);
         $this->assertStringContainsString('وقت الخروج المتوقع', $header->item(5)->textContent);
+
+        // The evening-punch table (index 6) mirrors the lateness table:
+        // rotation + morning check-in + notes carrying the missing evening
+        // punch.
+        $this->assertStringContainsString('تقرير عدم تسجيل البصمة المسائية لهذا اليوم', $xml);
+        $evening = $tables->item(6);
+        $this->assertInstanceOf(\DOMElement::class, $evening);
+        $eveningHeader = $xpath->query('./w:tr[1]/w:tc', $evening);
+        $this->assertSame(6, $eveningHeader->length);
+        $this->assertStringContainsString('موظف بلا مسائية', $evening->textContent);
+        $this->assertStringContainsString('دورية 1-3 (أ)', $evening->textContent);
+        $this->assertStringContainsString('لم يسجل البصمة المسائية أمس', $evening->textContent);
 
         // The lateness and missing-checkout data rows must be vertically
         // centered (previously bottom-aligned, which pushed the text up and

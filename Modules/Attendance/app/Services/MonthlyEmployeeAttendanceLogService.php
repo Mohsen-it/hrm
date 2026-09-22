@@ -6,6 +6,8 @@ use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 use Modules\Attendance\Repositories\RawAttendanceLogRepository;
 use Modules\Shifts\Services\ScheduleResolverService;
+use Modules\Vacations\Models\AttendanceJustificationRequest;
+use Modules\Vacations\Models\UserVacationRequest;
 
 /**
  * Builds a monthly, schedule-aware punch log for one employee.
@@ -36,22 +38,108 @@ class MonthlyEmployeeAttendanceLogService
             $end->addDay()->endOfDay()->toDateTimeString(),
         );
 
+        // Single bounded query per source (no N+1 inside the day loop).
+        $justifications = $this->justificationReasonsByDate($userId, $start->toDateString(), $end->toDateString());
+        $vacations = $this->approvedVacationsByDate($userId, $start->toDateString(), $end->toDateString());
+        $today = CarbonImmutable::today()->toDateString();
+
         $rows = [];
         for ($date = $start; $date->lte($end); $date = $date->addDay()) {
-            $schedule = $this->scheduleResolver->resolve($userId, $date->toDateString());
-            $rows[] = $this->buildDayRow($date, $schedule, $punches);
+            $dateStr = $date->toDateString();
+            $schedule = $this->scheduleResolver->resolve($userId, $dateStr);
+            $rows[] = $this->buildDayRow(
+                $date,
+                $schedule,
+                $punches,
+                $justifications[$dateStr] ?? null,
+                $vacations[$dateStr] ?? null,
+                $dateStr > $today,
+            );
         }
 
         return $rows;
     }
 
     /**
+     * Map "Y-m-d" => justification reason for the user inside the month.
+     *
+     * A null reason still means "justified" — the row must show that the
+     * employee filed a justification even when no reason text was written.
+     *
+     * @return array<string, string|null>
+     */
+    private function justificationReasonsByDate(int $userId, string $from, string $to): array
+    {
+        return AttendanceJustificationRequest::query()
+            ->where('user_id', $userId)
+            ->whereBetween('attendance_date', [$from, $to])
+            ->pluck('reason', 'attendance_date')
+            ->mapWithKeys(function ($reason, $date): array {
+                $key = $date instanceof \DateTimeInterface
+                    ? $date->format('Y-m-d')
+                    : (string) CarbonImmutable::parse((string) $date)->toDateString();
+
+                return [$key => $reason !== null ? (string) $reason : null];
+            })
+            ->all();
+    }
+
+    /**
+     * Map "Y-m-d" => approved vacation info (type label + color) for the user.
+     *
+     * Expands multi-day requests so every covered day carries its type.
+     * First request wins when ranges overlap.
+     *
+     * @return array<string, array{type: string, code: string|null, color: string|null}>
+     */
+    private function approvedVacationsByDate(int $userId, string $from, string $to): array
+    {
+        $requests = UserVacationRequest::query()
+            ->with('vacationType:id,code,name_ar,name_en,color')
+            ->where('user_id', $userId)
+            ->where('status', UserVacationRequest::STATUS_APPROVED)
+            ->where('start_date', '<=', $to)
+            ->where('end_date', '>=', $from)
+            ->orderBy('start_date')
+            ->get();
+
+        $locale = app()->getLocale();
+        $map = [];
+
+        foreach ($requests as $request) {
+            $type = $request->vacationType;
+            $label = $type
+                ? (string) ($locale === 'ar' ? ($type->name_ar ?: $type->name_en) : ($type->name_en ?: $type->name_ar))
+                : '';
+            $info = [
+                'type' => $label,
+                'code' => $type?->code,
+                'color' => $type?->color,
+            ];
+
+            $cursor = CarbonImmutable::parse($request->start_date->toDateString());
+            $last = CarbonImmutable::parse($request->end_date->toDateString());
+
+            for (; $cursor->lte($last); $cursor = $cursor->addDay()) {
+                $key = $cursor->toDateString();
+                if ($key < $from || $key > $to) {
+                    continue;
+                }
+                $map[$key] ??= $info;
+            }
+        }
+
+        return $map;
+    }
+
+    /**
      * Build one report row from the rotation schedule and raw punches.
      *
      * @param  array<string, mixed>  $schedule
+     * @param  array{type: string, code: string|null, color: string|null}|null  $vacation
      * @return array<string, bool|int|string|null>
      */
-    private function buildDayRow(CarbonImmutable $date, array $schedule, Collection $punches): array
+    private function buildDayRow(CarbonImmutable $date, array $schedule, Collection $punches, ?string $justificationReason = null, ?array $vacation = null, bool $isFuture = false): array
     {
         $isWorkDay = (bool) ($schedule['is_work_day'] ?? false);
         $checkInPunches = $isWorkDay
@@ -99,6 +187,12 @@ class MonthlyEmployeeAttendanceLogService
             'early_margin' => $earlyMargin,
             'late_minutes' => $this->computeLateMinutes($date, $schedule, $firstCheckIn),
             'early_leave_minutes' => $this->computeEarlyLeaveMinutes($date, $schedule, $firstCheckInModel, $lastCheckOut, $punches),
+            'has_justification' => $justificationReason !== null,
+            'justification_reason' => $justificationReason,
+            'vacation_type' => $vacation['type'] ?? null,
+            'vacation_type_code' => $vacation['code'] ?? null,
+            'vacation_type_color' => $vacation['color'] ?? null,
+            'is_future' => $isFuture,
         ];
     }
 

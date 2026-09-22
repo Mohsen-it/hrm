@@ -13,6 +13,7 @@ import { ref, computed, nextTick, watch } from 'vue';
 import { router } from '@inertiajs/vue3';
 import { PageHeader, Button, Card, StatCard, Badge, FormInput, FormSelect, FormSwitch, DataTable } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
+import { CHART_VACATION as VACATION_FALLBACK_COLOR } from '@/utils/chartPalette';
 
 const { t } = useTranslations();
 
@@ -221,7 +222,21 @@ const sessionColumns = [
 ];
 
 const sessionData = computed(() => ({ data: props.report.sessions || [], links: [] }));
-const monthlyLogData = computed(() => ({ data: props.monthlyLog, links: [] }));
+
+// Today's date in local timezone (avoids the UTC shift of toISOString).
+const todayStr = (() => {
+    const d = new Date();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${d.getFullYear()}-${m}-${day}`;
+})();
+
+const isFutureRow = (row) => row?.is_future ?? (row?.date > todayStr);
+
+// Days after today are in the future: no punches exist yet, so they are
+// hidden from the screen table, the totals and the printed record.
+const visibleMonthlyLog = computed(() => (props.monthlyLog || []).filter((row) => !isFutureRow(row)));
+const monthlyLogData = computed(() => ({ data: visibleMonthlyLog.value, links: [] }));
 const overtimeData = computed(() => ({ data: (props.overtime?.daily_details || []).filter(d => d.overtime_minutes > 0), links: [] }));
 const monthlyMonthLabel = computed(() => monthOptions.find(({ value }) => value === monthlyMonth.value)?.label || '');
 const scheduleStatusLabels = {
@@ -238,28 +253,55 @@ const baseMonthlyLogColumns = [
     { key: 'schedule_status', label: t('attendance.monthly_employee_log.schedule_status') },
     { key: 'expected_check_in', label: t('attendance.fields.expected_check_in') },
     { key: 'expected_check_out', label: t('attendance.fields.expected_check_out') },
-    { key: 'check_in_window', label: t('attendance.monthly_employee_log.check_in_window') },
     { key: 'first_check_in_at', label: t('attendance.fields.first_check_in_at') },
-    { key: 'check_out_window', label: t('attendance.monthly_employee_log.check_out_window') },
     { key: 'last_check_out_at', label: t('attendance.fields.last_check_out_at') },
 ];
 
 const monthlyLogColumns = computed(() => {
-    if (!showLate.value) return baseMonthlyLogColumns;
+    const notes = { key: 'notes', label: t('attendance.monthly_employee_log.notes') };
+    if (!showLate.value) return [...baseMonthlyLogColumns, notes];
     return [
         ...baseMonthlyLogColumns,
         { key: 'late_minutes', label: t('attendance.monthly_employee_log.late_minutes') },
         { key: 'early_leave_minutes', label: t('attendance.monthly_employee_log.early_leave') },
+        notes,
     ];
 });
 
 const totalEntryLateMinutes = computed(() =>
-    (props.monthlyLog || []).reduce((sum, row) => sum + (Number(row.late_minutes) || 0), 0),
+    visibleMonthlyLog.value.reduce((sum, row) => sum + (Number(row.late_minutes) || 0), 0),
 );
 
 const totalEarlyLeaveMinutes = computed(() =>
-    (props.monthlyLog || []).reduce((sum, row) => sum + (Number(row.early_leave_minutes) || 0), 0),
+    visibleMonthlyLog.value.reduce((sum, row) => sum + (Number(row.early_leave_minutes) || 0), 0),
 );
+
+/** Normalize a vacation-type color to a safe #RRGGBB string. */
+const sanitizeHexColor = (color) => {
+    const hex = String(color || '').replace(/^#/, '').toUpperCase();
+    if (/^[0-9A-F]{6}$/.test(hex)) return `#${hex}`;
+    if (/^[0-9A-F]{3}$/.test(hex)) return `#${hex[0]}${hex[0]}${hex[1]}${hex[1]}${hex[2]}${hex[2]}`;
+    return VACATION_FALLBACK_COLOR;
+};
+
+/**
+ * Vacation display for a row. A vacation only means something on a day the
+ * employee was expected to work (leave_excused) — on rotation rest days the
+ * resolver keeps "rest" and the vacation must not repaint the row.
+ */
+const vacationOf = (row) => {
+    if (row?.schedule_status !== 'leave_excused' || !row?.vacation_type) return null;
+    return { type: row.vacation_type, color: sanitizeHexColor(row.vacation_type_color) };
+};
+
+const vacationBadgeStyle = (row) => {
+    const { color } = vacationOf(row);
+    return {
+        backgroundColor: `${color}1F`,
+        color,
+        border: `1px solid ${color}66`,
+    };
+};
 
 const humanHours = (mins) => `${(mins / 60).toFixed(2)} ${t('attendance.monthly_employee_log.hours')} (${mins} ${t('attendance.monthly_employee_log.minutes')})`;
 
@@ -310,17 +352,19 @@ const overtimeTotals = computed(() => {
 });
 
 
-usePageTitle(t('attendance.user_report') + ' #' + props.userId);
+const headerTitle = computed(() => `${t('attendance.user_report')} — ${props.employeeName || `#${props.userId}`}`);
+
+usePageTitle(headerTitle.value);
 </script>
 
 <template>
     
         <PageHeader
-            :title="t('attendance.user_report') + ' #' + userId"
+            :title="headerTitle"
             :description="`${report.from} → ${report.to}`"
         >
             <template #actions>
-                <Button variant="secondary" icon="fas fa-arrow-right rtl-flip" :href="route('attendance.reports.index')">
+                <Button variant="secondary" icon="fas fa-arrow-right rtl-flip" :href="route('attendance.reports.user.index')">
                     {{ t('attendance.actions.back') }}
                 </Button>
             </template>
@@ -424,7 +468,20 @@ usePageTitle(t('attendance.user_report') + ' #' + props.userId);
                     :selectable="false"
                 >
                     <template #cell-schedule_status="{ row }">
-                        {{ scheduleStatusLabel(row.schedule_status) }}
+                        <span v-if="vacationOf(row)" class="vacation-badge" :style="vacationBadgeStyle(row)">
+                            {{ t('attendance.monthly_employee_log.vacation_prefix') }}: {{ row.vacation_type }}
+                        </span>
+                        <span v-else>{{ scheduleStatusLabel(row.schedule_status) }}</span>
+                    </template>
+                    <template #cell-notes="{ row }">
+                        <div v-if="row.has_justification" class="justification-note">
+                            <i class="fas fa-file-signature shrink-0"></i>
+                            <div>
+                                <div class="font-bold">{{ t('attendance.monthly_employee_log.justification_note') }}</div>
+                                <div>{{ t('attendance.monthly_employee_log.reason') }}: {{ row.justification_reason || '—' }}</div>
+                            </div>
+                        </div>
+                        <span v-else class="text-mistral-muted">—</span>
                     </template>
                     <template #cell-last_check_out_at="{ row }">
                         {{ row.last_check_out_at }}<span v-if="row.is_overnight_checkout" class="font-bold"> (+1)</span>
@@ -560,6 +617,29 @@ usePageTitle(t('attendance.user_report') + ' #' + props.userId);
     display: none;
 }
 
+.vacation-badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 9999px;
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.justification-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 4px 8px;
+    border-radius: 8px;
+    font-size: 12px;
+    line-height: 1.5;
+    text-align: start;
+    background: var(--color-mistral-warning-bg);
+    color: var(--color-mistral-warning);
+    border: 1px solid color-mix(in srgb, var(--color-mistral-warning) 35%, transparent);
+}
+
 @media print {
     @page {
         size: A4 portrait;
@@ -660,27 +740,39 @@ usePageTitle(t('attendance.user_report') + ' #' + props.userId);
     }
 
     .monthly-log-print th:nth-child(1),
-    .monthly-log-print td:nth-child(1) { width: 10.5%; }
+    .monthly-log-print td:nth-child(1) { width: 10%; }
     .monthly-log-print th:nth-child(2),
     .monthly-log-print td:nth-child(2) { width: 5.5%; }
     .monthly-log-print th:nth-child(3),
-    .monthly-log-print td:nth-child(3) { width: 8.5%; }
+    .monthly-log-print td:nth-child(3) { width: 9%; }
     .monthly-log-print th:nth-child(4),
-    .monthly-log-print td:nth-child(4) { width: 10%; }
+    .monthly-log-print td:nth-child(4) { width: 8%; }
     .monthly-log-print th:nth-child(5),
-    .monthly-log-print td:nth-child(5) { width: 10.5%; }
+    .monthly-log-print td:nth-child(5) { width: 8%; }
     .monthly-log-print th:nth-child(6),
-    .monthly-log-print td:nth-child(6) { width: 11%; }
+    .monthly-log-print td:nth-child(6) { width: 8%; }
     .monthly-log-print th:nth-child(7),
-    .monthly-log-print td:nth-child(7) { width: 7.5%; }
+    .monthly-log-print td:nth-child(7) { width: 8%; }
     .monthly-log-print th:nth-child(8),
-    .monthly-log-print td:nth-child(8) { width: 11%; }
+    .monthly-log-print td:nth-child(8) { width: 6.5%; }
     .monthly-log-print th:nth-child(9),
-    .monthly-log-print td:nth-child(9) { width: 7.5%; }
-    .monthly-log-print th:nth-child(10),
-    .monthly-log-print td:nth-child(10) { width: 9%; }
-    .monthly-log-print th:nth-child(11),
-    .monthly-log-print td:nth-child(11) { width: 9%; }
+    .monthly-log-print td:nth-child(9) { width: 6.5%; }
+
+    /* عمود الملاحظات دائماً الأخير: يأخذ باقي العرض المتاح سواء ظهر
+       عمودا التأخير أم لا (table-layout: fixed يوزع الباقي عليه). */
+    .monthly-log-print th:last-child,
+    .monthly-log-print td:last-child { width: auto; }
+
+    .monthly-log-print .vacation-badge {
+        font-size: 11px !important;
+        padding: 3px 12px !important;
+    }
+
+    .monthly-log-print .justification-note {
+        font-size: 10px !important;
+        padding: 5px 8px !important;
+        gap: 6px !important;
+    }
 
     .monthly-log-print tr {
         break-inside: avoid;

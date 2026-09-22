@@ -13,6 +13,7 @@ import { reactive, ref } from 'vue';
 import { router, Head } from '@inertiajs/vue3';
 import { PageHeader, Button, Card, FormInput, FormSwitch, FormSection, FormActions, IconButton, ErrorSummary, ContextHelp } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
+import { useScheduleWindows } from '@/composables/useScheduleWindows';
 
 const { t } = useTranslations();
 
@@ -36,6 +37,12 @@ const processing = ref(false);
 
 const errorFor = (key) => errors.value[key] || '';
 
+const {
+    minutesHint, edgeHint, inStart, inEnd, outStart, outEnd, showPreview,
+    windowErrors, hasWindowErrors, lateClock, earlyClock,
+    inStartClock, inEndClock, outStartClock, outEndClock,
+} = useScheduleWindows(form);
+
 function addBreak() {
     breaks.value.push({ break_start: '', duration: 0 });
 }
@@ -45,6 +52,7 @@ function removeBreak(index) {
 }
 
 function submit() {
+    if (hasWindowErrors.value) return
     processing.value = true;
     errors.value = {};
     router.post(route('time-schedules.store'), {
@@ -142,59 +150,59 @@ usePageTitle(t('shifts.add_schedule'));
                 </ContextHelp>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormInput
-                        v-model="form.late_margin"
-                        :label="t('shifts.late_margin')"
+                        v-model="lateClock"
+                        :label="t('shifts.late_until')"
                         name="late_margin"
-                        type="number"
-                        min="0"
-                        :hint="t('shifts.minutes')"
-                        :error="errorFor('late_margin')"
+                        type="time"
+                        :hint="minutesHint(form.late_margin)"
+                        :error="errorFor('late_margin') || windowErrors.late"
                     />
                     <FormInput
-                        v-model="form.early_margin"
-                        :label="t('shifts.early_margin')"
+                        v-model="earlyClock"
+                        :label="t('shifts.early_from')"
                         name="early_margin"
-                        type="number"
-                        min="0"
-                        :hint="t('shifts.minutes')"
-                        :error="errorFor('early_margin')"
+                        type="time"
+                        :hint="minutesHint(form.early_margin)"
+                        :error="errorFor('early_margin') || windowErrors.early"
                     />
                     <FormInput
-                        v-model="form.in_ahead_margin"
+                        v-model="inStartClock"
                         :label="t('shifts.in_ahead_margin')"
                         name="in_ahead_margin"
-                        type="number"
-                        min="0"
-                        :hint="t('shifts.minutes')"
-                        :error="errorFor('in_ahead_margin')"
+                        type="time"
+                        :hint="edgeHint(form.in_ahead_margin, inStart)"
+                        :error="errorFor('in_ahead_margin') || windowErrors.in_ahead"
                     />
                     <FormInput
-                        v-model="form.in_above_margin"
+                        v-model="inEndClock"
                         :label="t('shifts.in_above_margin')"
                         name="in_above_margin"
-                        type="number"
-                        min="0"
-                        :hint="t('shifts.minutes')"
-                        :error="errorFor('in_above_margin')"
+                        type="time"
+                        :hint="edgeHint(form.in_above_margin, inEnd)"
+                        :error="errorFor('in_above_margin') || windowErrors.in_above"
                     />
                     <FormInput
-                        v-model="form.out_ahead_margin"
+                        v-model="outStartClock"
                         :label="t('shifts.out_ahead_margin')"
                         name="out_ahead_margin"
-                        type="number"
-                        min="0"
-                        :hint="t('shifts.minutes')"
-                        :error="errorFor('out_ahead_margin')"
+                        type="time"
+                        :hint="edgeHint(form.out_ahead_margin, outStart)"
+                        :error="errorFor('out_ahead_margin') || windowErrors.out_ahead"
                     />
                     <FormInput
-                        v-model="form.out_above_margin"
+                        v-model="outEndClock"
                         :label="t('shifts.out_above_margin')"
                         name="out_above_margin"
-                        type="number"
-                        min="0"
-                        :hint="t('shifts.minutes')"
-                        :error="errorFor('out_above_margin')"
+                        type="time"
+                        :hint="edgeHint(form.out_above_margin, outEnd)"
+                        :error="errorFor('out_above_margin') || windowErrors.out_above"
                     />
+                </div>
+
+                <div v-if="showPreview" class="mt-4 p-3 bg-mistral-surface rounded-lg text-[13px] leading-6">
+                    <div class="font-semibold mb-1">{{ t('shifts.window_preview') }}</div>
+                    <div><span class="text-mistral-muted">{{ t('shifts.check_in_window') }}:</span> <span dir="ltr">{{ inStart }} – {{ inEnd }}</span></div>
+                    <div><span class="text-mistral-muted">{{ t('shifts.check_out_window') }}:</span> <span dir="ltr">{{ outStart }} – {{ outEnd }}</span></div>
                 </div>
             </FormSection>
 

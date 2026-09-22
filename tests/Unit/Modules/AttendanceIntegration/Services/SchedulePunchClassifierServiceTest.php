@@ -5,6 +5,11 @@ namespace Tests\Unit\Modules\AttendanceIntegration\Services;
 use DateTimeImmutable;
 use Modules\AttendanceIntegration\DTOs\PunchType;
 use Modules\AttendanceIntegration\Services\SchedulePunchClassifierService;
+use Modules\Shifts\Models\Rotation;
+use Modules\Shifts\Models\RotationAssignment;
+use Modules\Shifts\Models\RotationGroup;
+use Modules\Shifts\Repositories\RotationAssignmentRepository;
+use Modules\Shifts\Services\RotationEngine;
 use Modules\Shifts\Services\ScheduleResolverService;
 use Tests\TestCase;
 
@@ -15,7 +20,11 @@ class SchedulePunchClassifierServiceTest extends TestCase
         $resolver = $this->createMock(ScheduleResolverService::class);
         $resolver->method('resolve')->willReturn($this->workSchedule());
 
-        $service = new SchedulePunchClassifierService($resolver);
+        $service = new SchedulePunchClassifierService(
+            $resolver,
+            $this->createMock(RotationAssignmentRepository::class),
+            $this->createMock(RotationEngine::class)
+        );
 
         $type = $service->classify(10, new DateTimeImmutable('2026-08-03 15:00:00'), PunchType::CheckIn);
 
@@ -27,7 +36,11 @@ class SchedulePunchClassifierServiceTest extends TestCase
         $resolver = $this->createMock(ScheduleResolverService::class);
         $resolver->method('resolve')->willReturn($this->workSchedule());
 
-        $service = new SchedulePunchClassifierService($resolver);
+        $service = new SchedulePunchClassifierService(
+            $resolver,
+            $this->createMock(RotationAssignmentRepository::class),
+            $this->createMock(RotationEngine::class)
+        );
 
         $type = $service->classify(10, new DateTimeImmutable('2026-08-03 13:00:00'), PunchType::CheckIn);
 
@@ -41,7 +54,11 @@ class SchedulePunchClassifierServiceTest extends TestCase
         $resolver = $this->createMock(ScheduleResolverService::class);
         $resolver->method('resolve')->willReturn($this->windowlessSchedule());
 
-        $service = new SchedulePunchClassifierService($resolver);
+        $service = new SchedulePunchClassifierService(
+            $resolver,
+            $this->createMock(RotationAssignmentRepository::class),
+            $this->createMock(RotationEngine::class)
+        );
 
         $type = $service->classify(10, new DateTimeImmutable('2026-08-03 13:00:00'), PunchType::CheckIn);
 
@@ -57,7 +74,11 @@ class SchedulePunchClassifierServiceTest extends TestCase
             'out_above_margin' => '15:00:00',
         ]);
 
-        $service = new SchedulePunchClassifierService($resolver);
+        $service = new SchedulePunchClassifierService(
+            $resolver,
+            $this->createMock(RotationAssignmentRepository::class),
+            $this->createMock(RotationEngine::class)
+        );
 
         // No open session → check-in; the second punch is never automatic.
         $this->assertSame(
@@ -82,7 +103,11 @@ class SchedulePunchClassifierServiceTest extends TestCase
             }
         );
 
-        $service = new SchedulePunchClassifierService($resolver);
+        $service = new SchedulePunchClassifierService(
+            $resolver,
+            $this->createMock(RotationAssignmentRepository::class),
+            $this->createMock(RotationEngine::class)
+        );
 
         $type = $service->classify(10, new DateTimeImmutable('2026-08-04 08:20:00'), PunchType::CheckIn);
 
@@ -103,7 +128,11 @@ class SchedulePunchClassifierServiceTest extends TestCase
             }
         );
 
-        $service = new SchedulePunchClassifierService($resolver);
+        $service = new SchedulePunchClassifierService(
+            $resolver,
+            $this->createMock(RotationAssignmentRepository::class),
+            $this->createMock(RotationEngine::class)
+        );
 
         $type = $service->classify(10, new DateTimeImmutable('2026-08-04 08:20:00'), PunchType::CheckIn);
 
@@ -147,5 +176,43 @@ class SchedulePunchClassifierServiceTest extends TestCase
             'next_day_out_ahead_margin' => '07:00',
             'next_day_out_above_margin' => '10:00',
         ];
+    }
+
+    public function test_it_suppresses_same_day_checkout_on_last_block_day(): void
+    {
+        $resolver = $this->createMock(ScheduleResolverService::class);
+        $resolver->method('resolve')->willReturnCallback(
+            fn ($userId, $date) => match ("{$userId}|{$date}") {
+                '10|2026-08-03' => $this->overnightDutySchedule(),
+                default => ['is_work_day' => false],
+            }
+        );
+
+        $assignment = $this->createMock(RotationAssignment::class);
+        $assignment->method('__get')->willReturnCallback(
+            fn ($name) => match ($name) {
+                'rotation' => $this->createMock(Rotation::class),
+                'rotationGroup' => $this->createMock(RotationGroup::class),
+                default => null,
+            }
+        );
+        $repository = $this->createMock(RotationAssignmentRepository::class);
+        $repository->method('getAssignmentForDate')->willReturn($assignment);
+        $engine = $this->createMock(RotationEngine::class);
+        $engine->method('isLastWorkDayOfBlock')->willReturn(true);
+
+        $service = new SchedulePunchClassifierService($resolver, $repository, $engine);
+
+        // Evening punch on the last block day: presence only, never a checkout.
+        $this->assertSame(
+            PunchType::Extra,
+            $service->classify(10, new DateTimeImmutable('2026-08-03 20:00:00'), PunchType::CheckIn, true)
+        );
+
+        // Departure morning still closes the duty.
+        $this->assertSame(
+            PunchType::CheckOut,
+            $service->classify(10, new DateTimeImmutable('2026-08-04 08:20:00'), PunchType::CheckIn, true)
+        );
     }
 }

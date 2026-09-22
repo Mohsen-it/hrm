@@ -60,7 +60,7 @@ class PunchIngestionService
                 $user->id,
                 $punch->timestamp,
                 $punch->punchType,
-                $this->attendanceSessionService->getOpenSessionForUser($user->id) !== null,
+                $this->attendanceSessionService->hasRecentOpenSession($user->id, $punch->timestamp),
             );
             $punchTypeStr = $classifiedPunchType->value;
 

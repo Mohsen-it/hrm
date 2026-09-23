@@ -247,6 +247,14 @@ const scheduleStatusLabels = {
     unassigned: 'بدون إسناد',
 };
 const scheduleStatusLabel = (status) => scheduleStatusLabels[status] || status;
+
+// الغياب = يوم عمل متوقع بلا بصمة دخول (من الباكند)، ويُستثنى المبرر والمستقبل.
+const isAbsentRow = (row) => Boolean(row?.is_absent) && !row?.has_justification && !isFutureRow(row);
+const monthlyRowClass = (row) => {
+    if (isAbsentRow(row)) return 'monthly-log-absent-row';
+    if (row?.is_rest_day_checkout) return 'monthly-log-rest-checkout-row';
+    return '';
+};
 const baseMonthlyLogColumns = [
     { key: 'date', label: t('attendance.fields.date') },
     { key: 'day_name', label: t('attendance.monthly_employee_log.day') },
@@ -466,25 +474,38 @@ usePageTitle(headerTitle.value);
                     :enable-density="false"
                     :enable-column-visibility="false"
                     :selectable="false"
+                    :row-class="monthlyRowClass"
                 >
                     <template #cell-schedule_status="{ row }">
-                        <span v-if="vacationOf(row)" class="vacation-badge" :style="vacationBadgeStyle(row)">
+                        <span v-if="isAbsentRow(row)" class="absent-badge">
+                            {{ t('attendance.monthly_employee_log.absent') }}
+                        </span>
+                        <span v-else-if="vacationOf(row)" class="vacation-badge" :style="vacationBadgeStyle(row)">
                             {{ t('attendance.monthly_employee_log.vacation_prefix') }}: {{ row.vacation_type }}
                         </span>
                         <span v-else>{{ scheduleStatusLabel(row.schedule_status) }}</span>
                     </template>
                     <template #cell-notes="{ row }">
-                        <div v-if="row.has_justification" class="justification-note">
+                        <div v-if="isAbsentRow(row)" class="absent-note">
+                            <i class="fas fa-user-times shrink-0"></i>
+                            <span>{{ t('attendance.monthly_employee_log.absent_note') }}</span>
+                        </div>
+                        <div v-else-if="row.has_justification" class="justification-note">
                             <i class="fas fa-file-signature shrink-0"></i>
                             <div>
                                 <div class="font-bold">{{ t('attendance.monthly_employee_log.justification_note') }}</div>
                                 <div>{{ t('attendance.monthly_employee_log.reason') }}: {{ row.justification_reason || '—' }}</div>
                             </div>
                         </div>
+                        <div v-else-if="row.is_rest_day_checkout" class="rest-checkout-note">
+                            <i class="fas fa-fingerprint shrink-0"></i>
+                            <span>{{ t('attendance.monthly_employee_log.rest_checkout_note') }}</span>
+                        </div>
                         <span v-else class="text-mistral-muted">—</span>
                     </template>
                     <template #cell-last_check_out_at="{ row }">
-                        {{ row.last_check_out_at }}<span v-if="row.is_overnight_checkout" class="font-bold"> (+1)</span>
+                        <span>{{ row.last_check_out_at || '—' }}</span><span v-if="row.is_overnight_checkout" class="font-bold"> (+1)</span>
+                        <span v-if="row.is_rest_day_checkout" class="rest-checkout-tag">{{ t('attendance.monthly_employee_log.rest_checkout') }}</span>
                     </template>
                     <template #cell-late_minutes="{ row }">
                         {{ row.late_minutes || 0 }}
@@ -640,6 +661,71 @@ usePageTitle(headerTitle.value);
     border: 1px solid color-mix(in srgb, var(--color-mistral-warning) 35%, transparent);
 }
 
+/* سطر الغياب مميز بلون أحمر فاتح على الشاشة. */
+.monthly-log-absent-row td {
+    background: var(--color-mistral-danger-bg) !important;
+}
+.monthly-log-absent-row:hover td {
+    background: color-mix(in srgb, var(--color-mistral-danger-bg) 70%, var(--color-mistral-danger)) !important;
+}
+
+.absent-badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 9999px;
+    font-size: 12px;
+    font-weight: 800;
+    white-space: nowrap;
+    background: var(--color-mistral-danger);
+    color: var(--color-mistral-on-primary);
+}
+
+.absent-note {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.5;
+    text-align: start;
+    background: var(--color-mistral-danger);
+    color: var(--color-mistral-on-primary);
+}
+
+/* بصمة خروج يوم الراحة: تمييز خفيف أزرق + وسم نصي صريح. */
+.monthly-log-rest-checkout-row td {
+    background: var(--color-mistral-info-bg) !important;
+}
+
+.rest-checkout-tag {
+    display: inline-block;
+    margin-inline-start: 6px;
+    padding: 1px 8px;
+    border-radius: 9999px;
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
+    background: var(--color-mistral-info);
+    color: var(--color-mistral-on-primary);
+}
+
+.rest-checkout-note {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.5;
+    text-align: start;
+    background: var(--color-mistral-info-bg);
+    color: var(--color-mistral-info);
+    border: 1px solid color-mix(in srgb, var(--color-mistral-info) 35%, transparent);
+}
+
 @media print {
     @page {
         size: A4 portrait;
@@ -772,6 +858,37 @@ usePageTitle(headerTitle.value);
         font-size: 10px !important;
         padding: 5px 8px !important;
         gap: 6px !important;
+    }
+
+    /* الطباعة الفورية: سطر الغائب أحمر مميز يظهر في الورقة. */
+    .monthly-log-print .monthly-log-absent-row td {
+        background: var(--color-mistral-danger-bg) !important;
+        font-weight: 700 !important;
+    }
+
+    .monthly-log-print .absent-badge,
+    .monthly-log-print .absent-note {
+        background: var(--color-mistral-danger) !important;
+        color: var(--color-mistral-on-primary) !important;
+        font-size: 10px !important;
+        padding: 2px 8px !important;
+    }
+
+    /* الطباعة الفورية: بصمة خروج يوم الراحة بزرقاء مميزة + وسم نصي. */
+    .monthly-log-print .monthly-log-rest-checkout-row td {
+        background: var(--color-mistral-info-bg) !important;
+    }
+
+    .monthly-log-print .rest-checkout-tag {
+        background: var(--color-mistral-info) !important;
+        color: var(--color-mistral-on-primary) !important;
+        font-size: 9px !important;
+        padding: 1px 6px !important;
+    }
+
+    .monthly-log-print .rest-checkout-note {
+        font-size: 10px !important;
+        padding: 4px 6px !important;
     }
 
     .monthly-log-print tr {

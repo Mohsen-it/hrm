@@ -162,6 +162,24 @@ class MonthlyEmployeeAttendanceLogService
         $firstCheckInModel = $checkInPunches->sortBy('punch_time')->first();
         $firstCheckIn = $firstCheckInModel?->punch_time;
         $lastCheckOut = $checkOutPunches->sortByDesc('punch_time')->first()?->punch_time;
+
+        // بصمة الخروج في يوم الراحة: اليوم غير العامل لا يملك نوافذ دخول/خروج،
+        // لكن أي بصمة مسجلة بتاريخ هذا اليوم يجب عرضها كآخر خروج مع وسم صريح
+        // أنها "بصمة خروج" حتى لا تُقرأ كدوام كامل. تُعرض أيضاً بصمات الفجر
+        // المنسوبة لليلة السابقة (مرآة لصف اليوم السابق الذي يحمل ‎(+1)‎).
+        $isRestDayCheckout = false;
+        if (! $isWorkDay && ! $isFuture) {
+            $dayStr = $date->toDateString();
+            $restDayPunch = $punches
+                ->filter(fn ($punch) => $punch->punch_time->format('Y-m-d') === $dayStr)
+                ->sortByDesc('punch_time')
+                ->first()?->punch_time;
+            if ($restDayPunch && ! $lastCheckOut) {
+                $lastCheckOut = $restDayPunch;
+                $isRestDayCheckout = true;
+            }
+        }
+
         $graceMinutes = isset($schedule['grace_minutes']) && $schedule['grace_minutes'] !== null
             ? (int) $schedule['grace_minutes']
             : null;
@@ -169,11 +187,20 @@ class MonthlyEmployeeAttendanceLogService
             ? (int) $schedule['early_margin']
             : null;
 
+        // الغياب = يوم عمل متوقع بلا أي بصمة دخول، وليس مستقبلاً، وبلا تبرير.
+        // أيام الإجازة/التبديل/بدون إسناد ليست أيام عمل أصلاً فلا تُوسم غياباً.
+        $isAbsent = $isWorkDay
+            && $firstCheckIn === null
+            && ! $isFuture
+            && $justificationReason === null;
+
         return [
             'date' => $date->toDateString(),
             'day_name' => $date->locale(config('app.locale'))->translatedFormat('l'),
             'schedule_status' => (string) ($schedule['status'] ?? ScheduleResolverService::STATUS_UNASSIGNED),
             'is_work_day' => $isWorkDay,
+            'is_absent' => $isAbsent,
+            'is_rest_day_checkout' => $isRestDayCheckout,
             'expected_check_in' => $schedule['expected_check_in'] ?? null,
             'expected_check_out' => $schedule['expected_check_out'] ?? null,
             'check_in_window' => $this->windowLabel($schedule['in_ahead_margin'] ?? null, $schedule['in_above_margin'] ?? null),

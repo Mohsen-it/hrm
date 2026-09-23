@@ -156,6 +156,135 @@ class DailyReportServiceTest extends TestCase
     }
 
     /**
+     * The missing-checkout and missing-evening tables read the PREVIOUS duty
+     * day's actual punches: the real check-in, and the last raw punch when no
+     * genuine checkout was recorded (e.g. an early exit the pipeline never
+     * counted as a checkout).
+     */
+    public function test_previous_day_actuals_feed_missing_checkout_and_evening_tables(): void
+    {
+        $this->travelTo('2026-08-10 12:00:00');
+
+        $user = $this->makeEmployee('EMP40099');
+        $this->assignOpenWorkEveryDay($user);
+        $rotation = RotationAssignment::where('employee_id', $user->id)->first()->rotation;
+        $rotation->update([
+            'time_schedule_id' => $this->makeTimeSchedule($user, '08:00', '15:00')->id,
+            'out_ahead_margin' => '14:30:00',
+            'out_above_margin' => '18:00:00',
+        ]);
+        // Yesterday: checked in at 07:55, never checked out; the raw punches
+        // show an early 13:40 exit the pipeline never counted as a checkout.
+        $this->makeOpenSession($user, '2026-08-09 07:55:00');
+        foreach (['2026-08-09 07:55:00', '2026-08-09 13:40:00'] as $punch) {
+            RawAttendanceLog::create([
+                'user_id' => $user->id,
+                'punch_time' => $punch,
+                'punch_type' => 'check_in',
+                'source' => 'device',
+                'processed' => true,
+            ]);
+        }
+
+        $report = $this->service->build('2026-08-10', '09:00');
+        $row = $report['rows']->firstWhere('id', $user->id);
+
+        $this->assertTrue($row['has_incomplete_punch']);
+        $this->assertSame('07:55', $row['prev_check_in']);
+        $this->assertSame('', $row['prev_check_out']);
+        $this->assertSame('13:40', $row['prev_last_punch']);
+    }
+
+    /**
+     * A same-day checkout before the expected end but inside the schedule's
+     * early_margin is not a violation, yet the report must tell it apart
+     * from a full checkout with an explicit tolerance note.
+     */
+    public function test_early_checkout_within_tolerance_adds_note(): void
+    {
+        $user = $this->makeEmployee('EMP40101');
+        $this->assignOpenWorkEveryDay($user);
+        $rotation = RotationAssignment::where('employee_id', $user->id)->first()->rotation;
+        $schedule = $this->makeTimeSchedule($user, '08:00', '15:00');
+        $schedule->early_margin = 30;
+        $schedule->save();
+        $rotation->update([
+            'time_schedule_id' => $schedule->id,
+            'out_ahead_margin' => '14:30:00',
+            'out_above_margin' => '18:00:00',
+        ]);
+        // 15 minutes early — inside the 30-minute tolerance.
+        $this->makeCompleteSession($user, '2026-08-10 08:00:00', '2026-08-10 14:45:00');
+
+        $report = $this->service->build('2026-08-10', '09:00');
+        $row = $report['rows']->firstWhere('id', $user->id);
+
+        $this->assertSame('present', $row['status']);
+        $this->assertStringContainsString('خروج مبكر ضمن السماحية', $row['notes']);
+    }
+
+    /**
+     * An early checkout beyond the schedule's early_margin is a real early
+     * leave, never a tolerance case — no tolerance note may appear.
+     */
+    public function test_early_checkout_beyond_tolerance_adds_no_note(): void
+    {
+        $user = $this->makeEmployee('EMP40102');
+        $this->assignOpenWorkEveryDay($user);
+        $rotation = RotationAssignment::where('employee_id', $user->id)->first()->rotation;
+        $schedule = $this->makeTimeSchedule($user, '08:00', '15:00');
+        $schedule->early_margin = 30;
+        $schedule->save();
+        $rotation->update([
+            'time_schedule_id' => $schedule->id,
+            'out_ahead_margin' => '14:30:00',
+            'out_above_margin' => '18:00:00',
+        ]);
+        // 60 minutes early — beyond the 30-minute tolerance.
+        $this->makeCompleteSession($user, '2026-08-10 08:00:00', '2026-08-10 14:00:00');
+
+        $report = $this->service->build('2026-08-10', '09:00');
+        $row = $report['rows']->firstWhere('id', $user->id);
+
+        $this->assertStringNotContainsString('ضمن السماحية', $row['notes']);
+    }
+
+    /**
+     * An overnight duty whose departure-morning checkout lands before the
+     * expected end but inside the tolerance (e.g. 07:45 for an 08:00 duty)
+     * carries the tolerance note qualified with yesterday's date.
+     */
+    public function test_previous_day_early_checkout_within_tolerance_adds_note(): void
+    {
+        $this->travelTo('2026-08-10 12:00:00');
+
+        $user = $this->makeEmployee('EMP40103');
+        $this->assignOneDayDuty($user, '2026-08-09');
+        $rotation = RotationAssignment::where('employee_id', $user->id)->first()->rotation;
+        $schedule = $this->makeOvernightSchedule($user);
+        $schedule->early_margin = 30;
+        $schedule->save();
+        $rotation->update(['time_schedule_id' => $schedule->id]);
+        // Duty 08-09, departure checkout next morning 15 minutes early.
+        $this->makeCompleteSession($user, '2026-08-09 08:00:00', '2026-08-10 07:45:00');
+        foreach (['2026-08-09 08:00:00', '2026-08-09 18:00:00'] as $punch) {
+            RawAttendanceLog::create([
+                'user_id' => $user->id,
+                'punch_time' => $punch,
+                'punch_type' => 'check_in',
+                'source' => 'device',
+                'processed' => true,
+            ]);
+        }
+
+        $report = $this->service->build('2026-08-10', '09:00');
+        $row = $report['rows']->firstWhere('id', $user->id);
+
+        $this->assertFalse($row['has_incomplete_punch']);
+        $this->assertStringContainsString('خروج مبكر ضمن السماحية أمس', $row['notes']);
+    }
+
+    /**
      * The missing-checkout table is a strict "اليوم السابق" snapshot: an open
      * session on the report day itself is never evaluated, even when its exit
      * window has already ended — it will appear on tomorrow's report instead.
@@ -1141,6 +1270,73 @@ class DailyReportServiceTest extends TestCase
         RawAttendanceLog::create([
             'user_id' => $user->id,
             'punch_time' => '2026-08-10 17:00:00',
+            'punch_type' => 'extra',
+            'source' => 'device',
+            'processed' => true,
+        ]);
+
+        $report = $this->service->build('2026-08-11', '09:00');
+        $row = $report['rows']->firstWhere('id', $user->id);
+
+        $this->assertFalse($row['has_missing_evening_punch']);
+    }
+
+    /**
+     * When the time table configures an explicit third (evening) punch
+     * window, only a punch inside it fulfils the evening obligation — the
+     * legacy "anything after the entry window" rule no longer applies.
+     */
+    public function test_third_punch_window_governs_evening_obligation(): void
+    {
+        $this->travelTo('2026-08-11 18:00:00');
+
+        $user = $this->makeEmployee('EMP60016');
+        $this->assignOneDayDuty($user, '2026-08-10');
+        $schedule = $this->makeOvernightSchedule($user);
+        $schedule->third_punch_start = '18:00';
+        $schedule->third_punch_end = '23:00';
+        $schedule->save();
+        RotationAssignment::where('employee_id', $user->id)->first()->rotation->update([
+            'time_schedule_id' => $schedule->id,
+        ]);
+        $this->makeCompleteSession($user, '2026-08-10 08:00:00', '2026-08-11 08:05:00');
+        // 13:00 is after the legacy 12:00 threshold but outside the explicit
+        // 18:00-23:00 third-punch window: the obligation stays unfulfilled.
+        RawAttendanceLog::create([
+            'user_id' => $user->id,
+            'punch_time' => '2026-08-10 13:00:00',
+            'punch_type' => 'extra',
+            'source' => 'device',
+            'processed' => true,
+        ]);
+
+        $report = $this->service->build('2026-08-11', '09:00');
+        $row = $report['rows']->firstWhere('id', $user->id);
+
+        $this->assertTrue($row['has_missing_evening_punch']);
+    }
+
+    /**
+     * A punch inside the explicit third-punch window fulfils the evening
+     * obligation.
+     */
+    public function test_punch_inside_third_punch_window_fulfils_obligation(): void
+    {
+        $this->travelTo('2026-08-11 18:00:00');
+
+        $user = $this->makeEmployee('EMP60017');
+        $this->assignOneDayDuty($user, '2026-08-10');
+        $schedule = $this->makeOvernightSchedule($user);
+        $schedule->third_punch_start = '18:00';
+        $schedule->third_punch_end = '23:00';
+        $schedule->save();
+        RotationAssignment::where('employee_id', $user->id)->first()->rotation->update([
+            'time_schedule_id' => $schedule->id,
+        ]);
+        $this->makeCompleteSession($user, '2026-08-10 08:00:00', '2026-08-11 08:05:00');
+        RawAttendanceLog::create([
+            'user_id' => $user->id,
+            'punch_time' => '2026-08-10 20:00:00',
             'punch_type' => 'extra',
             'source' => 'device',
             'processed' => true,

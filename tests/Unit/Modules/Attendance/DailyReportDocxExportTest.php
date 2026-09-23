@@ -19,8 +19,8 @@ class DailyReportDocxExportTest extends TestCase
                 ['status' => 'absent', 'name' => 'موظف بلا بصمة', 'department_name' => 'القسم', 'has_no_fingerprint' => true, 'notes' => 'الموظف غير مسجل في جهاز البصمة'],
                 ['status' => 'rest', 'name' => 'موظف راحة بلا بصمة', 'department_name' => 'القسم', 'has_no_fingerprint' => true, 'notes' => 'الموظف غير مسجل في جهاز البصمة'],
                 ['status' => 'absent', 'name' => 'موظف غياب مسجل بالبصمة', 'department_name' => 'القسم', 'has_no_fingerprint' => false],
-                ['status' => 'present', 'name' => 'موظف دخول دون خروج', 'department_name' => 'القسم', 'rotation' => 'دورية النقل (ب)', 'check_in' => '08:30', 'has_incomplete_punch' => true, 'expected_check_in' => '08:00', 'expected_check_out' => '08:00', 'expected_check_out_next_day' => true, 'notes' => 'لم يسجل بصمة الخروج حتى نهاية نافذة الخروج 10:00'],
-                ['status' => 'present', 'name' => 'موظف بلا مسائية', 'department_name' => 'القسم', 'rotation' => 'دورية 1-3 (أ)', 'check_in' => '08:05', 'has_missing_evening_punch' => true, 'notes' => 'لم يسجل البصمة المسائية أمس'],
+                ['status' => 'present', 'name' => 'موظف دخول دون خروج', 'department_name' => 'القسم', 'rotation' => 'دورية النقل (ب)', 'check_in' => '08:30', 'has_incomplete_punch' => true, 'prev_check_in' => '07:55', 'prev_check_out' => '', 'prev_last_punch' => '13:40', 'expected_check_in' => '08:00', 'expected_check_out' => '17:00', 'expected_check_out_next_day' => false, 'notes' => 'لم يسجل بصمة الخروج حتى نهاية نافذة الخروج 10:00'],
+                ['status' => 'present', 'name' => 'موظف بلا مسائية', 'department_name' => 'القسم', 'rotation' => 'دورية 1-3 (أ)', 'check_in' => '08:05', 'prev_last_punch' => '21:35', 'has_missing_evening_punch' => true, 'notes' => 'لم يسجل البصمة المسائية أمس'],
             ],
         ]);
 
@@ -48,13 +48,14 @@ class DailyReportDocxExportTest extends TestCase
         $this->assertStringContainsString('09:15', $xml);
 
         // The missing-checkout table now sits right after the lateness table and
-        // carries the rotation, the expected entry time and the expected exit
-        // time from the rotation's time table (جدول الوقت) — the report reads
-        // against the schedules on the Time Schedules page.
+        // carries the PREVIOUS day's actual entry and exit times (a genuinely
+        // recorded checkout, else the last punch of that day — e.g. an early
+        // exit the pipeline never counted as a checkout), never the expected
+        // schedule times.
         $this->assertStringContainsString('تقرير عدم تسجيل بصمة الخروج حسب جداول الوقت', $xml);
         $this->assertStringContainsString('دورية النقل (ب)', $xml);
-        $this->assertStringContainsString('08:00', $xml);
-        $this->assertStringContainsString('(اليوم التالي)', $xml);
+        $this->assertStringContainsString('07:55', $xml);
+        $this->assertStringContainsString('13:40', $xml);
         $this->assertStringContainsString('لم يسجل بصمة الخروج حتى نهاية نافذة الخروج 10:00', $xml);
 
         $document = new \DOMDocument;
@@ -113,19 +114,24 @@ class DailyReportDocxExportTest extends TestCase
         $header = $xpath->query('./w:tr[1]/w:tc', $incomplete);
         $this->assertSame(7, $header->length);
         $this->assertStringContainsString('الدورية', $header->item(3)->textContent);
-        $this->assertStringContainsString('وقت الدخول المتوقع', $header->item(4)->textContent);
-        $this->assertStringContainsString('وقت الخروج المتوقع', $header->item(5)->textContent);
+        $this->assertStringContainsString('وقت الدخول الفعلي', $header->item(4)->textContent);
+        $this->assertStringContainsString('وقت الخروج الفعلي', $header->item(5)->textContent);
+        // The previous day's actual entry must be rendered (not today's
+        // 08:30 check-in and not the 08:00 schedule time).
+        $this->assertStringContainsString('07:55', $incomplete->textContent);
 
         // The evening-punch table (index 6) mirrors the lateness table:
-        // rotation + morning check-in + notes carrying the missing evening
-        // punch.
+        // rotation + the previous day's last recorded punch + notes carrying
+        // the missing evening punch.
         $this->assertStringContainsString('تقرير عدم تسجيل البصمة المسائية لهذا اليوم', $xml);
         $evening = $tables->item(6);
         $this->assertInstanceOf(\DOMElement::class, $evening);
         $eveningHeader = $xpath->query('./w:tr[1]/w:tc', $evening);
         $this->assertSame(6, $eveningHeader->length);
+        $this->assertStringContainsString('آخر بصمة مسجلة', $eveningHeader->item(4)->textContent);
         $this->assertStringContainsString('موظف بلا مسائية', $evening->textContent);
         $this->assertStringContainsString('دورية 1-3 (أ)', $evening->textContent);
+        $this->assertStringContainsString('21:35', $evening->textContent);
         $this->assertStringContainsString('لم يسجل البصمة المسائية أمس', $evening->textContent);
 
         // The lateness and missing-checkout data rows must be vertically

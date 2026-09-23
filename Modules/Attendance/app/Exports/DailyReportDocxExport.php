@@ -91,12 +91,20 @@ class DailyReportDocxExport
             $table = $tables?->item($index);
             if ($table instanceof DOMElement) {
                 // The evening-punch table mirrors the lateness table: rotation
-                // + morning check-in + notes (the missing evening punch is
-                // described in the notes column).
+                // + the last recorded punch + notes (the missing evening punch
+                // is described in the notes column).
                 $hasCheckIn = in_array($status, ['late', 'incomplete', 'evening'], true);
-                // The missing-checkout table carries the expected exit time
-                // from the rotation's time table as an extra column.
-                $hasExpectedExit = $status === 'incomplete';
+                // The missing-checkout table carries the ACTUAL previous-day
+                // entry and exit times as extra columns (not the expected
+                // schedule times).
+                $hasExitColumn = $status === 'incomplete';
+                if ($status === 'incomplete') {
+                    $this->renameHeaderCell($xpath, $table, 4, 'وقت الدخول الفعلي');
+                    $this->renameHeaderCell($xpath, $table, 5, 'وقت الخروج الفعلي');
+                }
+                if ($status === 'evening') {
+                    $this->renameHeaderCell($xpath, $table, 4, 'آخر بصمة مسجلة');
+                }
                 if ($hasCheckIn) {
                     // Give the notes column more room so its Arabic text does not
                     // wrap into several lines and inflate the row height.
@@ -108,7 +116,8 @@ class DailyReportDocxExport
                     $table,
                     $this->rowsFor($status),
                     $hasCheckIn,
-                    $hasExpectedExit,
+                    $hasExitColumn,
+                    $status,
                 );
             }
         }
@@ -154,7 +163,7 @@ class DailyReportDocxExport
      * the narrow notes cell and push the row height far above the others.
      *
      * The six-column grid is the lateness table; the seven-column grid is the
-     * missing-checkout table (which also carries the expected exit time). The
+     * missing-checkout table (which also carries the actual exit time). The
      * prototype data row's cell widths are kept in sync with the new grid so
      * every cloned row keeps its columns aligned with the table grid.
      */
@@ -201,14 +210,18 @@ class DailyReportDocxExport
      * Replace every template data row while retaining its complete styling.
      *
      * For the lateness and missing-checkout tables ($hasCheckIn = true) the
-     * template must keep the "الدورية" column immediately before the check-in
-     * column: the rotation value is written into that cell and the check-in
-     * time into the following one. In the missing-checkout table the check-in
-     * column shows the expected entry time from the rotation's time table and
-     * $hasExpectedExit adds the expected exit time column after it, so the
-     * table reads strictly against جداول الوقت.
+     * template must keep the "الدورية" column immediately before the time
+     * column: the rotation value is written into that cell and the time into
+     * the following one.
+     * - lateness: the time column shows today's actual check-in;
+     * - missing-checkout: the time columns show the PREVIOUS duty day's
+     *   actual entry and actual exit (a genuinely recorded checkout, else the
+     *   last punch of that day — e.g. an early exit the pipeline never
+     *   counted as a checkout);
+     * - missing-evening: the time column shows the previous day's last
+     *   recorded punch ("آخر بصمة مسجلة").
      */
-    private function replaceTableRows(DOMDocument $document, DOMXPath $xpath, DOMElement $table, array $rows, bool $hasCheckIn, bool $hasExpectedExit = false): void
+    private function replaceTableRows(DOMDocument $document, DOMXPath $xpath, DOMElement $table, array $rows, bool $hasCheckIn, bool $hasExitColumn = false, string $status = ''): void
     {
         $tableRows = $xpath->query('./w:tr', $table);
         $prototype = $tableRows?->item(1);
@@ -241,24 +254,32 @@ class DailyReportDocxExport
                 if ($hasCheckIn) {
                     // The lateness table carries the employee's rotation before
                     // the check-in time so the reviewer can see which rotation
-                    // the late employee belongs to. The missing-checkout table
-                    // shows the expected entry time from the time table instead
-                    // of the raw punch.
+                    // the late employee belongs to.
                     $values[] = (string) ($row['rotation'] ?? '—');
-                    $values[] = $hasExpectedExit
-                        ? (string) ($row['expected_check_in'] ?? '')
-                        : (string) ($row['check_in'] ?? '');
+                    $values[] = match ($status) {
+                        // Previous duty day actuals (the violation day), never
+                        // today's punch.
+                        'incomplete' => (string) ($row['prev_check_in'] ?? $row['check_in'] ?? ''),
+                        'evening' => (string) ($row['prev_last_punch'] ?? ''),
+                        default => (string) ($row['check_in'] ?? ''),
+                    };
                 }
-                if ($hasExpectedExit) {
-                    $exitTime = (string) ($row['expected_check_out'] ?? '');
-                    $values[] = $exitTime
-                        .(($exitTime !== '' && (bool) ($row['expected_check_out_next_day'] ?? false)) ? ' (اليوم التالي)' : '');
+                if ($hasExitColumn) {
+                    // Actual exit of the previous duty day: the genuinely
+                    // recorded checkout, else the last punch of that day (an
+                    // early exit the pipeline never counted as a checkout).
+                    // Actual punches always fall on the duty day itself, so no
+                    // next-day suffix is ever needed here.
+                    $exit = ($row['prev_check_out'] ?? '') !== ''
+                        ? $row['prev_check_out']
+                        : ($row['prev_last_punch'] ?? '');
+                    $values[] = (string) $exit;
                 }
                 $notes = (string) ($row['notes'] ?? '');
                 // The lateness table owns the check-in column: surface the
                 // evening presence punch (24h duties) next to the notes since
                 // the fixed template has no dedicated column for it.
-                if ($hasCheckIn && ! $hasExpectedExit && ! empty($row['evening_punch'])) {
+                if ($hasCheckIn && ! $hasExitColumn && ! empty($row['evening_punch'])) {
                     $notes .= ($notes !== '' ? '، ' : '').'بصمة مسائية: '.$row['evening_punch'];
                 }
                 // An overnight checkout lands on the next calendar day: mark it
@@ -312,6 +333,19 @@ class DailyReportDocxExport
                     $rPr->appendChild($document->createElementNS(self::WORD_NAMESPACE, 'w:rtl'));
                 }
             }
+        }
+    }
+
+    /** Rename one header cell of a template table without changing its formatting. */
+    private function renameHeaderCell(DOMXPath $xpath, DOMElement $table, int $cellIndex, string $label): void
+    {
+        $header = $xpath->query('./w:tr', $table)?->item(0);
+        if (! $header instanceof DOMElement) {
+            return;
+        }
+        $cell = $xpath->query('./w:tc', $header)?->item($cellIndex);
+        if ($cell instanceof DOMElement) {
+            $this->setElementText($xpath, $cell, $label);
         }
     }
 

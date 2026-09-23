@@ -28,9 +28,14 @@ class TimeScheduleValidationService
             'in_above_margin' => ['nullable', 'integer', 'min:0'],
             'out_ahead_margin' => ['nullable', 'integer', 'min:0'],
             'out_above_margin' => ['nullable', 'integer', 'min:0'],
+            'third_punch_start' => ['nullable', 'date_format:H:i'],
+            'third_punch_end' => ['nullable', 'date_format:H:i'],
         ];
 
-        return Validator::make($data, $rules)->validate();
+        $validated = Validator::make($data, $rules)->validate();
+        $this->assertThirdPunchRange($validated);
+
+        return $validated;
     }
 
     /**
@@ -55,8 +60,47 @@ class TimeScheduleValidationService
             'in_above_margin' => ['nullable', 'integer', 'min:0'],
             'out_ahead_margin' => ['nullable', 'integer', 'min:0'],
             'out_above_margin' => ['nullable', 'integer', 'min:0'],
+            'third_punch_start' => ['nullable', 'date_format:H:i'],
+            'third_punch_end' => ['nullable', 'date_format:H:i'],
         ];
 
-        return Validator::make($data, $rules)->validate();
+        $validated = Validator::make($data, $rules)->validate();
+
+        // On partial updates either edge may come from the stored row — but
+        // only when the key is absent from the payload (an explicit null
+        // clears the edge instead of inheriting the stored value).
+        $start = array_key_exists('third_punch_start', $validated)
+            ? $validated['third_punch_start']
+            : $schedule?->third_punch_start;
+        $end = array_key_exists('third_punch_end', $validated)
+            ? $validated['third_punch_end']
+            : $schedule?->third_punch_end;
+        $this->assertThirdPunchRange(['third_punch_start' => $start, 'third_punch_end' => $end]);
+
+        return $validated;
+    }
+
+    /**
+     * The third (evening) punch window is a same-day interval: when both
+     * edges are set, the end must fall after the start.
+     *
+     * @param  array<string, mixed>  $data
+     *
+     * @throws ValidationException
+     */
+    private function assertThirdPunchRange(array $data): void
+    {
+        $start = $data['third_punch_start'] ?? null;
+        $end = $data['third_punch_end'] ?? null;
+
+        if ($start === null || $start === '' || $end === null || $end === '') {
+            return;
+        }
+
+        if (substr((string) $end, 0, 5) <= substr((string) $start, 0, 5)) {
+            throw ValidationException::withMessages([
+                'third_punch_end' => [__('shifts.third_punch_invalid_range')],
+            ]);
+        }
     }
 }

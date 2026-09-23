@@ -468,6 +468,8 @@ class RotationService
                 'in_above_margin' => $timeSchedule->in_above_margin,
                 'out_ahead_margin' => $timeSchedule->out_ahead_margin,
                 'out_above_margin' => $timeSchedule->out_above_margin,
+                'third_punch_start' => $timeSchedule->third_punch_start,
+                'third_punch_end' => $timeSchedule->third_punch_end,
                 'breaks' => $timeSchedule->breaks->map(fn ($b) => [
                     'break_start' => $b->break_start,
                     'break_end' => $b->break_end,

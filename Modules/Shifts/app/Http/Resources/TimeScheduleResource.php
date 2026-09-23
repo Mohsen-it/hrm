@@ -26,6 +26,8 @@ class TimeScheduleResource extends JsonResource
             'in_above_margin' => $this->in_above_margin,
             'out_ahead_margin' => $this->out_ahead_margin,
             'out_above_margin' => $this->out_above_margin,
+            'third_punch_start' => $this->third_punch_start ? substr((string) $this->third_punch_start, 0, 5) : null,
+            'third_punch_end' => $this->third_punch_end ? substr((string) $this->third_punch_end, 0, 5) : null,
             'breaks' => $this->whenLoaded('breaks', function () {
                 return $this->breaks->map(function ($break) {
                     return [

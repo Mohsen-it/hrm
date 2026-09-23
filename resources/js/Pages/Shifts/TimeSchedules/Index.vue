@@ -36,6 +36,7 @@ const columns = computed(() => [
     { key: 'in_time', label: t('shifts.in_time') },
     { key: 'out_time', label: t('shifts.out_time') },
     { key: 'is_multi_day', label: t('shifts.is_multi_day'), cellClass: 'text-center' },
+    { key: 'third_punch', label: t('shifts.third_punch'), cellClass: 'text-center' },
     { key: 'late_margin', label: t('shifts.late_until'), cellClass: 'text-center' },
     { key: 'early_margin', label: t('shifts.early_from'), cellClass: 'text-center' },
     { key: 'actions', label: t('common.actions'), cellClass: 'text-center w-[180px]' },
@@ -159,6 +160,11 @@ usePageTitle(t('shifts.time_schedules_title'));
             <template #cell-early_margin="{ row }">
                 <span dir="ltr">{{ earlyFrom(row) }}</span>
                 <span class="text-mistral-muted text-[11px]">({{ row.early_margin ?? 0 }} {{ t('shifts.minutes') }})</span>
+            </template>
+
+            <template #cell-third_punch="{ row }">
+                <span v-if="row.third_punch_start && row.third_punch_end" dir="ltr">{{ String(row.third_punch_start).slice(0, 5) }} – {{ String(row.third_punch_end).slice(0, 5) }}</span>
+                <span v-else class="text-mistral-muted">—</span>
             </template>
 
             <template #cell-actions="{ row }">

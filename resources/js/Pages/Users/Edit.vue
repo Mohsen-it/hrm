@@ -285,7 +285,7 @@ usePageTitle(t('users.edit_user'));
                 icon="fas fa-bolt"
                 :collapsible="false"
                 :default-open="true"
-                :count="14"
+                :count="16"
             >
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     <FormInput
@@ -366,6 +366,22 @@ usePageTitle(t('users.edit_user'));
                         name="position_id"
                         :options="positionOptions"
                         :error="form.errors.position_id"
+                    />
+                    <FormSelect
+                        v-model="form.grade_id"
+                        :label="t('users.grade')"
+                        name="grade_id"
+                        :options="grades.map((g) => ({ value: g.id, label: g.grade_name }))"
+                        :placeholder="t('users.select_grade')"
+                        :error="form.errors.grade_id"
+                    />
+                    <FormSelect
+                        v-model="form.subordination_id"
+                        :label="t('users.subordination')"
+                        name="subordination_id"
+                        :options="subordinations.map((s) => ({ value: s.id, label: s.display_name }))"
+                        :placeholder="t('users.select_subordination')"
+                        :error="form.errors.subordination_id"
                     />
                     <FormSelect
                         v-model="form.rotation_assignment.rotation_id"

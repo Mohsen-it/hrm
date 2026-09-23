@@ -28,6 +28,8 @@ const form = reactive({
     in_above_margin: 0,
     out_ahead_margin: 0,
     out_above_margin: 0,
+    third_punch_start: '',
+    third_punch_end: '',
 });
 
 const breaks = ref([]);
@@ -61,6 +63,8 @@ function submit() {
         in_above_margin: Number(form.in_above_margin) || 0,
         out_ahead_margin: Number(form.out_ahead_margin) || 0,
         out_above_margin: Number(form.out_above_margin) || 0,
+        third_punch_start: form.third_punch_start || null,
+        third_punch_end: form.third_punch_end || null,
         breaks: breaks.value,
     }, {
         preserveScroll: true,
@@ -203,6 +207,28 @@ usePageTitle(t('shifts.add_schedule'));
                     <div class="font-semibold mb-1">{{ t('shifts.window_preview') }}</div>
                     <div><span class="text-mistral-muted">{{ t('shifts.check_in_window') }}:</span> <span dir="ltr">{{ inStart }} – {{ inEnd }}</span></div>
                     <div><span class="text-mistral-muted">{{ t('shifts.check_out_window') }}:</span> <span dir="ltr">{{ outStart }} – {{ outEnd }}</span></div>
+                </div>
+            </FormSection>
+
+            <FormSection v-if="form.is_multi_day" :title="t('shifts.third_punch')" icon="fas fa-moon" :collapsible="true" :default-open="true">
+                <ContextHelp>
+                    <p>{{ t('shifts.help_ts_third_punch') }}</p>
+                </ContextHelp>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FormInput
+                        v-model="form.third_punch_start"
+                        :label="t('shifts.third_punch_start')"
+                        name="third_punch_start"
+                        type="time"
+                        :error="errorFor('third_punch_start')"
+                    />
+                    <FormInput
+                        v-model="form.third_punch_end"
+                        :label="t('shifts.third_punch_end')"
+                        name="third_punch_end"
+                        type="time"
+                        :error="errorFor('third_punch_end')"
+                    />
                 </div>
             </FormSection>
 

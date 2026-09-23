@@ -7,6 +7,7 @@ use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\RichText\RichText;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Style\Color;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
 /**
@@ -70,6 +71,7 @@ class MonthlyEmployeeAttendanceLogExport
         $this->exporter->writeHeaders($sheet, array_column($columns, 'header'), $currentRow);
         $nextRow = $this->exporter->writeRows($sheet, $this->translatedRows(), $columns, $currentRow + 1);
         $this->enlargeFlaggedRows($sheet, $currentRow + 1, count($columns));
+        $this->highlightSpecialRows($sheet, $currentRow + 1, count($columns));
 
         if ($this->withLate) {
             $totalLate = array_sum(array_map(fn (array $row) => (int) ($row['late_minutes'] ?? 0), $this->rows));
@@ -129,6 +131,11 @@ class MonthlyEmployeeAttendanceLogExport
             if (! empty($row['is_overnight_checkout']) && is_string($row['last_check_out_at'] ?? null)) {
                 $row['last_check_out_at'] .= ' (+1)';
             }
+            // بصمة خروج يوم الراحة: تُعرض مع وسم صريح أنها بصمة خروج فقط.
+            if (! empty($row['is_rest_day_checkout']) && is_string($row['last_check_out_at'] ?? null)) {
+                $row['last_check_out_at'] .= ' ('.$this->t('monthly_employee_log.rest_checkout').')';
+            }
+            $isAbsent = ! empty($row['is_absent']) && empty($row['has_justification']);
             $statusLabel = match ($row['schedule_status'] ?? null) {
                 'work' => 'دوام',
                 'rest' => 'يوم راحة',
@@ -152,6 +159,12 @@ class MonthlyEmployeeAttendanceLogExport
                 $statusRich->createTextRun($statusLabel)
                     ->getFont()->setBold(true)->setSize(14)->setColor(new Color($this->sanitizeColor($row['vacation_type_color'] ?? null)));
                 $row['schedule_status'] = $statusRich;
+            } elseif ($isAbsent) {
+                // سطر الغياب مميز: حالة حمراء صريحة "غائب".
+                $absentRich = new RichText;
+                $absentRich->createTextRun($this->t('monthly_employee_log.absent'))
+                    ->getFont()->setBold(true)->setSize(14)->setColor(new Color('CE1126'));
+                $row['schedule_status'] = $absentRich;
             } else {
                 $row['schedule_status'] = $statusLabel;
             }
@@ -171,6 +184,14 @@ class MonthlyEmployeeAttendanceLogExport
     {
         $lines = [];
 
+        if (! empty($row['is_absent']) && empty($row['has_justification'])) {
+            $lines[] = [
+                'text' => $this->t('monthly_employee_log.absent_note'),
+                'color' => 'CE1126',
+                'bold' => true,
+            ];
+        }
+
         if (! empty($row['has_justification'])) {
             $reason = is_string($row['justification_reason'] ?? null) && $row['justification_reason'] !== ''
                 ? $row['justification_reason']
@@ -178,6 +199,14 @@ class MonthlyEmployeeAttendanceLogExport
             $lines[] = [
                 'text' => $this->t('monthly_employee_log.justification_note').': '.$this->t('monthly_employee_log.reason').': '.$reason,
                 'color' => 'B45309',
+                'bold' => true,
+            ];
+        }
+
+        if (! empty($row['is_rest_day_checkout'])) {
+            $lines[] = [
+                'text' => $this->t('monthly_employee_log.rest_checkout_note'),
+                'color' => '1D4ED8',
                 'bold' => true,
             ];
         }
@@ -212,14 +241,46 @@ class MonthlyEmployeeAttendanceLogExport
         foreach (array_values($this->rows) as $index => $row) {
             $isVacation = ($row['schedule_status'] ?? null) === 'leave_excused'
                 && ! empty($row['vacation_type']);
+            $isAbsent = ! empty($row['is_absent']) && empty($row['has_justification']);
+            $isRestCheckout = ! empty($row['is_rest_day_checkout']);
 
-            if (empty($row['has_justification']) && ! $isVacation) {
+            if (empty($row['has_justification']) && ! $isVacation && ! $isAbsent && ! $isRestCheckout) {
                 continue;
             }
 
             $excelRow = $firstRow + $index;
             $sheet->getRowDimension($excelRow)->setRowHeight(34);
             $sheet->getStyle($notesCol.$excelRow)->getAlignment()->setWrapText(true);
+        }
+    }
+
+    /**
+     * سطر الغياب مميز بلون أحمر فاتح، وسطر بصمة خروج يوم الراحة بأزرق فاتح.
+     */
+    private function highlightSpecialRows(Worksheet $sheet, int $firstRow, int $columnCount): void
+    {
+        $lastCol = Coordinate::stringFromColumnIndex($columnCount);
+        $firstCol = Coordinate::stringFromColumnIndex(1);
+
+        foreach (array_values($this->rows) as $index => $row) {
+            $isAbsent = ! empty($row['is_absent']) && empty($row['has_justification']);
+            $isRestCheckout = ! empty($row['is_rest_day_checkout']) && ! $isAbsent;
+
+            if (! $isAbsent && ! $isRestCheckout) {
+                continue;
+            }
+
+            $excelRow = $firstRow + $index;
+            $range = $firstCol.$excelRow.':'.$lastCol.$excelRow;
+            $bg = $isAbsent ? 'FBE7E9' : 'DBEAFE';
+
+            $sheet->getStyle($range)->applyFromArray([
+                'fill' => [
+                    'fillType' => Fill::FILL_SOLID,
+                    'color' => ['rgb' => $bg],
+                ],
+                'font' => ['bold' => $isAbsent],
+            ]);
         }
     }
 

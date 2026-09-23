@@ -37,6 +37,8 @@ function saveQuickDefaults() {
             branch_id: form.branch_id,
             department_id: form.department_id,
             position_id: form.position_id,
+            grade_id: form.grade_id,
+            subordination_id: form.subordination_id,
             rotation_id: form.rotation_assignment.rotation_id,
             rotation_group_id: form.rotation_assignment.rotation_group_id,
         }));
@@ -260,6 +262,12 @@ watch(
     if (saved.position_id && idIn(props.positions, saved.position_id)) {
         form.position_id = saved.position_id;
     }
+    if (saved.grade_id && idIn(props.grades, saved.grade_id)) {
+        form.grade_id = saved.grade_id;
+    }
+    if (saved.subordination_id && idIn(props.subordinations, saved.subordination_id)) {
+        form.subordination_id = saved.subordination_id;
+    }
     if (saved.rotation_id && idIn(props.rotations, saved.rotation_id)) {
         form.rotation_assignment.rotation_id = String(saved.rotation_id);
         nextTick(() => {
@@ -331,7 +339,7 @@ usePageTitle(t('users.add_new'));
                 icon="fas fa-bolt"
                 :collapsible="false"
                 :default-open="true"
-                :count="14"
+                :count="16"
             >
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     <FormInput
@@ -413,6 +421,22 @@ usePageTitle(t('users.add_new'));
                         name="position_id"
                         :options="positionOptions"
                         :error="form.errors.position_id"
+                    />
+                    <FormSelect
+                        v-model="form.grade_id"
+                        :label="t('users.grade')"
+                        name="grade_id"
+                        :options="grades.map((g) => ({ value: g.id, label: g.grade_name }))"
+                        :placeholder="t('users.select_grade')"
+                        :error="form.errors.grade_id"
+                    />
+                    <FormSelect
+                        v-model="form.subordination_id"
+                        :label="t('users.subordination')"
+                        name="subordination_id"
+                        :options="subordinations.map((s) => ({ value: s.id, label: s.display_name }))"
+                        :placeholder="t('users.select_subordination')"
+                        :error="form.errors.subordination_id"
                     />
                     <FormSelect
                         v-model="form.rotation_assignment.rotation_id"

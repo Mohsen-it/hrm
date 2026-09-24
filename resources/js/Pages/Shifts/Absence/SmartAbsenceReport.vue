@@ -44,6 +44,11 @@ const selectedYear = ref(Number(props.filters?.year) || today.getFullYear())
 const fromDate = ref(props.filters?.from_date || firstOfMonth(selectedMonth.value, selectedYear.value))
 const toDate = ref(props.filters?.to_date || lastOfMonth(selectedMonth.value, selectedYear.value))
 
+// Global table search (name / code / phone). Sent to the backend — the
+// tables only receive the current page, so client-side filtering would
+// wrongly search just 20 rows.
+const searchQuery = ref(props.filters?.search || '')
+
 function firstOfMonth(month, year) {
     return `${year}-${String(month).padStart(2, '0')}-01`
 }
@@ -101,6 +106,7 @@ const filterParams = computed(() => ({
     rotation_ids: selectedRotationIds.value,
     rotation_group_ids: selectedRotationGroupIds.value,
     include_awaiting: includeAwaiting.value || null,
+    search: searchQuery.value || null,
 }))
 
 // Employees still inside their arrival window (no punch yet, deadline not
@@ -119,6 +125,7 @@ const monthlyFilterParams = computed(() => ({
     department_id: selectedDepartmentId.value || null,
     rotation_ids: selectedRotationIds.value,
     rotation_group_ids: selectedRotationGroupIds.value,
+    search: searchQuery.value || null,
 }))
 
 const hasActiveFilters = computed(() =>
@@ -219,6 +226,7 @@ function loadDaily() {
         rotation_ids: selectedRotationIds.value,
         rotation_group_ids: selectedRotationGroupIds.value,
         include_awaiting: includeAwaiting.value ? 1 : null,
+        search: searchQuery.value || null,
     }, { preserveState: true, preserveScroll: true, replace: true, only: ['dailyData', 'monthlyData', 'monthlyReportData', 'filters'] })
 }
 
@@ -229,13 +237,38 @@ function loadMonthly() {
         department_id: selectedDepartmentId.value || null,
         rotation_ids: selectedRotationIds.value,
         rotation_group_ids: selectedRotationGroupIds.value,
+        search: searchQuery.value || null,
     }, { preserveState: true, preserveScroll: true, replace: true, only: ['dailyData', 'monthlyData', 'monthlyReportData', 'filters'] })
+}
+
+// Global search: server-side (tables only hold the current page) with page
+// reset. Longer debounce than filter changes because the monthly report
+// recomputes the whole date range per request.
+let searchTimer = null
+function onTableSearch(q) {
+    searchQuery.value = q || ''
+    clearTimeout(reloadTimer)
+    clearTimeout(searchTimer)
+    searchTimer = setTimeout(() => {
+        const params = activeTab.value === 'monthly'
+            ? { ...monthlyFilterParams.value, page: 1 }
+            : { ...filterParams.value, page: 1 }
+        const target = activeTab.value === 'monthly'
+            ? route('smart-absence.monthly.report')
+            : route('smart-absence.daily')
+        const only = activeTab.value === 'monthly'
+            ? ['monthlyReportData', 'filters']
+            : ['dailyData', 'monthlyData', 'monthlyReportData', 'filters']
+        router.get(target, params, { preserveState: true, preserveScroll: true, replace: true, only })
+    }, 500)
 }
 
 function clearFilters() {
     selectedDepartmentId.value = null
     selectedRotationIds.value = []
     selectedRotationGroupIds.value = []
+    searchQuery.value = ''
+    reloadActiveTab()
 }
 
 // ---- Unassigned section: local search + activity filter (client-side only) ----
@@ -318,6 +351,7 @@ function buildExportParams() {
     selectedRotationIds.value.forEach((id) => params.append('rotation_ids[]', String(id)))
     selectedRotationGroupIds.value.forEach((id) => params.append('rotation_group_ids[]', String(id)))
     if (includeAwaiting.value) params.set('include_awaiting', '1')
+    if (searchQuery.value) params.set('search', searchQuery.value)
     return params
 }
 
@@ -335,6 +369,7 @@ function buildMonthlyExportParams() {
     if (selectedDepartmentId.value) params.set('department_id', String(selectedDepartmentId.value))
     selectedRotationIds.value.forEach((id) => params.append('rotation_ids[]', String(id)))
     selectedRotationGroupIds.value.forEach((id) => params.append('rotation_group_ids[]', String(id)))
+    if (searchQuery.value) params.set('search', searchQuery.value)
     return params
 }
 
@@ -654,7 +689,7 @@ usePageTitle(t('shifts.smart_absence_report'));
                     :empty-title="t('shifts.no_absent_employees')"
                     :empty-description="t('shifts.no_absent_employees_description')"
                     storage-key="smart-absence-report-daily"
-                    @search="(q) => reloadActiveTab()"
+                    @search="onTableSearch"
                     @export="handleExport"
                 >
                     <template #cell-name="{ row }">
@@ -1004,7 +1039,7 @@ usePageTitle(t('shifts.smart_absence_report'));
                     :empty-title="t('shifts.no_absence_in_range')"
                     :empty-description="t('shifts.no_absence_in_range_description')"
                     storage-key="smart-absence-report-monthly"
-                    @search="(q) => reloadActiveTab()"
+                    @search="onTableSearch"
                     @export="handleMonthlyExport"
                 >
                     <template #cell-name="{ row }">

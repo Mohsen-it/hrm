@@ -42,8 +42,25 @@ class SmartAbsenceController extends Controller
         $rotationIds = $this->parseIdList($request->input('rotation_ids', $request->input('rotation_id')));
         $rotationGroupIds = $this->parseIdList($request->input('rotation_group_ids', $request->input('rotation_group_id')));
         $includeAwaiting = $request->boolean('include_awaiting');
+        $search = trim((string) $request->input('search', ''));
 
         $report = $this->buildDailyReport($date, $dateStr, $departmentId, $rotationIds, $rotationGroupIds, $includeAwaiting);
+
+        $absentDetails = $report['absentDetails'];
+        if ($search !== '') {
+            $absentDetails = $absentDetails->filter(function ($row) use ($search) {
+                $haystack = mb_strtolower(($row->name ?? '').' '.($row->employee_code ?? '').' '.($row->phone ?? ''));
+                $needles = preg_split('/\s+/u', mb_strtolower($search), -1, PREG_SPLIT_NO_EMPTY);
+
+                foreach ($needles as $needle) {
+                    if (! str_contains($haystack, $needle)) {
+                        return false;
+                    }
+                }
+
+                return true;
+            })->values();
+        }
 
         $unassigned = $this->buildUnassignedDetails($date, $dateStr);
 
@@ -59,15 +76,15 @@ class SmartAbsenceController extends Controller
         $perPage = $request->input('per_page', 20);
 
         if ($perPage === 'all' || $perPage === -1) {
-            $perPage = $report['absentDetails']->count();
+            $perPage = $absentDetails->count();
             $page = 1;
         } else {
             $perPage = (int) $perPage;
         }
 
         $absentPaginator = new LengthAwarePaginator(
-            $report['absentDetails']->forPage($page, $perPage),
-            $report['absentDetails']->count(),
+            $absentDetails->forPage($page, $perPage),
+            $absentDetails->count(),
             $perPage,
             $page,
             ['path' => route('smart-absence.daily')]
@@ -97,6 +114,7 @@ class SmartAbsenceController extends Controller
                 'rotation_group_ids' => $rotationGroupIds,
                 'date' => $dateStr,
                 'include_awaiting' => $includeAwaiting,
+                'search' => $search !== '' ? $search : null,
             ],
         ]);
     }
@@ -117,10 +135,29 @@ class SmartAbsenceController extends Controller
         $departmentId = $request->input('department_id') ? (int) $request->input('department_id') : null;
         $rotationIds = $this->parseIdList($request->input('rotation_ids', $request->input('rotation_id')));
         $rotationGroupIds = $this->parseIdList($request->input('rotation_group_ids', $request->input('rotation_group_id')));
+        $search = trim((string) $request->input('search', ''));
 
-        $report = $this->absenceService->getMonthlyAbsenceReport($from, $to, $departmentId, $rotationIds, $rotationGroupIds);
+        $report = $this->absenceService->getMonthlyAbsenceReport($from, $to, $departmentId, $rotationIds, $rotationGroupIds, $search ?: null);
 
         $absentDetails = $this->buildMonthlyAbsentDetails($report);
+
+        // Defensive in-memory filter: the service already narrows candidates
+        // by search, but details carry the display names — filter again so a
+        // search always matches what the user sees (name / code / phone).
+        if ($search !== '') {
+            $absentDetails = $absentDetails->filter(function ($row) use ($search) {
+                $haystack = mb_strtolower(($row->name ?? '').' '.($row->employee_code ?? '').' '.($row->phone ?? ''));
+                $needles = preg_split('/\s+/u', mb_strtolower($search), -1, PREG_SPLIT_NO_EMPTY);
+
+                foreach ($needles as $needle) {
+                    if (! str_contains($haystack, $needle)) {
+                        return false;
+                    }
+                }
+
+                return true;
+            })->values();
+        }
 
         $totalExpectedDays = $report['total_expected_days'];
         $totalAbsentDays = $report['total_absent_days'];
@@ -167,6 +204,7 @@ class SmartAbsenceController extends Controller
                 'department_id' => $departmentId,
                 'rotation_ids' => $rotationIds,
                 'rotation_group_ids' => $rotationGroupIds,
+                'search' => $search !== '' ? $search : null,
                 'month' => (int) $from->month,
                 'year' => (int) $from->year,
             ],
@@ -186,15 +224,33 @@ class SmartAbsenceController extends Controller
         $departmentId = $request->input('department_id') ? (int) $request->input('department_id') : null;
         $rotationIds = $this->parseIdList($request->input('rotation_ids', $request->input('rotation_id')));
         $rotationGroupIds = $this->parseIdList($request->input('rotation_group_ids', $request->input('rotation_group_id')));
+        $search = trim((string) $request->input('search', ''));
 
-        $report = $this->absenceService->getMonthlyAbsenceReport($from, $to, $departmentId, $rotationIds, $rotationGroupIds);
+        $report = $this->absenceService->getMonthlyAbsenceReport($from, $to, $departmentId, $rotationIds, $rotationGroupIds, $search ?: null);
+
+        $employees = $this->buildMonthlyAbsentDetails($report);
+
+        if ($search !== '') {
+            $employees = $employees->filter(function ($row) use ($search) {
+                $haystack = mb_strtolower(($row->name ?? '').' '.($row->employee_code ?? '').' '.($row->phone ?? ''));
+                $needles = preg_split('/\s+/u', mb_strtolower($search), -1, PREG_SPLIT_NO_EMPTY);
+
+                foreach ($needles as $needle) {
+                    if (! str_contains($haystack, $needle)) {
+                        return false;
+                    }
+                }
+
+                return true;
+            })->values();
+        }
 
         $export = new SmartAbsenceMonthlyExport(
             fromDate: $from->toDateString(),
             toDate: $to->toDateString(),
             totalExpectedDays: $report['total_expected_days'],
             totalAbsentDays: $report['total_absent_days'],
-            employees: $this->buildMonthlyAbsentDetails($report),
+            employees: $employees,
             statusLabel: __('shifts.absent_short', [], null) ?: 'غياب',
         );
 

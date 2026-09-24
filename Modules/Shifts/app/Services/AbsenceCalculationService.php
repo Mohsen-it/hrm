@@ -946,6 +946,7 @@ class AbsenceCalculationService
         ?int $departmentId = null,
         int|array|null $rotationIds = null,
         int|array|null $rotationGroupIds = null,
+        ?string $search = null,
     ): array {
         $fromStr = $from->toDateString();
         $toStr = $to->toDateString();
@@ -975,6 +976,9 @@ class AbsenceCalculationService
 
         // Active employees, respecting the department filter.
         // id => employment / exemption metadata.
+        // A search term narrows the candidate set up front so a name lookup
+        // does not recompute the whole month for every employee.
+        $search = $search !== null ? trim($search) : null;
         $activeUsers = DB::table('users')
             ->whereNull('deleted_at')
             ->where('status', 1)
@@ -984,6 +988,13 @@ class AbsenceCalculationService
                     ->orWhere('termination_date', '>=', $fromStr);
             })
             ->when($departmentId !== null, fn ($q) => $q->where('department_id', $departmentId))
+            ->when($search !== null && $search !== '', function ($q) use ($search) {
+                $q->where(function ($sq) use ($search) {
+                    $sq->where('name', 'like', "%{$search}%")
+                        ->orWhere('employee_code', 'like', "%{$search}%")
+                        ->orWhere('phone', 'like', "%{$search}%");
+                });
+            })
             ->get(['id', 'hire_date', 'branch_id', 'department_id', 'termination_date', 'attendance_exemption_type', 'attendance_exemption_from', 'attendance_exemption_to'])
             ->keyBy('id');
 

@@ -96,7 +96,7 @@ const form = useForm({
         action: '',
         rotation_id: props.currentRotationAssignment?.rotation_id != null ? String(props.currentRotationAssignment.rotation_id) : '',
         rotation_group_id: props.currentRotationAssignment?.rotation_group_id != null ? String(props.currentRotationAssignment.rotation_group_id) : '',
-        start_date: '',
+        start_date: props.currentRotationAssignment?.start_date || '',
         end_date: '',
     },
 });
@@ -192,6 +192,19 @@ const rotationGroupOptions = computed(() => {
     ];
 });
 
+// Quick mode prefills the start date from the current assignment so the
+// operator sees it. Picking a different rotation/group needs a fresh
+// effective date, so clear it; reverting to the current combo restores it.
+// (With no current assignment the typed date is left alone.)
+function syncQuickStartDate() {
+    const cur = props.currentRotationAssignment;
+    if (!cur) return;
+    const ra = form.rotation_assignment;
+    const sameRotation = String(ra.rotation_id ?? '') === String(cur?.rotation_id ?? '');
+    const sameGroup = String(ra.rotation_group_id ?? '') === String(cur?.rotation_group_id ?? '');
+    ra.start_date = (sameRotation && sameGroup) ? (cur?.start_date ?? '') : '';
+}
+
 watch(
     () => form.company_id,
     () => {
@@ -227,6 +240,14 @@ watch(
     () => form.rotation_assignment.rotation_id,
     () => {
         form.rotation_assignment.rotation_group_id = '';
+        if (mode.value === 'quick') syncQuickStartDate();
+    },
+);
+
+watch(
+    () => form.rotation_assignment.rotation_group_id,
+    () => {
+        if (mode.value === 'quick') syncQuickStartDate();
     },
 );
 
@@ -253,7 +274,8 @@ function submit() {
             const cur = props.currentRotationAssignment;
             const sameRotation = String(ra.rotation_id ?? '') === String(cur?.rotation_id ?? '');
             const sameGroup = String(ra.rotation_group_id ?? '') === String(cur?.rotation_group_id ?? '');
-            const changed = !sameRotation || !sameGroup || !!ra.start_date;
+            const sameStart = (ra.start_date || '') === (cur?.start_date || '');
+            const changed = !sameRotation || !sameGroup || !sameStart;
             if (!changed) {
                 delete payload.rotation_assignment;
             } else {

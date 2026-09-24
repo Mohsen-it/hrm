@@ -244,8 +244,26 @@ function submit() {
         }
         if (payload.roles && payload.roles.length === 0) delete payload.roles;
         if (payload.permissions && payload.permissions.length === 0) delete payload.permissions;
-        if (!payload.rotation_assignment || !payload.rotation_assignment.action) {
+        // Quick mode has no action picker (unlike the full form's rotation
+        // section): infer assign/transfer from what actually changed so the
+        // visible rotation fields are not silently dropped on save.
+        const rawRa = payload.rotation_assignment;
+        const ra = rawRa ? { ...rawRa } : null;
+        if (mode.value === 'quick' && ra) {
+            const cur = props.currentRotationAssignment;
+            const sameRotation = String(ra.rotation_id ?? '') === String(cur?.rotation_id ?? '');
+            const sameGroup = String(ra.rotation_group_id ?? '') === String(cur?.rotation_group_id ?? '');
+            const changed = !sameRotation || !sameGroup || !!ra.start_date;
+            if (!changed) {
+                delete payload.rotation_assignment;
+            } else {
+                if (!ra.action) ra.action = cur ? 'transfer' : 'assign';
+                payload.rotation_assignment = ra;
+            }
+        } else if (!ra || !ra.action) {
             delete payload.rotation_assignment;
+        } else {
+            payload.rotation_assignment = ra;
         }
         return payload;
     }).put(route('users.update', props.user.id), {
@@ -397,6 +415,7 @@ usePageTitle(t('users.edit_user'));
                         name="rotation_group_id"
                         :options="rotationGroupOptions"
                         :placeholder="t('users.select_rotation_group')"
+                        :disabled="!form.rotation_assignment.rotation_id"
                         :error="form.errors['rotation_assignment.rotation_group_id']"
                     />
                     <FormInput

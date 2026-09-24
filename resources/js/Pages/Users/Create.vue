@@ -296,10 +296,15 @@ function submit() {
             payload.device_privilege = Number(payload.device_privilege);
         }
         // New users can only be assigned (no transfer/unassign yet): infer the
-        // action from the picked rotation, otherwise drop the block entirely.
-        const ra = payload.rotation_assignment || {};
-        if (ra.rotation_id && ra.rotation_group_id && ra.start_date) {
+        // action from the picked rotation. Keep a partially-filled block so
+        // backend validation points at the missing field instead of silently
+        // dropping the whole assignment. Clone first: payload is a shallow
+        // copy and mutating the nested object would leak into the form.
+        const rawRa = payload.rotation_assignment;
+        const ra = rawRa ? { ...rawRa } : null;
+        if (ra && (ra.rotation_id || ra.rotation_group_id || ra.start_date)) {
             ra.action = 'assign';
+            payload.rotation_assignment = ra;
         } else {
             delete payload.rotation_assignment;
         }
@@ -452,6 +457,7 @@ usePageTitle(t('users.add_new'));
                         name="rotation_group_id"
                         :options="rotationGroupOptions"
                         :placeholder="t('users.select_rotation_group')"
+                        :disabled="!form.rotation_assignment.rotation_id"
                         :error="form.errors['rotation_assignment.rotation_group_id']"
                     />
                     <FormInput

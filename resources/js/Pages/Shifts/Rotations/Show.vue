@@ -351,7 +351,7 @@ usePageTitle(t('shifts.rotation_details') + ': ' + props.rotation.name);
                 </div>
                 <div class="flex flex-col">
                     <dt class="text-[12px] font-semibold text-mistral-slate uppercase tracking-wider">{{ t('shifts.grace_minutes') }}</dt>
-                    <dd class="text-[14px] text-mistral-ink mt-1">{{ rotation.grace_minutes }} {{ t('shifts.minutes') }}</dd>
+                    <dd class="text-[14px] text-mistral-ink mt-1">{{ timeSchedule ? (timeSchedule.late_margin ?? 0) : (rotation.grace_minutes ?? 0) }} {{ t('shifts.minutes') }}</dd>
                 </div>
             </dl>
         </Card>

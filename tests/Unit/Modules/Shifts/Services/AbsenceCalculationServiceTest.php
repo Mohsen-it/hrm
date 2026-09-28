@@ -14,6 +14,7 @@ use Modules\Shifts\Models\RotationGroup;
 use Modules\Shifts\Models\ShiftException;
 use Modules\Shifts\Models\TimeSchedule;
 use Modules\Shifts\Services\AbsenceCalculationService;
+use Modules\Shifts\Services\ScheduleResolverService;
 use Modules\Users\Models\User;
 use Modules\Vacations\Models\UserVacationRequest;
 use Modules\Vacations\Models\VacationType;
@@ -546,6 +547,61 @@ class AbsenceCalculationServiceTest extends TestCase
         } finally {
             Carbon::setTestNow();
         }
+    }
+
+    /**
+     * The linked time schedule owns lateness grace: its late_margin wins over
+     * the rotation-level grace_minutes (production case 2026-09-27 — دورية
+     * 7-21 carried schedule 50 but rotation 30, flagging every 10:31-10:50
+     * arrival late). The rotation value is only a fallback for rotations with
+     * no schedule data at all.
+     */
+    public function test_time_schedule_late_margin_owns_lateness_grace_over_rotation(): void
+    {
+        $user = $this->makeEmployee('EMP10400');
+        $assignment = $this->assignRotation($user);
+        $assignment->rotation->grace_minutes = 30;
+        $assignment->rotation->save();
+        $this->attachSchedule($assignment, '10:00', '10:00', lateMargin: 50);
+        $assignment = $assignment->fresh(['rotation', 'rotationGroup']);
+
+        $deadline = $this->service->arrivalDeadline(Carbon::parse('2026-08-06'), $assignment);
+
+        $this->assertNotNull($deadline);
+        $this->assertSame('10:50', $deadline->format('H:i'), 'The schedule late_margin (50) must win over the rotation grace (30).');
+
+        $resolved = app(ScheduleResolverService::class)
+            ->resolve($user->id, '2026-08-06');
+
+        $this->assertSame(50, $resolved['grace_minutes'], 'The resolver contract must carry the schedule margin.');
+    }
+
+    /**
+     * A rotation without any schedule data keeps its own grace_minutes as the
+     * fallback (the schedule-owns-grace rule must not zero it).
+     */
+    public function test_rotation_without_schedule_keeps_its_own_grace(): void
+    {
+        $user = $this->makeEmployee('EMP10401');
+        $assignment = $this->assignRotation($user);
+        $assignment->rotation->grace_minutes = 25;
+        $assignment->rotation->save();
+        // Detach any schedule: resolveTimes() then yields late_margin null.
+        $assignment->rotation->time_schedule_id = null;
+        $assignment->rotation->save();
+        $assignment = $assignment->fresh(['rotation', 'rotationGroup']);
+        $assignment->rotation->setRelation('timeSchedule', null);
+
+        // Force the expected check-in through the snapshot path.
+        $assignment->snapshot_data = [
+            'time_schedule' => ['in_time' => '08:00', 'out_time' => '15:00', 'is_multi_day' => false],
+        ];
+        $assignment->save();
+
+        $deadline = $this->service->arrivalDeadline(Carbon::parse('2026-08-06'), $assignment);
+
+        $this->assertNotNull($deadline);
+        $this->assertSame('08:25', $deadline->format('H:i'), 'Without schedule data the rotation grace (25) must still apply.');
     }
 
     /**

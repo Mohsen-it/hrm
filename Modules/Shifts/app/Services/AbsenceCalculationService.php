@@ -45,6 +45,24 @@ class AbsenceCalculationService
     }
 
     /**
+     * Lateness grace (دقائق السماح) for one assignment.
+     *
+     * The linked time schedule (جدول الوقت) is the single source of truth:
+     * its late_margin wins whenever schedule data exists (live schedule or
+     * assignment snapshot, including an explicit 0 meaning "no tolerance").
+     * The rotation-level grace_minutes is only a fallback for rotations with
+     * no schedule data at all. Mirrors ScheduleResolverService.
+     */
+    private function latenessGraceMinutes(object $rotation, array $times): int
+    {
+        if (array_key_exists('late_margin', $times) && $times['late_margin'] !== null) {
+            return (int) $times['late_margin'];
+        }
+
+        return (int) ($rotation->grace_minutes ?? 0);
+    }
+
+    /**
      * Normalize a rotation filter (single id or array) into a list of ids.
      *
      * @return array<int, int>
@@ -308,7 +326,7 @@ class AbsenceCalculationService
             }
 
             $times = $this->rotationEngine->resolveTimes($assignment);
-            $grace = (int) ($rotation->grace_minutes ?: $times['late_margin'] ?: 0);
+            $grace = $this->latenessGraceMinutes($rotation, $times);
             $deadline = $times['check_in']
                 ? $date->copy()->setTimeFromTimeString($times['check_in'])->addMinutes($grace)
                 : $date->copy()->endOfDay();
@@ -478,7 +496,7 @@ class AbsenceCalculationService
         }
 
         $times = $this->rotationEngine->resolveTimes($assignment);
-        $grace = (int) ($assignment->rotation->grace_minutes ?: $times['late_margin'] ?: 0);
+        $grace = $this->latenessGraceMinutes($assignment->rotation, $times);
 
         return $times['check_in']
             ? $date->copy()->setTimeFromTimeString($times['check_in'])->addMinutes($grace)

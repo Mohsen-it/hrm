@@ -3,6 +3,7 @@
 namespace Modules\Shifts\Services;
 
 use Carbon\Carbon;
+use Modules\Shifts\Models\Rotation;
 use Modules\Shifts\Repositories\RotationAssignmentRepository;
 use Modules\Shifts\Repositories\ShiftExceptionRepository;
 use Modules\Vacations\Models\UserVacationRequest;
@@ -95,10 +96,7 @@ class ScheduleResolverService
         if (! $this->rotationEngine->isWorkDay($rotation, $group, $date)) {
             $times = $this->rotationEngine->resolveTimes($rotationAssignment);
 
-            $rotationGrace = $rotation->grace_minutes;
-            $graceMinutes = $rotationGrace !== null && (int) $rotationGrace > 0
-                ? (int) $rotationGrace
-                : ($times['late_margin'] ?? null);
+            $graceMinutes = $this->latenessGraceMinutes($rotation, $times);
 
             return $this->rotationEngine->resolve(
                 employeeId: $employeeId,
@@ -157,13 +155,7 @@ class ScheduleResolverService
         // --- Step 4: Engine Math (Rotation, work day) --------------------
         $times = $this->rotationEngine->resolveTimes($rotationAssignment);
 
-        // Grace priority: rotation.grace_minutes → snapshot late_margin → global config (null = defer to consumer)
-        // grace_minutes defaults to 0 (not null) in the DB, so treat 0 as
-        // "no rotation-level override" and fall through to the schedule margin.
-        $rotationGrace = $rotation->grace_minutes;
-        $graceMinutes = $rotationGrace !== null && (int) $rotationGrace > 0
-            ? (int) $rotationGrace
-            : ($times['late_margin'] ?? null);
+        $graceMinutes = $this->latenessGraceMinutes($rotation, $times);
 
         $timesMeta = [
             'grace_minutes' => $graceMinutes,
@@ -193,6 +185,26 @@ class ScheduleResolverService
             expectedCheckOut: $times['check_out'],
             timesMeta: $timesMeta,
         );
+    }
+
+    /**
+     * Lateness grace (دقائق السماح) for one assignment.
+     *
+     * The linked time schedule (جدول الوقت) is the single source of truth:
+     * its late_margin wins whenever schedule data exists (live schedule or
+     * assignment snapshot, including an explicit 0 meaning "no tolerance").
+     * The rotation-level grace_minutes is only a fallback for rotations with
+     * no schedule data at all (null = defer to the consumer's global config).
+     */
+    private function latenessGraceMinutes(Rotation $rotation, array $times): ?int
+    {
+        if (array_key_exists('late_margin', $times) && $times['late_margin'] !== null) {
+            return (int) $times['late_margin'];
+        }
+
+        $rotationGrace = $rotation->grace_minutes;
+
+        return $rotationGrace !== null && (int) $rotationGrace > 0 ? (int) $rotationGrace : null;
     }
 
     /**

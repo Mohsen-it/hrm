@@ -484,7 +484,9 @@ class AttendanceSessionService
     /**
      * Compute late minutes for a check-in against the expected slot.
      *
-     * Grace priority: rotation.grace_minutes → global config fallback.
+     * Grace comes pre-resolved by ScheduleResolverService (the time
+     * schedule's late_margin is the single source of truth) → global
+     * config fallback.
      */
     protected function computeLateMinutes(?string $expectedCheckIn, DateTimeInterface $at, array $resolved): int
     {

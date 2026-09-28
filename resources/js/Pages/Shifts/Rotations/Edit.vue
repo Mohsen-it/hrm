@@ -30,7 +30,6 @@ const form = reactive({
     time_schedule_id: props.rotation.time_schedule_id || null,
     overtime_enabled: props.rotation.overtime_enabled || false,
     work_on_holidays: props.rotation.work_on_holidays || false,
-    grace_minutes: props.rotation.grace_minutes || 0,
     color: props.rotation.color || 'var(--color-mistral-primary)',
 });
 
@@ -103,7 +102,10 @@ function submit() {
     router.put(route('rotations.update', props.rotation.id), {
         ...form,
         number_of_groups: parseInt(form.number_of_groups, 10) || 1,
-        grace_minutes: parseInt(form.grace_minutes, 10) || 0,
+        // Lateness grace lives on the time schedule only (late_margin is
+        // the single source of truth) — saving a rotation resets any legacy
+        // rotation-level value back to 0.
+        grace_minutes: 0,
         pattern: form.pattern,
     }, {
         preserveScroll: true,
@@ -259,7 +261,6 @@ usePageTitle(t('shifts.edit_rotation'));
                         <li><strong>{{ t('shifts.help_rot_options_schedule_t') }}</strong> {{ t('shifts.help_rot_options_schedule_d') }}</li>
                         <li><strong>{{ t('shifts.help_rot_options_overtime_t') }}</strong> {{ t('shifts.help_rot_options_overtime_d') }}</li>
                         <li><strong>{{ t('shifts.help_rot_options_holidays_t') }}</strong> {{ t('shifts.help_rot_options_holidays_d') }}</li>
-                        <li><strong>{{ t('shifts.help_rot_options_grace_t') }}</strong> {{ t('shifts.help_rot_options_grace_d') }}</li>
                         <li><strong>{{ t('shifts.help_rot_options_color_t') }}</strong> {{ t('shifts.help_rot_options_color_d') }}</li>
                     </ul>
                 </ContextHelp>
@@ -279,15 +280,6 @@ usePageTitle(t('shifts.edit_rotation'));
                     </div>
                     <FormSwitch v-model="form.overtime_enabled" :label="t('shifts.overtime_enabled')" name="overtime_enabled" />
                     <FormSwitch v-model="form.work_on_holidays" :label="t('shifts.work_on_holidays')" name="work_on_holidays" />
-                    <FormInput
-                        v-model="form.grace_minutes"
-                        :label="t('shifts.grace_minutes')"
-                        name="grace_minutes"
-                        type="number"
-                        min="0"
-                        max="120"
-                        :error="errorFor('grace_minutes')"
-                    />
                     <FormInput
                         v-model="form.color"
                         :label="t('shifts.color')"

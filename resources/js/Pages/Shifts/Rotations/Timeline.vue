@@ -11,7 +11,7 @@ import { ref, computed, watch } from 'vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { PageHeader, Button, Card, Badge, StatCard, SearchInput, FormSelect, FormInput, FormModal, ErrorSummary, Alert, EmptyState } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
-import { CHART_STONE } from '@/utils/chartPalette';
+import { groupColorByIndex } from '@/composables/useRotationGroupColors';
 
 const { t } = useTranslations();
 
@@ -30,21 +30,10 @@ const toDate = ref(props.to);
 const searchQuery = ref(props.filters.search || '');
 const selectedGroup = ref(props.filters.group_id || '');
 
-const groupColors = [
-    { bg: 'bg-mistral-success-bg', border: 'border-mistral-success/20', text: 'text-mistral-success', dot: 'bg-mistral-success' },
-    { bg: 'bg-mistral-info-bg', border: 'border-mistral-info/20', text: 'text-mistral-info', dot: 'bg-mistral-info' },
-    { bg: 'bg-mistral-warning-bg', border: 'border-mistral-warning/20', text: 'text-mistral-warning', dot: 'bg-mistral-warning' },
-    { bg: 'bg-mistral-danger-bg', border: 'border-mistral-danger/20', text: 'text-mistral-danger', dot: 'bg-mistral-danger' },
-    { bg: 'bg-mistral-status-overtime/10', border: 'border-mistral-status-overtime/20', text: 'text-mistral-status-overtime', dot: 'bg-mistral-status-overtime' },
-    { bg: 'bg-mistral-status-vacation/10', border: 'border-mistral-status-vacation/20', text: 'text-mistral-status-vacation', dot: 'bg-mistral-status-vacation' },
-    { bg: 'bg-mistral-primary/10', border: 'border-mistral-primary/20', text: 'text-mistral-primary', dot: 'bg-mistral-primary' },
-    { bg: 'bg-mistral-cream-deeper', border: 'border-mistral-beige-deep', text: 'text-mistral-primary-deep', dot: 'bg-mistral-sunshine-700' },
-];
-
 const groupColorMap = computed(() => {
     const map = {};
     props.groups.forEach((group, idx) => {
-        map[group.id] = groupColors[idx % groupColors.length];
+        map[group.id] = groupColorByIndex(idx);
     });
     return map;
 });
@@ -511,8 +500,12 @@ const submitQuickTransfer = async () => {
                                         :class="rowIdx % 2 === 0 ? 'bg-white' : 'bg-mistral-surface/30'"
                                     >
                                         <span
-                                            class="inline-flex items-center justify-center w-8 h-8 rounded-lg text-xs font-bold text-white shadow-sm"
-                                            :style="{ backgroundColor: groupColors[emp.group_index % groupColors.length]?.dot || CHART_STONE }"
+                                            class="inline-flex items-center justify-center w-8 h-8 rounded-lg text-xs font-bold shadow-sm border"
+                                            :class="[
+                                                groupColorMap[emp.group_id]?.bg || 'bg-mistral-surface',
+                                                groupColorMap[emp.group_id]?.border || 'border-mistral-hairline',
+                                                groupColorMap[emp.group_id]?.text || 'text-mistral-steel',
+                                            ]"
                                         >
                                             {{ emp.group_name }}
                                         </span>

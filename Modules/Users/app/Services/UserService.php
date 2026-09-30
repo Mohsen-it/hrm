@@ -584,7 +584,9 @@ class UserService
                 ['required', 'email', 'max:255'],
                 $this->uniqueEmailRule($ignoreId),
             ),
-            'password' => [$ignoreId ? 'nullable' : 'required', 'string', 'min:8', 'max:255'],
+            // Optional on both create and update: createUser() auto-generates a
+            // secure password when none is given (shown once to the operator).
+            'password' => ['nullable', 'string', 'min:8', 'max:255'],
             'national_id' => ['nullable', 'string', 'max:30'],
             'phone' => ['nullable', 'string', 'max:20'],
             'phone2' => ['nullable', 'string', 'max:20'],

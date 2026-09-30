@@ -14,9 +14,17 @@ import { router, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import { PageHeader, DataTable, SearchInput, ConfirmDialog, Badge, Button, Card, IconButton, FormSelect, Alert, AvatarWithPreview, FormModal, PunchTypeBadge, LoadingSpinner, EmptyState, ReportTable } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
+import { groupColorByIndex } from '@/composables/useRotationGroupColors';
 
 const { t } = useTranslations();
 const page = usePage();
+
+// Badge colors follow the shared rotation-group palette, keyed by the
+// group's position so the same group shows the same color everywhere
+// (users table, manage-assignments, timeline).
+function rotationGroupBadge(rotation) {
+    return groupColorByIndex(rotation?.rotation_group_index ?? rotation?.rotation_group_id);
+}
 
 const props = defineProps({
     users: { type: Object, default: () => ({ data: [], links: [] }) },
@@ -343,7 +351,14 @@ usePageTitle(t('users.title'));
                 <span v-else class="text-mistral-hairline">—</span>
             </template>
             <template #cell-rotation_group="{ row }">
-                <Badge v-if="row.rotation?.rotation_group_name" :text="row.rotation.rotation_group_name" variant="info" />
+                <span
+                    v-if="row.rotation?.rotation_group_name"
+                    class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[12px] font-medium border whitespace-nowrap"
+                    :class="[rotationGroupBadge(row.rotation).bg, rotationGroupBadge(row.rotation).border, rotationGroupBadge(row.rotation).text]"
+                >
+                    <span class="w-2 h-2 rounded-full shrink-0" :class="rotationGroupBadge(row.rotation).dot"></span>
+                    {{ row.rotation.rotation_group_name }}
+                </span>
                 <span v-else class="text-mistral-hairline">—</span>
             </template>
 

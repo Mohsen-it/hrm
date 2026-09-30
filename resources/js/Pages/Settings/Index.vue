@@ -86,6 +86,9 @@ usePageTitle(t('settings.title'));
     
         <PageHeader :title="t('settings.title')" :description="t('settings.index_description')">
             <template #actions>
+                <Button variant="secondary" icon="fas fa-heart-pulse" :href="route('settings.system-status')">
+                    {{ t('settings.system_status') }}
+                </Button>
                 <Button variant="secondary" icon="fas fa-cog" :href="route('settings.general')">
                     {{ t('settings.general_settings') }}
                 </Button>

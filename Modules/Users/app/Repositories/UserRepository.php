@@ -54,7 +54,7 @@ class UserRepository
                         'subordination:id,code,name_ar,name_en',
                         'shift:id,shift_name',
                         'rotationAssignments' => fn ($q) => $q->active()
-                            ->with(['rotation:id,name', 'rotationGroup:id,rotation_id,name'])
+                            ->with(['rotation:id,name', 'rotationGroup:id,rotation_id,name,group_index'])
                             ->orderByDesc('start_date'),
                     ]),
                 $filters

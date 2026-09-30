@@ -102,6 +102,12 @@ class RotationService
 
     /**
      * Update an existing rotation.
+     *
+     * When `number_of_groups` changes the related `att_rotation_groups` rows
+     * are synced: missing groups are created (B, C, ...) and extra groups are
+     * removed from the highest index downwards. An extra group that still has
+     * active assignments blocks the shrink with a validation error so no
+     * employee history is ever orphaned.
      */
     public function update(int $id, array $data): Rotation
     {
@@ -114,6 +120,11 @@ class RotationService
                 ]);
             }
 
+            // Effective cycle/work counts (new pattern wins when provided) so
+            // the max-groups validation below always uses the final values.
+            $effectiveCycle = $rotation->cycle_length;
+            $effectiveWork = $rotation->work_days_count;
+
             if (isset($data['pattern'])) {
                 $pattern = $data['pattern'];
                 $data['cycle_length'] = count($pattern);
@@ -125,6 +136,9 @@ class RotationService
                         'pattern' => [__('shifts.rotation_pattern_requires_work_day')],
                     ]);
                 }
+
+                $effectiveCycle = $data['cycle_length'];
+                $effectiveWork = $data['work_days_count'];
 
                 // Rebalance group indices sequentially so the engine's
                 // `group_index * work_days_count` offset stays correct after a
@@ -143,9 +157,26 @@ class RotationService
                 }
             }
 
+            // Validate the requested group count against the effective pattern
+            // (previously any number up to 26 was saved to the rotations table
+            // without creating the matching group rows).
+            $requestedGroups = isset($data['number_of_groups'])
+                ? (int) $data['number_of_groups']
+                : (int) $rotation->number_of_groups;
+
+            $maxGroups = $this->maxGroupsForPattern($effectiveCycle, $effectiveWork);
+
+            if ($requestedGroups > $maxGroups) {
+                throw ValidationException::withMessages([
+                    'number_of_groups' => [__('shifts.rotation_too_many_groups', ['max' => $maxGroups])],
+                ]);
+            }
+
             $rotation = $this->rotationRepository->update($rotation, $data);
 
-            return $rotation;
+            $this->syncGroupsCount($rotation, $requestedGroups);
+
+            return $rotation->fresh(['groups']);
         });
     }
 
@@ -405,6 +436,75 @@ class RotationService
                 'group_index' => $i,
             ]);
         }
+    }
+
+    /**
+     * Sync the persisted groups with the requested count.
+     *
+     * Creates missing trailing groups (B, C, ...) and removes surplus groups
+     * starting from the highest index. A surplus group with active assignments
+     * aborts the whole update so employees are never stranded.
+     */
+    private function syncGroupsCount(Rotation $rotation, int $requestedCount): void
+    {
+        $groups = $rotation->groups()->orderBy('group_index')->get()->values();
+        $currentCount = $groups->count();
+
+        if ($requestedCount === $currentCount) {
+            // Keep the counter column truthful even when rows were added
+            // through the standalone addGroup endpoint.
+            if ((int) $rotation->number_of_groups !== $currentCount) {
+                $rotation->update(['number_of_groups' => $currentCount]);
+            }
+
+            return;
+        }
+
+        if ($requestedCount > $currentCount) {
+            $existingNames = $groups->pluck('name')->all();
+
+            for ($i = $currentCount; $i < $requestedCount; $i++) {
+                $name = chr(65 + $i);
+
+                // Avoid colliding with a custom-renamed group (e.g. user
+                // renamed A → B manually, then grows 1 → 2).
+                $suffix = 1;
+                $candidate = $name;
+                while (in_array($candidate, $existingNames, true)) {
+                    $suffix++;
+                    $candidate = $name.$suffix;
+                }
+
+                $created = $this->groupRepository->create([
+                    'rotation_id' => $rotation->id,
+                    'name' => $candidate,
+                    'group_index' => $i,
+                ]);
+
+                $existingNames[] = $created->name;
+            }
+
+            $rotation->update(['number_of_groups' => $requestedCount]);
+
+            return;
+        }
+
+        // Shrink: delete from the highest index downwards.
+        $toDelete = $groups->slice($requestedCount)->sortByDesc('group_index')->values();
+
+        foreach ($toDelete as $group) {
+            if ($this->groupRepository->hasActiveAssignments($group->id)) {
+                throw ValidationException::withMessages([
+                    'number_of_groups' => [__('shifts.rotation_group_has_active_assignments')],
+                ]);
+            }
+        }
+
+        foreach ($toDelete as $group) {
+            $this->groupRepository->delete($group);
+        }
+
+        $rotation->update(['number_of_groups' => $requestedCount]);
     }
 
     /**

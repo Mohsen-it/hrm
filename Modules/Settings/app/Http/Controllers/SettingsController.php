@@ -12,6 +12,7 @@ use Modules\Settings\Http\Requests\StoreSettingRequest;
 use Modules\Settings\Http\Requests\UpdateSettingRequest;
 use Modules\Settings\Models\Setting;
 use Modules\Settings\Services\SettingService;
+use Modules\Settings\Services\SystemStatusService;
 
 /**
  * SettingsController — manage the key-value configuration catalogue.
@@ -20,6 +21,7 @@ class SettingsController extends Controller
 {
     public function __construct(
         private SettingService $service,
+        private SystemStatusService $statusService,
     ) {}
 
     /**
@@ -65,6 +67,21 @@ class SettingsController extends Controller
 
         return Inertia::render('Settings/Attendance', [
             'settings' => fn () => $this->service->getSettingsByGroup('attendance'),
+        ]);
+    }
+
+    /**
+     * صفحة حالة التشغيل: مدة العمل + آخر إطفاء/إقلاع + سجل الأحداث + logs.
+     */
+    public function systemStatus(Request $request): Response
+    {
+        $this->authorize('view-settings');
+
+        return Inertia::render('Settings/SystemStatus', [
+            'status' => fn () => $this->statusService->getStatus(),
+            'history' => fn () => $this->statusService->getHistory(50),
+            'logs' => fn () => $this->statusService->getLogs(),
+            'health' => fn () => $this->statusService->getHealth(),
         ]);
     }
 

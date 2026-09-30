@@ -69,6 +69,9 @@ class UserIndexResource extends JsonResource
                     'id' => $active->rotation->id,
                     'rotation_name' => $active->rotation->name,
                     'rotation_group_id' => $active->rotation_group_id,
+                    'rotation_group_index' => $active->relationLoaded('rotationGroup')
+                        ? $active->rotationGroup?->group_index
+                        : null,
                     'rotation_group_name' => $active->relationLoaded('rotationGroup')
                         ? $active->rotationGroup?->name
                         : null,

@@ -9,43 +9,16 @@ export default {
 <script setup>
 import { usePageTitle } from '@/composables/usePageTitle';
 
-import { computed, nextTick, ref, watch } from 'vue';
-import { useForm, usePage } from '@inertiajs/vue3';
+import { computed, ref, watch } from 'vue';
+import { useForm } from '@inertiajs/vue3';
 import { PageHeader, Button, Card, FormInput, FormTextarea, FormSelect, FormCheckbox, FormFileUpload, FormSection, FormActions, ErrorSummary, Alert, Tabs } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
 
-// Speedy entry: remember the operator's last picks (company/branch/...)
-// so the next create opens pre-filled. Gender falls back to male.
-const QUICK_DEFAULTS_KEY = 'hrm-user-quick-defaults';
-
-function loadQuickDefaults() {
-    try {
-        const raw = localStorage.getItem(QUICK_DEFAULTS_KEY);
-        return raw ? JSON.parse(raw) : {};
-    } catch {
-        return {};
-    }
-}
-
-function saveQuickDefaults() {
-    try {
-        localStorage.setItem(QUICK_DEFAULTS_KEY, JSON.stringify({
-            gender: form.gender,
-            company_id: form.company_id,
-            branch_id: form.branch_id,
-            department_id: form.department_id,
-            position_id: form.position_id,
-            grade_id: form.grade_id,
-            subordination_id: form.subordination_id,
-            rotation_id: form.rotation_assignment.rotation_id,
-            rotation_group_id: form.rotation_assignment.rotation_group_id,
-        }));
-    } catch {
-        // Storage unavailable (private mode) — creation still works.
-    }
-}
+// Every create opens with a blank form: no remembered picks from the
+// previously created employee (company/branch/department/rotation/...).
+// Gender keeps a static male default.
 
 // Form mode: quick (essential fields) vs full. Same toggle exists in Edit.vue.
 const mode = ref('quick');
@@ -125,7 +98,7 @@ const form = useForm({
         action: '',
         rotation_id: '',
         rotation_group_id: '',
-        start_date: new Date().toISOString().slice(0, 10),
+        start_date: '',
         end_date: '',
     },
 });
@@ -219,64 +192,19 @@ watch(
 
 watch(
     () => form.rotation_assignment.rotation_id,
-    () => { form.rotation_assignment.rotation_group_id = ''; },
+    () => {
+        form.rotation_assignment.rotation_group_id = '';
+        // Rotation is optional: only default the start date once a rotation
+        // is actually picked (an always-filled date forced the assignment
+        // block to be sent, making rotation effectively mandatory).
+        if (form.rotation_assignment.rotation_id && !form.rotation_assignment.start_date) {
+            form.rotation_assignment.start_date = new Date().toISOString().slice(0, 10);
+        }
+    },
 );
 
-// Apply instant defaults. Priority: remembered last picks → my own org
-// scope → empty. In Vue the selection IS the v-model value (equivalent of
-// the native `selected` attribute), so prefilling here = preselected UI.
-// Cascading selects need a tick between levels because the company/branch
-// watchers reset their children on change.
-{
-    const saved = loadQuickDefaults();
-    const page = usePage();
-    const me = page.props.auth?.user || {};
-    const idIn = (list, id) => (list || []).some((o) => String(o.id ?? o.value) === String(id));
-    // Remembered → mine → the only option (when a list has a single choice
-    // it is deterministic, like the static gender default) → empty.
-    const pick = (savedId, myId, list) => {
-        if (savedId && idIn(list, savedId)) return savedId;
-        if (myId && idIn(list, myId)) return myId;
-        if ((list || []).length === 1) return list[0].id ?? list[0].value;
-        return '';
-    };
-
-    form.gender = saved.gender || 'male';
-
-    const defaultCompany = pick(saved.company_id, me.company_id, props.companies);
-    if (defaultCompany) {
-        form.company_id = defaultCompany;
-        nextTick(() => {
-            const defaultBranch = pick(saved.branch_id, me.branch_id, filteredBranches.value);
-            if (defaultBranch) {
-                form.branch_id = defaultBranch;
-                nextTick(() => {
-                    const defaultDept = pick(saved.department_id, me.department_id, filteredDepartments.value);
-                    if (defaultDept) {
-                        form.department_id = defaultDept;
-                    }
-                });
-            }
-        });
-    }
-    if (saved.position_id && idIn(props.positions, saved.position_id)) {
-        form.position_id = saved.position_id;
-    }
-    if (saved.grade_id && idIn(props.grades, saved.grade_id)) {
-        form.grade_id = saved.grade_id;
-    }
-    if (saved.subordination_id && idIn(props.subordinations, saved.subordination_id)) {
-        form.subordination_id = saved.subordination_id;
-    }
-    if (saved.rotation_id && idIn(props.rotations, saved.rotation_id)) {
-        form.rotation_assignment.rotation_id = String(saved.rotation_id);
-        nextTick(() => {
-            if (saved.rotation_group_id && idIn(availableRotationGroups.value, saved.rotation_group_id)) {
-                form.rotation_assignment.rotation_group_id = String(saved.rotation_group_id);
-            }
-        });
-    }
-}
+// Static default only — never pre-filled from a previous employee.
+form.gender = 'male';
 
 watch(
     () => form.employee_code,
@@ -287,7 +215,6 @@ watch(
 );
 
 function submit() {
-    saveQuickDefaults();
     form.transform((data) => {
         const payload = { ...data };
         if (payload.device_privilege === '' || payload.device_privilege === null) {
@@ -295,14 +222,14 @@ function submit() {
         } else {
             payload.device_privilege = Number(payload.device_privilege);
         }
-        // New users can only be assigned (no transfer/unassign yet): infer the
-        // action from the picked rotation. Keep a partially-filled block so
-        // backend validation points at the missing field instead of silently
-        // dropping the whole assignment. Clone first: payload is a shallow
-        // copy and mutating the nested object would leak into the form.
+        // Rotation assignment is fully optional: the block is only sent when
+        // a rotation was picked. Otherwise it is dropped so backend
+        // validation never demands rotation fields for a plain new user.
+        // Clone first: payload is a shallow copy and mutating the nested
+        // object would leak into the form.
         const rawRa = payload.rotation_assignment;
         const ra = rawRa ? { ...rawRa } : null;
-        if (ra && (ra.rotation_id || ra.rotation_group_id || ra.start_date)) {
+        if (ra && ra.rotation_id) {
             ra.action = 'assign';
             payload.rotation_assignment = ra;
         } else {

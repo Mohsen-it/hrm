@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Cache;
 use Inertia\Inertia;
 use Inertia\Response;
 use Modules\Backups\Http\Requests\RestoreBackupRequest;
+use Modules\Backups\Http\Requests\UploadBackupRequest;
 use Modules\Backups\Models\BackupConfig;
 use Modules\Backups\Repositories\BackupRunRepository;
 use Modules\Backups\Services\BackupHealthService;
@@ -234,6 +235,27 @@ class BackupsController extends Controller
 
         return redirect()->route('backups.show', $run->id)
             ->with('success', __('backups.created_successfully'));
+    }
+
+    /**
+     * Register an external backup file (USB / flash drive) so it can be
+     * verified and restored like any system backup.
+     */
+    public function upload(UploadBackupRequest $request): RedirectResponse
+    {
+        $this->authorize('create-backups');
+
+        try {
+            $run = $this->backupService->importUploadedBackup(
+                $request->file('backup_file'),
+                auth()->id()
+            );
+        } catch (Throwable $e) {
+            return redirect()->back()->with('error', $e->getMessage());
+        }
+
+        return redirect()->route('backups.show', $run->id)
+            ->with('success', __('backups.uploaded_successfully'));
     }
 
     public function verify(int $id): RedirectResponse

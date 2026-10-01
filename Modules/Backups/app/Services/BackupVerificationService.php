@@ -43,7 +43,7 @@ class BackupVerificationService
 
             // Probe decrypt + decompress of the first bytes without
             // materializing the whole 500MB dump.
-            $this->probeIntegrity($full, $run->encrypted);
+            $this->probeIntegrity($full, $run->encrypted, (bool) $run->compressed);
 
             $this->runs->update($run, [
                 'verification_status' => 'verified',
@@ -58,12 +58,14 @@ class BackupVerificationService
     }
 
     /**
-     * Decrypt (if needed) the head of the file, gunzip the head, and assert
-     * it looks like a mysqldump (contains SQL keywords / dump header).
+     * Decrypt (if needed) the head of the file, gunzip the head (if
+     * compressed), and assert it looks like a mysqldump (contains SQL
+     * keywords / dump header). Plain `.sql` uploads from USB drives skip
+     * the gzip step and are probed as raw text.
      *
      * @throws \RuntimeException
      */
-    private function probeIntegrity(string $fullPath, bool $encrypted): void
+    private function probeIntegrity(string $fullPath, bool $encrypted, bool $compressed = true): void
     {
         $working = $fullPath;
         $tempDec = null;
@@ -82,35 +84,8 @@ class BackupVerificationService
                 $working = $tempDec;
             }
 
-            $in = gzopen($working, 'rb');
-            if ($in === false) {
-                throw new \RuntimeException('Cannot gunzip backup (corrupt gzip?).');
-            }
-            $head = '';
-            for ($i = 0; $i < 8; $i++) {
-                $chunk = gzread($in, 65536);
-                if ($chunk === false) {
-                    gzclose($in);
-                    throw new \RuntimeException('Gzip read failed (corrupt?).');
-                }
-                $head .= $chunk;
-                if (gzeof($in)) {
-                    break;
-                }
-            }
-            gzclose($in);
-
-            if ($head === '') {
-                throw new \RuntimeException('Decompressed content is empty.');
-            }
-            $probe = strtolower(substr($head, 0, 200000));
-            $looksSql = str_contains($probe, 'create table')
-                || str_contains($probe, 'insert into')
-                || str_contains($probe, 'mysqldump')
-                || str_contains($probe, 'drop table');
-            if (! $looksSql) {
-                throw new \RuntimeException('Decompressed content is not recognizable SQL.');
-            }
+            $head = $this->readHead($working, $compressed);
+            $this->assertLooksLikeSql($head);
         } finally {
             if ($tempDec) {
                 @unlink($tempDec);
@@ -118,6 +93,106 @@ class BackupVerificationService
             if ($tempSql) {
                 @unlink($tempSql);
             }
+        }
+    }
+
+    /**
+     * Read the first ~512KB of (possibly gzipped) content as text.
+     * Falls back to plain-text read when the file is not gzip data
+     * (e.g. plain `.sql` uploads from a flash drive).
+     */
+    private function readHead(string $path, bool $compressed): string
+    {
+        if ($compressed) {
+            $in = @gzopen($path, 'rb');
+            if ($in !== false) {
+                $head = '';
+                try {
+                    for ($i = 0; $i < 8; $i++) {
+                        $chunk = gzread($in, 65536);
+                        if ($chunk === false) {
+                            throw new \RuntimeException('Gzip read failed (corrupt?).');
+                        }
+                        $head .= $chunk;
+                        if ($head !== '' && ! $this->isGzipStream($path, $head)) {
+                            break;
+                        }
+                        if (gzeof($in)) {
+                            break;
+                        }
+                    }
+                } finally {
+                    gzclose($in);
+                }
+                // gzopen succeeds even on plain text in some builds but
+                // returns empty/garbage — detect and fall through to raw read.
+                if ($head !== '' && $this->looksLikeGzipContent($head)) {
+                    return $head;
+                }
+                // If gzip probe produced nothing useful, fall through to raw.
+                if ($head !== '') {
+                    return $head;
+                }
+            }
+            // Fallback: maybe the flag is wrong (e.g. `.enc` mislabeled) —
+            // try raw read before giving up.
+        }
+
+        $handle = @fopen($path, 'rb');
+        if ($handle === false) {
+            throw new \RuntimeException('Cannot open backup for reading.');
+        }
+        try {
+            $head = (string) fread($handle, 512 * 1024);
+        } finally {
+            fclose($handle);
+        }
+
+        return $head;
+    }
+
+    private function isGzipStream(string $path, string $head): bool
+    {
+        // Gzip magic bytes; when reading a plain .sql via gzopen the
+        // output is usually empty or binary noise — check raw magic.
+        $raw = @file_get_contents($path, false, null, 0, 2);
+        if ($raw !== false && strlen($raw) === 2) {
+            return $raw[0] === "\x1f" && $raw[1] === "\x8b";
+        }
+
+        return true;
+    }
+
+    private function looksLikeGzipContent(string $head): bool
+    {
+        // Genuine decompressed SQL head is printable text.
+        $sample = substr($head, 0, 4096);
+        if ($sample === '') {
+            return false;
+        }
+        $printable = preg_match_all('/[\x09\x0A\x0D\x20-\x7E\xC0-\xFF]/', $sample);
+
+        return ($printable / max(strlen($sample), 1)) > 0.7;
+    }
+
+    private function assertLooksLikeSql(string $head): void
+    {
+        // Strip BOM that HeidiSQL / Windows editors may prepend.
+        $head = ltrim($head, "\xEF\xBB\xBF \t\r\n");
+        if ($head === '') {
+            throw new \RuntimeException('Decompressed content is empty.');
+        }
+        $probe = strtolower(substr($head, 0, 200000));
+        $looksSql = str_contains($probe, 'create table')
+            || str_contains($probe, 'insert into')
+            || str_contains($probe, 'mysqldump')
+            || str_contains($probe, 'drop table')
+            || str_contains($probe, 'create database')
+            || str_contains($probe, 'use `')
+            || str_contains($probe, 'set names')
+            || str_contains($probe, 'lock tables');
+        if (! $looksSql) {
+            throw new \RuntimeException('Decompressed content is not recognizable SQL.');
         }
     }
 

@@ -442,6 +442,29 @@ try {
     }
     if (-not $dbReady) { throw 'Database preflight failed after 6 attempts. See storage\logs\hrm-migration-status.log.' }
 
+    # REDIS PREFLIGHT: the queue workers below use QUEUE_CONNECTION=redis, so a
+    # cold boot where redis-server is still starting used to spray Predis
+    # "Stream is already at the end" errors into laravel.log. Wait (bounded)
+    # for TCP 127.0.0.1:6379 -- warning only, never a fatal block: if Redis
+    # stays down the workers still start (and retry) exactly as before.
+    $redisReady = $false
+    for ($attempt = 1; $attempt -le 12; $attempt++) {
+        $tcp = $null
+        try {
+            $tcp = New-Object Net.Sockets.TcpClient
+            $iar = $tcp.BeginConnect('127.0.0.1', 6379, $null, $null)
+            if ($iar.AsyncWaitHandle.WaitOne(5000)) {
+                $tcp.EndConnect($iar)
+                $redisReady = $true
+            }
+        } catch {}
+        if ($tcp) { try { $tcp.Close() } catch {} }
+        if ($redisReady) { break }
+        Write-Host "  Redis not ready (attempt $attempt/12) - waiting 5s..." -ForegroundColor Yellow
+        Start-Sleep -Seconds 5
+    }
+    if (-not $redisReady) { Write-Host '  WARNING: Redis 127.0.0.1:6379 unreachable -- queue workers will retry on their own. Continuing startup.' -ForegroundColor DarkYellow }
+
     Write-Host 'Clearing cached Laravel configuration...'
     & $PhpExe artisan optimize:clear
     if ($LASTEXITCODE -ne 0) { throw 'Could not clear Laravel caches.' }

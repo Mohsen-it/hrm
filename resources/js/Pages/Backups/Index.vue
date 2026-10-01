@@ -9,7 +9,7 @@ export default {
 <script setup>
 import { ref, computed } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
-import { PageHeader, DataTable, ConfirmDialog, Badge, Button, Alert, StatCard, Card } from '@/Components/ui';
+import { PageHeader, DataTable, ConfirmDialog, Badge, Button, Alert, StatCard, Card, FormModal, FormFileUpload } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 import { usePageTitle } from '@/composables/usePageTitle';
 
@@ -25,6 +25,10 @@ const props = defineProps({
 const creating = ref(false);
 const showDelete = ref(false);
 const selected = ref(null);
+const showUpload = ref(false);
+const uploadFile = ref(null);
+const uploading = ref(false);
+const uploadError = ref('');
 
 // Format date in Arabic locale with RTL-friendly format
 function formatDate(dateStr) {
@@ -98,6 +102,37 @@ function performDelete() {
     router.delete(route('backups.destroy', selected.value.id), { preserveScroll: true });
 }
 
+function openUpload() {
+    uploadFile.value = null;
+    uploadError.value = '';
+    showUpload.value = true;
+}
+
+function submitUpload() {
+    if (!uploadFile.value) {
+        uploadError.value = t('backups.upload_required');
+        return;
+    }
+    uploading.value = true;
+    uploadError.value = '';
+    const data = new FormData();
+    data.append('backup_file', uploadFile.value);
+    router.post(route('backups.upload'), data, {
+        forceFormData: true,
+        preserveScroll: true,
+        onSuccess: () => {
+            showUpload.value = false;
+            uploadFile.value = null;
+        },
+        onError: (errors) => {
+            uploadError.value = errors.backup_file || Object.values(errors)[0] || '';
+        },
+        onFinish: () => { uploading.value = false; },
+    });
+}
+
+const canCreate = computed(() => page.props.auth?.permissions?.includes('create-backups') ?? true);
+
 const flashSuccess = computed(() => page.props.flash?.success);
 const flashError = computed(() => page.props.flash?.error);
 
@@ -109,6 +144,9 @@ usePageTitle(t('backups.title'));
         <template #actions>
             <Button variant="primary" icon="fas fa-database" :loading="creating" @click="createBackup">
                 {{ creating ? t('backups.creating') : t('backups.create_backup') }}
+            </Button>
+            <Button v-if="canCreate" variant="secondary" icon="fas fa-upload" @click="openUpload">
+                {{ t('backups.upload_backup') }}
             </Button>
             <Button variant="secondary" icon="fas fa-cog" :href="route('backups.settings')">
                 {{ t('backups.settings_title') }}
@@ -174,4 +212,25 @@ usePageTitle(t('backups.title'));
         confirm-variant="danger"
         @confirm="performDelete"
     />
+
+    <FormModal v-model="showUpload" :title="t('backups.upload_title')">
+        <p class="text-[13px] text-mistral-steel mb-4">{{ t('backups.upload_description') }}</p>
+        <FormFileUpload
+            v-model="uploadFile"
+            :label="t('backups.select_file')"
+            accept=".sql,.gz,.enc"
+            :error="uploadError"
+            :hint="t('backups.upload_hint')"
+            :disabled="uploading"
+            name="backup_file"
+        />
+        <template #footer>
+            <Button variant="secondary" :disabled="uploading" @click="showUpload = false">
+                {{ t('common.cancel') }}
+            </Button>
+            <Button variant="primary" icon="fas fa-upload" :loading="uploading" :disabled="!uploadFile" @click="submitUpload">
+                {{ uploading ? t('backups.uploading') : t('backups.upload_button') }}
+            </Button>
+        </template>
+    </FormModal>
 </template>

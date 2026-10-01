@@ -2,6 +2,7 @@
 
 namespace Modules\Backups\Services;
 
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -229,6 +230,164 @@ class BackupService
         } finally {
             $lock->release();
         }
+    }
+
+    /**
+     * Register an external backup file (USB / flash drive upload) as a
+     * first-class backup run so it can be verified + restore-tested +
+     * production-restored exactly like a system-generated backup.
+     *
+     * Accepted inputs (detected from the original filename):
+     * - `*.sql`            plain dump (e.g. HeidiSQL export from flash drive)
+     * - `*.sql.gz` / `*.gz` gzip-compressed dump
+     * - `*.sql.gz.enc` / `*.enc` our encrypted format
+     *
+     * The file is stored AS-IS on the local backups disk (streaming copy,
+     * no memory load) with its compressed/encrypted flags inferred, then
+     * checksummed + verified. The caller can immediately run the normal
+     * restore-test / production-restore flow on the returned run.
+     *
+     * @throws RuntimeException
+     */
+    public function importUploadedBackup(UploadedFile $file, ?int $initiatedBy = null): BackupRun
+    {
+        $original = strtolower($file->getClientOriginalName());
+        if ($original === '' || $original === 'blank') {
+            $original = 'backup.sql';
+        }
+
+        [$encrypted, $compressed] = $this->inferFlagsFromName($original);
+
+        $database = (string) config('backups.database_name', 'hrmair');
+        $localDisk = (string) config('backups.local_disk', 'backups');
+
+        // Sanitize to a safe basename (no directories / traversal).
+        $safe = preg_replace('/[^a-z0-9._-]+/', '_', $original) ?? 'backup.sql';
+        $safe = trim($safe, '._');
+        if ($safe === '') {
+            $safe = 'backup.sql';
+        }
+        $finalName = 'uploaded_'.now()->format('Y-m-d_H-i-s').'_'.uniqid().'_'.$safe;
+
+        $run = $this->runs->create([
+            'backup_config_id' => null,
+            'type' => 'uploaded',
+            'status' => 'running',
+            'database_driver' => 'mysql',
+            'database_name' => $database,
+            'database_server_version' => null,
+            'file_path' => $localDisk.'/'.$finalName,
+            'file_name' => $finalName,
+            'checksum_algorithm' => 'sha256',
+            'checksum' => 'pending',
+            'compressed' => $compressed,
+            'encrypted' => $encrypted,
+            'verification_status' => 'pending',
+            'started_at' => now(),
+            'initiated_by' => $initiatedBy ?? auth()->id(),
+        ]);
+
+        $this->audit->log('backup.upload_started', [
+            'original_name' => $file->getClientOriginalName(),
+            'stored_as' => $finalName,
+            'source' => 'external_upload',
+        ], $run->id);
+
+        try {
+            // Streaming store (supports hundreds of MB without memory load).
+            $stream = fopen($file->getRealPath(), 'rb');
+            if ($stream === false) {
+                throw new RuntimeException('Cannot read uploaded file.');
+            }
+            try {
+                if (! Storage::disk($localDisk)->put($finalName, $stream)) {
+                    throw new RuntimeException('Failed writing uploaded backup to local storage.');
+                }
+            } finally {
+                if (is_resource($stream)) {
+                    fclose($stream);
+                }
+            }
+
+            $full = Storage::disk($localDisk)->path($finalName);
+            $checksum = $this->crypto->sha256($full);
+            $size = filesize($full);
+
+            $run = $this->runs->update($run, [
+                'status' => 'completed',
+                'file_size' => $size,
+                'checksum' => $checksum,
+                'completed_at' => now(),
+            ]);
+
+            // Same trust bar as system backups: SHA-256 + decrypt/gzip
+            // probe + SQL-head check. A tampered USB file fails here.
+            if ((bool) config('backups.verification_enabled', true)) {
+                if (! $this->verification->verify($run)) {
+                    $run = $run->fresh();
+                    throw new RuntimeException(
+                        'الملف المرفوع غير صالح: '.($run->verification_message ?? 'فشل التحقق')
+                    );
+                }
+                $run = $run->fresh();
+            }
+
+            $this->audit->log('backup.upload_completed', [
+                'file_name' => $finalName,
+                'file_size' => $size,
+                'verification' => $run->verification_status,
+            ], $run->id);
+
+            return $run->fresh();
+        } catch (Throwable $e) {
+            try {
+                Storage::disk($localDisk)->delete($finalName);
+            } catch (Throwable) {
+                // Swallow — cleanup only.
+            }
+            try {
+                $this->runs->update($run, [
+                    'status' => 'failed',
+                    'failed_at' => now(),
+                    'error_code' => 'UPLOAD_FAILED',
+                    'error_message' => mb_substr($e->getMessage(), 0, 2000),
+                ]);
+            } catch (Throwable) {
+                // Swallow — must not mask the original error.
+            }
+            try {
+                $this->audit->log('backup.upload_failed', [
+                    'error' => mb_substr($e->getMessage(), 0, 500),
+                ], $run->id);
+            } catch (Throwable) {
+                // Swallow.
+            }
+
+            throw new RuntimeException($e->getMessage(), 0, $e);
+        }
+    }
+
+    /**
+     * Infer storage flags from the original filename.
+     *
+     * @return array{bool, bool} [encrypted, compressed]
+     */
+    private function inferFlagsFromName(string $name): array
+    {
+        if (str_ends_with($name, '.sql.gz.enc')) {
+            return [true, true];
+        }
+        if (str_ends_with($name, '.gz.enc') || str_ends_with($name, '.enc')) {
+            // Our encrypted files are always gzipped first — assume so.
+            // Verification will reject the file if the assumption is wrong.
+            return [true, true];
+        }
+        if (str_ends_with($name, '.sql.gz') || str_ends_with($name, '.gz')) {
+            return [false, true];
+        }
+
+        // Default: plain .sql (HeidiSQL / mysqldump text from flash drive).
+        return [false, false];
     }
 
     /**

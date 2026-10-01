@@ -49,15 +49,25 @@ catch {
     $redisUp = $false
 }
 if (-not $redisUp) {
-    $redisExe = 'C:\laragon\bin\redis\redis-x64-5.0.14.1\redis-server.exe'
-    $redisConf = 'C:\laragon\bin\redis\redis-x64-5.0.14.1\redis.windows.conf'
-    if (Test-Path -LiteralPath $redisExe) {
+    # Discover the bundled redis dynamically: Laragon upgrades change the
+    # versioned folder name, so a hardcoded path rots on new machines.
+    $redisExe = $null
+    $redisConf = $null
+    $rFound = Get-ChildItem 'C:\laragon\bin\redis\*\redis-server.exe' -ErrorAction SilentlyContinue | Sort-Object FullName -Descending | Select-Object -First 1
+    if ($rFound) {
+        $redisExe = $rFound.FullName
+        foreach ($cf in @('redis.windows.conf', 'redis.conf')) {
+            $cp = Join-Path $rFound.Directory.FullName $cf
+            if (Test-Path -LiteralPath $cp) { $redisConf = $cp; break }
+        }
+    }
+    if (($redisExe) -and ($redisConf)) {
         Write-StartupLog 'Redis 6379 not listening — starting redis-server detached.'
         Start-Process -FilePath $redisExe -ArgumentList $redisConf -WindowStyle Hidden
         Start-Sleep -Seconds 3
     }
     else {
-        Write-StartupLog "FATAL: redis-server not found at $redisExe. Queue (redis) cannot start."
+        Write-StartupLog 'FATAL: no redis-server.exe under C:\laragon\bin\redis\. Queue (redis) cannot start.'
         exit 1
     }
 }

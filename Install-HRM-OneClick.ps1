@@ -14,6 +14,11 @@
       Scheduler + watchdog tasks + firewall rules + logon autostart + health checks
       Fresh-Windows hardening: Laragon-PHP recovery, php.ini extension
       enablement, long paths, connectivity probes, stale-IP guard
+      -AutoInstall tiers (verified IDs): Full = Laragon bundle
+      (LeNgocKhoa.Laragon: PHP + MySQL + Redis + Node + git + Composer);
+      Minimal (-Minimal) = PHP-NTS.8.3 + Node + Python + Composer-Setup.exe
+      with SQLite (no MySQL/Redis). Laragon mysqld/redis are started
+      detached when present but dark; the DB itself is auto-created.
 
     Correct ordering guarantee: .env is created and all secrets/keys are
     finalized BEFORE `npm run build`, because Vite bakes VITE_* values into
@@ -46,6 +51,7 @@ param(
     [ValidateSet('auto', 'sqlite', 'mysql')]
     [string] $DbMode = 'auto',
     [string] $ServerIp = '',
+    [switch] $Minimal,
     [switch] $Help
 )
 
@@ -57,7 +63,7 @@ if ([string]::IsNullOrWhiteSpace($Root)) {
 if ($Help) {
     Write-Host 'Usage: Install-HRM-OneClick.ps1 [-CheckOnly] [-SkipBuild] [-Seed] [-SkipSeed]'
     Write-Host '       [-Production] [-DbMode auto|sqlite|mysql] [-ServerIp 10.10.250.2]'
-    Write-Host '       [-AutoInstall] [-StartAfter] [-NonInteractive]'
+    Write-Host '       [-AutoInstall] [-Minimal] [-StartAfter] [-NonInteractive]'
     Write-Host ''
     Write-Host '  -CheckOnly     : audit only, change nothing (run first on a new machine)'
     Write-Host '  -SkipBuild     : skip npm run build'
@@ -66,6 +72,7 @@ if ($Help) {
     Write-Host '  -DbMode        : force sqlite or mysql (default auto = keep .env, fallback sqlite)'
     Write-Host '  -ServerIp      : write APP_URL + VITE_REVERB_HOST with this LAN IP'
     Write-Host '  -AutoInstall   : try winget install for missing Git/Node/Python (needs admin + internet)'
+    Write-Host '  -Minimal       : with -AutoInstall, skip Laragon; PHP-NTS stack + SQLite (no MySQL/Redis)'
     Write-Host '  -StartAfter    : launch services after install (scripts\Start-HRM-Windows.ps1)'
     Write-Host '  -NonInteractive: never prompt, use defaults (for fresh-machine copy-paste runs)'
     exit 0
@@ -104,6 +111,192 @@ function Install-WithWinget([string] $id, [string] $label) {
     & winget install --id $id -e --silent --accept-package-agreements --accept-source-agreements
     if ($LASTEXITCODE -ne 0) { throw "winget install failed for $label ($id)" }
     Write-Ok "$label installed (restart shell may be needed for PATH)"
+}
+
+# Verified 2026-10: LeNgocKhoa.Laragon (by Laragon author, Inno, full WAMP:
+# PHP + MySQL + Redis + Node + git + Composer). PHP.PHP.NTS.8.3 is the
+# official PHP Group build (CLI-optimal). There is NO winget package for PHP
+# Composer itself, so the Minimal tier uses the official Composer-Setup.exe.
+$script:LaragonPython = $null
+$script:PyBin = 'py'
+$script:PyArgs = @('-3')
+$script:SessionAddedPaths = @()
+
+function Find-LaragonRoot {
+    if (Test-Path -LiteralPath 'C:\laragon\laragon.exe') { return 'C:\laragon' }
+    try {
+        $l = (Get-Command laragon.exe -ErrorAction Stop).Source
+        if ($l) { return (Split-Path $l -Parent) }
+    } catch {}
+    return $null
+}
+
+function Add-SessionPathOnce([string] $Dir) {
+    if ([string]::IsNullOrWhiteSpace($Dir)) { return $false }
+    if (-not (Test-Path -LiteralPath $Dir -PathType Container)) { return $false }
+    $norm = $Dir.TrimEnd('\')
+    foreach ($p in ($env:Path -split ';')) {
+        if ($p.Trim().TrimEnd('\') -ieq $norm) { return $true }
+    }
+    $env:Path = $Dir + ';' + $env:Path
+    $script:SessionAddedPaths += $Dir
+    return $true
+}
+
+function Persist-UserPathOnce {
+    if ($script:SessionAddedPaths.Count -eq 0) { return }
+    try {
+        $userPath = [System.Environment]::GetEnvironmentVariable('Path', 'User')
+        if ([string]::IsNullOrEmpty($userPath)) { $userPath = '' }
+        $toAdd = @()
+        foreach ($d in $script:SessionAddedPaths) {
+            $hit = $false
+            foreach ($p in ($userPath -split ';')) {
+                if ($p.Trim().TrimEnd('\') -ieq $d.TrimEnd('\')) { $hit = $true; break }
+            }
+            if (-not $hit) { $toAdd += $d }
+        }
+        if ($toAdd.Count -eq 0) { return }
+        $newPath = ($toAdd -join ';') + ';' + $userPath
+        if ($newPath.Length -le 1000) {
+            [System.Environment]::SetEnvironmentVariable('Path', $newPath, 'User')
+            Write-Ok 'Tool dirs persisted to User PATH (new windows will see them)'
+        } else { Write-Warn 'User PATH too long to persist automatically - session PATH works for this run; add the tool dirs manually for new windows' }
+    } catch { Write-Warn "could not persist User PATH: $($_.Exception.Message) (session still works)" }
+}
+
+# Laragon leaves its tools out of PATH by default (its GUI has
+# Tools > PATH > Add Laragon to PATH). Import them for this session.
+function Import-LaragonTools([string] $LRoot) {
+    if ([string]::IsNullOrWhiteSpace($LRoot)) { return }
+    $picked = @()
+    $php = Get-ChildItem (Join-Path $LRoot 'bin\php\*\php.exe') -ErrorAction SilentlyContinue | Sort-Object FullName -Descending | Select-Object -First 1
+    if ($php -and (Add-SessionPathOnce $php.Directory.FullName)) { $picked += 'php' }
+    $node = Get-ChildItem (Join-Path $LRoot 'bin\nodejs\*\node.exe') -ErrorAction SilentlyContinue | Sort-Object FullName -Descending | Select-Object -First 1
+    if ($node -and (Add-SessionPathOnce $node.Directory.FullName)) { $picked += 'nodejs' }
+    $pyth = Get-ChildItem (Join-Path $LRoot 'bin\python\*\python.exe') -ErrorAction SilentlyContinue | Sort-Object FullName -Descending | Select-Object -First 1
+    if ($pyth) { $script:LaragonPython = $pyth.FullName; $picked += 'python' }
+    $g1 = Join-Path $LRoot 'bin\git\bin\git.exe'
+    $g2 = Join-Path $LRoot 'bin\git\cmd\git.exe'
+    if ((Test-Path -LiteralPath $g1) -and (Add-SessionPathOnce (Split-Path $g1 -Parent))) { $picked += 'git' }
+    elseif ((Test-Path -LiteralPath $g2) -and (Add-SessionPathOnce (Split-Path $g2 -Parent))) { $picked += 'git' }
+    if (Test-Path -LiteralPath (Join-Path $LRoot 'bin\composer\composer.bat')) { $picked += 'composer' }
+    if ($picked.Count -gt 0) {
+        Write-Ok ("Laragon tools in session PATH: " + ($picked -join ', '))
+        Persist-UserPathOnce
+    } else { Write-Warn 'Laragon found but no usable tool dirs matched the known layout' }
+}
+
+# Re-probe every installable tool and refresh the audit table + the python
+# interpreter selected for the venv step. Safe to call repeatedly.
+function Invoke-ToolReprobe {
+    Write-Info 're-probing tools ...'
+    $p = ''
+    try { $p = ((& php -v | Out-String).Split([Environment]::NewLine)[0].Trim()) } catch { $p = '' }
+    if ($p -match 'PHP 8\.(3|4|5)') { $script:phpOk = $true; ($script:checks | Where-Object { $_.Name -eq 'PHP 8.3+' }).Ok = $true; Write-Ok "PHP: $p" }
+    $w = ''
+    try { $w = (& where.exe composer.bat | Out-String) } catch { $w = '' }
+    $bl = ($w.Split([Environment]::NewLine) | Where-Object { $_ -match 'composer\.bat' } | Select-Object -First 1)
+    if ($bl) { $script:composerCmd = $bl.Trim() }
+    if ([string]::IsNullOrWhiteSpace($script:composerCmd)) { $script:composerCmd = 'composer.bat' }
+    $c = ''
+    try { $c = (& $script:composerCmd --version | Out-String) } catch { $c = '' }
+    if ($c -match 'Composer') { $script:composerOk = $true; ($script:checks | Where-Object { $_.Name -eq 'Composer 2.x' }).Ok = $true; Write-Ok "Composer: $($c.Trim().Split([Environment]::NewLine)[0])" }
+    $n = ''
+    try { $n = ((& node -v | Out-String).Trim()) } catch { $n = '' }
+    if ($n -match 'v(2[0-9]|[3-9][0-9])') { $script:nodeOk = $true; $script:npmOk = $true; ($script:checks | Where-Object { $_.Name -eq 'Node 20+' }).Ok = $true; ($script:checks | Where-Object { $_.Name -eq 'npm' }).Ok = $true; Write-Ok "Node: $n" }
+    $g = ''
+    try { $g = ((& git --version | Out-String).Trim()) } catch { $g = '' }
+    if ($g -match 'git version') { $script:gitOk = $true; Write-Ok "Git: $g" }
+    $script:PyBin = $null
+    $script:PyArgs = @()
+    $pa = ''
+    try { $pa = (& py -3 --version | Out-String) } catch { $pa = '' }
+    if ($pa -match 'Python 3\.(1[1-9]|[2-9][0-9])') {
+        $script:PyBin = 'py'; $script:PyArgs = @('-3')
+        $script:pyOk = $true; ($script:checks | Where-Object { $_.Name -eq 'Python 3.11+' }).Ok = $true
+        Write-Ok "Python: $($pa.Trim())"
+    } else {
+        $pb = ''
+        try { $pb = (& python --version | Out-String) } catch { $pb = '' }
+        if ($pb -match 'Python 3\.(1[1-9]|[2-9][0-9])') {
+            $script:PyBin = 'python'; $script:PyArgs = @()
+            $script:pyOk = $true; ($script:checks | Where-Object { $_.Name -eq 'Python 3.11+' }).Ok = $true
+            Write-Ok "Python: $($pb.Trim())"
+        } elseif (($script:LaragonPython) -and (Test-Path -LiteralPath $script:LaragonPython)) {
+            $pc = ''
+            try { $pc = (& $script:LaragonPython --version | Out-String) } catch { $pc = '' }
+            if ($pc -match 'Python 3\.(1[1-9]|[2-9][0-9])') {
+                $script:PyBin = $script:LaragonPython; $script:PyArgs = @()
+                $script:pyOk = $true; ($script:checks | Where-Object { $_.Name -eq 'Python 3.11+' }).Ok = $true
+                Write-Ok "Python (Laragon): $($pc.Trim())"
+            }
+        }
+    }
+}
+
+# No winget package exists for PHP Composer: use the official Inno setup.
+function Install-ComposerSetup {
+    Write-Info 'Installing Composer via official Composer-Setup.exe (/VERYSILENT) ...'
+    $url = 'https://getcomposer.org/Composer-Setup.exe'
+    $dst = Join-Path ([System.IO.Path]::GetTempPath()) 'Composer-Setup.exe'
+    try {
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        Invoke-WebRequest -Uri $url -OutFile $dst -UseBasicParsing
+    } catch { throw "Composer download failed: $($_.Exception.Message) - install manually: https://getcomposer.org/download/" }
+    try { Start-Process -FilePath $dst -ArgumentList '/VERYSILENT', '/NORESTART' -Wait }
+    catch { throw "Composer setup failed: $($_.Exception.Message)" }
+    Write-Ok 'Composer setup finished'
+}
+
+# Starts Laragon's mysqld detached for THIS install run (no service layer -
+# that stays documented in production/DEPLOY-NEW-MACHINE.md). Initializes an
+# empty-root data dir when none exists yet.
+function Start-LaragonMysql {
+    $lr = Find-LaragonRoot
+    if (-not $lr) { return $false }
+    $mysqld = Get-ChildItem (Join-Path $lr 'bin\mysql\*\bin\mysqld.exe') -ErrorAction SilentlyContinue | Sort-Object FullName -Descending | Select-Object -First 1
+    if (-not $mysqld) { return $false }
+    $mBase = Split-Path $mysqld.Directory.FullName -Parent
+    $ini = Join-Path $mBase 'my.ini'
+    $dataDir = $null
+    if (Test-Path -LiteralPath $ini) {
+        $dm = Select-String -LiteralPath $ini -Pattern '^\s*datadir\s*=\s*(.+?)\s*$' | Select-Object -First 1
+        if ($dm) { $dataDir = $dm.Matches[0].Groups[1].Value.Trim().Trim('"').Trim("'") }
+    }
+    if ([string]::IsNullOrWhiteSpace($dataDir)) { $dataDir = Join-Path $mBase 'data' }
+    if (-not [System.IO.Path]::IsPathRooted($dataDir)) { $dataDir = Join-Path $mBase $dataDir }
+    $dataDir = $dataDir -replace '/', '\'
+    $init = @('mysql.ib', 'ibdata1', 'mysql') | Where-Object { Test-Path -LiteralPath (Join-Path $dataDir $_) } | Select-Object -First 1
+    if (-not $init) {
+        $alt = Get-ChildItem (Join-Path $lr 'data\mysql*') -Directory -ErrorAction SilentlyContinue | Where-Object {
+            (Test-Path -LiteralPath (Join-Path $_.FullName 'mysql.ib')) -or (Test-Path -LiteralPath (Join-Path $_.FullName 'ibdata1'))
+        } | Select-Object -First 1
+        if ($alt) { $dataDir = $alt.FullName }
+    }
+    $init = @('mysql.ib', 'ibdata1', 'mysql') | Where-Object { Test-Path -LiteralPath (Join-Path $dataDir $_) } | Select-Object -First 1
+    if (-not (Test-Path -LiteralPath $dataDir)) { try { New-Item -ItemType Directory -Path $dataDir -Force | Out-Null } catch {} }
+    if (-not $init) {
+        Write-Info "initializing MySQL data dir with empty root: $dataDir ..."
+        try { & $mysqld.FullName --initialize-insecure --datadir=($dataDir -replace '\\', '/') | Out-Null }
+        catch { Write-Warn "mysqld --initialize-insecure failed: $($_.Exception.Message)"; return $false }
+        $init = @('mysql.ib', 'ibdata1', 'mysql') | Where-Object { Test-Path -LiteralPath (Join-Path $dataDir $_) } | Select-Object -First 1
+        if (-not $init) { Write-Warn 'data dir initialization did not produce system tables'; return $false }
+    }
+    try {
+        $margs = @()
+        if (Test-Path -LiteralPath $ini) { $margs += ('--defaults-file=' + ($ini -replace '\\', '/')) }
+        $margs += ('--datadir=' + ($dataDir -replace '\\', '/'))
+        $margs += '--console'
+        Write-Info "starting mysqld detached ($($mysqld.FullName)) ..."
+        Start-Process -FilePath $mysqld.FullName -ArgumentList $margs -WindowStyle Hidden
+    } catch { Write-Warn "mysqld start failed: $($_.Exception.Message)"; return $false }
+    for ($i = 1; $i -le 18; $i++) {
+        Start-Sleep -Seconds 5
+        if (Test-Tcp '127.0.0.1' 3306) { return $true }
+    }
+    Write-Warn 'mysqld started but 3306 stayed dark for 90s'
+    return $false
 }
 
 # --- .env helpers (all values we write are plain ASCII: hex, urls, ips) ---
@@ -259,9 +452,11 @@ try { $gv = ((& git --version | Out-String).Trim()) } catch { $gv = '' }
 if ($gv -match 'git version') { $gitOk = $true; Write-Ok "Git: $gv" }
 else { Write-Warn 'Git missing (optional but recommended)' }
 
+$LRootAudit = Find-LaragonRoot
+$mysqlBinGlob = if ($LRootAudit) { Join-Path $LRootAudit 'bin\mysql\*\bin\mysqld.exe' } else { 'C:\laragon\bin\mysql\*\bin\mysqld.exe' }
 $mysqlUp = Test-Tcp '127.0.0.1' 3306
 $mysqlSvc = Get-Service 'HRM-MySQL' -ErrorAction SilentlyContinue
-$laragonMysql = Get-ChildItem 'C:\laragon\bin\mysql\*\bin\mysqld.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
+$laragonMysql = Get-ChildItem $mysqlBinGlob -ErrorAction SilentlyContinue | Select-Object -First 1
 if ($mysqlUp) { Write-Ok 'MySQL: port 3306 reachable' }
 elseif ($mysqlSvc) { Write-Warn "MySQL: service HRM-MySQL exists but not listening (status: $($mysqlSvc.Status)) - will try to start it" }
 elseif ($laragonMysql) { Write-Warn "MySQL: Laragon mysqld found at $($laragonMysql.FullName) but not running - start Laragon or the HRM-MySQL service" }
@@ -269,9 +464,19 @@ else { Write-Warn 'MySQL: not detected (SQLite fallback will be used unless you 
 
 $redisUp = Test-Tcp '127.0.0.1' 6379
 $redisSvc = Get-Service 'hrm-redis' -ErrorAction SilentlyContinue
-$laragonRedisExe = 'C:\laragon\bin\redis\redis-x64-5.0.14.1\redis-server.exe'
-$laragonRedisConf = 'C:\laragon\bin\redis\redis-x64-5.0.14.1\redis.windows.conf'
-$laragonRedis = Test-Path -LiteralPath $laragonRedisExe
+$laragonRedisExe = $null
+$laragonRedisConf = $null
+if ($LRootAudit) {
+    $rExe = Get-ChildItem (Join-Path $LRootAudit 'bin\redis\*\redis-server.exe') -ErrorAction SilentlyContinue | Sort-Object FullName -Descending | Select-Object -First 1
+    if ($rExe) {
+        $laragonRedisExe = $rExe.FullName
+        foreach ($cf in @('redis.windows.conf', 'redis.conf')) {
+            $cp = Join-Path $rExe.Directory.FullName $cf
+            if (Test-Path -LiteralPath $cp) { $laragonRedisConf = $cp; break }
+        }
+    }
+}
+$laragonRedis = (-not [string]::IsNullOrWhiteSpace($laragonRedisExe))
 if ($redisUp) { Write-Ok 'Redis: port 6379 reachable' }
 elseif ($redisSvc) { Write-Warn "Redis: service hrm-redis exists (status: $($redisSvc.Status)) - will try to start it" }
 elseif ($laragonRedis) { Write-Warn 'Redis: Laragon redis-server.exe found but not running - will try to start it' }
@@ -279,30 +484,33 @@ else { Write-Warn 'Redis: not detected - queue/cache/session fall back to databa
 
 if ($AutoInstall) {
     Write-Host ''
-    Write-Host '--- AutoInstall via winget ---' -ForegroundColor Cyan
+    Write-Host '--- AutoInstall (verified package IDs, Oct 2026) ---' -ForegroundColor Cyan
     try { & winget --version | Out-Null } catch { throw 'winget not available - install App Installer from Microsoft Store first.' }
-    if (-not $gitOk) { try { Install-WithWinget 'Git.Git' 'Git' } catch { Write-Warn $_.Exception.Message } }
+    if (-not $Minimal) {
+        # Full tier: ONE bundle for PHP + MySQL + Redis + Node + git + Composer.
+        if (-not (Find-LaragonRoot)) {
+            Write-Info 'Installing Laragon Full (~230MB: PHP + MySQL + Redis + Node + git + Composer) - takes several minutes ...'
+            try { Install-WithWinget 'LeNgocKhoa.Laragon' 'Laragon Full' }
+            catch { Write-Warn "Laragon install failed: $($_.Exception.Message) - falling back to individual packages" }
+        }
+        $lr2 = Find-LaragonRoot
+        if ($lr2) { Import-LaragonTools $lr2 }
+        Invoke-ToolReprobe
+    } else {
+        Write-Info 'Minimal stack: Laragon skipped (SQLite DB, no MySQL/Redis services)'
+    }
+    if (-not $phpOk) {
+        try { Install-WithWinget 'Microsoft.VCRedist.2015+.x64' 'VC++ Redistributable' } catch { Write-Warn $_.Exception.Message }
+        try { Install-WithWinget 'PHP.PHP.NTS.8.3' 'PHP 8.3 NTS (official PHP Group build)' } catch { Write-Warn $_.Exception.Message }
+    }
     if (-not $nodeOk) { try { Install-WithWinget 'OpenJS.NodeJS.LTS' 'Node.js LTS' } catch { Write-Warn $_.Exception.Message } }
+    if (-not $gitOk) { try { Install-WithWinget 'Git.Git' 'Git' } catch { Write-Warn $_.Exception.Message } }
     if (-not $pyOk) { try { Install-WithWinget 'Python.Python.3.12' 'Python 3.12' } catch { Write-Warn $_.Exception.Message } }
-    if (-not $composerOk) { try { Install-WithWinget 'Composer.Composer' 'Composer' } catch { Write-Warn $_.Exception.Message } }
+    if (-not $composerOk) { try { Install-ComposerSetup } catch { Write-Warn $_.Exception.Message } }
     $env:Path = $env:Path + ';' + [System.Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' + [System.Environment]::GetEnvironmentVariable('Path', 'User')
     # Winget installers only take effect for NEW processes; re-probe inside
     # this session so freshly installed tools are picked up without re-run.
-    Write-Info 're-probing tools after AutoInstall ...'
-    try { $gv2 = ((& git --version | Out-String).Trim()) } catch { $gv2 = '' }
-    if ($gv2 -match 'git version') { $gitOk = $true; Write-Ok "Git: $gv2" }
-    try { $nv2 = ((& node -v | Out-String).Trim()) } catch { $nv2 = '' }
-    if ($nv2 -match 'v(2[0-9]|[3-9][0-9])') { $nodeOk = $true; $npmOk = $true; ($checks | Where-Object { $_.Name -eq 'Node 20+' }).Ok = $true; ($checks | Where-Object { $_.Name -eq 'npm' }).Ok = $true; Write-Ok "Node: $nv2" }
-    try { $pyv2 = ((& py -3 --version | Out-String).Trim()) } catch { $pyv2 = '' }
-    if ($pyv2 -match 'Python 3\.(1[1-9]|[2-9][0-9])') { $pyOk = $true; ($checks | Where-Object { $_.Name -eq 'Python 3.11+' }).Ok = $true; Write-Ok "Python: $pyv2" }
-    try {
-        $w2 = (& where.exe composer.bat | Out-String)
-        $bat2 = ($w2.Split([Environment]::NewLine) | Where-Object { $_ -match 'composer\.bat' } | Select-Object -First 1)
-        if ($bat2) { $composerCmd = $bat2.Trim() }
-    } catch {}
-    $cv2 = ''
-    try { $cv2 = (& $composerCmd --version | Out-String) } catch { $cv2 = '' }
-    if ($cv2 -match 'Composer') { $composerOk = $true; ($checks | Where-Object { $_.Name -eq 'Composer 2.x' }).Ok = $true; Write-Ok "Composer: $($cv2.Trim().Split([Environment]::NewLine)[0])" }
+    Invoke-ToolReprobe
     Write-Warn 'If PATH still misses new tools, CLOSE this window, open a new one, and re-run the installer.'
 }
 
@@ -325,34 +533,20 @@ if ($CheckOnly) {
     else {
         Write-Warn 'Missing prerequisites:'
         foreach ($m in $missing) { Write-Host "    - $($m.Name): $($m.Hint)" -ForegroundColor Yellow }
-        Write-Host '  Re-run with -AutoInstall to try winget for Git/Node/Python.' -ForegroundColor DarkGray
+        Write-Host '  Re-run with -AutoInstall (Laragon bundle, or individual packages with -Minimal).' -ForegroundColor DarkGray
     }
     try { Stop-Transcript | Out-Null } catch {}
     if ($missing.Count -eq 0) { exit 0 } else { exit 1 }
 }
 
-# Laragon ships PHP but often leaves it out of PATH. Recover it automatically:
-# use the newest Laragon PHP for this session and persist it to User PATH.
-if (-not $phpOk) {
-    $laraPhp = Get-ChildItem 'C:\laragon\bin\php\*\php.exe' -ErrorAction SilentlyContinue | Sort-Object FullName -Descending | Select-Object -First 1
-    if ($laraPhp) {
-        $env:Path = $laraPhp.Directory.FullName + ';' + $env:Path
-        Write-Ok "Laragon PHP found: $($laraPhp.FullName) (session PATH updated)"
-        try {
-            $userPath = [System.Environment]::GetEnvironmentVariable('Path', 'User')
-            if ($userPath -notmatch [regex]::Escape($laraPhp.Directory.FullName)) {
-                $newUserPath = $laraPhp.Directory.FullName + ';' + $userPath
-                if ($newUserPath.Length -le 1000) {
-                    [System.Environment]::SetEnvironmentVariable('Path', $newUserPath, 'User')
-                    Write-Ok 'Laragon PHP persisted to User PATH (new windows will see it)'
-                } else { Write-Warn 'User PATH too long for setx-style persist - add Laragon php dir manually (session still works)' }
-            }
-        } catch { Write-Warn "could not persist User PATH: $($_.Exception.Message) (session still works)" }
-        $pv = ''
-        try { $pv = (& php -v | Out-String) } catch { $pv = '' }
-        if ($pv -match 'PHP 8\.(3|4|5)') { $phpOk = $true; ($checks | Where-Object { $_.Name -eq 'PHP 8.3+' }).Ok = $true; Write-Ok "PHP: $($pv.Split([Environment]::NewLine)[0].Trim())" }
-        else { Write-Warn 'Laragon PHP found but version is not 8.3+ - upgrade Laragon' }
-    }
+# Laragon recovery (full run only): import its PHP/Node/Python/git/Composer
+# into this session (Laragon leaves them out of PATH unless you click
+# Tools > PATH > Add Laragon to PATH in its GUI).
+$LRoot = Find-LaragonRoot
+if ($LRoot) {
+    Write-Ok "Laragon bundle: $LRoot"
+    Import-LaragonTools $LRoot
+    Invoke-ToolReprobe
 }
 
 if (-not ($phpOk -and $composerOk -and $nodeOk -and $pyOk)) {
@@ -459,7 +653,7 @@ if (-not (Test-Tcp '127.0.0.1' 6379)) {
             if (Test-Tcp '127.0.0.1' 6379) { Write-Ok 'hrm-redis started (6379 listening)'; $redisUp = $true }
         } catch { Write-Warn "could not start hrm-redis: $($_.Exception.Message)" }
     }
-    if ((-not $redisUp) -and $laragonRedis -and (Test-Path -LiteralPath $laragonRedisConf)) {
+    if ((-not $redisUp) -and (-not [string]::IsNullOrWhiteSpace($laragonRedisExe)) -and (-not [string]::IsNullOrWhiteSpace($laragonRedisConf))) {
         try {
             Write-Info 'starting Laragon redis-server detached ...'
             Start-Process -FilePath $laragonRedisExe -ArgumentList $laragonRedisConf -WindowStyle Hidden
@@ -527,6 +721,11 @@ $conn = 'sqlite'
 $envText = Get-Content -LiteralPath $envFile -Raw
 if ($envText -match '(?m)^DB_CONNECTION=(\w+)') { $conn = $Matches[1].Trim().ToLower() }
 if ($DbMode -ne 'auto') { $conn = $DbMode }
+if (($conn -eq 'mysql') -and (-not (Test-Tcp '127.0.0.1' 3306))) {
+    Write-Info 'MySQL 3306 dark - trying to start Laragon MySQL for this install ...'
+    if (Start-LaragonMysql) { Write-Ok 'Laragon MySQL is up (this session; register a service for reboots per production/DEPLOY-NEW-MACHINE.md)' }
+    else { Write-Warn 'Laragon MySQL could not be started automatically - open Laragon and click Start All, then re-run' }
+}
 if (($conn -eq 'mysql') -and (-not (Test-Tcp '127.0.0.1' 3306)) -and (-not $laragonMysql) -and (-not $mysqlSvc)) {
     Write-Warn 'DB_CONNECTION=mysql but no MySQL detected on this machine - falling back to sqlite.'
     Write-Warn 'To use MySQL later: install Laragon/MySQL, set DB_CONNECTION=mysql, re-run installer.'
@@ -692,8 +891,10 @@ Push-Location $Root
 try {
     Invoke-Step 'python venv + pip requirements' {
         if (-not (Test-Path -LiteralPath $venvPy)) {
-            Write-Info 'creating venv (py -3 -m venv zkteco-service\venv) ...'
-            & py -3 -m venv (Join-Path $Root 'zkteco-service\venv')
+            # $PyBin resolves to `py -3`, `python`, or Laragon python.exe
+            # (no `py` launcher on Laragon-only machines) - see Invoke-ToolReprobe.
+            Write-Info "creating venv ($PyBin -m venv zkteco-service\venv) ..."
+            & $PyBin @PyArgs -m venv (Join-Path $Root 'zkteco-service\venv')
         }
         Write-Info 'upgrading pip ...'
         & $venvPy -m pip install --upgrade pip

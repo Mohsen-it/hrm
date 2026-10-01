@@ -6,7 +6,9 @@ REM  Calls Install-HRM-OneClick.ps1 with all args passed through.
 REM  Examples:
 REM    INSTALL-HRM.bat
 REM    INSTALL-HRM.bat -CheckOnly
+REM    INSTALL-HRM.bat -AutoInstall
 REM    INSTALL-HRM.bat -Production -Seed -StartAfter -AutoInstall -ServerIp 10.10.250.2
+REM    INSTALL-HRM.bat -AutoInstall -Minimal -NonInteractive  (tiny stack: no MySQL/Redis)
 REM  ASCII-only by project rule - never add non-ASCII chars here.
 REM ============================================================
 

@@ -19,6 +19,10 @@
       Minimal (-Minimal) = PHP-NTS.8.3 + Node + Python + Composer-Setup.exe
       with SQLite (no MySQL/Redis). Laragon mysqld/redis are started
       detached when present but dark; the DB itself is auto-created.
+      Native (-Native) = cloud-server parity without Laragon: official MySQL
+      8.4 LTS ZIP + Redis 5 ZIP registered as real Windows services
+      (HRM-MySQL, hrm-redis) under C:\hrm-services. Same names/ports as the
+      production NSSM layer, so DEPLOY-NEW-MACHINE.md keeps applying.
 
     Correct ordering guarantee: .env is created and all secrets/keys are
     finalized BEFORE `npm run build`, because Vite bakes VITE_* values into
@@ -52,6 +56,7 @@ param(
     [string] $DbMode = 'auto',
     [string] $ServerIp = '',
     [switch] $Minimal,
+    [switch] $Native,
     [switch] $Help
 )
 
@@ -60,10 +65,19 @@ if ([string]::IsNullOrWhiteSpace($Root)) {
     $Root = (Resolve-Path (Join-Path (Split-Path $MyInvocation.MyCommand.Path -Parent) '.')).Path
 }
 
+# ZKBioTime-style pollution: machine/user PYTHONHOME/PYTHONPATH redirect EVERY
+# python interpreter (venv included) at a FOREIGN stdlib and break it with
+# "SRE module mismatch" (proven on 2026-10-01: ZKBioTime Python311 leaked into
+# our 3.15 venv). Project convention (install-deps.bat) is to clear them, so
+# the venv always uses its own stdlib. Must precede ANY python invocation.
+Remove-Item Env:\PYTHONHOME -ErrorAction SilentlyContinue
+Remove-Item Env:\PYTHONPATH -ErrorAction SilentlyContinue
+Remove-Item Env:\PYTHONIOENCODING -ErrorAction SilentlyContinue
+
 if ($Help) {
     Write-Host 'Usage: Install-HRM-OneClick.ps1 [-CheckOnly] [-SkipBuild] [-Seed] [-SkipSeed]'
     Write-Host '       [-Production] [-DbMode auto|sqlite|mysql] [-ServerIp 10.10.250.2]'
-    Write-Host '       [-AutoInstall] [-Minimal] [-StartAfter] [-NonInteractive]'
+    Write-Host '       [-AutoInstall] [-Minimal] [-Native] [-StartAfter] [-NonInteractive]'
     Write-Host ''
     Write-Host '  -CheckOnly     : audit only, change nothing (run first on a new machine)'
     Write-Host '  -SkipBuild     : skip npm run build'
@@ -73,6 +87,8 @@ if ($Help) {
     Write-Host '  -ServerIp      : write APP_URL + VITE_REVERB_HOST with this LAN IP'
     Write-Host '  -AutoInstall   : try winget install for missing Git/Node/Python (needs admin + internet)'
     Write-Host '  -Minimal       : with -AutoInstall, skip Laragon; PHP-NTS stack + SQLite (no MySQL/Redis)'
+    Write-Host '  -Native        : server-grade, no Laragon: native Windows services for MySQL 8.4'
+    Write-Host '                   (HRM-MySQL) + Redis 5 (hrm-redis) under C:\hrm-services (implies tool setup)'
     Write-Host '  -StartAfter    : launch services after install (scripts\Start-HRM-Windows.ps1)'
     Write-Host '  -NonInteractive: never prompt, use defaults (for fresh-machine copy-paste runs)'
     exit 0
@@ -138,7 +154,10 @@ function Add-SessionPathOnce([string] $Dir) {
     foreach ($p in ($env:Path -split ';')) {
         if ($p.Trim().TrimEnd('\') -ieq $norm) { return $true }
     }
-    $env:Path = $Dir + ';' + $env:Path
+    # APPEND (not prepend): properly installed system tools keep priority and
+    # Laragon dirs only fill gaps. Prepending once caused Laragon npm to shadow
+    # system npm and churn package-lock.json.
+    $env:Path = $env:Path + ';' + $Dir
     $script:SessionAddedPaths += $Dir
     return $true
 }
@@ -235,6 +254,59 @@ function Invoke-ToolReprobe {
     }
 }
 
+# winget PHP manifests rot fast (proven 2026-10-01: the pinned 8.3.31 zip
+# 404s). Try winget first (cheap), then fall back to a direct download with
+# version discovery from windows.php.net (latest 8.3.x NTS VS16 x64).
+function Install-PhpNts {
+    $wingetOk = $false
+    try { Install-WithWinget 'PHP.PHP.NTS.8.3' 'PHP 8.3 NTS'; $wingetOk = $true }
+    catch { Write-Warn "winget PHP failed: $($_.Exception.Message) - trying direct download" }
+    Invoke-ToolReprobe
+    if ($script:phpOk) { return }
+    if ($wingetOk) { throw 'PHP installed via winget but php -v still fails - fix PATH manually and re-run' }
+    Write-Info 'Discovering latest PHP 8.3 NTS build from windows.php.net ...'
+    $page = ''
+    try {
+        $page = (Invoke-WebRequest -Uri 'https://windows.php.net/download/' -UseBasicParsing -UserAgent $script:BrowserUa | Select-Object -ExpandProperty Content)
+    } catch { throw "windows.php.net unreachable: $($_.Exception.Message)" }
+    $vers = @()
+    foreach ($m in ([regex]::Matches($page, 'php-(8\.3\.\d+)-nts-Win32-vs16-x64\.zip'))) { $vers += $m.Groups[1].Value }
+    if ($vers.Count -eq 0) { throw 'no PHP 8.3 NTS x64 build found on windows.php.net/download - install PHP manually' }
+    $best = ($vers | Sort-Object { [version]$_ } -Descending | Select-Object -First 1)
+    $zipUrl = "https://windows.php.net/downloads/releases/php-${best}-nts-Win32-vs16-x64.zip"
+    $dest = Join-Path $script:NativeRoot ("php\php-${best}-nts")
+    $dstPhp = Join-Path $dest 'php.exe'
+    if (-not (Test-Path -LiteralPath $dstPhp)) {
+        $zip = Join-Path ([System.IO.Path]::GetTempPath()) "php-${best}-nts.zip"
+        if (-not (Test-Path -LiteralPath $zip)) {
+            Write-Info "Downloading PHP $best NTS (~30MB) ..."
+            try {
+                $pp = $ProgressPreference; $ProgressPreference = 'SilentlyContinue'
+                try { Invoke-WebRequest -Uri $zipUrl -OutFile $zip -UseBasicParsing -UserAgent $script:BrowserUa }
+                finally { $ProgressPreference = $pp }
+            } catch { throw "PHP download failed: $($_.Exception.Message)" }
+        }
+        if (((Get-Item -LiteralPath $zip).Length) -lt 5MB) { throw "PHP zip suspiciously small - delete $zip and re-run" }
+        try { New-Item -ItemType Directory -Path $dest -Force | Out-Null } catch {}
+        Write-Info 'Extracting PHP ...'
+        try { Expand-Archive -LiteralPath $zip -DestinationPath $dest -Force }
+        catch { throw "PHP extraction failed: $($_.Exception.Message)" }
+        try { Remove-Item -LiteralPath $zip -Force -ErrorAction SilentlyContinue } catch {}
+    }
+    if (-not (Test-Path -LiteralPath $dstPhp)) { throw "php.exe not found after extract: $dstPhp" }
+    $prodIni = Join-Path $dest 'php.ini-production'
+    $ini = Join-Path $dest 'php.ini'
+    if ((-not (Test-Path -LiteralPath $ini)) -and (Test-Path -LiteralPath $prodIni)) {
+        Copy-Item -LiteralPath $prodIni -Destination $ini -Force
+        Write-Ok "php.ini seeded from php.ini-production: $ini"
+    }
+    Add-SessionPathOnce $dest | Out-Null
+    Persist-UserPathOnce
+    Invoke-ToolReprobe
+    if (-not $script:phpOk) { throw 'PHP extracted but php -v still fails - fix PATH manually and re-run' }
+    Write-Ok "Native PHP ready: $dest"
+}
+
 # No winget package exists for PHP Composer: use the official Inno setup.
 function Install-ComposerSetup {
     Write-Info 'Installing Composer via official Composer-Setup.exe (/VERYSILENT) ...'
@@ -242,7 +314,7 @@ function Install-ComposerSetup {
     $dst = Join-Path ([System.IO.Path]::GetTempPath()) 'Composer-Setup.exe'
     try {
         [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-        Invoke-WebRequest -Uri $url -OutFile $dst -UseBasicParsing
+        Invoke-WebRequest -Uri $url -OutFile $dst -UseBasicParsing -UserAgent $script:BrowserUa
     } catch { throw "Composer download failed: $($_.Exception.Message) - install manually: https://getcomposer.org/download/" }
     try { Start-Process -FilePath $dst -ArgumentList '/VERYSILENT', '/NORESTART' -Wait }
     catch { throw "Composer setup failed: $($_.Exception.Message)" }
@@ -297,6 +369,238 @@ function Start-LaragonMysql {
     }
     Write-Warn 'mysqld started but 3306 stayed dark for 90s'
     return $false
+}
+
+# --- Native tier (no Laragon): real Windows services, cloud-server parity ---
+$script:NativeRoot = 'C:\hrm-services'
+$script:NativeMysqlDir = $null
+$script:NativeRedisDir = $null
+$script:NativeNginxDir = $null
+$script:MysqlZipUrl = 'https://cdn.mysql.com//archives/mysql-8.4/mysql-8.4.3-winx64.zip'
+$script:MysqlZipName = 'mysql-8.4.3-winx64.zip'
+$script:MysqlVerDir = 'mysql-8.4.3-winx64'
+$script:RedisZipUrl = 'https://github.com/tporadowski/redis/releases/download/v5.0.14.1/Redis-x64-5.0.14.1.zip'
+$script:RedisZipName = 'Redis-x64-5.0.14.1.zip'
+$script:NginxZipUrl = 'https://nginx.org/download/nginx-1.30.5.zip'
+$script:NginxZipName = 'nginx-1.30.5.zip'
+$script:NginxVerDir = 'nginx-1.30.5'
+# Browser UA for downloads: some CDNs (Oracle) reject script user-agents.
+$script:BrowserUa = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36'
+
+function Install-NativeMysql {
+    $svc = Get-Service 'HRM-MySQL' -ErrorAction SilentlyContinue
+    if ($svc) {
+        Write-Ok "MySQL service HRM-MySQL already exists (status $($svc.Status))"
+        return $true
+    }
+    $base = Join-Path $script:NativeRoot 'mysql'
+    $verDir = Join-Path $base $script:MysqlVerDir
+    $mysqld = Join-Path $verDir 'bin\mysqld.exe'
+    if (-not (Test-Path -LiteralPath $mysqld)) {
+        $zip = Join-Path ([System.IO.Path]::GetTempPath()) $script:MysqlZipName
+        if (-not (Test-Path -LiteralPath $zip)) {
+            Write-Info 'Downloading MySQL 8.4 LTS ZIP from Oracle CDN (several hundred MB) ...'
+            try {
+                [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+                $pp = $ProgressPreference; $ProgressPreference = 'SilentlyContinue'
+                try { Invoke-WebRequest -Uri $script:MysqlZipUrl -OutFile $zip -UseBasicParsing -UserAgent $script:BrowserUa }
+                finally { $ProgressPreference = $pp }
+            } catch { throw "MySQL download failed: $($_.Exception.Message) - use Laragon instead (-AutoInstall without -Native)" }
+        }
+        $mb = [math]::Round(((Get-Item -LiteralPath $zip).Length / 1MB), 1)
+        if (((Get-Item -LiteralPath $zip).Length) -lt 50MB) { throw "MySQL zip suspiciously small (${mb}MB) - delete $zip and re-run" }
+        Write-Ok "MySQL zip ready (${mb}MB)"
+        try { New-Item -ItemType Directory -Path $base -Force | Out-Null } catch {}
+        Write-Info 'Extracting MySQL (takes a few minutes) ...'
+        try { Expand-Archive -LiteralPath $zip -DestinationPath $base -Force }
+        catch { throw "MySQL extraction failed: $($_.Exception.Message)" }
+        try { Remove-Item -LiteralPath $zip -Force -ErrorAction SilentlyContinue } catch {}
+    }
+    if (-not (Test-Path -LiteralPath $mysqld)) { throw "mysqld not found after extract: $mysqld" }
+    $script:NativeMysqlDir = $verDir
+    Write-Ok "MySQL binaries: $verDir"
+    $dataDir = Join-Path $script:NativeRoot 'mysql-data'
+    try { New-Item -ItemType Directory -Path $dataDir -Force | Out-Null } catch {}
+    $ini = Join-Path $verDir 'my.ini'
+    # NOTE: never use `'a' + (...)` concatenation as a bare @() element:
+    # PowerShell 5.1 splits it into TWO array elements (proven 2026-10-01).
+    # Precompute full lines in statement position (always safe) instead.
+    $verDirFwd = $verDir -replace '\\', '/'
+    $dataDirFwd = $dataDir -replace '\\', '/'
+    $iniLines = @(
+        '[mysqld]',
+        "basedir=$verDirFwd",
+        "datadir=$dataDirFwd",
+        'port=3306',
+        'character-set-server=utf8mb4',
+        'collation-server=utf8mb4_unicode_ci',
+        'max_connections=200'
+    )
+    Set-Content -LiteralPath $ini -Value $iniLines -Encoding ASCII
+    Write-Ok "my.ini written: $ini"
+    $hasData = (Test-Path -LiteralPath (Join-Path $dataDir 'mysql.ib')) -or (Test-Path -LiteralPath (Join-Path $dataDir 'ibdata1'))
+    if (-not $hasData) {
+        Write-Info 'Initializing MySQL data dir with empty root (takes a minute) ...'
+        # Start-Process (not `&`): the `&` operator misreports forking
+        # mysqld invocations (silent exit 1 with no output, proven 2026-10-01).
+        $initProc = Start-Process -FilePath $mysqld -ArgumentList '--initialize-insecure', ('--datadir=' + ($dataDir -replace '\\', '/')) -Wait -PassThru -NoNewWindow
+        if ($initProc.ExitCode -ne 0) { throw "mysqld --initialize-insecure exited $($initProc.ExitCode) - see the data-dir .err log" }
+        $hasData = (Test-Path -LiteralPath (Join-Path $dataDir 'mysql.ib')) -or (Test-Path -LiteralPath (Join-Path $dataDir 'ibdata1'))
+        if (-not $hasData) { throw 'data dir initialization did not produce system tables - see the error log in the data dir' }
+        Write-Ok 'data dir initialized (root has empty password)'
+    } else { Write-Ok 'data dir already initialized (reusing)' }
+    Write-Info 'Registering Windows service HRM-MySQL (automatic start) ...'
+    $instProc = Start-Process -FilePath $mysqld -ArgumentList '--install', 'HRM-MySQL', ('--defaults-file=' + ($ini -replace '\\', '/')) -Wait -PassThru -NoNewWindow
+    if ($instProc.ExitCode -ne 0) { throw "mysqld --install exited $($instProc.ExitCode)" }
+    if (-not (Get-Service 'HRM-MySQL' -ErrorAction SilentlyContinue)) { throw 'HRM-MySQL service was not created - run mysqld manually once to see the error' }
+    try { Set-Service -Name 'HRM-MySQL' -StartupType Automatic } catch {}
+    try { Start-Service -Name 'HRM-MySQL' } catch { throw "could not start HRM-MySQL: $($_.Exception.Message)" }
+    for ($i = 1; $i -le 18; $i++) {
+        Start-Sleep -Seconds 5
+        if (Test-Tcp '127.0.0.1' 3306) { break }
+    }
+    if (-not (Test-Tcp '127.0.0.1' 3306)) {
+        $errLog = Get-ChildItem (Join-Path $dataDir '*.err') -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+        if ($errLog) { Write-Host '  --- tail of MySQL error log ---' -ForegroundColor Yellow; Get-Content -LiteralPath $errLog.FullName -Tail 15 | ForEach-Object { Write-Host "  $_" -ForegroundColor Yellow } }
+        throw 'HRM-MySQL did not listen on 3306 within 90s - inspect the error log above'
+    }
+    Write-Ok 'HRM-MySQL running on 3306 (service, automatic)'
+    # Belt and braces: TCP clients connect to 127.0.0.1, which reverse-resolves
+    # to localhost on Windows, but an explicit account removes all doubt.
+    try {
+        $mysqlExe = Join-Path $verDir 'bin\mysql.exe'
+        & $mysqlExe -u root -e "CREATE USER IF NOT EXISTS 'root'@'127.0.0.1' IDENTIFIED BY ''; GRANT ALL PRIVILEGES ON *.* TO 'root'@'127.0.0.1' WITH GRANT OPTION; FLUSH PRIVILEGES;" | Out-Null
+        Write-Ok "127.0.0.1 root access ensured"
+    } catch { Write-Warn '127.0.0.1 grant skipped (root@localhost normally suffices on Windows)' }
+    return $true
+}
+
+function Install-NativeRedis {
+    $svc = Get-Service 'hrm-redis' -ErrorAction SilentlyContinue
+    if ($svc) {
+        Write-Ok "Redis service hrm-redis already exists (status $($svc.Status))"
+        return $true
+    }
+    $dir = Join-Path $script:NativeRoot 'redis'
+    $exe = Join-Path $dir 'redis-server.exe'
+    if (-not (Test-Path -LiteralPath $exe)) {
+        $zip = Join-Path ([System.IO.Path]::GetTempPath()) $script:RedisZipName
+        if (-not (Test-Path -LiteralPath $zip)) {
+            Write-Info 'Downloading Redis 5.0.14.1 for Windows (tporadowski, ~13MB) ...'
+            try {
+                [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+                $pp = $ProgressPreference; $ProgressPreference = 'SilentlyContinue'
+                try { Invoke-WebRequest -Uri $script:RedisZipUrl -OutFile $zip -UseBasicParsing -UserAgent $script:BrowserUa }
+                finally { $ProgressPreference = $pp }
+            } catch { throw "Redis download failed: $($_.Exception.Message)" }
+        }
+        if (((Get-Item -LiteralPath $zip).Length) -lt 1MB) { throw "Redis zip suspiciously small - delete $zip and re-run" }
+        try { New-Item -ItemType Directory -Path $dir -Force | Out-Null } catch {}
+        Write-Info 'Extracting Redis ...'
+        try { Expand-Archive -LiteralPath $zip -DestinationPath $dir -Force }
+        catch { throw "Redis extraction failed: $($_.Exception.Message)" }
+        try { Remove-Item -LiteralPath $zip -Force -ErrorAction SilentlyContinue } catch {}
+        $found = Get-ChildItem $dir -Recurse -Filter 'redis-server.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($found -and ($found.Directory.FullName -ne $dir)) {
+            Get-ChildItem -LiteralPath $found.Directory.FullName | ForEach-Object { Move-Item -LiteralPath $_.FullName -Destination $dir -Force }
+            Write-Ok 'Redis binaries normalized to a flat layout'
+        }
+    }
+    if (-not (Test-Path -LiteralPath $exe)) { throw "redis-server.exe not found after extract: $exe" }
+    $script:NativeRedisDir = $dir
+    Write-Ok "Redis binaries: $dir"
+    $dataDir = Join-Path $script:NativeRoot 'redis-data'
+    try { New-Item -ItemType Directory -Path $dataDir -Force | Out-Null } catch {}
+    # Own conf copy: absolute dir/logfile (a service starts in System32, so
+    # relative paths would scatter data). Later lines override earlier ones.
+    $tpl = Get-ChildItem $dir -Filter '*.conf' -ErrorAction SilentlyContinue | Where-Object { $_.Name -match 'windows-service|windows' } | Select-Object -First 1
+    if (-not $tpl) { throw 'no redis .conf template found in the Redis package' }
+    $conf = Join-Path $dir 'hrm-redis.conf'
+    Copy-Item -LiteralPath $tpl.FullName -Destination $conf -Force
+    # Same @() concatenation rule as my.ini above: full lines precomputed.
+    $dataDirFwd = $dataDir -replace '\\', '/'
+    $redisDirLine = 'dir ' + $dataDirFwd
+    $redisLogLine = 'logfile ' + $dataDirFwd + '/redis.log'
+    Add-Content -LiteralPath $conf -Value @('', '# --- HRM native service overrides (absolute paths) ---', 'port 6379', 'bind 127.0.0.1 ::1', $redisDirLine, 'dbfilename dump.rdb', $redisLogLine) -Encoding ASCII
+    Write-Ok "Redis conf: $conf"
+    Write-Info 'Registering Windows service hrm-redis (automatic start) ...'
+    try { & $exe $conf --service-install --service-name hrm-redis --port 6379 | Out-Null }
+    catch { throw "redis --service-install failed: $($_.Exception.Message)" }
+    $svc2 = Get-Service 'hrm-redis' -ErrorAction SilentlyContinue
+    if (-not $svc2) { throw 'hrm-redis service was not created - run redis-server.exe manually once to see the error' }
+    try { Set-Service -Name 'hrm-redis' -StartupType Automatic } catch {}
+    try { & $exe --service-start --service-name hrm-redis | Out-Null }
+    catch { throw "redis --service-start failed: $($_.Exception.Message)" }
+    for ($i = 1; $i -le 12; $i++) {
+        Start-Sleep -Seconds 5
+        if (Test-Tcp '127.0.0.1' 6379) { break }
+    }
+    if (-not (Test-Tcp '127.0.0.1' 6379)) { throw 'hrm-redis did not listen on 6379 within 60s' }
+    Write-Ok 'hrm-redis running on 6379 (service, automatic)'
+    return $true
+}
+
+# Nginx web tier (Option B): user browsers get :80 with a real concurrent
+# backend, while `artisan serve :8000` keeps serving only fast ADMS/bridge
+# callbacks (single-threaded on Windows by design - see supervisor note).
+# Layout mirrors production: C:\nginx ran standalone; here everything lives
+# under C:\hrm-services\nginx with conf generated from production/nginx-hrm.conf.
+# Runtime ownership belongs to the supervisor (Start-HRM-Windows.ps1); this
+# function only stages FILES and validates the config (`nginx -t`).
+function Install-NativeNginx([string] $ProjectRoot, [string] $LanIp) {
+    $nRoot = Join-Path $script:NativeRoot 'nginx'
+    $exe = Join-Path $nRoot 'nginx.exe'
+    if (-not (Test-Path -LiteralPath $exe)) {
+        $zip = Join-Path ([System.IO.Path]::GetTempPath()) $script:NginxZipName
+        if (-not (Test-Path -LiteralPath $zip)) {
+            Write-Info 'Downloading Nginx 1.30.5 stable for Windows (~2MB, nginx.org) ...'
+            try {
+                $pp = $ProgressPreference; $ProgressPreference = 'SilentlyContinue'
+                try { Invoke-WebRequest -Uri $script:NginxZipUrl -OutFile $zip -UseBasicParsing -UserAgent $script:BrowserUa }
+                finally { $ProgressPreference = $pp }
+            } catch { throw "Nginx download failed: $($_.Exception.Message)" }
+        }
+        if (((Get-Item -LiteralPath $zip).Length) -lt 500KB) { throw "Nginx zip suspiciously small - delete $zip and re-run" }
+        $stage = Join-Path ([System.IO.Path]::GetTempPath()) 'hrm-nginx-stage'
+        if (Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Recurse -Force }
+        try { New-Item -ItemType Directory -Path $stage -Force | Out-Null } catch {}
+        Write-Info 'Extracting Nginx ...'
+        try { Expand-Archive -LiteralPath $zip -DestinationPath $stage -Force }
+        catch { throw "Nginx extraction failed: $($_.Exception.Message)" }
+        $src = Join-Path $stage $script:NginxVerDir
+        if (-not (Test-Path -LiteralPath (Join-Path $src 'nginx.exe'))) { throw "nginx.exe not found in the extracted package" }
+        try { New-Item -ItemType Directory -Path $nRoot -Force | Out-Null } catch {}
+        Get-ChildItem -LiteralPath $src | ForEach-Object { Move-Item -LiteralPath $_.FullName -Destination $nRoot -Force }
+        Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue
+        try { Remove-Item -LiteralPath $zip -Force -ErrorAction SilentlyContinue } catch {}
+    }
+    if (-not (Test-Path -LiteralPath $exe)) { throw "nginx.exe not found after extract: $exe" }
+    $script:NativeNginxDir = $nRoot
+    Write-Ok "Nginx binaries: $nRoot"
+    foreach ($req in @('mime.types', 'fastcgi_params')) {
+        if (-not (Test-Path -LiteralPath (Join-Path $nRoot "conf\$req"))) { throw "Nginx package incomplete: conf\$req missing" }
+    }
+    $tpl = Join-Path $ProjectRoot 'production\nginx-hrm.conf'
+    if (-not (Test-Path -LiteralPath $tpl)) { throw "Nginx template missing: $tpl" }
+    $publicRoot = (($ProjectRoot -replace '\\', '/') + '/public')
+    $storagePub = (($ProjectRoot -replace '\\', '/') + '/storage/app/public')
+    $confText = [System.IO.File]::ReadAllText($tpl)
+    $confText = $confText.Replace('%%PUBLIC_ROOT%%', $publicRoot)
+    $confText = $confText.Replace('%%LAN_IP%%', $LanIp)
+    $confText = $confText.Replace('%%STORAGE_PUBLIC%%', $storagePub)
+    if ($confText -match '%%[A-Z_]+%%') { throw 'Nginx template tokens left unreplaced - check production/nginx-hrm.conf' }
+    $confPath = Join-Path $nRoot 'conf\nginx.conf'
+    Copy-Item -LiteralPath $confPath -Destination ($confPath + '.dist-bak') -Force -ErrorAction SilentlyContinue
+    $utf8NoBom = New-Object System.Text.UTF8Encoding $false
+    [System.IO.File]::WriteAllText($confPath, $confText, $utf8NoBom)
+    Write-Ok "Nginx conf written: $confPath (root=$publicRoot, lan=$LanIp)"
+    foreach ($d in @('logs', 'temp', 'temp\client_body_temp', 'temp\proxy_temp', 'temp\fastcgi_temp', 'temp\uwsgi_temp', 'temp\scgi_temp')) {
+        try { New-Item -ItemType Directory -Path (Join-Path $nRoot $d) -Force | Out-Null } catch {}
+    }
+    $t = Start-Process -FilePath $exe -ArgumentList '-t', '-c', $confPath, '-p', $nRoot -Wait -PassThru -NoNewWindow
+    if ($t.ExitCode -ne 0) { throw "nginx -t FAILED for the generated conf (exit $($t.ExitCode)) - inspect $confPath" }
+    Write-Ok 'nginx -t: configuration test successful'
+    return $true
 }
 
 # --- .env helpers (all values we write are plain ASCII: hex, urls, ips) ---
@@ -501,7 +805,7 @@ if ($AutoInstall) {
     }
     if (-not $phpOk) {
         try { Install-WithWinget 'Microsoft.VCRedist.2015+.x64' 'VC++ Redistributable' } catch { Write-Warn $_.Exception.Message }
-        try { Install-WithWinget 'PHP.PHP.NTS.8.3' 'PHP 8.3 NTS (official PHP Group build)' } catch { Write-Warn $_.Exception.Message }
+        try { Install-PhpNts } catch { Write-Warn $_.Exception.Message }
     }
     if (-not $nodeOk) { try { Install-WithWinget 'OpenJS.NodeJS.LTS' 'Node.js LTS' } catch { Write-Warn $_.Exception.Message } }
     if (-not $gitOk) { try { Install-WithWinget 'Git.Git' 'Git' } catch { Write-Warn $_.Exception.Message } }
@@ -514,11 +818,37 @@ if ($AutoInstall) {
     Write-Warn 'If PATH still misses new tools, CLOSE this window, open a new one, and re-run the installer.'
 }
 
+if ($Native) {
+    Write-Host ''
+    Write-Host '--- Native services (MySQL 8.4 + Redis 5 as Windows services) ---' -ForegroundColor Cyan
+    if (-not $isAdmin) { throw '-Native registers Windows services and requires Administrator. Re-run elevated (double-click INSTALL-HRM.bat).' }
+    # Native implies tool setup: winget tools first when they are missing.
+    if (-not ($phpOk -and $composerOk -and $nodeOk -and $pyOk)) {
+        Write-Info 'Native tier: installing missing tools first ...'
+        try { & winget --version | Out-Null } catch { throw 'winget not available - install App Installer from Microsoft Store first.' }
+        if (-not $phpOk) {
+            try { Install-WithWinget 'Microsoft.VCRedist.2015+.x64' 'VC++ Redistributable' } catch { Write-Warn $_.Exception.Message }
+            try { Install-PhpNts } catch { Write-Warn $_.Exception.Message }
+        }
+        if (-not $nodeOk) { try { Install-WithWinget 'OpenJS.NodeJS.LTS' 'Node.js LTS' } catch { Write-Warn $_.Exception.Message } }
+        if (-not $gitOk) { try { Install-WithWinget 'Git.Git' 'Git' } catch { Write-Warn $_.Exception.Message } }
+        if (-not $pyOk) { try { Install-WithWinget 'Python.Python.3.12' 'Python 3.12' } catch { Write-Warn $_.Exception.Message } }
+        if (-not $composerOk) { try { Install-ComposerSetup } catch { Write-Warn $_.Exception.Message } }
+        $env:Path = $env:Path + ';' + [System.Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' + [System.Environment]::GetEnvironmentVariable('Path', 'User')
+        Invoke-ToolReprobe
+    }
+    try { Install-NativeMysql } catch { Write-Err "native MySQL failed: $($_.Exception.Message)"; throw }
+    try { Install-NativeRedis } catch { Write-Err "native Redis failed: $($_.Exception.Message)"; throw }
+    try { Install-NativeNginx $Root (Get-LanIp) } catch { Write-Err "native Nginx failed: $($_.Exception.Message)"; throw }
+    $mysqlUp = Test-Tcp '127.0.0.1' 3306
+    $redisUp = Test-Tcp '127.0.0.1' 6379
+}
+
 $missing = @($checks | Where-Object { -not $_.Ok })
 if ($CheckOnly) {
     Write-Host ''
     Write-Host '--- integration status (informational, fixed by a full run as admin) ---' -ForegroundColor Cyan
-    foreach ($p in @(8000, 8080, 8081, 5000)) {
+    foreach ($p in @(80, 8000, 8080, 8081, 5000)) {
         try {
             if (Get-NetFirewallRule -DisplayName "HRM-Allow-$p" -ErrorAction Stop) { Write-Ok "firewall rule HRM-Allow-$p present" }
         } catch { Write-Warn "firewall rule HRM-Allow-$p missing (TCP $p inbound for LAN/devices)" }
@@ -604,6 +934,16 @@ if ($missingExt.Count -gt 0) {
         try { $phpBin = (Get-Command php -ErrorAction Stop).Source } catch {}
         $extDir = ''
         if ($phpBin) { $extDir = Join-Path (Split-Path $phpBin -Parent) 'ext' }
+        # No loaded ini (fresh builds ship only php.ini-production): seed it.
+        if (([string]::IsNullOrWhiteSpace($iniFile) -or (-not (Test-Path -LiteralPath $iniFile))) -and ($phpBin)) {
+            $prodIni = Join-Path (Split-Path $phpBin -Parent) 'php.ini-production'
+            $newIni = Join-Path (Split-Path $phpBin -Parent) 'php.ini'
+            if (Test-Path -LiteralPath $prodIni) {
+                Copy-Item -LiteralPath $prodIni -Destination $newIni -Force
+                $iniFile = $newIni
+                Write-Ok "php.ini seeded from php.ini-production: $newIni"
+            }
+        }
         if (($iniFile -ne '') -and (Test-Path -LiteralPath $iniFile) -and ($extDir -ne '') -and (Test-Path -LiteralPath $extDir)) {
             $dllMap = @{ 'pdo_mysql' = 'php_pdo_mysql.dll'; 'pdo_sqlite' = 'php_pdo_sqlite.dll' }
             $iniBackedUp = $false
@@ -714,6 +1054,18 @@ if (($auHost -match '^\d+\.\d+\.\d+\.\d+$') -and ($auHost -ne $lanIpEarly) -and 
 $viteHostNow = Get-DotEnvValue $envFile 'VITE_REVERB_HOST'
 if (($viteHostNow -match '^\d+\.\d+\.\d+\.\d+$') -and ($viteHostNow -ne $lanIpEarly)) {
     Write-Warn "VITE_REVERB_HOST ($viteHostNow) differs from this machine LAN ($lanIpEarly) - browsers on LAN will fail realtime; re-run with -ServerIp $lanIpEarly to rewrite"
+}
+
+# -Native promises MySQL: a fresh template defaults to sqlite, so point a
+# JUST-CREATED .env at the native server (never touch an existing .env).
+if ($envJustCreated -and $Native) {
+    Set-DotEnvValue $envFile 'DB_CONNECTION' 'mysql'
+    Set-DotEnvValue $envFile 'DB_HOST' '127.0.0.1'
+    Set-DotEnvValue $envFile 'DB_PORT' '3306'
+    Set-DotEnvValue $envFile 'DB_DATABASE' 'hrmair'
+    Set-DotEnvValue $envFile 'DB_USERNAME' 'root'
+    Set-DotEnvValue $envFile 'DB_PASSWORD' ''
+    Write-Ok 'fresh .env defaulted to native MySQL (hrmair/root/empty) for -Native'
 }
 
 # DB mode decision
@@ -850,6 +1202,18 @@ try {
         Set-DotEnvValue $envFile 'BACKUP_ENCRYPTION_KEY' $nb
         Write-Ok 'BACKUP_ENCRYPTION_KEY generated (base64 of 32 random bytes)'
     } else { Write-Ok 'backup encryption key OK (disabled or present)' }
+
+    # Native tier: point the backup module at the native MySQL client tools
+    # (templates point at Laragon paths which do not exist without Laragon).
+    if ($script:NativeMysqlDir) {
+        $nd = Join-Path $script:NativeMysqlDir 'bin\mysqldump.exe'
+        $nm = Join-Path $script:NativeMysqlDir 'bin\mysql.exe'
+        if ((Test-Path -LiteralPath $nd) -and (Test-Path -LiteralPath $nm)) {
+            Set-DotEnvValue $envFile 'BACKUP_MYSQLDUMP_PATH' $nd
+            Set-DotEnvValue $envFile 'BACKUP_MYSQL_PATH' $nm
+            Write-Ok 'backup tools pointed at native MySQL bin'
+        }
+    }
 
     # MySQL database (missing DB is the #1 fresh-machine migrate killer).
     if ($conn -eq 'mysql') {
@@ -1061,8 +1425,9 @@ if ($isAdmin) {
         }
     } catch { Write-Warn "Legacy task cleanup skipped: $($_.Exception.Message)" }
 
-    # 4) Firewall: LAN browsers + fingerprint devices must reach these ports.
-    foreach ($p in @(8000, 8080, 8081, 5000)) {
+    # 4) Firewall: LAN browsers + fingerprint devices must reach these ports
+    # (:80 = Nginx user traffic, 8080 = Reverb, 8081 = ADMS, 5000 = bridge).
+    foreach ($p in @(80, 8000, 8080, 8081, 5000)) {
         $ruleName = "HRM-Allow-$p"
         try {
             Get-NetFirewallRule -DisplayName $ruleName -ErrorAction Stop | Out-Null
@@ -1145,6 +1510,25 @@ try {
             if ($revSvc) { Write-Warn "HRM-Reverb service exists (status $($revSvc.Status)) but 8080 is dark - start the service" }
             else { Write-Err 'Reverb 8080 dark and no HRM-Reverb service - realtime WILL NOT work. Register the NSSM layer per production/DEPLOY-NEW-MACHINE.md, or switch BROADCAST_CONNECTION=log.'; $fail++ }
         }
+    }
+    # -Native promises real services: they must exist and run afterwards.
+    if ($Native) {
+        foreach ($sn in @('HRM-MySQL', 'hrm-redis')) {
+            $sv = Get-Service $sn -ErrorAction SilentlyContinue
+            if (-not $sv) { Write-Err "native service missing: $sn"; $fail++ }
+            elseif ($sv.Status -ne 'Running') { Write-Err "native service not running: $sn ($($sv.Status)) - run: Start-Service $sn"; $fail++ }
+            else { Write-Ok "native service running: $sn" }
+        }
+    }
+    # Nginx web tier: files staged by Install-NativeNginx, runtime owned by
+    # the supervisor. Validate the config here (needs no ports, no admin).
+    $nExe = Join-Path 'C:\hrm-services\nginx' 'nginx.exe'
+    $nConf = Join-Path 'C:\hrm-services\nginx' 'conf\nginx.conf'
+    if ((Test-Path -LiteralPath $nExe) -and (Test-Path -LiteralPath $nConf)) {
+        Assert-Path $nExe 'nginx binary (user web tier :80)'
+        $nt = Start-Process -FilePath $nExe -ArgumentList '-t', '-c', $nConf, '-p', 'C:\hrm-services\nginx' -Wait -PassThru -NoNewWindow
+        if ($nt.ExitCode -eq 0) { Write-Ok 'nginx -t: configuration test successful' }
+        else { Write-Err 'nginx -t FAILED - inspect C:\hrm-services\nginx\conf\nginx.conf'; $fail++ }
     }
     foreach ($pt in @(8000, 8080, 8081, 5000)) {
         if (Test-Tcp '127.0.0.1' $pt) { Write-Warn "port $pt already in use (a service may already run - installer leaves it alone)" }

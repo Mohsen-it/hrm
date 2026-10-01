@@ -25,6 +25,12 @@ param(
 $Root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $LogFile = Join-Path $Root 'storage\logs\hrm-startup.log'
 
+# PYTHON* hygiene (mirrors the supervisor): runs headless under SYSTEM where
+# third-party PYTHONHOME pollution would otherwise break the venv children.
+Remove-Item Env:\PYTHONHOME -ErrorAction SilentlyContinue
+Remove-Item Env:\PYTHONPATH -ErrorAction SilentlyContinue
+Remove-Item Env:\PYTHONIOENCODING -ErrorAction SilentlyContinue
+
 function Write-StartupLog([string] $message) {
     $line = "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] $message"
     Add-Content -LiteralPath $LogFile -Value $line -Encoding UTF8

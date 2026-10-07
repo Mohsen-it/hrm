@@ -3,6 +3,8 @@
 return [
     'title' => 'العطل الرسمية',
     'index_description' => 'إدارة العطل الرسمية في النظام',
+    'no_holidays_title' => 'لا توجد عطل بعد',
+    'no_holidays_description' => 'أضف أول عطلة (الاسم + التاريخ) وستُستثنى تلقائياً من الدوام',
     'add_holiday' => 'إضافة عطلة',
     'edit_holiday' => 'تعديل عطلة',
     'view_holiday' => 'عرض العطلة',

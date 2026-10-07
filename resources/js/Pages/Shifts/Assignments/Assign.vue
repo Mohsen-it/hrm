@@ -9,15 +9,16 @@ export default {
 <script setup>
 import { usePageTitle } from '@/composables/usePageTitle';
 
-import { ref, reactive, computed, watch } from 'vue';
+import { ref, reactive, computed } from 'vue';
 import { router, Head } from '@inertiajs/vue3';
-import { PageHeader, Button, Card, FormInput, FormSelect, FormDatepicker, ErrorSummary, FormSection, FormActions } from '@/Components/ui';
+import { PageHeader, Button, Card, FormInput, FormSelect, FormSearchableSelect, FormDatepicker, ErrorSummary, FormSection, FormActions } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
 
 const props = defineProps({
     categories: { type: Object, default: () => ({ data: [] }) },
+    employees: { type: Array, default: () => [] },
     preselected_category_id: { type: Number, default: null },
 });
 
@@ -33,50 +34,17 @@ const processing = ref(false);
 
 const errorFor = (key) => errors.value[key] || '';
 
-const employeeSearch = ref('');
-const employees = ref([]);
-const selectedEmployee = ref(null);
-const searching = ref(false);
-let searchTimer = null;
+// Unified searchable employee select (same component as Vacations requests).
+const employeeOptions = computed(() =>
+    (props.employees || []).map((emp) => ({
+        value: emp.id,
+        label: emp.employee_code ? `${emp.employee_code} - ${emp.first_name || ''} ${emp.last_name || ''}`.trim() : (emp.name || ''),
+    })),
+);
 
 const categoryOptions = computed(() =>
     (props.categories?.data || props.categories || []).map((c) => ({ value: c.id, label: c.name })),
 );
-
-function searchEmployees() {
-    if (searchTimer) clearTimeout(searchTimer);
-    if (employeeSearch.value.length < 2) {
-        employees.value = [];
-        return;
-    }
-    searchTimer = setTimeout(async () => {
-        searching.value = true;
-        try {
-            const response = await fetch(
-                route('shift-assignments.search-employees') + '?search=' + encodeURIComponent(employeeSearch.value),
-                { headers: { 'Accept': 'application/json' } },
-            );
-            const data = await response.json();
-            employees.value = data.employees || [];
-        } catch (e) {
-            employees.value = [];
-        } finally {
-            searching.value = false;
-        }
-    }, 300);
-}
-
-function selectEmployee(emp) {
-    selectedEmployee.value = emp;
-    form.employee_id = emp.id;
-    employeeSearch.value = '';
-    employees.value = [];
-}
-
-function clearSelectedEmployee() {
-    selectedEmployee.value = null;
-    form.employee_id = '';
-}
 
 function submit() {
     processing.value = true;
@@ -91,8 +59,6 @@ function submit() {
         },
     });
 }
-
-watch(employeeSearch, searchEmployees);
 
 
 usePageTitle(t('shifts.assign_employee'));
@@ -116,59 +82,16 @@ usePageTitle(t('shifts.assign_employee'));
             <FormSection :title="t('shifts.assignment_info')" :description="t('shifts.assignments_description')">
                 <div class="max-w-2xl">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-[13px] text-mistral-ink mb-1">
-                                {{ t('shifts.employee') }} <span class="text-mistral-danger">*</span>
-                            </label>
-
-                            <div v-if="selectedEmployee" class="flex items-center justify-between p-2 bg-mistral-surface rounded-md border border-mistral-hairline">
-                                <div class="flex flex-col">
-                                    <span class="text-[14px] font-medium text-mistral-ink">
-                                        {{ selectedEmployee.first_name }} {{ selectedEmployee.last_name }}
-                                    </span>
-                                    <span class="text-[12px] text-mistral-muted">{{ selectedEmployee.employee_code }}</span>
-                                </div>
-                                <Button type="button" variant="ghost" size="sm" icon="fas fa-times" @click="clearSelectedEmployee" />
-                            </div>
-
-                            <div v-else class="relative">
-                                <FormInput
-                                    v-model="employeeSearch"
-                                    :placeholder="t('shifts.search_employee_placeholder')"
-                                    :error="errorFor('employee_id')"
-                                />
-                                <div
-                                    v-if="searching"
-                                    class="absolute top-full left-0 right-0 mt-1 p-2 bg-mistral-canvas border border-mistral-hairline rounded-md text-[13px] text-mistral-muted z-10"
-                                >
-                                    <i class="fas fa-spinner fa-spin"></i> {{ t('common.search') }}...
-                                </div>
-                                <div
-                                    v-else-if="employees.length > 0"
-                                    class="absolute top-full left-0 right-0 mt-1 bg-mistral-canvas border border-mistral-hairline rounded-md shadow-level-2 max-h-[240px] overflow-y-auto z-10"
-                                >
-                                    <button
-                                        v-for="emp in employees"
-                                        :key="emp.id"
-                                        type="button"
-                                        class="w-full text-end flex items-center justify-between p-2 hover:bg-mistral-surface border-b border-mistral-hairline-soft last:border-b-0"
-                                        @click="selectEmployee(emp)"
-                                    >
-                                        <div class="flex flex-col">
-                                            <span class="text-[14px] text-mistral-ink">{{ emp.first_name }} {{ emp.last_name }}</span>
-                                            <span class="text-[12px] text-mistral-muted">{{ emp.employee_code }}</span>
-                                        </div>
-                                        <i class="fas fa-plus text-mistral-primary text-[12px]"></i>
-                                    </button>
-                                </div>
-                                <div
-                                    v-else-if="employeeSearch.length >= 2 && !searching"
-                                    class="absolute top-full left-0 right-0 mt-1 p-2 bg-mistral-canvas border border-mistral-hairline rounded-md text-[13px] text-mistral-muted z-10"
-                                >
-                                    {{ t('shifts.no_employees_found') }}
-                                </div>
-                            </div>
-                        </div>
+                        <FormSearchableSelect
+                            v-model="form.employee_id"
+                            :label="t('shifts.employee')"
+                            name="employee_id"
+                            :options="employeeOptions"
+                            :placeholder="t('shifts.search_employee_placeholder')"
+                            :search-placeholder="t('shifts.search_employee_placeholder')"
+                            required
+                            :error="errorFor('employee_id')"
+                        />
 
                         <FormSelect
                             v-model="form.shift_category_id"

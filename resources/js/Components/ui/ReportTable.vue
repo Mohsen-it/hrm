@@ -46,7 +46,9 @@ function keyOf(row, index) {
             :icon="emptyIcon"
             :title="emptyTitle"
             :description="emptyDescription"
-        />
+        >
+            <slot name="empty-actions" />
+        </EmptyState>
         <div v-else class="overflow-x-auto">
             <table
                 class="w-full"

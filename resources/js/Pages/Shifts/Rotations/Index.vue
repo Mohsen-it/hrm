@@ -110,10 +110,17 @@ usePageTitle(t('shifts.rotations'));
             :route-name="'rotations.index'"
             :only="['rotations', 'filters']"
             storage-key="rotations"
+            :empty-title="t('shifts.no_rotations_title')"
+            :empty-description="t('shifts.no_rotations_description')"
             @search="onSearch"
             @filter-change="onFilterChange"
             @export="onExport"
         >
+            <template #empty-actions>
+                <Button variant="primary" :href="route('rotations.create')" icon="fas fa-plus">
+                    {{ t('shifts.add_rotation') }}
+                </Button>
+            </template>
             <template #cell-name="{ row }">
                 <div class="flex items-center gap-2">
                     <div

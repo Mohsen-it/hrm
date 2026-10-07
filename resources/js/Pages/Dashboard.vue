@@ -11,7 +11,7 @@ import { usePageTitle } from '@/composables/usePageTitle';
 
 import { ref, computed, onMounted, onBeforeUnmount, watch, defineAsyncComponent } from 'vue';
 import { Link } from '@inertiajs/vue3';
-import { Badge, Avatar, EmptyState, Button, FormDatepicker } from '@/Components/ui';
+import { Badge, Avatar, EmptyState, Button, FormDatepicker, ReportTable, PageHeader } from '@/Components/ui';
 import DashboardWidget from '@/Components/dashboard/DashboardWidget.vue';
 // Heavy chart code (chart.js) loads in a separate chunk only when this page
 // renders — identical output, smaller initial bundle on every other page.
@@ -69,6 +69,11 @@ let isPolling = false;
 let isTabVisible = !document.hidden;
 let isComponentMounted = true;
 
+// Stat cards: 6 primary visible by default, the rest behind "show more"
+// (P1-UX: reduce first-screen cognitive load for new users).
+const showAllStats = ref(false);
+const visibleStatCards = computed(() => (showAllStats.value ? statCards.value : statCards.value.slice(0, 6)));
+
 // Stat cards configuration
 const statCards = computed(() => [
     { label: t('dashboard.total_employees'), key: 'employees', icon: 'fas fa-users', color: 'primary' },
@@ -85,6 +90,9 @@ const statCards = computed(() => [
     { label: t('dashboard.active_devices'), key: 'active_devices', icon: 'fas fa-microchip', color: 'success' },
 ]);
 
+// Chart colors live in @/utils/chartPalette (1:1 with app.css mistral-* tokens).
+import { CHART_COLORS } from '@/utils/chartPalette';
+
 // Chart data: Attendance Doughnut
 const attendanceDoughnutData = computed(() => ({
     labels: [t('dashboard.present'), t('dashboard.absent'), t('dashboard.late'), t('dashboard.early_leave')],
@@ -95,7 +103,7 @@ const attendanceDoughnutData = computed(() => ({
             data.value.dailyKpis?.late || 0,
             data.value.dailyKpis?.early_leave || 0,
         ],
-        backgroundColor: ['#007a3d', '#ce1126', '#d97706', '#2563eb'],
+        backgroundColor: [CHART_COLORS.success, CHART_COLORS.danger, CHART_COLORS.warning, CHART_COLORS.info],
         borderWidth: 0,
         hoverOffset: 6,
     }],
@@ -118,21 +126,21 @@ const weeklyTrendData = computed(() => ({
         {
             label: t('dashboard.present'),
             data: (data.value.weeklyTrend || []).map((d) => d.present),
-            backgroundColor: '#007a3d',
+            backgroundColor: CHART_COLORS.success,
             borderRadius: 6,
             barPercentage: 0.6,
         },
         {
             label: t('dashboard.absent'),
             data: (data.value.weeklyTrend || []).map((d) => d.absent),
-            backgroundColor: '#ce1126',
+            backgroundColor: CHART_COLORS.danger,
             borderRadius: 6,
             barPercentage: 0.6,
         },
         {
             label: t('dashboard.late'),
             data: (data.value.weeklyTrend || []).map((d) => d.late),
-            backgroundColor: '#d97706',
+            backgroundColor: CHART_COLORS.warning,
             borderRadius: 6,
             barPercentage: 0.6,
         },
@@ -149,8 +157,8 @@ const monthlyTrendData = computed(() => ({
         {
             label: t('dashboard.present'),
             data: (data.value.monthlyTrend || []).map((d) => d.present),
-            borderColor: '#007a3d',
-            backgroundColor: 'rgba(0,122,61,0.1)',
+            borderColor: CHART_COLORS.success,
+            backgroundColor: CHART_COLORS.successSoft,
             fill: true,
             tension: 0.4,
             pointRadius: 2,
@@ -159,8 +167,8 @@ const monthlyTrendData = computed(() => ({
         {
             label: t('dashboard.absent'),
             data: (data.value.monthlyTrend || []).map((d) => d.absent),
-            borderColor: '#ce1126',
-            backgroundColor: 'rgba(206,17,38,0.05)',
+            borderColor: CHART_COLORS.danger,
+            backgroundColor: CHART_COLORS.dangerSoft,
             fill: true,
             tension: 0.4,
             pointRadius: 2,
@@ -179,11 +187,36 @@ const lineChartOptions = {
             ticks: { maxTicksLimit: 10, font: { size: 9 } },
         },
         y: {
-            grid: { color: '#ededed' },
+            grid: { color: CHART_COLORS.grid },
             beginAtZero: true,
         },
     },
 };
+
+// ReportTable column sets (P1-UX: single table component everywhere).
+const deptColumns = computed(() => [
+    { key: 'department', label: t('dashboard.department_statistics'), align: 'start' },
+    { key: 'total', label: t('dashboard.total_employees'), align: 'center' },
+    { key: 'present', label: t('dashboard.present'), align: 'center' },
+    { key: 'absent', label: t('dashboard.absent'), align: 'center' },
+    { key: 'late', label: t('dashboard.late'), align: 'center' },
+    { key: 'overtime', label: t('dashboard.overtime'), align: 'center' },
+]);
+
+const shiftColumns = computed(() => [
+    { key: 'shift', label: t('dashboard.shift_name'), align: 'start' },
+    { key: 'start', label: t('dashboard.start_time'), align: 'center' },
+    { key: 'end', label: t('dashboard.end_time'), align: 'center' },
+    { key: 'count', label: t('dashboard.employees_assigned'), align: 'center' },
+]);
+
+const anomalyColumns = computed(() => [
+    { key: 'employee', label: t('dashboard.total_employees'), align: 'start' },
+    { key: 'status', label: t('dashboard.attendance_heatmap'), align: 'center' },
+    { key: 'late', label: t('dashboard.late_today'), align: 'center' },
+    { key: 'in', label: t('dashboard.start_time'), align: 'center' },
+    { key: 'out', label: t('dashboard.end_time'), align: 'center' },
+]);
 
 // Quick actions
 const quickActions = computed(() => [
@@ -330,17 +363,12 @@ usePageTitle(t('dashboard.title'));
 <template>
     
         <div class="space-y-5">
-            <!-- ===== TOP BAR ===== -->
-            <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                <div>
-                    <h1 class="text-[22px] font-bold text-mistral-ink tracking-tight">
-                        {{ t('dashboard.title') }}
-                    </h1>
-                    <p class="text-[13px] text-mistral-steel mt-1">
-                        {{ t('dashboard.last_updated') }}: {{ new Date().toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' }) }}
-                    </p>
-                </div>
-                <div class="flex items-center gap-2">
+            <!-- ===== TOP BAR (unified PageHeader: predictable title + description + actions) ===== -->
+            <PageHeader
+                :title="t('dashboard.title')"
+                :description="`${t('dashboard.subtitle')} · ${t('dashboard.last_updated')}: ${new Date().toLocaleTimeString(isRtl ? 'ar-SA' : 'en-GB', { hour: '2-digit', minute: '2-digit' })}`"
+            >
+                <template #actions>
                     <!-- Date picker -->
                     <FormDatepicker
                         v-model="selectedDate"
@@ -365,8 +393,8 @@ usePageTitle(t('dashboard.title'));
                     >
                         <span class="hidden sm:inline">{{ t('dashboard.export') }}</span>
                     </Button>
-                </div>
-            </div>
+                </template>
+            </PageHeader>
 
             <!-- ===== MASS ALERTS ===== -->
             <div
@@ -406,9 +434,9 @@ usePageTitle(t('dashboard.title'));
             </div>
 
             <!-- ===== LIVE COUNTERS ===== -->
-            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-10 gap-3">
+            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
                 <div
-                    v-for="card in statCards"
+                    v-for="card in visibleStatCards"
                     :key="card.key"
                     class="bg-white border border-mistral-hairline-soft rounded-xl p-4 hover:shadow-level-1 transition-all duration-200 group cursor-default"
                 >
@@ -433,6 +461,11 @@ usePageTitle(t('dashboard.title'));
                     </div>
                     <div class="text-[11px] text-mistral-steel mt-1.5 leading-tight">{{ card.label }}</div>
                 </div>
+            </div>
+            <div v-if="statCards.length > 6" class="flex justify-center mt-3">
+                <Button variant="ghost" size="sm" @click="showAllStats = !showAllStats" :icon="showAllStats ? 'fas fa-chevron-up' : 'fas fa-chevron-down'">
+                    {{ showAllStats ? t('common.show_less') : t('common.show_more') }}
+                </Button>
             </div>
 
             <!-- ===== CHARTS ROW ===== -->
@@ -490,63 +523,31 @@ usePageTitle(t('dashboard.title'));
                     class="lg:col-span-2"
                     :padded="false"
                 >
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-[13px]">
-                            <thead>
-                                <tr class="border-b border-mistral-hairline-soft">
-                                    <th class="text-start px-5 py-3 text-[11px] font-semibold text-mistral-steel uppercase tracking-wider">
-                                        {{ t('dashboard.department_statistics') }}
-                                    </th>
-                                    <th class="text-center px-3 py-3 text-[11px] font-semibold text-mistral-steel uppercase tracking-wider">
-                                        {{ t('dashboard.total_employees') }}
-                                    </th>
-                                    <th class="text-center px-3 py-3 text-[11px] font-semibold text-mistral-steel uppercase tracking-wider">
-                                        {{ t('dashboard.present') }}
-                                    </th>
-                                    <th class="text-center px-3 py-3 text-[11px] font-semibold text-mistral-steel uppercase tracking-wider">
-                                        {{ t('dashboard.absent') }}
-                                    </th>
-                                    <th class="text-center px-3 py-3 text-[11px] font-semibold text-mistral-steel uppercase tracking-wider">
-                                        {{ t('dashboard.late') }}
-                                    </th>
-                                    <th class="text-center px-3 py-3 text-[11px] font-semibold text-mistral-steel uppercase tracking-wider">
-                                        {{ t('dashboard.overtime') }}
-                                    </th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-mistral-hairline-soft/60">
-                                <tr
-                                    v-for="dept in data.departmentStats"
-                                    :key="dept.department_id"
-                                    class="hover:bg-mistral-surface/40 transition-colors"
-                                >
-                                    <td class="px-5 py-3 text-mistral-ink font-medium">
-                                        {{ dept.department_name || '—' }}
-                                    </td>
-                                    <td class="px-3 py-3 text-center text-mistral-slate">
-                                        {{ dept.employees }}
-                                    </td>
-                                    <td class="px-3 py-3 text-center">
-                                        <span class="text-mistral-success font-semibold">{{ dept.present_days }}</span>
-                                    </td>
-                                    <td class="px-3 py-3 text-center">
-                                        <span class="text-mistral-danger font-semibold">{{ dept.absent_days }}</span>
-                                    </td>
-                                    <td class="px-3 py-3 text-center">
-                                        <span class="text-mistral-warning font-semibold">{{ dept.late_days }}</span>
-                                    </td>
-                                    <td class="px-3 py-3 text-center text-mistral-slate font-mono" dir="ltr">
-                                        {{ Math.floor(dept.overtime_minutes / 60) }}h {{ dept.overtime_minutes % 60 }}m
-                                    </td>
-                                </tr>
-                                <tr v-if="!data.departmentStats?.length">
-                                    <td colspan="6" class="px-5 py-8 text-center text-mistral-stone text-[13px]">
-                                        {{ t('common.no_data') }}
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
+                    <ReportTable
+                        :columns="deptColumns"
+                        :items="data.departmentStats || []"
+                        row-key="department_id"
+                        :empty-title="t('common.no_data')"
+                    >
+                        <template #cell-department="{ row }">
+                            <span class="text-mistral-ink font-medium">{{ row.department_name || '—' }}</span>
+                        </template>
+                        <template #cell-total="{ row }">
+                            <span class="text-mistral-slate">{{ row.employees }}</span>
+                        </template>
+                        <template #cell-present="{ row }">
+                            <span class="text-mistral-success font-semibold">{{ row.present_days }}</span>
+                        </template>
+                        <template #cell-absent="{ row }">
+                            <span class="text-mistral-danger font-semibold">{{ row.absent_days }}</span>
+                        </template>
+                        <template #cell-late="{ row }">
+                            <span class="text-mistral-warning font-semibold">{{ row.late_days }}</span>
+                        </template>
+                        <template #cell-overtime="{ row }">
+                            <span class="text-mistral-slate font-mono" dir="ltr">{{ Math.floor(row.overtime_minutes / 60) }}h {{ row.overtime_minutes % 60 }}m</span>
+                        </template>
+                    </ReportTable>
                 </DashboardWidget>
 
                 <!-- Top Late -->
@@ -643,56 +644,30 @@ usePageTitle(t('dashboard.title'));
                     icon-color="info"
                     :padded="false"
                 >
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-[13px]">
-                            <thead>
-                                <tr class="border-b border-mistral-hairline-soft">
-                                    <th class="text-start px-5 py-3 text-[11px] font-semibold text-mistral-steel uppercase tracking-wider">
-                                        {{ t('dashboard.shift_name') }}
-                                    </th>
-                                    <th class="text-center px-3 py-3 text-[11px] font-semibold text-mistral-steel uppercase tracking-wider" dir="ltr">
-                                        {{ t('dashboard.start_time') }}
-                                    </th>
-                                    <th class="text-center px-3 py-3 text-[11px] font-semibold text-mistral-steel uppercase tracking-wider" dir="ltr">
-                                        {{ t('dashboard.end_time') }}
-                                    </th>
-                                    <th class="text-center px-3 py-3 text-[11px] font-semibold text-mistral-steel uppercase tracking-wider">
-                                        {{ t('dashboard.employees_assigned') }}
-                                    </th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-mistral-hairline-soft/60">
-                                <tr
-                                    v-for="shift in data.shiftOverview?.shifts"
-                                    :key="shift.id"
-                                    class="hover:bg-mistral-surface/40 transition-colors"
-                                >
-                                    <td class="px-5 py-3">
-                                        <div class="flex items-center gap-2">
-                                            <span class="text-mistral-ink font-medium">{{ shift.name }}</span>
-                                            <Badge :text="shift.code" variant="cream" size="sm" />
-                                        </div>
-                                    </td>
-                                    <td class="px-3 py-3 text-center text-mistral-slate font-mono" dir="ltr">
-                                        {{ shift.start_time }}
-                                    </td>
-                                    <td class="px-3 py-3 text-center text-mistral-slate font-mono" dir="ltr">
-                                        {{ shift.end_time }}
-                                    </td>
-                                    <td class="px-3 py-3 text-center">
-                                        <span class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-mistral-info/10 text-mistral-info text-[12px] font-bold">
-                                            {{ shift.employee_count }}
-                                        </span>
-                                    </td>
-                                </tr>
-                                <tr v-if="!data.shiftOverview?.shifts?.length">
-                                    <td colspan="4" class="px-5 py-8 text-center text-mistral-stone text-[13px]">
-                                        {{ t('dashboard.no_shifts') }}
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
+                    <ReportTable
+                        :columns="shiftColumns"
+                        :items="data.shiftOverview?.shifts || []"
+                        row-key="id"
+                        :empty-title="t('dashboard.no_shifts')"
+                    >
+                        <template #cell-shift="{ row }">
+                            <div class="flex items-center gap-2">
+                                <span class="text-mistral-ink font-medium">{{ row.name }}</span>
+                                <Badge :text="row.code" variant="cream" size="sm" />
+                            </div>
+                        </template>
+                        <template #cell-start="{ row }">
+                            <span class="text-mistral-slate font-mono" dir="ltr">{{ row.start_time }}</span>
+                        </template>
+                        <template #cell-end="{ row }">
+                            <span class="text-mistral-slate font-mono" dir="ltr">{{ row.end_time }}</span>
+                        </template>
+                        <template #cell-count="{ row }">
+                            <span class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-mistral-info/10 text-mistral-info text-[12px] font-bold">
+                                {{ row.employee_count }}
+                            </span>
+                        </template>
+                    </ReportTable>
                 </DashboardWidget>
 
                 <!-- Upcoming Shifts -->
@@ -840,70 +815,41 @@ usePageTitle(t('dashboard.title'));
                     class="lg:col-span-2"
                     :padded="false"
                 >
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-[13px]">
-                            <thead>
-                                <tr class="border-b border-mistral-hairline-soft">
-                                    <th class="text-start px-5 py-3 text-[11px] font-semibold text-mistral-steel uppercase tracking-wider">
-                                        {{ t('dashboard.total_employees') }}
-                                    </th>
-                                    <th class="text-center px-3 py-3 text-[11px] font-semibold text-mistral-steel uppercase tracking-wider">
-                                        {{ t('dashboard.attendance_heatmap') }}
-                                    </th>
-                                    <th class="text-center px-3 py-3 text-[11px] font-semibold text-mistral-steel uppercase tracking-wider">
-                                        {{ t('dashboard.late_today') }}
-                                    </th>
-                                    <th class="text-center px-3 py-3 text-[11px] font-semibold text-mistral-steel uppercase tracking-wider" dir="ltr">
-                                        {{ t('dashboard.start_time') }}
-                                    </th>
-                                    <th class="text-center px-3 py-3 text-[11px] font-semibold text-mistral-steel uppercase tracking-wider" dir="ltr">
-                                        {{ t('dashboard.end_time') }}
-                                    </th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-mistral-hairline-soft/60">
-                                <tr
-                                    v-for="anomaly in data.anomalies"
-                                    :key="anomaly.id"
-                                    class="hover:bg-mistral-surface/40 transition-colors"
-                                >
-                                    <td class="px-5 py-3">
-                                        <div class="flex items-center gap-2">
-                                            <Avatar :name="anomaly.employee_name" :src="anomaly.avatar_url || null" size="xs" />
-                                            <div>
-                                                <div class="text-mistral-ink font-medium">{{ anomaly.employee_name }}</div>
-                                                <div class="text-[11px] text-mistral-stone">{{ anomaly.employee_code }}</div>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td class="px-3 py-3 text-center">
-                                        <Badge
-                                            :text="anomaly.status === 'absent' ? t('dashboard.absent') : t('dashboard.missing_punch')"
-                                            :variant="anomaly.status === 'absent' ? 'danger' : 'warning'"
-                                            size="sm"
-                                        />
-                                    </td>
-                                    <td class="px-3 py-3 text-center">
-                                        <span v-if="anomaly.late_minutes > 0" class="text-mistral-danger font-semibold">
-                                            {{ anomaly.late_minutes }} {{ t('dashboard.minutes_late').replace(':minutes', '') }}
-                                        </span>
-                                        <span v-else class="text-mistral-muted">—</span>
-                                    </td>
-                                    <td class="px-3 py-3 text-center text-mistral-slate font-mono" dir="ltr">
-                                        {{ anomaly.first_check_in || '—' }}
-                                    </td>
-                                    <td class="px-3 py-3 text-center text-mistral-slate font-mono" dir="ltr">
-                                        {{ anomaly.last_check_out || '—' }}
-                                    </td>
-                                </tr>
-                                <tr v-if="!data.anomalies?.length">
-                                    <td colspan="5" class="px-5 py-8 text-center text-mistral-stone text-[13px]">
-                                        {{ t('dashboard.no_anomalies') }}
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
+                    <ReportTable
+                        :columns="anomalyColumns"
+                        :items="data.anomalies || []"
+                        row-key="id"
+                        :empty-title="t('dashboard.no_anomalies')"
+                    >
+                        <template #cell-employee="{ row }">
+                            <div class="flex items-center gap-2">
+                                <Avatar :name="row.employee_name" :src="row.avatar_url || null" size="xs" />
+                                <div>
+                                    <div class="text-mistral-ink font-medium">{{ row.employee_name }}</div>
+                                    <div class="text-[11px] text-mistral-stone">{{ row.employee_code }}</div>
+                                </div>
+                            </div>
+                        </template>
+                        <template #cell-status="{ row }">
+                            <Badge
+                                :text="row.status === 'absent' ? t('dashboard.absent') : t('dashboard.missing_punch')"
+                                :variant="row.status === 'absent' ? 'danger' : 'warning'"
+                                size="sm"
+                            />
+                        </template>
+                        <template #cell-late="{ row }">
+                            <span v-if="row.late_minutes > 0" class="text-mistral-danger font-semibold">
+                                {{ row.late_minutes }} {{ t('dashboard.minutes_late').replace(':minutes', '') }}
+                            </span>
+                            <span v-else class="text-mistral-muted">—</span>
+                        </template>
+                        <template #cell-in="{ row }">
+                            <span class="text-mistral-slate font-mono" dir="ltr">{{ row.first_check_in || '—' }}</span>
+                        </template>
+                        <template #cell-out="{ row }">
+                            <span class="text-mistral-slate font-mono" dir="ltr">{{ row.last_check_out || '—' }}</span>
+                        </template>
+                    </ReportTable>
                 </DashboardWidget>
 
                 <!-- System Health -->
@@ -1050,7 +996,7 @@ usePageTitle(t('dashboard.title'));
                                 </div>
                                 <span
                                     v-if="log.source === 'live'"
-                                    class="absolute -top-0.5 -right-0.5 w-3 h-3 bg-mistral-success border-2 border-white rounded-full animate-pulse"
+                                    class="absolute -top-0.5 -end-0.5 w-3 h-3 bg-mistral-success border-2 border-white rounded-full animate-pulse"
                                 ></span>
                             </div>
                             <div>

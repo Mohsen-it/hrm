@@ -11,7 +11,7 @@ import { usePageTitle } from '@/composables/usePageTitle';
 
 import { computed } from 'vue';
 import { Link, usePage } from '@inertiajs/vue3';
-import { PageHeader, Button, Card, Badge, Alert } from '@/Components/ui';
+import { PageHeader, Button, Card, Badge, Alert, ReportTable } from '@/Components/ui';
 import { BalanceEditModal } from '@/Components/Vacations';
 import { useTranslations } from '@/composables/useTranslations';
 
@@ -55,6 +55,13 @@ const orgFields = computed(() => [
     { label: t('users.subordination'), value: props.user.subordination?.name_ar || '—' },
     { label: t('users.shift'), value: props.user.shift?.shift_name || '—' },
     { label: t('users.manager'), value: props.user.manager?.name || '—' },
+]);
+
+const balanceColumns = computed(() => [
+    { key: 'type', label: t('vacations.vacation_type'), align: 'start' },
+    { key: 'year', label: t('common.year'), align: 'start' },
+    { key: 'remaining', label: t('vacations.remaining_days'), align: 'start' },
+    { key: 'actions', label: t('common.actions'), align: 'start' },
 ]);
 
 const contactFields = computed(() => [
@@ -309,28 +316,26 @@ usePageTitle(t('users.view_user'));
                 <h3 class="text-[16px] font-semibold text-mistral-ink mb-4">
                     {{ t('vacations.vacation_balances') }}
                 </h3>
-                <div class="overflow-x-auto">
-                    <table class="w-full text-start text-[14px]">
-                        <thead class="text-mistral-stone border-b border-mistral-hairline-soft">
-                            <tr>
-                                <th class="py-2 px-3">{{ t('vacations.vacation_type') }}</th>
-                                <th class="py-2 px-3">{{ t('common.year') }}</th>
-                                <th class="py-2 px-3">{{ t('vacations.remaining_days') }}</th>
-                                <th class="py-2 px-3">{{ t('common.actions') }}</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr v-for="balance in $page.props.vacation_balances" :key="balance.id" class="border-b border-mistral-hairline-soft">
-                                <td class="py-2 px-3">{{ balance.vacation_type.name_ar }}</td>
-                                <td class="py-2 px-3">{{ balance.year }}</td>
-                                <td class="py-2 px-3">{{ balance.days_entitled + balance.days_carried_over + balance.days_adjustment - balance.days_used - balance.days_pending }}</td>
-                                <td class="py-2 px-3">
-                                    <BalanceEditModal :user="user" :types="$page.props.vacation_types || []" :initial-type-id="balance.vacation_type_id" />
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
+                <ReportTable
+                    :columns="balanceColumns"
+                    :items="$page.props.vacation_balances || []"
+                    row-key="id"
+                    compact
+                    :empty-title="t('common.no_data')"
+                >
+                    <template #cell-type="{ row }">
+                        {{ row.vacation_type.name_ar }}
+                    </template>
+                    <template #cell-year="{ row }">
+                        {{ row.year }}
+                    </template>
+                    <template #cell-remaining="{ row }">
+                        {{ row.days_entitled + row.days_carried_over + row.days_adjustment - row.days_used - row.days_pending }}
+                    </template>
+                    <template #cell-actions="{ row }">
+                        <BalanceEditModal :user="user" :types="$page.props.vacation_types || []" :initial-type-id="row.vacation_type_id" />
+                    </template>
+                </ReportTable>
             </div>
         </Card>
     </template>

@@ -11,7 +11,7 @@ import { usePageTitle } from '@/composables/usePageTitle';
 
 import { computed, reactive, ref } from 'vue';
 import { router } from '@inertiajs/vue3';
-import { PageHeader, Button, FormTextarea, FormSelect, FormSection, FormActions, ErrorSummary } from '@/Components/ui';
+import { PageHeader, Button, Card, FormTextarea, FormSelect, FormSection, FormActions, ErrorSummary } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 import VacationDateRangeFields from '../Partials/VacationDateRangeFields.vue';
 
@@ -20,6 +20,7 @@ const { t } = useTranslations();
 const props = defineProps({
     request: { type: Object, required: true },
     types: { type: Array, default: () => [] },
+    balances: { type: Array, default: () => [] },
 });
 
 const form = reactive({
@@ -42,6 +43,14 @@ const typeOptions = computed(() =>
 );
 
 const errorFor = (key) => errors.value[key] || '';
+
+// Balance snapshot for the request owner (provided by the controller).
+const selectedType = computed(() =>
+    (props.types || []).find((type) => String(type.id) === String(form.vacation_type_id)) || null,
+);
+const activeBalance = computed(() =>
+    (props.balances || []).find((b) => String(b.vacation_type_id) === String(form.vacation_type_id)) || null,
+);
 
 function submit() {
     processing.value = true;
@@ -88,6 +97,52 @@ usePageTitle(t('vacations.edit_request'));
                     />
                 </div>
             </FormSection>
+
+            <!-- Employee balance snapshot for the request owner. -->
+            <Card variant="cream" padding="sm">
+                <div class="flex items-center gap-2 mb-3">
+                    <i class="fas fa-wallet text-mistral-primary text-[14px]" aria-hidden="true"></i>
+                    <h3 class="text-[14px] font-semibold text-mistral-ink">
+                        {{ t('vacations.balance_card_title') }}
+                    </h3>
+                </div>
+                <div v-if="!selectedType" class="text-[13px] text-mistral-steel">
+                    {{ t('vacations.vacation_type') }}: —
+                </div>
+                <div v-else>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <div class="rounded-lg bg-mistral-canvas border border-mistral-hairline-soft p-3 text-center">
+                            <div class="text-[20px] font-bold text-mistral-ink tabular-nums">
+                                {{ activeBalance ? (activeBalance.remaining_days ?? activeBalance.days_remaining ?? 0) : 0 }}
+                            </div>
+                            <div class="text-[11px] text-mistral-steel mt-0.5">
+                                {{ t('vacations.remaining_days') }} ({{ t('vacations.balance_days_unit') }})
+                            </div>
+                        </div>
+                        <div class="rounded-lg bg-mistral-canvas border border-mistral-hairline-soft p-3 text-center">
+                            <div class="text-[20px] font-bold text-mistral-ink tabular-nums">
+                                {{ activeBalance ? (activeBalance.days_entitled ?? 0) : 0 }}
+                            </div>
+                            <div class="text-[11px] text-mistral-steel mt-0.5">{{ t('vacations.entitled_days') }}</div>
+                        </div>
+                        <div class="rounded-lg bg-mistral-canvas border border-mistral-hairline-soft p-3 text-center">
+                            <div class="text-[20px] font-bold text-mistral-ink tabular-nums">
+                                {{ activeBalance ? (activeBalance.days_used ?? 0) : 0 }}
+                            </div>
+                            <div class="text-[11px] text-mistral-steel mt-0.5">{{ t('vacations.used_days') }}</div>
+                        </div>
+                        <div class="rounded-lg bg-mistral-canvas border border-mistral-hairline-soft p-3 text-center">
+                            <div class="text-[20px] font-bold text-mistral-ink tabular-nums">
+                                {{ activeBalance ? (activeBalance.days_pending ?? 0) : 0 }}
+                            </div>
+                            <div class="text-[11px] text-mistral-steel mt-0.5">{{ t('vacations.pending_days') }}</div>
+                        </div>
+                    </div>
+                    <p v-if="!activeBalance" class="text-[12px] text-mistral-steel mt-2">
+                        {{ t('vacations.balance_no_record') }}
+                    </p>
+                </div>
+            </Card>
 
             <FormSection :title="t('vacations.additional')" icon="fas fa-align-left" :collapsible="true" :default-open="true">
                 <FormTextarea

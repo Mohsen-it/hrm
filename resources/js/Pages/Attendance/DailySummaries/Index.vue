@@ -11,7 +11,7 @@ import { usePageTitle } from '@/composables/usePageTitle';
 
 import { ref, computed, onMounted } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
-import { PageHeader, Button, Card, DataTable, FormModal, FormInput, FormSelect, FormCheckbox, Badge, Alert, EmptyState, StatCard } from '@/Components/ui';
+import { PageHeader, Button, Card, DataTable, FormModal, FormInput, FormSelect, FormCheckbox, Badge, Alert, EmptyState, StatCard, ReportTable } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
@@ -33,6 +33,27 @@ const rangeForm = ref({
     to: new Date().toISOString().slice(0, 10),
     missing_only: false,
 });
+
+// P1-UX: violation tables share one ReportTable column model.
+const violationCheckInColumns = computed(() => [
+    { key: 'idx', label: '#', align: 'start' },
+    { key: 'user_name', label: t('attendance.violations.employee_name'), align: 'start' },
+    { key: 'department', label: t('attendance.fields.department'), align: 'start' },
+    { key: 'date', label: t('attendance.violations.date'), align: 'start' },
+    { key: 'check_in', label: t('attendance.violations.check_in_time'), align: 'start' },
+    { key: 'cutoff', label: t('attendance.violations.cutoff'), align: 'start' },
+    { key: 'minutes', label: t('attendance.violations.late_minutes'), align: 'start' },
+]);
+
+const missingCheckOutColumns = computed(() => [
+    { key: 'idx', label: '#', align: 'start' },
+    { key: 'user_name', label: t('attendance.violations.employee_name'), align: 'start' },
+    { key: 'department', label: t('attendance.fields.department'), align: 'start' },
+    { key: 'date', label: t('attendance.violations.date'), align: 'start' },
+    { key: 'check_in', label: t('attendance.violations.check_in_time'), align: 'start' },
+    { key: 'expected', label: t('attendance.violations.expected_check_out'), align: 'start' },
+    { key: 'minutes', label: t('attendance.violations.missing_checkout_duration'), align: 'start' },
+]);
 
 const statusOptions = [
     { value: 'present', label: t('attendance.status.present') },
@@ -388,34 +409,35 @@ usePageTitle(t('attendance.summaries'));
                 </div>
             </div>
 
-            <div v-if="lateCheckInData.length > 0" class="overflow-x-auto">
-                <table class="w-full text-sm">
-                    <thead>
-                        <tr class="border-b border-mistral-border bg-mistral-cream/30">
-                            <th scope="col" class="px-4 py-3 text-start font-semibold text-mistral-ink">#</th>
-                            <th scope="col" class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.employee_name') }}</th>
-                            <th scope="col" class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.fields.department') }}</th>
-                            <th scope="col" class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.date') }}</th>
-                            <th scope="col" class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.check_in_time') }}</th>
-                            <th scope="col" class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.cutoff') }}</th>
-                            <th scope="col" class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.late_minutes') }}</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr v-for="(row, idx) in lateCheckInData" :key="row.id" class="border-b border-mistral-border hover:bg-mistral-cream/20">
-                            <td class="px-4 py-3 text-mistral-stone">{{ idx + 1 }}</td>
-                            <td class="px-4 py-3 font-medium text-mistral-ink">{{ row.user_name }}</td>
-                            <td class="px-4 py-3 text-mistral-stone">{{ row.department_name || '—' }}</td>
-                            <td class="px-4 py-3 text-mistral-stone" dir="ltr">{{ row.summary_date }}</td>
-                            <td class="px-4 py-3 text-mistral-stone" dir="ltr">{{ row.first_check_in_at }}</td>
-                            <td class="px-4 py-3 text-mistral-stone" dir="ltr">{{ row.cutoff_time }}</td>
-                            <td class="px-4 py-3">
-                                <Badge :text="`${row.late_minutes} ${t('attendance.units.minutes_short')}`" variant="pending" />
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
+            <ReportTable
+                v-if="lateCheckInData.length > 0"
+                :columns="violationCheckInColumns"
+                :items="lateCheckInData"
+                row-key="id"
+                :empty-title="t('attendance.violations.no_data')"
+            >
+                <template #cell-idx="{ index }">
+                    <span class="text-mistral-stone">{{ index + 1 }}</span>
+                </template>
+                <template #cell-user_name="{ row }">
+                    <span class="font-medium text-mistral-ink">{{ row.user_name }}</span>
+                </template>
+                <template #cell-department="{ row }">
+                    <span class="text-mistral-stone">{{ row.department_name || '—' }}</span>
+                </template>
+                <template #cell-date="{ row }">
+                    <span class="text-mistral-stone" dir="ltr">{{ row.summary_date }}</span>
+                </template>
+                <template #cell-check_in="{ row }">
+                    <span class="text-mistral-stone" dir="ltr">{{ row.first_check_in_at }}</span>
+                </template>
+                <template #cell-cutoff="{ row }">
+                    <span class="text-mistral-stone" dir="ltr">{{ row.cutoff_time }}</span>
+                </template>
+                <template #cell-minutes="{ row }">
+                    <Badge :text="`${row.late_minutes} ${t('attendance.units.minutes_short')}`" variant="pending" />
+                </template>
+            </ReportTable>
             <EmptyState
                 v-else-if="!lateCheckInLoading && lateCheckInData.length === 0"
                 :title="t('attendance.violations.no_data')"
@@ -471,34 +493,35 @@ usePageTitle(t('attendance.summaries'));
                 </div>
             </div>
 
-            <div v-if="missingCheckOutData.length > 0" class="overflow-x-auto">
-                <table class="w-full text-sm">
-                    <thead>
-                        <tr class="border-b border-mistral-border bg-mistral-cream/30">
-                            <th scope="col" class="px-4 py-3 text-start font-semibold text-mistral-ink">#</th>
-                            <th scope="col" class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.employee_name') }}</th>
-                            <th scope="col" class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.fields.department') }}</th>
-                            <th scope="col" class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.date') }}</th>
-                            <th scope="col" class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.check_in_time') }}</th>
-                            <th scope="col" class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.expected_check_out') }}</th>
-                            <th scope="col" class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.missing_checkout_duration') }}</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr v-for="(row, idx) in missingCheckOutData" :key="row.id" class="border-b border-mistral-border hover:bg-mistral-cream/20">
-                            <td class="px-4 py-3 text-mistral-stone">{{ idx + 1 }}</td>
-                            <td class="px-4 py-3 font-medium text-mistral-ink">{{ row.user_name }}</td>
-                            <td class="px-4 py-3 text-mistral-stone">{{ row.department_name || '—' }}</td>
-                            <td class="px-4 py-3 text-mistral-stone" dir="ltr">{{ row.summary_date }}</td>
-                            <td class="px-4 py-3 text-mistral-stone" dir="ltr">{{ row.first_check_in_at }}</td>
-                            <td class="px-4 py-3 text-mistral-stone" dir="ltr">{{ row.expected_check_out || '—' }}</td>
-                            <td class="px-4 py-3">
-                                <Badge :text="`${row.open_minutes} ${t('attendance.units.minutes_short')}`" variant="absent" />
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
+            <ReportTable
+                v-if="missingCheckOutData.length > 0"
+                :columns="missingCheckOutColumns"
+                :items="missingCheckOutData"
+                row-key="id"
+                :empty-title="t('attendance.violations.no_data')"
+            >
+                <template #cell-idx="{ index }">
+                    <span class="text-mistral-stone">{{ index + 1 }}</span>
+                </template>
+                <template #cell-user_name="{ row }">
+                    <span class="font-medium text-mistral-ink">{{ row.user_name }}</span>
+                </template>
+                <template #cell-department="{ row }">
+                    <span class="text-mistral-stone">{{ row.department_name || '—' }}</span>
+                </template>
+                <template #cell-date="{ row }">
+                    <span class="text-mistral-stone" dir="ltr">{{ row.summary_date }}</span>
+                </template>
+                <template #cell-check_in="{ row }">
+                    <span class="text-mistral-stone" dir="ltr">{{ row.first_check_in_at }}</span>
+                </template>
+                <template #cell-expected="{ row }">
+                    <span class="text-mistral-stone" dir="ltr">{{ row.expected_check_out || '—' }}</span>
+                </template>
+                <template #cell-minutes="{ row }">
+                    <Badge :text="`${row.open_minutes} ${t('attendance.units.minutes_short')}`" variant="absent" />
+                </template>
+            </ReportTable>
             <EmptyState
                 v-else-if="!missingCheckOutLoading && missingCheckOutData.length === 0"
                 :title="t('attendance.violations.no_data')"
@@ -554,34 +577,35 @@ usePageTitle(t('attendance.summaries'));
                 </div>
             </div>
 
-            <div v-if="lateForVacationData.length > 0" class="overflow-x-auto">
-                <table class="w-full text-sm">
-                    <thead>
-                        <tr class="border-b border-mistral-border bg-mistral-cream/30">
-                            <th scope="col" class="px-4 py-3 text-start font-semibold text-mistral-ink">#</th>
-                            <th scope="col" class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.employee_name') }}</th>
-                            <th scope="col" class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.fields.department') }}</th>
-                            <th scope="col" class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.date') }}</th>
-                            <th scope="col" class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.check_in_time') }}</th>
-                            <th scope="col" class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.cutoff') }}</th>
-                            <th scope="col" class="px-4 py-3 text-start font-semibold text-mistral-ink">{{ t('attendance.violations.late_minutes') }}</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr v-for="(row, idx) in lateForVacationData" :key="row.id" class="border-b border-mistral-border hover:bg-mistral-cream/20">
-                            <td class="px-4 py-3 text-mistral-stone">{{ idx + 1 }}</td>
-                            <td class="px-4 py-3 font-medium text-mistral-ink">{{ row.user_name }}</td>
-                            <td class="px-4 py-3 text-mistral-stone">{{ row.department_name || '—' }}</td>
-                            <td class="px-4 py-3 text-mistral-stone" dir="ltr">{{ row.summary_date }}</td>
-                            <td class="px-4 py-3 text-mistral-stone" dir="ltr">{{ row.first_check_in_at }}</td>
-                            <td class="px-4 py-3 text-mistral-stone" dir="ltr">{{ row.cutoff_time }}</td>
-                            <td class="px-4 py-3">
-                                <Badge :text="`${row.late_minutes} ${t('attendance.units.minutes_short')}`" variant="pending" />
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
+            <ReportTable
+                v-if="lateForVacationData.length > 0"
+                :columns="violationCheckInColumns"
+                :items="lateForVacationData"
+                row-key="id"
+                :empty-title="t('attendance.violations.no_data')"
+            >
+                <template #cell-idx="{ index }">
+                    <span class="text-mistral-stone">{{ index + 1 }}</span>
+                </template>
+                <template #cell-user_name="{ row }">
+                    <span class="font-medium text-mistral-ink">{{ row.user_name }}</span>
+                </template>
+                <template #cell-department="{ row }">
+                    <span class="text-mistral-stone">{{ row.department_name || '—' }}</span>
+                </template>
+                <template #cell-date="{ row }">
+                    <span class="text-mistral-stone" dir="ltr">{{ row.summary_date }}</span>
+                </template>
+                <template #cell-check_in="{ row }">
+                    <span class="text-mistral-stone" dir="ltr">{{ row.first_check_in_at }}</span>
+                </template>
+                <template #cell-cutoff="{ row }">
+                    <span class="text-mistral-stone" dir="ltr">{{ row.cutoff_time }}</span>
+                </template>
+                <template #cell-minutes="{ row }">
+                    <Badge :text="`${row.late_minutes} ${t('attendance.units.minutes_short')}`" variant="pending" />
+                </template>
+            </ReportTable>
             <EmptyState
                 v-else-if="!lateForVacationLoading && lateForVacationData.length === 0"
                 :title="t('attendance.violations.no_data')"
@@ -628,7 +652,7 @@ usePageTitle(t('attendance.summaries'));
                 />
                 <FormCheckbox
                     v-model="rangeForm.missing_only"
-                    :label="t('attendance.filters.processed') === 'معالجة' ? 'إعادة حساب المفقود فقط' : 'Only missing'"
+                    :label="t('attendance.violations.recalc_missing_only')"
                     class="col-span-2"
                 />
             </div>

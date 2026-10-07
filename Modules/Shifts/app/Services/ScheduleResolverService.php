@@ -3,6 +3,7 @@
 namespace Modules\Shifts\Services;
 
 use Carbon\Carbon;
+use Modules\Shifts\Models\Rotation;
 use Modules\Shifts\Repositories\RotationAssignmentRepository;
 use Modules\Shifts\Repositories\ShiftExceptionRepository;
 use Modules\Vacations\Models\UserVacationRequest;
@@ -11,14 +12,17 @@ use Modules\Vacations\Models\UserVacationRequest;
  * ScheduleResolverService — the central Dynamic Shift Engine resolver.
  *
  * Given a single employee and a target date it returns a clean, standardised
- * contract payload. Execution follows a STRICT FAIL-FAST order:
+ * contract payload. Execution follows a STRICT order:
  *
  *   1. Rotation Resolution — fetch the active rotation assignment for the employee.
- *   2. Leave Interceptor   — query Shift_Exceptions (and approved vacations).
- *                           If an exception intercepts, short-circuit and
- *                           return `{ is_work_day: false, status: 'leave_excused' }`
- *                           so the employee is NEVER flagged absent.
- *   3. Engine Math         — delegate to RotationEngine for work/rest calculation.
+ *   2. Engine Math (rest check) — when the rotation marks the day as rest,
+ *      return rest immediately: a vacation / exception on a rest day is
+ *      meaningless and must never turn the day into leave_excused.
+ *   3. Leave Interceptor   — query Shift_Exceptions (and approved vacations)
+ *      for WORK days only. If an exception intercepts, short-circuit and
+ *      return `{ is_work_day: false, status: 'leave_excused' }`
+ *      so the employee is NEVER flagged absent.
+ *   4. Engine Math (work)  — delegate to RotationEngine for work-day details.
  *
  * No loops over date ranges are used — all math is closed-form / DB-level.
  */
@@ -81,7 +85,44 @@ class ScheduleResolverService
             );
         }
 
-        // --- Step 2: Leave / Exception Interceptor (fail-fast) ----------
+        // --- Step 2: Engine Math first (Rotation) ------------------------
+        // A vacation / exception only matters on a day the employee was
+        // expected to work. On a rotation rest day the leave is meaningless
+        // and the employee must stay in the "rest" group instead of being
+        // marked leave_excused (same rule as the daily operational report:
+        // e.g. a 1-work / 3-rest pattern with a mission covering a rest day).
+        $rotation = $rotationAssignment->rotation;
+        $group = $rotationAssignment->rotationGroup;
+        if (! $this->rotationEngine->isWorkDay($rotation, $group, $date)) {
+            $times = $this->rotationEngine->resolveTimes($rotationAssignment);
+
+            $graceMinutes = $this->latenessGraceMinutes($rotation, $times);
+
+            return $this->rotationEngine->resolve(
+                employeeId: $employeeId,
+                rotation: $rotation,
+                group: $group,
+                targetDate: $dateStr,
+                expectedCheckIn: $times['check_in'],
+                expectedCheckOut: $times['check_out'],
+                timesMeta: [
+                    'grace_minutes' => $graceMinutes,
+                    'early_margin' => $times['early_margin'] ?? null,
+                    'in_ahead_margin' => $times['in_ahead_margin'] ?? null,
+                    'in_above_margin' => $times['in_above_margin'] ?? null,
+                    'out_ahead_margin' => $times['out_ahead_margin'] ?? null,
+                    'out_above_margin' => $times['out_above_margin'] ?? null,
+                    'next_day_out_ahead_margin' => $times['next_day_out_ahead_margin'] ?? null,
+                    'next_day_out_above_margin' => $times['next_day_out_above_margin'] ?? null,
+                    'overtime_enabled' => (bool) $rotation->overtime_enabled,
+                    'work_on_holidays' => (bool) $rotation->work_on_holidays,
+                    'is_overnight' => $times['is_overnight'] ?? false,
+                    'break_minutes' => $times['break_minutes'] ?? 0,
+                ],
+            );
+        }
+
+        // --- Step 3: Leave / Exception Interceptor (work days only) -------
         $exception = $this->exceptionRepository->findIntercepting($employeeId, $dateStr);
 
         if ($exception && $exception->intercepts()) {
@@ -111,18 +152,10 @@ class ScheduleResolverService
             );
         }
 
-        // --- Step 3: Engine Math (Rotation) -----------------------------
-        $rotation = $rotationAssignment->rotation;
-        $group = $rotationAssignment->rotationGroup;
+        // --- Step 4: Engine Math (Rotation, work day) --------------------
         $times = $this->rotationEngine->resolveTimes($rotationAssignment);
 
-        // Grace priority: rotation.grace_minutes → snapshot late_margin → global config (null = defer to consumer)
-        // grace_minutes defaults to 0 (not null) in the DB, so treat 0 as
-        // "no rotation-level override" and fall through to the schedule margin.
-        $rotationGrace = $rotation->grace_minutes;
-        $graceMinutes = $rotationGrace !== null && (int) $rotationGrace > 0
-            ? (int) $rotationGrace
-            : ($times['late_margin'] ?? null);
+        $graceMinutes = $this->latenessGraceMinutes($rotation, $times);
 
         $timesMeta = [
             'grace_minutes' => $graceMinutes,
@@ -152,6 +185,26 @@ class ScheduleResolverService
             expectedCheckOut: $times['check_out'],
             timesMeta: $timesMeta,
         );
+    }
+
+    /**
+     * Lateness grace (دقائق السماح) for one assignment.
+     *
+     * The linked time schedule (جدول الوقت) is the single source of truth:
+     * its late_margin wins whenever schedule data exists (live schedule or
+     * assignment snapshot, including an explicit 0 meaning "no tolerance").
+     * The rotation-level grace_minutes is only a fallback for rotations with
+     * no schedule data at all (null = defer to the consumer's global config).
+     */
+    private function latenessGraceMinutes(Rotation $rotation, array $times): ?int
+    {
+        if (array_key_exists('late_margin', $times) && $times['late_margin'] !== null) {
+            return (int) $times['late_margin'];
+        }
+
+        $rotationGrace = $rotation->grace_minutes;
+
+        return $rotationGrace !== null && (int) $rotationGrace > 0 ? (int) $rotationGrace : null;
     }
 
     /**

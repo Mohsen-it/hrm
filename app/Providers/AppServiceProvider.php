@@ -6,6 +6,7 @@ use App\Services\ExcelExportService;
 use App\Services\ZKTecoPythonBridgeService;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\ServiceProvider;
+use Modules\Settings\Services\SystemStatusService;
 use Nwidart\Modules\Facades\Module;
 
 class AppServiceProvider extends ServiceProvider
@@ -32,6 +33,23 @@ class AppServiceProvider extends ServiceProvider
         JsonResource::withoutWrapping();
 
         $this->registerModuleTranslationPaths();
+        $this->recordSystemBoot();
+    }
+
+    /**
+     * سجل إقلاع الـ stack مرة واحدة لكل إقلاع فعلي (dedupe داخل الـ Service
+     * عبر ملف العلامة). مغلف بـ try/catch حتى لا يكسر أي طلب لو تعطلت
+     * قاعدة البيانات أثناء الإقلاع.
+     */
+    private function recordSystemBoot(): void
+    {
+        $this->app->booted(function (): void {
+            try {
+                $this->app->make(SystemStatusService::class)->recordBootIfNeeded();
+            } catch (\Throwable) {
+                // تجاهل صامت — تسجيل الإقلاع مساعد وليس حرجاً.
+            }
+        });
     }
 
     /**

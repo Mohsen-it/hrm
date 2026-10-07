@@ -132,7 +132,7 @@ class UserActivityService
      * nearest minute (e.g. a 90-second span counts as 2 minutes) so short
      * sessions are not systematically undercounted.
      *
-     * @param  iterable<int, Carbon|string>  $timestamps
+     * @param  iterable<int, Carbon|string|int>  $timestamps
      */
     public function calculateActiveMinutes(
         iterable $timestamps,
@@ -140,23 +140,44 @@ class UserActivityService
         int $maxSessionMinutes = self::MAX_SESSION_MINUTES
     ): int {
         $times = collect($timestamps)
-            ->map(static fn ($t): Carbon => $t instanceof Carbon ? $t : Carbon::parse($t))
+            ->map(static fn ($t): int => $t instanceof Carbon ? $t->getTimestamp() : (is_int($t) ? $t : Carbon::parse($t)->getTimestamp()))
             ->sort()
-            ->values();
+            ->values()
+            ->all();
 
-        if ($times->isEmpty()) {
+        if ($times === []) {
             return 0;
         }
 
-        $idleGapSeconds = max(0, $idleGapMinutes) * 60;
-        $maxSessionSeconds = max(0, $maxSessionMinutes) * 60;
+        return $this->activeMinutesFromUnix(
+            $times,
+            max(0, $idleGapMinutes) * 60,
+            max(0, $maxSessionMinutes) * 60
+        );
+    }
+
+    /**
+     * Core session-merging algorithm over ascending unix timestamps.
+     *
+     * Kept in one place so the chunked report aggregations (which never
+     * materialize Carbon instances for memory reasons) compute exactly the
+     * same totals as {@see self::calculateActiveMinutes()}.
+     *
+     * @param  array<int, int>  $timestamps  ascending unix timestamps
+     */
+    private function activeMinutesFromUnix(array $timestamps, int $idleGapSeconds, int $maxSessionSeconds): int
+    {
+        if ($timestamps === []) {
+            return 0;
+        }
 
         $totalSeconds = 0;
-        $sessionStart = $times->first()->getTimestamp();
+        $sessionStart = $timestamps[0];
         $last = $sessionStart;
+        $count = count($timestamps);
 
-        foreach ($times->slice(1) as $time) {
-            $current = $time->getTimestamp();
+        for ($i = 1; $i < $count; $i++) {
+            $current = $timestamps[$i];
 
             // A gap of at least $idleGapSeconds closes the session. The idle
             // period itself is never counted, so a short break (e.g. leaving
@@ -172,6 +193,23 @@ class UserActivityService
         $totalSeconds += min($last - $sessionStart, $maxSessionSeconds);
 
         return max(0, (int) round($totalSeconds / 60));
+    }
+
+    /**
+     * Raw `created_at` value (`Y-m-d H:i:s` app-local string) to a unix
+     * timestamp without building a Carbon instance.
+     */
+    private function toUnixTimestamp(mixed $value): int
+    {
+        if (is_int($value)) {
+            return $value;
+        }
+
+        $string = (string) $value;
+        $ts = strtotime($string);
+
+        // Fail loud on unparseable values, mirroring Carbon::parse().
+        return $ts === false ? Carbon::parse($string)->getTimestamp() : $ts;
     }
 
     /**
@@ -211,7 +249,7 @@ class UserActivityService
      * Active minutes using the configured idle gap (persisted setting →
      * module config → default).
      *
-     * @param  iterable<int, Carbon|string>  $timestamps
+     * @param  iterable<int, Carbon|string|int>  $timestamps
      */
     private function activeMinutes(iterable $timestamps): int
     {
@@ -311,60 +349,108 @@ class UserActivityService
     public function userDetail(User $user, string $from, string $to): array
     {
         [$fromLocal, $toLocal] = $this->localDayBounds($from, $to);
+        $userId = (int) $user->getAuthIdentifier();
 
-        $logs = $this->repository->logsForUser((int) $user->getAuthIdentifier(), $fromLocal, $toLocal);
-        $timestamps = $logs->pluck('created_at');
+        // Single chunked pass over lightweight query-builder rows. Loading
+        // full Eloquent models for a heavy user exhausts PHP memory and the
+        // page dies with a 500 — only plain scalars are accumulated here.
+        $total = 0;
+        $real = 0;
+        $views = 0;
+        $logins = 0;
+        $firstActiveAt = null;
+        $lastActiveAt = null;
+        $allTimes = [];
+        $breakdown = [];
+        $daily = [];
+
+        $this->repository->chunkUserRows($userId, $fromLocal, $toLocal, function ($rows) use (
+            &$total, &$real, &$views, &$logins, &$firstActiveAt, &$lastActiveAt, &$allTimes, &$breakdown, &$daily
+        ): void {
+            foreach ($rows as $row) {
+                $total++;
+
+                $action = (string) $row->action;
+                $createdAt = (string) $row->created_at;
+
+                if (in_array($action, self::MUTATION_ACTIONS, true)) {
+                    $real++;
+                }
+                if (in_array($action, self::VIEW_ACTIONS, true)) {
+                    $views++;
+                }
+                if ($action === 'login') {
+                    $logins++;
+                }
+
+                $timestamp = $this->toUnixTimestamp($createdAt);
+                $allTimes[] = $timestamp;
+
+                $date = substr($createdAt, 0, 10);
+                if (! isset($daily[$date])) {
+                    $daily[$date] = ['actions' => 0, 'times' => []];
+                }
+                $daily[$date]['actions']++;
+                $daily[$date]['times'][] = $timestamp;
+
+                $entity = $row->entity ?: 'other';
+                $key = $entity."\0".$action;
+                if (! isset($breakdown[$key])) {
+                    $breakdown[$key] = ['entity' => $entity, 'action' => $action, 'count' => 0];
+                }
+                $breakdown[$key]['count']++;
+
+                // Rows arrive in id order, which can differ from created_at
+                // order when timestamps are backfilled — track the extremes.
+                if ($firstActiveAt === null || $createdAt < $firstActiveAt) {
+                    $firstActiveAt = $createdAt;
+                }
+                if ($lastActiveAt === null || $createdAt > $lastActiveAt) {
+                    $lastActiveAt = $createdAt;
+                }
+            }
+        });
 
         $kpis = [
-            'total_actions' => $logs->count(),
-            'real_actions' => $logs->whereIn('action', self::MUTATION_ACTIONS)->count(),
-            'views' => $logs->whereIn('action', self::VIEW_ACTIONS)->count(),
-            'logins' => $logs->where('action', 'login')->count(),
-            'active_minutes' => $this->activeMinutes($timestamps),
-            'active_days' => $timestamps->map(static fn (Carbon $c): string => $c->toDateString())->unique()->count(),
-            'first_active_at' => $this->formatDateTime($logs->first()?->created_at),
-            'last_active_at' => $this->formatDateTime($logs->last()?->created_at),
+            'total_actions' => $total,
+            'real_actions' => $real,
+            'views' => $views,
+            'logins' => $logins,
+            'active_minutes' => $this->activeMinutes($allTimes),
+            'active_days' => count($daily),
+            'first_active_at' => $this->formatDateTime($firstActiveAt),
+            'last_active_at' => $this->formatDateTime($lastActiveAt),
         ];
 
-        $breakdown = $logs
-            ->groupBy(static fn ($log): string => $log->entity ?: 'other')
-            ->flatMap(function (Collection $group, string $entity): array {
-                return $group->groupBy('action')
-                    ->map(fn (Collection $actions): int => $actions->count())
-                    ->map(fn (int $count, string $action): array => [
-                        'entity' => $entity,
-                        'action' => $action,
-                        'count' => $count,
-                    ])
-                    ->values()
-                    ->all();
-            })
+        $breakdown = collect($breakdown)
             ->sortByDesc('count')
             ->values()
             ->take(12)
             ->all();
 
-        $daily = $logs->groupBy(static fn ($log): string => $log->created_at->toDateString())
-            ->map(function (Collection $group, string $date): array {
-                return [
-                    'date' => $date,
-                    'actions' => $group->count(),
-                    'active_minutes' => $this->activeMinutes($group->pluck('created_at')),
-                ];
-            })
-            ->sortKeys()
+        ksort($daily);
+        $dailyRows = [];
+        foreach ($daily as $date => $group) {
+            $dailyRows[] = [
+                'date' => $date,
+                'actions' => $group['actions'],
+                'active_minutes' => $this->activeMinutes($group['times']),
+            ];
+        }
+        $daily = $dailyRows;
+
+        $timeline = $this->repository->recentForUser($userId, $fromLocal, $toLocal, 100)
+            ->map(fn ($log): array => [
+                'id' => $log->id,
+                'action' => $log->action,
+                'entity' => $log->entity,
+                'method' => $log->method,
+                'url' => $log->url,
+                'ip_address' => $log->ip_address,
+                'created_at' => $this->formatDateTime($log->created_at),
+            ])
             ->values()
             ->all();
-
-        $timeline = $logs->reverse()->take(100)->values()->map(static fn ($log): array => [
-            'id' => $log->id,
-            'action' => $log->action,
-            'entity' => $log->entity,
-            'method' => $log->method,
-            'url' => $log->url,
-            'ip_address' => $log->ip_address,
-            'created_at' => $log->created_at->format('Y-m-d H:i:s'),
-        ])->all();
 
         return [
             'kpis' => $kpis,
@@ -381,20 +467,28 @@ class UserActivityService
      */
     private function timingsPerUser(Carbon $fromLocal, Carbon $toLocal): array
     {
-        $grouped = [];
+        // Chunked pass over raw (user_id, created_at) pairs. Only plain
+        // unix ints are kept in memory — never Eloquent models. Sorting
+        // happens inside calculateActiveMinutes(), so chunk order is free.
+        $times = [];
+        $dates = [];
 
-        foreach ($this->repository->allInRange($fromLocal, $toLocal) as $log) {
-            $userId = (int) $log->user_id;
+        $this->repository->chunkRangeTimestamps($fromLocal, $toLocal, function ($rows) use (&$times, &$dates): void {
+            foreach ($rows as $row) {
+                $userId = (int) $row->user_id;
+                $createdAt = (string) $row->created_at;
 
-            $grouped[$userId][] = $log->created_at;
-        }
+                $times[$userId][] = $this->toUnixTimestamp($createdAt);
+                $dates[$userId][substr($createdAt, 0, 10)] = true;
+            }
+        });
 
         $result = [];
 
-        foreach ($grouped as $userId => $times) {
+        foreach ($times as $userId => $userTimes) {
             $result[$userId] = [
-                'minutes' => $this->activeMinutes($times),
-                'days' => collect($times)->map(static fn (Carbon $c): string => $c->toDateString())->unique()->count(),
+                'minutes' => $this->activeMinutes($userTimes),
+                'days' => count($dates[$userId]),
             ];
         }
 

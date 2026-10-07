@@ -75,7 +75,7 @@ const devicesWithIssues = computed(() =>
 );
 
 // Devices-tab report columns (labels mirror the legacy thead exactly;
-// first column uses logical start instead of physical text-left for RTL).
+// first column uses logical-start alignment for correct RTL).
 const deviceColumns = computed(() => [
     { key: 'device', label: t('fingerprint_devices.device_name') || 'Device', align: 'start' },
     { key: 'status', label: t('fingerprint_devices.status') || 'Status', align: 'center' },
@@ -289,7 +289,7 @@ usePageTitle(t('fingerprint_devices.face_sync_dashboard') || 'Face Sync Dashboar
             "
             @click="activeTab = tab.key"
         >
-            <i :class="tab.icon" class="mr-1.5"></i>
+            <i :class="tab.icon" class="me-1.5"></i>
             {{ tab.label }}
         </button>
     </div>
@@ -385,7 +385,7 @@ usePageTitle(t('fingerprint_devices.face_sync_dashboard') || 'Face Sync Dashboar
                             </p>
                             <button
                                 v-if="device.failed_commands > 0"
-                                class="text-[10px] text-mistral-danger hover:text-mistral-danger/80 font-medium disabled:opacity-50 ml-auto"
+                                class="text-[10px] text-mistral-danger hover:text-mistral-danger/80 font-medium disabled:opacity-50 ms-auto"
                                 :disabled="retryingDeviceId === device.id"
                                 @click="retryDeviceFailed(device.id)"
                             >

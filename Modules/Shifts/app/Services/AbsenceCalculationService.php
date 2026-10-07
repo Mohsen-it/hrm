@@ -45,6 +45,24 @@ class AbsenceCalculationService
     }
 
     /**
+     * Lateness grace (دقائق السماح) for one assignment.
+     *
+     * The linked time schedule (جدول الوقت) is the single source of truth:
+     * its late_margin wins whenever schedule data exists (live schedule or
+     * assignment snapshot, including an explicit 0 meaning "no tolerance").
+     * The rotation-level grace_minutes is only a fallback for rotations with
+     * no schedule data at all. Mirrors ScheduleResolverService.
+     */
+    private function latenessGraceMinutes(object $rotation, array $times): int
+    {
+        if (array_key_exists('late_margin', $times) && $times['late_margin'] !== null) {
+            return (int) $times['late_margin'];
+        }
+
+        return (int) ($rotation->grace_minutes ?? 0);
+    }
+
+    /**
      * Normalize a rotation filter (single id or array) into a list of ids.
      *
      * @return array<int, int>
@@ -308,7 +326,7 @@ class AbsenceCalculationService
             }
 
             $times = $this->rotationEngine->resolveTimes($assignment);
-            $grace = (int) ($rotation->grace_minutes ?: $times['late_margin'] ?: 0);
+            $grace = $this->latenessGraceMinutes($rotation, $times);
             $deadline = $times['check_in']
                 ? $date->copy()->setTimeFromTimeString($times['check_in'])->addMinutes($grace)
                 : $date->copy()->endOfDay();
@@ -478,7 +496,7 @@ class AbsenceCalculationService
         }
 
         $times = $this->rotationEngine->resolveTimes($assignment);
-        $grace = (int) ($assignment->rotation->grace_minutes ?: $times['late_margin'] ?: 0);
+        $grace = $this->latenessGraceMinutes($assignment->rotation, $times);
 
         return $times['check_in']
             ? $date->copy()->setTimeFromTimeString($times['check_in'])->addMinutes($grace)
@@ -792,20 +810,19 @@ class AbsenceCalculationService
             ->map(fn ($value) => $this->dateKey($value))
             ->flip();
 
-        $monthUtcBounds = [
-            Carbon::parse($monthFromStr)->startOfDay()->setTimezone('UTC')->format('Y-m-d H:i:s'),
-            Carbon::parse($monthToStr)->endOfDay()->setTimezone('UTC')->format('Y-m-d H:i:s'),
+        $monthBounds = [
+            Carbon::parse($monthFromStr)->startOfDay()->format('Y-m-d H:i:s'),
+            Carbon::parse($monthToStr)->endOfDay()->format('Y-m-d H:i:s'),
         ];
         $rawTimesByDay = [];
         foreach (
             DB::table('raw_attendance_logs')
                 ->where('user_id', $employeeId)
-                ->whereBetween('punch_time', $monthUtcBounds)
+                ->whereBetween('punch_time', $monthBounds)
                 ->whereNull('deleted_at')
                 ->pluck('punch_time') as $punch
         ) {
-            $rawTimesByDay[$this->localDateFromUtc((string) $punch)][] = Carbon::parse((string) $punch, 'UTC')
-                ->setTimezone(config('app.timezone'));
+            $rawTimesByDay[$this->punchLocalDay((string) $punch)][] = $this->toLocalTime((string) $punch);
         }
 
         $monthVacations = $this->indexCoverage(
@@ -947,6 +964,7 @@ class AbsenceCalculationService
         ?int $departmentId = null,
         int|array|null $rotationIds = null,
         int|array|null $rotationGroupIds = null,
+        ?string $search = null,
     ): array {
         $fromStr = $from->toDateString();
         $toStr = $to->toDateString();
@@ -976,6 +994,9 @@ class AbsenceCalculationService
 
         // Active employees, respecting the department filter.
         // id => employment / exemption metadata.
+        // A search term narrows the candidate set up front so a name lookup
+        // does not recompute the whole month for every employee.
+        $search = $search !== null ? trim($search) : null;
         $activeUsers = DB::table('users')
             ->whereNull('deleted_at')
             ->where('status', 1)
@@ -985,6 +1006,13 @@ class AbsenceCalculationService
                     ->orWhere('termination_date', '>=', $fromStr);
             })
             ->when($departmentId !== null, fn ($q) => $q->where('department_id', $departmentId))
+            ->when($search !== null && $search !== '', function ($q) use ($search) {
+                $q->where(function ($sq) use ($search) {
+                    $sq->where('name', 'like', "%{$search}%")
+                        ->orWhere('employee_code', 'like', "%{$search}%")
+                        ->orWhere('phone', 'like', "%{$search}%");
+                });
+            })
             ->get(['id', 'hire_date', 'branch_id', 'department_id', 'termination_date', 'attendance_exemption_type', 'attendance_exemption_from', 'attendance_exemption_to'])
             ->keyBy('id');
 
@@ -1007,21 +1035,20 @@ class AbsenceCalculationService
         // expected day without a session - without these, such employees would
         // be wrongly reported as absent. Times are kept (app timezone) so an
         // overnight duty's morning checkout is not mistaken for an arrival.
-        $utcFrom = Carbon::parse($fromStr)->startOfDay()->setTimezone('UTC')->format('Y-m-d H:i:s');
-        $utcTo = Carbon::parse($toStr)->endOfDay()->setTimezone('UTC')->format('Y-m-d H:i:s');
+        $rangeFrom = Carbon::parse($fromStr)->startOfDay()->format('Y-m-d H:i:s');
+        $rangeTo = Carbon::parse($toStr)->endOfDay()->format('Y-m-d H:i:s');
         $rawTimesByDate = [];
         foreach (
             DB::table('raw_attendance_logs')
                 ->whereIn('user_id', $activeIds)
-                ->whereBetween('punch_time', [$utcFrom, $utcTo])
+                ->whereBetween('punch_time', [$rangeFrom, $rangeTo])
                 // Soft-deleted logs are excluded, exactly like the Eloquent model
                 // query the rest of the report uses.
                 ->whereNull('deleted_at')
                 ->get(['punch_time', 'user_id']) as $rawRow
         ) {
-            $localDay = $this->localDateFromUtc((string) $rawRow->punch_time);
-            $rawTimesByDate[$localDay][(int) $rawRow->user_id][] = Carbon::parse((string) $rawRow->punch_time, 'UTC')
-                ->setTimezone(config('app.timezone'));
+            $localDay = $this->punchLocalDay((string) $rawRow->punch_time);
+            $rawTimesByDate[$localDay][(int) $rawRow->user_id][] = $this->toLocalTime((string) $rawRow->punch_time);
         }
 
         // Approved vacations overlapping the range.
@@ -1289,35 +1316,49 @@ class AbsenceCalculationService
     }
 
     /**
-     * UTC boundary strings covering one full app-timezone day.
+     * Boundary strings covering one full roster day.
      *
-     * Raw device punches are stored in UTC while report dates are local, so
-     * matching a local date requires shifting the day's bounds to UTC.
+     * Raw device punches are stored as naive local wall time (same clock as
+     * the server), so a roster date matches its own 00:00-23:59 slice with no
+     * timezone shifting.
      *
      * @return array{0: string, 1: string}
      */
-    private function localDayUtcBounds(string $dateStr): array
+    private function localDayBounds(string $dateStr): array
     {
         $day = Carbon::parse($dateStr);
 
         return [
-            $day->copy()->startOfDay()->setTimezone('UTC')->format('Y-m-d H:i:s'),
-            $day->copy()->endOfDay()->setTimezone('UTC')->format('Y-m-d H:i:s'),
+            $day->copy()->startOfDay()->format('Y-m-d H:i:s'),
+            $day->copy()->endOfDay()->format('Y-m-d H:i:s'),
         ];
     }
 
     /**
-     * Convert a UTC-stored raw punch timestamp to the app-local date.
+     * The roster date a raw punch belongs to.
      *
-     * Raw device punches are stored in UTC while report dates are local;
-     * grouping a punch under the wrong date (e.g. a 23:30 UTC punch that is
-     * 02:30 the next day locally) would misplace it in monthly summaries.
+     * Punches are stored as naive local wall time, so the date part is used
+     * directly — no timezone conversion (converting would push 21:00-23:59
+     * punches onto the next day).
      */
-    private function localDateFromUtc(string $utcTime): string
+    private function punchLocalDay(string $punchTime): string
     {
-        return Carbon::parse($utcTime, 'UTC')
-            ->setTimezone(config('app.timezone'))
-            ->toDateString();
+        return substr($punchTime, 0, 10);
+    }
+
+    /**
+     * Normalize a raw punch timestamp to app-local time.
+     *
+     * Punch values are naive local wall time; strings parse in the default
+     * (app) timezone and instances are converted without any UTC shifting.
+     */
+    private function toLocalTime(mixed $value): Carbon
+    {
+        $time = $value instanceof \DateTimeInterface
+            ? Carbon::instance($value)
+            : Carbon::parse((string) $value);
+
+        return $time->setTimezone(config('app.timezone'));
     }
 
     /**
@@ -1366,7 +1407,7 @@ class AbsenceCalculationService
 
         $rawRows = RawAttendanceLog::query()
             ->whereIn('user_id', $ids)
-            ->whereBetween('punch_time', $this->localDayUtcBounds($dateStr))
+            ->whereBetween('punch_time', $this->localDayBounds($dateStr))
             ->get(['user_id', 'punch_time']);
 
         if ($rawRows->isEmpty()) {
@@ -1376,8 +1417,7 @@ class AbsenceCalculationService
         $sessionFlip = $sessionIds->flip();
         $rawByUser = [];
         foreach ($rawRows as $row) {
-            $rawByUser[(int) $row->user_id][] = Carbon::parse($row->punch_time, 'UTC')
-                ->setTimezone(config('app.timezone'));
+            $rawByUser[(int) $row->user_id][] = $this->toLocalTime($row->punch_time);
         }
 
         $assignments = $this->rotationAssignmentRepository
@@ -1474,7 +1514,34 @@ class AbsenceCalculationService
             }
         }
 
-        return true;
+        // A departure checkout can only exist while the previous duty is still
+        // open. When yesterday's duty closed properly (evening checkout
+        // recorded), a morning punch inside the departure window is the new
+        // day's arrival — not yesterday's checkout. Without this guard, early
+        // arrivals on mid-block days (3-9/4-12 mornings land inside the
+        // departure window) are dismissed and the employee falsely reported
+        // absent despite punching in.
+        return $this->hasOpenDutySession($userId, $prevDay->toDateString());
+    }
+
+    /**
+     * Whether the employee has an open (started, not checked-out) session on
+     * a duty date. Memoized per instance; the service is transient so the
+     * memo never goes stale across requests.
+     *
+     * @var array<string, bool>
+     */
+    private array $openDutySessionMemo = [];
+
+    private function hasOpenDutySession(int $userId, string $dateStr): bool
+    {
+        $key = $userId.'|'.$dateStr;
+
+        return $this->openDutySessionMemo[$key] ??= AttendanceSession::forUser($userId)
+            ->onDate($dateStr)
+            ->open()
+            ->whereNotNull('check_in_at')
+            ->exists();
     }
 
     /**
@@ -1626,20 +1693,19 @@ class AbsenceCalculationService
             ->map(fn ($value) => $this->dateKey($value))
             ->flip();
 
-        $empMonthUtcBounds = [
-            Carbon::parse($fromStr)->startOfDay()->setTimezone('UTC')->format('Y-m-d H:i:s'),
-            Carbon::parse($toStr)->endOfDay()->setTimezone('UTC')->format('Y-m-d H:i:s'),
+        $empMonthBounds = [
+            Carbon::parse($fromStr)->startOfDay()->format('Y-m-d H:i:s'),
+            Carbon::parse($toStr)->endOfDay()->format('Y-m-d H:i:s'),
         ];
         $empRawTimesByDay = [];
         foreach (
             DB::table('raw_attendance_logs')
                 ->where('user_id', $employeeId)
-                ->whereBetween('punch_time', $empMonthUtcBounds)
+                ->whereBetween('punch_time', $empMonthBounds)
                 ->whereNull('deleted_at')
                 ->pluck('punch_time') as $empPunch
         ) {
-            $empRawTimesByDay[$this->localDateFromUtc((string) $empPunch)][] = Carbon::parse((string) $empPunch, 'UTC')
-                ->setTimezone(config('app.timezone'));
+            $empRawTimesByDay[$this->punchLocalDay((string) $empPunch)][] = $this->toLocalTime((string) $empPunch);
         }
 
         $pickAssignmentForDate = function (string $day) use ($monthAssignments): ?RotationAssignment {

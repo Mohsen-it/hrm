@@ -3,6 +3,8 @@
 return [
     'title' => 'Holidays',
     'index_description' => 'Manage official holidays in the system',
+    'no_holidays_title' => 'No holidays yet',
+    'no_holidays_description' => 'Add the first holiday (name + date) and it will be excluded from shifts automatically',
     'add_holiday' => 'Add Holiday',
     'edit_holiday' => 'Edit Holiday',
     'view_holiday' => 'View Holiday',

@@ -139,6 +139,12 @@ function performRegenerate() {
 const flashSuccess = computed(() => page.props.flash?.success);
 const flashError = computed(() => page.props.flash?.error);
 
+// Learnability: empty-state CTA only when truly empty, not when filters hide rows.
+const hasActiveFilters = computed(() => {
+    const f = props.filters || {};
+    return Object.entries(f).some(([k, v]) => k !== 'page' && v !== '' && v !== null && v !== undefined);
+});
+
 
 usePageTitle(t('shifts.schedules_title'));
 </script>
@@ -166,8 +172,15 @@ usePageTitle(t('shifts.schedules_title'));
             :route-name="'schedules.index'"
             :only="['periods', 'filters']"
             storage-key="schedules"
+            :empty-title="t('shifts.no_schedules_title')"
+            :empty-description="t('shifts.no_schedules_description')"
             @filter-change="onFilterChange"
         >
+            <template #empty-actions>
+                <Button v-if="!hasActiveFilters" variant="primary" icon="fas fa-plus" @click="handleGenerate">
+                    {{ t('shifts.generate_schedule') }}
+                </Button>
+            </template>
             <template #cell-month="{ row }">
                 <span class="text-[13px]">{{ formatMonth(row.month) }}</span>
             </template>

@@ -41,6 +41,16 @@ const fields = computed(() => [
     { label: t('shifts.in_above_margin'), value: props.schedule.in_above_margin ?? 0 },
     { label: t('shifts.out_ahead_margin'), value: props.schedule.out_ahead_margin ?? 0 },
     { label: t('shifts.out_above_margin'), value: props.schedule.out_above_margin ?? 0 },
+    {
+        label: t('shifts.third_punch_start'),
+        value: props.schedule.third_punch_start ? String(props.schedule.third_punch_start).slice(0, 5) : '—',
+        ltr: true,
+    },
+    {
+        label: t('shifts.third_punch_end'),
+        value: props.schedule.third_punch_end ? String(props.schedule.third_punch_end).slice(0, 5) : '—',
+        ltr: true,
+    },
 ]);
 
 const breaksList = computed(() => {

@@ -60,7 +60,7 @@ class PunchIngestionService
                 $user->id,
                 $punch->timestamp,
                 $punch->punchType,
-                $this->attendanceSessionService->getOpenSessionForUser($user->id) !== null,
+                $this->attendanceSessionService->hasRecentOpenSession($user->id, $punch->timestamp),
             );
             $punchTypeStr = $classifiedPunchType->value;
 
@@ -82,7 +82,7 @@ class PunchIngestionService
 
             Log::channel('attendance_push')->debug('punch_ingestion_raw_log_created', [
                 'raw_log_id' => $rawLog->id,
-                'device_id' => $device->getId(),
+                'device_id' => $deviceId ?? 0,
                 'user_id' => $user->id,
                 'punch_type' => $punch->punchType->value,
             ]);
@@ -144,7 +144,7 @@ class PunchIngestionService
                 'session_id' => $session->id,
                 'raw_log_id' => $rawLog->id,
                 'user_id' => $user->id,
-                'device_id' => $device->getId(),
+                'device_id' => $deviceId ?? 0,
                 'punch_type' => $classifiedPunchType->value,
             ]);
 

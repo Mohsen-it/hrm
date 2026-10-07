@@ -234,7 +234,7 @@ usePageTitle(t('shifts.assign_rotation'));
                 <ErrorSummary :errors="errors" />
 
                 <div v-if="generalError" class="p-3 bg-mistral-danger/10 border border-mistral-danger/20 rounded-md text-[13px] text-mistral-danger">
-                    <i class="fas fa-exclamation-circle mr-1"></i>
+                    <i class="fas fa-exclamation-circle me-1"></i>
                     {{ generalError }}
                 </div>
 

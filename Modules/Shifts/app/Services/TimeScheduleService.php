@@ -155,6 +155,8 @@ class TimeScheduleService
             'in_above_margin' => $original->in_above_margin,
             'out_ahead_margin' => $original->out_ahead_margin,
             'out_above_margin' => $original->out_above_margin,
+            'third_punch_start' => $original->third_punch_start,
+            'third_punch_end' => $original->third_punch_end,
         ]);
 
         foreach ($original->breaks as $break) {

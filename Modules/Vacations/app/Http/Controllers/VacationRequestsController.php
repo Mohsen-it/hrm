@@ -13,8 +13,10 @@ use Modules\Vacations\Exports\VacationRequestsExport;
 use Modules\Vacations\Http\Requests\DecisionVacationRequestRequest;
 use Modules\Vacations\Http\Requests\StoreVacationRequestRequest;
 use Modules\Vacations\Http\Requests\UpdateVacationRequestRequest;
+use Modules\Vacations\Http\Resources\UserVacationBalanceResource;
 use Modules\Vacations\Http\Resources\UserVacationRequestResource;
 use Modules\Vacations\Models\VacationType;
+use Modules\Vacations\Services\VacationBalanceService;
 use Modules\Vacations\Services\VacationRequestService;
 use Modules\Vacations\Services\VacationTypeService;
 
@@ -34,6 +36,7 @@ class VacationRequestsController extends Controller
     public function __construct(
         private VacationRequestService $requestService,
         private VacationTypeService $typeService,
+        private VacationBalanceService $balanceService,
         private UserService $userService,
     ) {}
 
@@ -68,9 +71,11 @@ class VacationRequestsController extends Controller
     /**
      * Show the form for creating a new request (operator-driven).
      */
-    public function create(): Response
+    public function create(Request $request): Response
     {
         $this->authorize('create-vacation-requests');
+
+        $userId = (int) $request->input('user_id', 0);
 
         return Inertia::render('Vacations/Requests/Create', [
             'users' => fn () => $this->userService->getActiveUsers()
@@ -86,6 +91,13 @@ class VacationRequestsController extends Controller
                     'max_days_per_request' => (int) $t->max_days_per_request,
                     'advance_notice_days' => (int) $t->advance_notice_days,
                 ]),
+            // Lazy balance snapshot for the preselected employee (refreshed via
+            // router.reload({ only: ['balances'] }) when the operator picks one).
+            'balances' => fn () => $userId > 0
+                ? UserVacationBalanceResource::collection(
+                    $this->balanceService->getBalancesForUser($userId)
+                )->resolve()
+                : [],
         ]);
     }
 
@@ -144,6 +156,11 @@ class VacationRequestsController extends Controller
                     'name_en' => $t->name_en,
                     'color' => $t->color,
                 ]),
+            // Balance snapshot for the request owner so the operator sees the
+            // remaining quota while editing.
+            'balances' => fn () => UserVacationBalanceResource::collection(
+                $this->balanceService->getBalancesForUser((int) $req->user_id)
+            )->resolve(),
         ]);
     }
 

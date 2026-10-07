@@ -2,6 +2,7 @@
 param(
     [switch] $SkipBuild,
     [switch] $NoBridge,
+    [switch] $NoNginx,
     [switch] $NoClean,
     # 011/SERVER: headless server mode -- no console interaction (no Q key),
     # silent supervision loop only. Interactive behaviour stays the default.
@@ -13,6 +14,14 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+
+# PYTHON* hygiene (mirrors Install-HRM-OneClick.ps1): third-party suites
+# (e.g. ZKBioTime) set machine/user PYTHONHOME that hijacks the venv
+# interpreters of the bridge/ADMS children and breaks them with
+# "SRE module mismatch". Clear for this supervisor and all its children.
+Remove-Item Env:\PYTHONHOME -ErrorAction SilentlyContinue
+Remove-Item Env:\PYTHONPATH -ErrorAction SilentlyContinue
+Remove-Item Env:\PYTHONIOENCODING -ErrorAction SilentlyContinue
 
 $Root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 if ([string]::IsNullOrWhiteSpace($ServerIp)) {
@@ -41,6 +50,18 @@ try {
 } catch {
     throw 'PHP executable not found in PATH. Install Laragon PHP or fix PATH before starting HRM.'
 }
+
+# Web tier contract (Option B, mirrors C:\nginx production): Nginx :80 plus a
+# 4x php-cgi pool (127.0.0.1:9000-9003, least_conn). Files are staged by
+# Install-HRM-OneClick.ps1 -Native under C:\hrm-services\nginx. Presence
+# driven: missing files or -NoNginx means browsers keep using Laravel :8000.
+$PhpPoolPorts = @(9000, 9001, 9002, 9003)
+$NginxRoot = 'C:\hrm-services\nginx'
+$NginxExe = Join-Path $NginxRoot 'nginx.exe'
+$NginxConf = Join-Path $NginxRoot 'conf\nginx.conf'
+$PhpCgiExe = Join-Path (Split-Path $PhpExe -Parent) 'php-cgi.exe'
+$PhpIniFile = Join-Path (Split-Path $PhpExe -Parent) 'php.ini'
+$script:WantWeb = ((-not $NoNginx) -and (Test-Path -LiteralPath $NginxExe) -and (Test-Path -LiteralPath $NginxConf) -and (Test-Path -LiteralPath $PhpCgiExe))
 
 # 012/STABILITY: supervisor event log (restarts, backoff, circuit-breaker).
 # Console output is invisible headless -- this file is the audit trail.
@@ -71,9 +92,10 @@ $HrmHealthCheckEvery = 60   # supervision iterations (~500ms each => ~30s)
 $HrmPortGraceFails = 2      # consecutive failed port checks before a hung restart
 
 if ($Help) {
-    Write-Host 'Usage: Start-HRM-Windows.bat [-SkipBuild] [-NoBridge] [-NoClean] [-NonInteractive] [-ServerIp 10.10.250.2]'
+    Write-Host 'Usage: Start-HRM-Windows.bat [-SkipBuild] [-NoBridge] [-NoNginx] [-NoClean] [-NonInteractive] [-ServerIp 10.10.250.2]'
     Write-Host '  -SkipBuild     : skip npm run build'
     Write-Host '  -NoBridge      : do not start ZKTeco bridge (port 5000)'
+    Write-Host '  -NoNginx       : do not start Nginx web tier + php-cgi pool (port 80, 9000-9003)'
     Write-Host '  -NoClean       : do not kill old services before start (default: clean)'
     Write-Host '  -NonInteractive: headless server mode -- no Q key, silent supervision loop'
     exit 0
@@ -212,6 +234,9 @@ function Stop-HrmOldServices {
     # NSSM service HRM-Reverb; the supervisor never touches that port.
     $hrmPorts = @($script:LaravelPort, $script:AdmsPort)
     if (-not $script:NoBridge) { $hrmPorts += $script:BridgePort }
+    # Web tier ports join the sweep only when the tier is wanted: :80 often
+    # belongs to foreign servers (IIS/Skype) which must never be touched.
+    if ($script:WantWeb) { $hrmPorts += 80; $hrmPorts += $script:PhpPoolPorts }
 
     for ($round = 1; $round -le 3; $round++) {
         $anyKilled = $false
@@ -442,6 +467,29 @@ try {
     }
     if (-not $dbReady) { throw 'Database preflight failed after 6 attempts. See storage\logs\hrm-migration-status.log.' }
 
+    # REDIS PREFLIGHT: the queue workers below use QUEUE_CONNECTION=redis, so a
+    # cold boot where redis-server is still starting used to spray Predis
+    # "Stream is already at the end" errors into laravel.log. Wait (bounded)
+    # for TCP 127.0.0.1:6379 -- warning only, never a fatal block: if Redis
+    # stays down the workers still start (and retry) exactly as before.
+    $redisReady = $false
+    for ($attempt = 1; $attempt -le 12; $attempt++) {
+        $tcp = $null
+        try {
+            $tcp = New-Object Net.Sockets.TcpClient
+            $iar = $tcp.BeginConnect('127.0.0.1', 6379, $null, $null)
+            if ($iar.AsyncWaitHandle.WaitOne(5000)) {
+                $tcp.EndConnect($iar)
+                $redisReady = $true
+            }
+        } catch {}
+        if ($tcp) { try { $tcp.Close() } catch {} }
+        if ($redisReady) { break }
+        Write-Host "  Redis not ready (attempt $attempt/12) - waiting 5s..." -ForegroundColor Yellow
+        Start-Sleep -Seconds 5
+    }
+    if (-not $redisReady) { Write-Host '  WARNING: Redis 127.0.0.1:6379 unreachable -- queue workers will retry on their own. Continuing startup.' -ForegroundColor DarkYellow }
+
     Write-Host 'Clearing cached Laravel configuration...'
     & $PhpExe artisan optimize:clear
     if ($LASTEXITCODE -ne 0) { throw 'Could not clear Laravel caches.' }
@@ -533,6 +581,12 @@ try {
     # 011/P0-5: `artisan serve` writes one stdout line per HTTP request (~17MB/day,
     # mostly ADMS device polling). Discard stdout, keep stderr (real errors).
     # App errors are additionally preserved in the daily `laravel-*.log` channel.
+    # NOTE: PHP_CLI_SERVER_WORKERS was tried here and REVERTED: PHP on
+    # Windows silently ignores it (proven 2026-10-01: 2x4s sleeps take ~10s
+    # with and without it - fork-based workers are Unix-only). `serve` stays
+    # single-threaded ON PURPOSE: it serves only fast ADMS/bridge callbacks
+    # (ms-scale, then queued). User traffic goes through Nginx + php-cgi pool
+    # (:80, see C:\nginx) which parallelizes properly. Do not re-add workers.
     $services.Add((Start-HrmProcess -Job $job -Name 'Laravel' -WorkingDirectory $Root -Command "$PhpExe artisan serve --host=0.0.0.0 --port=$LaravelPort" -LogPath (Join-Path $Root 'storage\logs\hrm-laravel-server.log') -DiscardStdout -Port $LaravelPort))
     Wait-HrmPort -Port $LaravelPort -Name 'Laravel'
 
@@ -621,6 +675,32 @@ try {
         }
     }
 
+    # --- Nginx web tier + php-cgi pool (Option B). Browsers get :80 with true
+    # concurrency; `serve :8000` keeps serving only fast ADMS/bridge callbacks.
+    # Same warn-only policy as the bridge: a web-tier failure must never kill
+    # the core stack. Quoted-exe form mirrors the proven bridge command.
+    $webUp = $false
+    if ($WantWeb) {
+        foreach ($pp in $PhpPoolPorts) {
+            $poolLog = Join-Path $Root ("storage\logs\hrm-php-cgi-$pp.log")
+            $poolCmd = '"' + $PhpCgiExe + '" -b 127.0.0.1:' + $pp + ' -c "' + $PhpIniFile + '"'
+            $services.Add((Start-HrmProcess -Job $job -Name "PHP-CGI ($pp)" -WorkingDirectory $Root -Command $poolCmd -LogPath $poolLog -Port $pp))
+        }
+        try {
+            Wait-HrmPort -Port 9000 -Name 'PHP-CGI pool' -Seconds 20
+            $nginxCmd = '"' + $NginxExe + '" -p "' + $NginxRoot + '"'
+            $services.Add((Start-HrmProcess -Job $job -Name 'Nginx' -WorkingDirectory $NginxRoot -Command $nginxCmd -LogPath (Join-Path $Root 'storage\logs\hrm-nginx.log') -Port 80))
+            Wait-HrmPort -Port 80 -Name 'Nginx' -Seconds 20
+            $webUp = $true
+            try { Write-HrmSupervisorLog 'Nginx web tier up (:80 -> php-cgi pool 9000-9003).' } catch {}
+        } catch {
+            Write-Host "  WARNING: web tier did not start: $($_.Exception.Message)" -ForegroundColor DarkYellow
+            Write-Host '  Browsers keep working via Laravel :8000 (single-threaded). To retry: re-run the installer with -Native.' -ForegroundColor DarkYellow
+        }
+    } else {
+        Write-Host '  Web tier skipped (use -Native installer for Nginx :80, or pass nothing to keep :8000).' -ForegroundColor DarkGray
+    }
+
     Write-Host ''
     Write-Host '[OK] HRM services are running:' -ForegroundColor Green
     Write-Host "     Laravel:  http://${ServerIp}:$LaravelPort"
@@ -628,6 +708,7 @@ try {
     Write-Host "     ADMS:     http://${ServerIp}:$AdmsPort"
     Write-Host "     Scheduler: Task Scheduler 'HRM Scheduler' (schedule:run every minute)"
     if (-not $NoBridge) { Write-Host "     Bridge:   http://${ServerIp}:$BridgePort" }
+    if ($webUp) { Write-Host "     Web:      http://${ServerIp} (Nginx :80 -> php-cgi pool)" }
     Write-Host ''
     if ($NonInteractive) {
         Write-Host 'Running headless (server mode): supervising services until the task stops this process.' -ForegroundColor Cyan

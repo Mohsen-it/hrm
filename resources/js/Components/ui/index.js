@@ -6,6 +6,7 @@ export { default as Breadcrumb } from './Breadcrumb.vue';
 export { default as Button } from './Button.vue';
 export { default as Card } from './Card.vue';
 export { default as ConfirmDialog } from './ConfirmDialog.vue';
+export { default as ContextHelp } from './ContextHelp.vue';
 export { default as DataTable } from './DataTable.vue';
 export { default as DataTableSkeleton } from './DataTable/DataTableSkeleton.vue';
 export { default as DataTableToolbar } from './DataTable/DataTableToolbar.vue';

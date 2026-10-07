@@ -24,16 +24,57 @@ class UserActivityRepository
     }
 
     /**
-     * All log rows inside a UTC range — used for active-time computations.
+     * Stream every (user_id, created_at) pair inside the range in small
+     * chunks, ordered by user then time.
      *
-     * @return Collection<int, UserActivityLog>
+     * Reporting must never hydrate Eloquent models for the whole range:
+     * with hundreds of thousands of rows that exhausts the PHP memory
+     * limit and the page dies with a 500. Raw query-builder rows keep the
+     * memory footprint flat regardless of table size.
      */
-    public function allInRange(Carbon $from, Carbon $to): Collection
+    public function chunkRangeTimestamps(Carbon $from, Carbon $to, callable $callback, int $chunkSize = 10000): void
     {
-        return UserActivityLog::query()
+        // chunkById (not offset chunking): each page seeks on the primary
+        // key, so later pages stay as fast as the first ones.
+        DB::table('user_activity_logs')
+            ->select(['id', 'user_id', 'created_at'])
             ->whereBetween('created_at', [$from, $to])
-            ->orderBy('created_at')
-            ->get(['id', 'user_id', 'created_at']);
+            ->orderBy('id')
+            ->chunkById($chunkSize, $callback);
+    }
+
+    /**
+     * Stream one user's (created_at, action, entity) rows in small chunks,
+     * oldest first. Same memory rationale as {@see self::chunkRangeTimestamps()}.
+     */
+    public function chunkUserRows(int $userId, Carbon $from, Carbon $to, callable $callback, int $chunkSize = 5000): void
+    {
+        // chunkById (not offset chunking): each page seeks on the primary
+        // key, so later pages stay as fast as the first ones.
+        DB::table('user_activity_logs')
+            ->select(['id', 'created_at', 'action', 'entity'])
+            ->where('user_id', $userId)
+            ->whereBetween('created_at', [$from, $to])
+            ->orderBy('id')
+            ->chunkById($chunkSize, $callback);
+    }
+
+    /**
+     * The newest log rows for one user inside the range (detail timeline).
+     *
+     * Only the display fields are selected and the query is capped, so it
+     * stays cheap no matter how many rows the user has in total.
+     *
+     * @return Collection<int, object>
+     */
+    public function recentForUser(int $userId, Carbon $from, Carbon $to, int $limit = 100): Collection
+    {
+        return DB::table('user_activity_logs')
+            ->where('user_id', $userId)
+            ->whereBetween('created_at', [$from, $to])
+            ->orderByDesc('id')
+            ->limit($limit)
+            ->get(['id', 'action', 'entity', 'method', 'url', 'ip_address', 'created_at']);
     }
 
     /**
@@ -128,20 +169,6 @@ class UserActivityRepository
             ->orderByDesc(DB::raw('COUNT(*)'))
             ->limit($limit)
             ->get(['entity', 'action', DB::raw('COUNT(*) as count')]);
-    }
-
-    /**
-     * Every log row for one user inside the range, ordered chronologically.
-     *
-     * @return Collection<int, UserActivityLog>
-     */
-    public function logsForUser(int $userId, Carbon $from, Carbon $to): Collection
-    {
-        return UserActivityLog::query()
-            ->where('user_id', $userId)
-            ->whereBetween('created_at', [$from, $to])
-            ->orderBy('created_at')
-            ->get();
     }
 
     /**

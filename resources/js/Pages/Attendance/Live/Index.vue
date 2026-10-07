@@ -203,7 +203,7 @@ usePageTitle(t('attendance.live_page.title'));
                 <h3 class="text-[16px] font-semibold mb-3 text-mistral-ink">
                     <i class="fas fa-fingerprint text-mistral-primary"></i>
                     {{ t('attendance.live_page.live_punch_feed', 'سجل البصمات المباشر') }}
-                    <span class="text-[11px] text-mistral-steel mr-2" v-if="punchCount > 0">
+                    <span class="text-[11px] text-mistral-steel me-2" v-if="punchCount > 0">
                         ({{ punchCount }})
                     </span>
                 </h3>

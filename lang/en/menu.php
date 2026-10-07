@@ -45,6 +45,7 @@ return [
     'attendance_groups' => 'Attendance Groups',
     'attendance_shifts' => 'Attendance Shifts',
     'group_schedules' => 'Group Schedules',
+    'shifts_group' => 'Rotations & Schedules',
     'rotations' => 'Rotations',
     'rotation_assignments' => 'Rotation Assignments',
     'rotation_groups' => 'Rotation Groups',

@@ -79,6 +79,7 @@ return [
     'status_pending' => 'Pending',
     'type_manual' => 'Manual',
     'type_automatic' => 'Automatic',
+    'type_uploaded' => 'External upload',
     'type_restore_test' => 'Restore test',
     'type_restore_production' => 'Production restore',
     'verify_now' => 'Verify now',
@@ -90,4 +91,16 @@ return [
     // Delete confirmation
     'confirm_delete_title' => 'Confirm deletion',
     'confirm_delete_message' => 'Are you sure you want to delete this backup? This action cannot be undone.',
+    // External upload (USB / flash drive)
+    'upload_backup' => 'Upload external backup',
+    'upload_title' => 'Restore from external file (USB drive)',
+    'upload_description' => 'Pick a backup file from your PC or USB drive (.sql, .sql.gz or .sql.gz.enc). It will be registered as a new backup and verified automatically, then you can test-restore and production-restore it.',
+    'upload_hint' => 'Supported: .sql, .sql.gz, .gz, .sql.gz.enc, .enc — max 2GB.',
+    'upload_button' => 'Upload & register',
+    'uploading' => 'Uploading…',
+    'select_file' => 'Select backup file',
+    'uploaded_successfully' => 'External backup uploaded and registered — verify it, then restore.',
+    'upload_required' => 'Please choose a backup file first.',
+    'upload_too_large' => 'File is too large (max 2GB).',
+    'upload_invalid_type' => 'Unsupported file type — use .sql, .gz or .enc.',
 ];

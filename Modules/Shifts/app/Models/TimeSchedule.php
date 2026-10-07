@@ -39,6 +39,8 @@ class TimeSchedule extends Model
         'in_above_margin',
         'out_ahead_margin',
         'out_above_margin',
+        'third_punch_start',
+        'third_punch_end',
     ];
 
     /**

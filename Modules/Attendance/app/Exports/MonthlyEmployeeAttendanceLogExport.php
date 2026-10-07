@@ -3,7 +3,12 @@
 namespace Modules\Attendance\Exports;
 
 use App\Services\ExcelExportService;
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
+use PhpOffice\PhpSpreadsheet\RichText\RichText;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Style\Color;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
 /**
  * Excel rendering for a monthly employee attendance log.
@@ -30,15 +35,20 @@ class MonthlyEmployeeAttendanceLogExport
         // Excel sheet names are limited to 31 characters.
         $this->exporter->setupSheet($sheet, mb_substr($this->t('monthly_employee_log.title'), 0, 31));
 
+        // Days after today are in the future — they carry no punches and must
+        // never appear in a printed/exported monthly record.
+        $this->rows = array_values(array_filter(
+            $this->rows,
+            fn (array $row) => empty($row['is_future']),
+        ));
+
         $columns = [
             'date' => ['header' => $this->t('fields.date'), 'type' => 'string', 'width' => 14],
             'day_name' => ['header' => $this->t('monthly_employee_log.day'), 'type' => 'string', 'width' => 16],
-            'schedule_status' => ['header' => $this->t('monthly_employee_log.schedule_status'), 'type' => 'string', 'width' => 16],
+            'schedule_status' => ['header' => $this->t('monthly_employee_log.schedule_status'), 'type' => 'rich', 'width' => 22],
             'expected_check_in' => ['header' => $this->t('fields.expected_check_in'), 'type' => 'string', 'width' => 16],
             'expected_check_out' => ['header' => $this->t('fields.expected_check_out'), 'type' => 'string', 'width' => 16],
-            'check_in_window' => ['header' => $this->t('monthly_employee_log.check_in_window'), 'type' => 'string', 'width' => 18],
             'first_check_in_at' => ['header' => $this->t('fields.first_check_in_at'), 'type' => 'string', 'width' => 20],
-            'check_out_window' => ['header' => $this->t('monthly_employee_log.check_out_window'), 'type' => 'string', 'width' => 18],
             'last_check_out_at' => ['header' => $this->t('fields.last_check_out_at'), 'type' => 'string', 'width' => 20],
         ];
 
@@ -46,6 +56,9 @@ class MonthlyEmployeeAttendanceLogExport
             $columns['late_minutes'] = ['header' => $this->t('monthly_employee_log.late_minutes'), 'type' => 'string', 'width' => 16];
             $columns['early_leave_minutes'] = ['header' => $this->t('monthly_employee_log.early_leave'), 'type' => 'string', 'width' => 16];
         }
+
+        // Notes always last — same column order as the on-screen table.
+        $columns['notes'] = ['header' => $this->t('monthly_employee_log.notes'), 'type' => 'rich', 'width' => 40];
 
         $currentRow = $this->exporter->writeTitle(
             $sheet,
@@ -57,6 +70,8 @@ class MonthlyEmployeeAttendanceLogExport
         $currentRow++;
         $this->exporter->writeHeaders($sheet, array_column($columns, 'header'), $currentRow);
         $nextRow = $this->exporter->writeRows($sheet, $this->translatedRows(), $columns, $currentRow + 1);
+        $this->enlargeFlaggedRows($sheet, $currentRow + 1, count($columns));
+        $this->highlightSpecialRows($sheet, $currentRow + 1, count($columns));
 
         if ($this->withLate) {
             $totalLate = array_sum(array_map(fn (array $row) => (int) ($row['late_minutes'] ?? 0), $this->rows));
@@ -64,10 +79,18 @@ class MonthlyEmployeeAttendanceLogExport
             $grandTotal = $totalLate + $totalEarly;
             $grandHuman = $this->t('monthly_employee_log.total_late').': '.$this->humanHours($grandTotal);
             // صف الإجمالي: الإجمالي الموحد (دخول + خروج مبكر) في التسمية،
-            // وتفصيل كل نوع في عموده.
+            // وتفصيل كل نوع في عموده الخاص (موضع العمود يُحل بالاسم حتى لو
+            // تغيّر ترتيب الأعمدة — عمود الملاحظات هو الأخير الآن).
             $values = array_fill(0, count($columns) - 1, '');
-            $values[count($values) - 2] = $this->humanHours($totalLate);
-            $values[count($values) - 1] = $this->humanHours($totalEarly);
+            $keys = array_keys($columns);
+            $lateIndex = array_search('late_minutes', $keys, true);
+            $earlyIndex = array_search('early_leave_minutes', $keys, true);
+            if ($lateIndex !== false && $lateIndex > 0) {
+                $values[$lateIndex - 1] = $this->humanHours($totalLate);
+            }
+            if ($earlyIndex !== false && $earlyIndex > 0) {
+                $values[$earlyIndex - 1] = $this->humanHours($totalEarly);
+            }
             $this->exporter->writeSummaryRow(
                 $sheet,
                 ['label' => $grandHuman, 'values' => $values],
@@ -93,7 +116,11 @@ class MonthlyEmployeeAttendanceLogExport
     /**
      * Translate the schedule status without changing the data used by the UI.
      *
-     * @return array<int, array<string, bool|int|string|null>>
+     * Vacation days keep their type ("إجازة: سنوية") in the type's own color,
+     * and justified days carry the justification + reason in the notes column —
+     * both rendered as RichText so the colors survive in Excel.
+     *
+     * @return array<int, array<string, mixed>>
      */
     private function translatedRows(): array
     {
@@ -104,7 +131,12 @@ class MonthlyEmployeeAttendanceLogExport
             if (! empty($row['is_overnight_checkout']) && is_string($row['last_check_out_at'] ?? null)) {
                 $row['last_check_out_at'] .= ' (+1)';
             }
-            $row['schedule_status'] = match ($row['schedule_status'] ?? null) {
+            // بصمة خروج يوم الراحة: تُعرض مع وسم صريح أنها بصمة خروج فقط.
+            if (! empty($row['is_rest_day_checkout']) && is_string($row['last_check_out_at'] ?? null)) {
+                $row['last_check_out_at'] .= ' ('.$this->t('monthly_employee_log.rest_checkout').')';
+            }
+            $isAbsent = ! empty($row['is_absent']) && empty($row['has_justification']);
+            $statusLabel = match ($row['schedule_status'] ?? null) {
                 'work' => 'دوام',
                 'rest' => 'يوم راحة',
                 'leave_excused' => 'إجازة',
@@ -113,8 +145,164 @@ class MonthlyEmployeeAttendanceLogExport
                 default => (string) ($row['schedule_status'] ?? '—'),
             };
 
+            // A vacation only means something on a day the employee was expected
+            // to work (leave_excused). On rotation rest days the resolver keeps
+            // "rest" and the vacation must not repaint the row.
+            $vacationType = ($row['schedule_status'] ?? null) === 'leave_excused'
+                && is_string($row['vacation_type'] ?? null) && $row['vacation_type'] !== ''
+                ? $row['vacation_type']
+                : null;
+
+            if ($vacationType !== null) {
+                $statusLabel = $this->t('monthly_employee_log.vacation_prefix').': '.$vacationType;
+                $statusRich = new RichText;
+                $statusRich->createTextRun($statusLabel)
+                    ->getFont()->setBold(true)->setSize(14)->setColor(new Color($this->sanitizeColor($row['vacation_type_color'] ?? null)));
+                $row['schedule_status'] = $statusRich;
+            } elseif ($isAbsent) {
+                // سطر الغياب مميز: حالة حمراء صريحة "غائب".
+                $absentRich = new RichText;
+                $absentRich->createTextRun($this->t('monthly_employee_log.absent'))
+                    ->getFont()->setBold(true)->setSize(14)->setColor(new Color('CE1126'));
+                $row['schedule_status'] = $absentRich;
+            } else {
+                $row['schedule_status'] = $statusLabel;
+            }
+
+            $row['notes'] = $this->formatNotesCell($row);
+
             return $row;
         }, $this->rows);
+    }
+
+    /**
+     * Build the notes cell: one line per fact, justification first.
+     *
+     * @param  array<string, mixed>  $row
+     */
+    private function formatNotesCell(array $row): RichText|string
+    {
+        $lines = [];
+
+        if (! empty($row['is_absent']) && empty($row['has_justification'])) {
+            $lines[] = [
+                'text' => $this->t('monthly_employee_log.absent_note'),
+                'color' => 'CE1126',
+                'bold' => true,
+            ];
+        }
+
+        if (! empty($row['has_justification'])) {
+            $reason = is_string($row['justification_reason'] ?? null) && $row['justification_reason'] !== ''
+                ? $row['justification_reason']
+                : '—';
+            $lines[] = [
+                'text' => $this->t('monthly_employee_log.justification_note').': '.$this->t('monthly_employee_log.reason').': '.$reason,
+                'color' => 'B45309',
+                'bold' => true,
+            ];
+        }
+
+        if (! empty($row['is_rest_day_checkout'])) {
+            $lines[] = [
+                'text' => $this->t('monthly_employee_log.rest_checkout_note'),
+                'color' => '1D4ED8',
+                'bold' => true,
+            ];
+        }
+
+        if ($lines === []) {
+            return '—';
+        }
+
+        $rich = new RichText;
+        foreach ($lines as $i => $line) {
+            if ($i > 0) {
+                $rich->createText("\n");
+            }
+            $run = $rich->createTextRun($line['text']);
+            $run->getFont()->setColor(new Color($line['color']))->setSize(13);
+            if ($line['bold']) {
+                $run->getFont()->setBold(true);
+            }
+        }
+
+        return $rich;
+    }
+
+    /**
+     * Give flagged rows room for their enlarged text: taller row + wrapped
+     * notes cell so the bigger justification/vacation runs never overflow.
+     */
+    private function enlargeFlaggedRows(Worksheet $sheet, int $firstRow, int $columnCount): void
+    {
+        $notesCol = Coordinate::stringFromColumnIndex($columnCount);
+
+        foreach (array_values($this->rows) as $index => $row) {
+            $isVacation = ($row['schedule_status'] ?? null) === 'leave_excused'
+                && ! empty($row['vacation_type']);
+            $isAbsent = ! empty($row['is_absent']) && empty($row['has_justification']);
+            $isRestCheckout = ! empty($row['is_rest_day_checkout']);
+
+            if (empty($row['has_justification']) && ! $isVacation && ! $isAbsent && ! $isRestCheckout) {
+                continue;
+            }
+
+            $excelRow = $firstRow + $index;
+            $sheet->getRowDimension($excelRow)->setRowHeight(34);
+            $sheet->getStyle($notesCol.$excelRow)->getAlignment()->setWrapText(true);
+        }
+    }
+
+    /**
+     * سطر الغياب مميز بلون أحمر فاتح، وسطر بصمة خروج يوم الراحة بأزرق فاتح.
+     */
+    private function highlightSpecialRows(Worksheet $sheet, int $firstRow, int $columnCount): void
+    {
+        $lastCol = Coordinate::stringFromColumnIndex($columnCount);
+        $firstCol = Coordinate::stringFromColumnIndex(1);
+
+        foreach (array_values($this->rows) as $index => $row) {
+            $isAbsent = ! empty($row['is_absent']) && empty($row['has_justification']);
+            $isRestCheckout = ! empty($row['is_rest_day_checkout']) && ! $isAbsent;
+
+            if (! $isAbsent && ! $isRestCheckout) {
+                continue;
+            }
+
+            $excelRow = $firstRow + $index;
+            $range = $firstCol.$excelRow.':'.$lastCol.$excelRow;
+            $bg = $isAbsent ? 'FBE7E9' : 'DBEAFE';
+
+            $sheet->getStyle($range)->applyFromArray([
+                'fill' => [
+                    'fillType' => Fill::FILL_SOLID,
+                    'color' => ['rgb' => $bg],
+                ],
+                'font' => ['bold' => $isAbsent],
+            ]);
+        }
+    }
+
+    /**
+     * Normalize a vacation-type color to a 6-digit RGB hex string.
+     *
+     * Falls back to --color-mistral-status-vacation (#0891b2), the same token
+     * the UI uses (CHART_VACATION in resources/js/utils/chartPalette.js).
+     */
+    private function sanitizeColor(mixed $color): string
+    {
+        $hex = strtoupper(ltrim((string) ($color ?? ''), '#'));
+
+        if (preg_match('/^[0-9A-F]{6}$/', $hex) === 1) {
+            return $hex;
+        }
+
+        if (preg_match('/^[0-9A-F]{3}$/', $hex) === 1) {
+            return $hex[0].$hex[0].$hex[1].$hex[1].$hex[2].$hex[2];
+        }
+
+        return '0891B2';
     }
 
     /**

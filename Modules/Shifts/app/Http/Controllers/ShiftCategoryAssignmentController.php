@@ -17,12 +17,14 @@ use Modules\Shifts\Http\Resources\ShiftCategoryResource;
 use Modules\Shifts\Services\ShiftCategoryAssignmentService;
 use Modules\Shifts\Services\ShiftCategoryService;
 use Modules\Users\Models\User;
+use Modules\Users\Services\UserService;
 
 class ShiftCategoryAssignmentController extends Controller
 {
     public function __construct(
         private ShiftCategoryAssignmentService $assignmentService,
-        private ShiftCategoryService $categoryService
+        private ShiftCategoryService $categoryService,
+        private UserService $userService
     ) {}
 
     /**
@@ -60,6 +62,10 @@ class ShiftCategoryAssignmentController extends Controller
             'categories' => fn () => ShiftCategoryResource::collection(
                 $this->categoryService->getAll()
             ),
+            // Active employees for the unified searchable select (same shape as
+            // Vacations/Requests/Create so the UX pattern stays identical).
+            'employees' => fn () => $this->userService->getActiveUsers()
+                ->map(fn ($u) => ['id' => $u->id, 'name' => $u->name, 'employee_code' => $u->employee_code]),
             'preselected_category_id' => $preselectedCategoryId ? (int) $preselectedCategoryId : null,
         ]);
     }

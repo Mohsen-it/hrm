@@ -202,6 +202,114 @@ class RotationEngineResolveTimesTest extends TestCase
     }
 
     /**
+     * The departure-morning window of overnight duties opens at out_time
+     * minus the wider of out_ahead_margin and early_margin: a checkout punch
+     * inside the tolerated early-leave minutes (e.g. 07:51 for an 08:00 duty
+     * with early_margin 30) is a genuine exit and must fall inside the
+     * window instead of being discarded as an extra punch.
+     */
+    public function test_next_day_exit_window_honours_early_margin(): void
+    {
+        [$user, $assignment] = $this->makeAssignment();
+
+        $schedule = TimeSchedule::create([
+            'company_id' => $user->company_id,
+            'name' => 'Overnight Early',
+            'in_time' => '08:00',
+            'out_time' => '08:00',
+            'is_multi_day' => true,
+            'early_margin' => 30,
+            'out_ahead_margin' => 5,   // 07:55 alone would reject a 07:51 punch
+            'out_above_margin' => 540, // window ends 17:00
+        ]);
+
+        $assignment->rotation()->update(['time_schedule_id' => $schedule->id]);
+
+        $times = $this->engine->resolveTimes($assignment->fresh(['rotation.timeSchedule']));
+
+        $this->assertTrue($times['is_overnight']);
+        $this->assertSame('07:30', $times['next_day_out_ahead_margin']);
+        $this->assertSame('17:00', $times['next_day_out_above_margin']);
+    }
+
+    /**
+     * When the schedule's out_ahead_margin is already wider than the early
+     * margin, it keeps winning — the early margin only widens, never narrows.
+     */
+    public function test_next_day_exit_window_keeps_wider_out_ahead_margin(): void
+    {
+        [$user, $assignment] = $this->makeAssignment();
+
+        $schedule = TimeSchedule::create([
+            'company_id' => $user->company_id,
+            'name' => 'Overnight Wide',
+            'in_time' => '08:00',
+            'out_time' => '08:00',
+            'is_multi_day' => true,
+            'early_margin' => 10,
+            'out_ahead_margin' => 60,
+            'out_above_margin' => 120,
+        ]);
+
+        $assignment->rotation()->update(['time_schedule_id' => $schedule->id]);
+
+        $times = $this->engine->resolveTimes($assignment->fresh(['rotation.timeSchedule']));
+
+        $this->assertSame('07:00', $times['next_day_out_ahead_margin']);
+        $this->assertSame('10:00', $times['next_day_out_above_margin']);
+    }
+
+    /**
+     * The explicit third (evening) punch window is exposed for overnight
+     * duties only — day schedules never carry one, even when set.
+     */
+    public function test_third_punch_window_is_exposed_for_overnight_duties_only(): void
+    {
+        [$user, $assignment] = $this->makeAssignment();
+
+        $schedule = TimeSchedule::create([
+            'company_id' => $user->company_id,
+            'name' => 'Overnight Third',
+            'in_time' => '08:00',
+            'out_time' => '08:00',
+            'is_multi_day' => true,
+            'third_punch_start' => '18:00',
+            'third_punch_end' => '23:00',
+        ]);
+
+        $assignment->rotation()->update(['time_schedule_id' => $schedule->id]);
+
+        $times = $this->engine->resolveTimes($assignment->fresh(['rotation.timeSchedule']));
+
+        $this->assertTrue($times['is_overnight']);
+        $this->assertSame('18:00', $times['third_punch_start']);
+        $this->assertSame('23:00', $times['third_punch_end']);
+    }
+
+    public function test_third_punch_window_is_null_for_day_duties(): void
+    {
+        [$user, $assignment] = $this->makeAssignment();
+
+        $schedule = TimeSchedule::create([
+            'company_id' => $user->company_id,
+            'name' => 'Day Third',
+            'in_time' => '08:00',
+            'out_time' => '16:00',
+            'is_multi_day' => false,
+            'third_punch_start' => '18:00',
+            'third_punch_end' => '23:00',
+        ]);
+
+        $assignment->rotation()->update(['time_schedule_id' => $schedule->id]);
+
+        $times = $this->engine->resolveTimes($assignment->fresh(['rotation.timeSchedule']));
+
+        $this->assertFalse($times['is_overnight']);
+        $this->assertNull($times['third_punch_start']);
+        $this->assertNull($times['third_punch_end']);
+    }
+
+    /**
      * @return array{0: User, 1: RotationAssignment}
      */
     private function makeAssignment(): array

@@ -5,6 +5,7 @@ import { ref, onMounted, watch, onBeforeUnmount, shallowRef } from 'vue';
 // scale and element (~all of chart.js) in the initial bundle is waste.
 // `Filler` is required (line datasets use `fill: true`), `Title` is kept so
 // any `options.plugins.title` payload keeps working exactly as before.
+import { CHART_STEEL, CHART_STONE, CHART_INK, CHART_GRID } from '@/utils/chartPalette';
 import {
     Chart,
     DoughnutController,
@@ -69,11 +70,11 @@ const defaultOptions = {
                     family: "'Tajawal', 'Cairo', 'Inter', sans-serif",
                     size: 11,
                 },
-                color: '#525252',
+                color: CHART_STEEL,
             },
         },
         tooltip: {
-            backgroundColor: '#171717',
+            backgroundColor: CHART_INK,
             titleFont: { family: "'Tajawal', 'Inter', sans-serif", size: 12 },
             bodyFont: { family: "'Tajawal', 'Inter', sans-serif", size: 11 },
             padding: 10,
@@ -94,15 +95,15 @@ function buildOptions() {
                 grid: { display: false },
                 ticks: {
                     font: { family: "'Tajawal', 'Inter', sans-serif", size: 10 },
-                    color: '#737373',
+                    color: CHART_STONE,
                 },
                 border: { display: false },
             },
             y: {
-                grid: { color: '#ededed' },
+                grid: { color: CHART_GRID },
                 ticks: {
                     font: { family: "'Tajawal', 'Inter', sans-serif", size: 10 },
-                    color: '#737373',
+                    color: CHART_STONE,
                 },
                 border: { display: false },
             },

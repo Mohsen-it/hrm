@@ -60,6 +60,16 @@ class SettingsControllerTest extends TestCase
     }
 
     /**
+     * The system status page renders with uptime payload.
+     */
+    public function test_system_status_renders(): void
+    {
+        $this->actAsSuperAdmin();
+
+        $this->get(route('settings.system-status'))->assertOk();
+    }
+
+    /**
      * `store` persists a new setting and redirects.
      */
     public function test_store_creates_setting(): void

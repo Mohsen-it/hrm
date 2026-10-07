@@ -149,7 +149,7 @@ class FingerprintDeviceService
                 $userPk,
                 new \DateTimeImmutable($timestamp),
                 $devicePunchType,
-                $userPk !== null && $this->sessionService->getOpenSessionForUser($userPk) !== null,
+                $userPk !== null && $this->sessionService->hasRecentOpenSession($userPk, new \DateTimeImmutable($timestamp)),
             );
 
             $rows[] = [

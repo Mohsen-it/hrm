@@ -19,6 +19,7 @@ import DashboardWidget from '@/Components/dashboard/DashboardWidget.vue';
 import { usePeriodFilter } from '@/composables/usePeriodFilter';
 import { useTranslations } from '@/composables/useTranslations';
 import { actionMeta } from './actionMeta';
+import { CHART_COLORS, CHART_CATEGORICAL } from '@/utils/chartPalette';
 
 const props = defineProps({
     user: { type: Object, required: true },
@@ -100,7 +101,7 @@ const dailyActionsData = computed(() => ({
     datasets: [{
         label: t('useractivity.daily_actions'),
         data: (props.detail.daily || []).map((d) => d.actions),
-        backgroundColor: '#054239',
+        backgroundColor: CHART_COLORS.primary,
         borderRadius: 6,
         barPercentage: 0.6,
     }],
@@ -112,8 +113,8 @@ const dailyHoursData = computed(() => ({
     datasets: [{
         label: t('useractivity.daily_hours'),
         data: (props.detail.daily || []).map((d) => Math.round((d.active_minutes / 60) * 10) / 10),
-        borderColor: '#007a3d',
-        backgroundColor: 'rgba(0,122,61,0.1)',
+        borderColor: CHART_COLORS.success,
+        backgroundColor: CHART_COLORS.successSoft,
         fill: true,
         tension: 0.4,
         pointRadius: 3,
@@ -132,7 +133,7 @@ const actionBreakdownData = computed(() => {
         labels: entries.map(([action]) => actionLabel(action)),
         datasets: [{
             data: entries.map(([, count]) => count),
-            backgroundColor: ['#054239', '#007a3d', '#2563eb', '#d97706', '#9333ea', '#0891b2', '#ce1126', '#78716c'],
+            backgroundColor: CHART_CATEGORICAL,
             borderWidth: 0,
             hoverOffset: 6,
         }],

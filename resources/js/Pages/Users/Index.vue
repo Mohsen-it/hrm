@@ -12,11 +12,19 @@ import { usePageTitle } from '@/composables/usePageTitle';
 import { ref, computed } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
-import { PageHeader, DataTable, SearchInput, ConfirmDialog, Badge, Button, Card, IconButton, FormSelect, Alert, AvatarWithPreview, FormModal, PunchTypeBadge, LoadingSpinner, EmptyState } from '@/Components/ui';
+import { PageHeader, DataTable, SearchInput, ConfirmDialog, Badge, Button, Card, IconButton, FormSelect, Alert, AvatarWithPreview, FormModal, PunchTypeBadge, LoadingSpinner, EmptyState, ReportTable } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
+import { groupColorByIndex } from '@/composables/useRotationGroupColors';
 
 const { t } = useTranslations();
 const page = usePage();
+
+// Badge colors follow the shared rotation-group palette, keyed by the
+// group's position so the same group shows the same color everywhere
+// (users table, manage-assignments, timeline).
+function rotationGroupBadge(rotation) {
+    return groupColorByIndex(rotation?.rotation_group_index ?? rotation?.rotation_group_id);
+}
 
 const props = defineProps({
     users: { type: Object, default: () => ({ data: [], links: [] }) },
@@ -43,6 +51,14 @@ const fingerprintLogs = ref([]);
 const fingerprintLoading = ref(false);
 const fingerprintPage = ref(1);
 const fingerprintPagination = ref({ total: 0, per_page: 20, current_page: 1, last_page: 1 });
+
+const fingerprintLogColumns = computed(() => [
+    { key: 'punch_time', label: t('attendance.fields.punch_time'), align: 'start' },
+    { key: 'punch_type', label: t('attendance.fields.punch_type'), align: 'start' },
+    { key: 'verify_type', label: t('attendance.fields.verify_type'), align: 'start' },
+    { key: 'device', label: t('fingerprint_devices.device_name'), align: 'start' },
+    { key: 'status', label: t('common.status'), align: 'start' },
+]);
 
 const columns = computed(() => [
     { key: 'employee_code', label: t('users.employee_code'), sortable: true },
@@ -177,6 +193,15 @@ async function fetchFingerprintLogs(page = 1) {
 
 const flashSuccess = computed(() => page.props.flash?.success);
 const flashError = computed(() => page.props.flash?.error);
+const generatedPassword = computed(() => page.props.flash?.generated_password || '');
+
+// Learnability: show the empty-state CTA only when the list is truly empty,
+// not when filters/search merely hide all rows.
+const hasActiveFilters = computed(() => {
+    if (search.value) return true;
+    const f = props.filters || {};
+    return Object.entries(f).some(([k, v]) => k !== 'page' && v !== '' && v !== null && v !== undefined);
+});
 
 
 usePageTitle(t('users.title'));
@@ -205,6 +230,14 @@ usePageTitle(t('users.title'));
 
         <Alert v-if="flashSuccess" type="success" :message="flashSuccess" class="mb-4" />
         <Alert v-if="flashError" type="danger" :message="flashError" class="mb-4" />
+        <!-- Auto-generated password: shown once so the operator can send it. -->
+        <Alert
+            v-if="generatedPassword"
+            type="warning"
+            :message="`${t('users.auto_password_created')}: ${generatedPassword}`"
+            class="mb-4"
+            dismissible
+        />
 
         <Card variant="base" padding="none" class="mb-4">
             <div class="p-5 sm:p-6">
@@ -271,12 +304,19 @@ usePageTitle(t('users.title'));
             :only="['users', 'filters']"
             enable-bulk-delete
             enable-bulk-export
+            :empty-title="t('users.no_users_found')"
+            :empty-description="t('users.no_users_description')"
             @search="onSearch"
             @export="onExport"
             @selection-change="(ids) => (selectedIds = ids)"
             @bulk-delete="(ids) => confirmBulkDelete(ids)"
             @bulk-export="onExportSelected"
         >
+            <template #empty-actions>
+                <Button v-if="!hasActiveFilters" variant="primary" icon="fas fa-plus" :href="route('users.create')">
+                    {{ t('users.add_new') }}
+                </Button>
+            </template>
             <template #cell-name="{ row }">
                 <div class="flex items-center gap-2">
                     <AvatarWithPreview :name="row.name" :src="row.avatar_url" :employee-code="row.employee_code" :href="route('users.show', row.id)" size="sm" />
@@ -311,7 +351,14 @@ usePageTitle(t('users.title'));
                 <span v-else class="text-mistral-hairline">—</span>
             </template>
             <template #cell-rotation_group="{ row }">
-                <Badge v-if="row.rotation?.rotation_group_name" :text="row.rotation.rotation_group_name" variant="info" />
+                <span
+                    v-if="row.rotation?.rotation_group_name"
+                    class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[12px] font-medium border whitespace-nowrap"
+                    :class="[rotationGroupBadge(row.rotation).bg, rotationGroupBadge(row.rotation).border, rotationGroupBadge(row.rotation).text]"
+                >
+                    <span class="w-2 h-2 rounded-full shrink-0" :class="rotationGroupBadge(row.rotation).dot"></span>
+                    {{ row.rotation.rotation_group_name }}
+                </span>
                 <span v-else class="text-mistral-hairline">—</span>
             </template>
 
@@ -365,39 +412,37 @@ usePageTitle(t('users.title'));
                 :title="t('common.no_data')"
             />
             <div v-else class="max-h-[60vh] overflow-y-auto">
-                <table class="w-full text-[13px]">
-                    <thead class="sticky top-0 bg-white z-10">
-                        <tr class="border-b border-mistral-hairline-soft">
-                            <th class="text-start py-2 px-2.5 text-mistral-steel font-medium">{{ t('attendance.fields.punch_time') }}</th>
-                            <th class="text-start py-2 px-2.5 text-mistral-steel font-medium">{{ t('attendance.fields.punch_type') }}</th>
-                            <th class="text-start py-2 px-2.5 text-mistral-steel font-medium">{{ t('attendance.fields.verify_type') }}</th>
-                            <th class="text-start py-2 px-2.5 text-mistral-steel font-medium">{{ t('fingerprint_devices.device_name') }}</th>
-                            <th class="text-start py-2 px-2.5 text-mistral-steel font-medium">{{ t('common.status') }}</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr v-for="log in fingerprintLogs" :key="log.id" class="border-b border-mistral-hairline-soft/50 hover:bg-mistral-surface/40 transition-colors">
-                            <td class="py-2 px-2.5 text-mistral-ink font-medium whitespace-nowrap" dir="ltr">{{ log.punch_time }}</td>
-                            <td class="py-2 px-2.5">
-                                <PunchTypeBadge :type="log.punch_type" />
-                            </td>
-                            <td class="py-2 px-2.5 text-mistral-steel">{{ t(`attendance.verify_type.${log.verify_type}`, log.verify_type) }}</td>
-                            <td class="py-2 px-2.5">
-                                <div v-if="log.device" class="text-mistral-ink">
-                                    <div class="font-medium">{{ log.device.name }}</div>
-                                    <div v-if="log.device.serial_number" class="text-[11px] text-mistral-steel">{{ log.device.serial_number }}</div>
-                                </div>
-                                <span v-else class="text-mistral-hairline">—</span>
-                            </td>
-                            <td class="py-2 px-2.5">
-                                <Badge
-                                    :text="log.processed ? t('attendance.fields.processed') : t('common.pending')"
-                                    :variant="log.processed ? 'active' : 'warning'"
-                                />
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
+                <ReportTable
+                    :columns="fingerprintLogColumns"
+                    :items="fingerprintLogs"
+                    row-key="id"
+                    sticky-header
+                    compact
+                    :empty-title="t('common.no_data')"
+                >
+                    <template #cell-punch_time="{ row }">
+                        <span class="text-mistral-ink font-medium whitespace-nowrap" dir="ltr">{{ row.punch_time }}</span>
+                    </template>
+                    <template #cell-punch_type="{ row }">
+                        <PunchTypeBadge :type="row.punch_type" />
+                    </template>
+                    <template #cell-verify_type="{ row }">
+                        <span class="text-mistral-steel">{{ t(`attendance.verify_type.${row.verify_type}`, row.verify_type) }}</span>
+                    </template>
+                    <template #cell-device="{ row }">
+                        <div v-if="row.device" class="text-mistral-ink">
+                            <div class="font-medium">{{ row.device.name }}</div>
+                            <div v-if="row.device.serial_number" class="text-[11px] text-mistral-steel">{{ row.device.serial_number }}</div>
+                        </div>
+                        <span v-else class="text-mistral-hairline">—</span>
+                    </template>
+                    <template #cell-status="{ row }">
+                        <Badge
+                            :text="row.processed ? t('attendance.fields.processed') : t('common.pending')"
+                            :variant="row.processed ? 'active' : 'warning'"
+                        />
+                    </template>
+                </ReportTable>
             </div>
             <template v-if="fingerprintPagination.last_page > 1" #footer>
                 <div class="flex items-center justify-between w-full">

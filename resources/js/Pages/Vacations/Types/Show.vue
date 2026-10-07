@@ -12,6 +12,7 @@ import { usePageTitle } from '@/composables/usePageTitle';
 import { computed } from 'vue';
 import { PageHeader, Button, Card, Badge } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
+import { CHART_INFO as DEFAULT_TYPE_COLOR } from '@/utils/chartPalette';
 
 const { t } = useTranslations();
 
@@ -51,7 +52,7 @@ usePageTitle(t('vacations.view_type'));
                 <div class="flex items-center gap-4 mb-6 pb-6 border-b border-mistral-hairline-soft">
                     <div
                         class="w-16 h-16 rounded-xl flex items-center justify-center text-white text-[24px] font-bold"
-                        :style="{ backgroundColor: type.color || '#2563eb' }"
+                        :style="{ backgroundColor: type.color || DEFAULT_TYPE_COLOR }"
                     >
                         <i class="fas fa-tag"></i>
                     </div>

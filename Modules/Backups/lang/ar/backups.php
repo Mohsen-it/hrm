@@ -79,6 +79,7 @@ return [
     'status_pending' => 'في الانتظار',
     'type_manual' => 'يدوي',
     'type_automatic' => 'تلقائي',
+    'type_uploaded' => 'مرفوعة خارجية',
     'type_restore_test' => 'اختبار استعادة',
     'type_restore_production' => 'استعادة إنتاجية',
     'verify_now' => 'تحقق الآن',
@@ -90,4 +91,16 @@ return [
     // Delete confirmation
     'confirm_delete_title' => 'تأكيد الحذف',
     'confirm_delete_message' => 'هل أنت متأكد من حذف هذه النسخة؟ لا يمكن التراجع عن هذا الإجراء.',
+    // External upload (USB / flash drive)
+    'upload_backup' => 'رفع نسخة خارجية',
+    'upload_title' => 'استعادة من ملف خارجي (فلاشة)',
+    'upload_description' => 'اختر ملف نسخة احتياطية من جهازك أو من فلاشة ( ‎.sql أو ‎.sql.gz أو ‎.sql.gz.enc ). سيُسجَّل كنسخة جديدة ويُتحقق منه تلقائياً، ثم يمكنك اختبار استعادته واستعادته للإنتاج.',
+    'upload_hint' => 'الصيغ المدعومة: ‎.sql , ‎.sql.gz , ‎.gz , ‎.sql.gz.enc , ‎.enc — الحد الأقصى 2GB.',
+    'upload_button' => 'رفع وتسجيل النسخة',
+    'uploading' => 'جارٍ الرفع…',
+    'select_file' => 'اختر ملف النسخة',
+    'uploaded_successfully' => 'تم رفع النسخة الخارجية وتسجيلها بنجاح — تحقق منها ثم نفّذ الاستعادة.',
+    'upload_required' => 'اختر ملف النسخة الاحتياطية أولاً.',
+    'upload_too_large' => 'حجم الملف كبير جداً (الحد الأقصى 2GB).',
+    'upload_invalid_type' => 'صيغة الملف غير مدعومة — استخدم ‎.sql أو ‎.gz أو ‎.enc.',
 ];

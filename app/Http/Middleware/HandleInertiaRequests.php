@@ -57,6 +57,10 @@ class HandleInertiaRequests extends Middleware
                     'employee_code' => $user->employee_code,
                     'avatar' => $user->avatar,
                     'avatar_url' => $user->avatar_url,
+                    // Org scope for instant form defaults (plain columns, zero queries).
+                    'company_id' => $user->company_id,
+                    'branch_id' => $user->branch_id,
+                    'department_id' => $user->department_id,
                 ] : null,
                 // Shortest safe cache: 60s per authenticated user. Spatie has no
                 // built-in cache for getAllPermissions/getRoleNames, so every
@@ -87,6 +91,7 @@ class HandleInertiaRequests extends Middleware
                 'error' => fn () => $request->session()->get('error'),
                 'warning' => fn () => $request->session()->get('warning'),
                 'info' => fn () => $request->session()->get('info'),
+                'generated_password' => fn () => $request->session()->get('generated_password'),
             ],
         ];
     }

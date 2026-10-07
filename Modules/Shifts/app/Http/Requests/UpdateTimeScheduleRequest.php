@@ -30,6 +30,8 @@ class UpdateTimeScheduleRequest extends FormRequest
             'in_above_margin' => ['nullable', 'integer', 'min:0'],
             'out_ahead_margin' => ['nullable', 'integer', 'min:0'],
             'out_above_margin' => ['nullable', 'integer', 'min:0'],
+            'third_punch_start' => ['nullable', 'date_format:H:i'],
+            'third_punch_end' => ['nullable', 'date_format:H:i'],
             'breaks' => ['nullable', 'array'],
             'breaks.*.break_start' => ['nullable', 'date_format:H:i'],
             'breaks.*.duration' => ['nullable', 'integer', 'min:0'],

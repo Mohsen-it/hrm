@@ -62,6 +62,29 @@ class AttendanceSessionService
     }
 
     /**
+     * Whether the user has an open session started within the recent duty
+     * window (default 48h — the same horizon checkOut() closes across).
+     *
+     * Ancient open sessions (June backlog that the auto-close cannot resolve
+     * for lack of a deadline) must never hijack new punches: an overlap
+     * resolved by a years-old session would close nothing and open nothing,
+     * leaving a present employee sessionless. Callers use this — not the
+     * unbounded lookup above — to disambiguate overlapping punch windows.
+     */
+    public function hasRecentOpenSession(int $userId, DateTimeInterface $at, int $hours = 48): bool
+    {
+        $atImmutable = $at instanceof DateTimeImmutable
+            ? $at
+            : DateTimeImmutable::createFromInterface($at);
+        $cutoff = $atImmutable->modify("-{$hours} hours")->format('Y-m-d H:i:s');
+
+        return AttendanceSession::forUser($userId)
+            ->open()
+            ->where('check_in_at', '>=', $cutoff)
+            ->exists();
+    }
+
+    /**
      * Get a paginated list of sessions filtered by the supplied filter bag.
      *
      * @param  array<string, mixed>  $filters
@@ -369,7 +392,7 @@ class AttendanceSessionService
         $classification = $this->punchWindowService->classify(
             $log->user_id,
             $at,
-            $this->getOpenSessionForUser($log->user_id) !== null,
+            $this->hasRecentOpenSession($log->user_id, $at),
         );
         $punchType = $classification['type']
             ?? (! $classification['has_configured_window'] ? $log->punch_type : null);
@@ -461,7 +484,9 @@ class AttendanceSessionService
     /**
      * Compute late minutes for a check-in against the expected slot.
      *
-     * Grace priority: rotation.grace_minutes → global config fallback.
+     * Grace comes pre-resolved by ScheduleResolverService (the time
+     * schedule's late_margin is the single source of truth) → global
+     * config fallback.
      */
     protected function computeLateMinutes(?string $expectedCheckIn, DateTimeInterface $at, array $resolved): int
     {

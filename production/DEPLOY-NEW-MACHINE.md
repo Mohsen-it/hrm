@@ -82,8 +82,19 @@ coexist with it -- duplicate supervisors fight over the same ports.
 | `HRM-Startup-backup.xml` | Original task definition before our changes |
 | `Register-Headless-Startup.bat` | Run-as-admin helper that registers the XML above |
 | `Setup-NewMachine.ps1` | New-machine installer (`-CheckOnly` audits, full run installs) |
+| `nginx-hrm.conf` | Nginx web-tier template (Option B): verbatim copy of the proven C:\nginx conf with %%TOKENS%% for root/IP; the one-click installer renders it to C:\hrm-services\nginx and the supervisor runs Nginx :80 + php-cgi pool from it |
 | `.env.production.example` | Complete production env template (values blanked) |
 | `DEPLOY-NEW-MACHINE.md` | This file |
+
+## 6b. Web tier on a new machine (Option B)
+
+User browsers go through Nginx :80 (true concurrency via 4x php-cgi 9000-9003);
+`artisan serve :8000` stays for fast ADMS/bridge callbacks only (it is
+single-threaded on Windows - PHP ignores PHP_CLI_SERVER_WORKERS there, proven
+2026-10-01). The one-click installer (`INSTALL-HRM.bat -AutoInstall -Native`)
+downloads Nginx, renders this template, and the supervisor owns both Nginx and
+the pool (warn-only: if the tier fails, browsers fall back to :8000). No NSSM
+entries are needed for the web tier. Open `http://SERVER-IP` (no port) to use it.
 
 ## 7. Long-term rules (why this stays healthy)
 

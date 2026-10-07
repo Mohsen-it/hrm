@@ -34,7 +34,8 @@ class DailyAttendanceSummaryServiceTest extends TestCase
         $user = $this->makeEmployee('EMP60001');
         $this->assignRotation($user);
 
-        // Device punch at 06:05 Asia/Riyadh = 03:05 UTC; no session created.
+        // Device punch at 03:05 wall time (stored naive-local like production
+        // punches); no session created.
         RawAttendanceLog::create([
             'user_id' => $user->id,
             'punch_time' => '2026-08-06 03:05:04',

@@ -146,7 +146,7 @@ class DailyAttendanceSummaryService
         // work day with a raw punch must never be persisted as "absent".
         $hasRawPunch = RawAttendanceLog::query()
             ->where('user_id', $userId)
-            ->whereBetween('punch_time', $this->localDayUtcBounds($date))
+            ->whereBetween('punch_time', $this->localDayBounds($date))
             ->exists();
 
         $employee = User::select('id', 'branch_id', 'department_id')->find($userId);
@@ -280,20 +280,22 @@ class DailyAttendanceSummaryService
     }
 
     /**
-     * UTC boundary strings covering one full app-timezone day.
+     * Boundary strings covering one full roster day.
      *
-     * Raw device punches are stored in UTC while summary dates are local, so
-     * matching a local date requires shifting the day's bounds to UTC.
+     * Raw device punches are stored as naive local wall time (same clock as
+     * the server), so a roster date matches its own 00:00-23:59 slice with no
+     * timezone shifting — shifting to UTC would misattribute 21:00-23:59
+     * punches to the next day.
      *
      * @return array{0: string, 1: string}
      */
-    private function localDayUtcBounds(string $date): array
+    private function localDayBounds(string $date): array
     {
         $day = Carbon::parse($date);
 
         return [
-            $day->copy()->startOfDay()->setTimezone('UTC')->format('Y-m-d H:i:s'),
-            $day->copy()->endOfDay()->setTimezone('UTC')->format('Y-m-d H:i:s'),
+            $day->copy()->startOfDay()->format('Y-m-d H:i:s'),
+            $day->copy()->endOfDay()->format('Y-m-d H:i:s'),
         ];
     }
 
@@ -305,6 +307,14 @@ class DailyAttendanceSummaryService
      */
     protected function resolveExternalStatus(int $userId, string $date, ?User $employee = null, array $resolved = []): ?string
     {
+        // A vacation / holiday on a rotation rest day is meaningless: the day
+        // must stay "rest" (same rule as the daily operational report and the
+        // ScheduleResolver). Defense in depth in case the resolver contract
+        // ever carries leave_excused on a rest day again.
+        if (($resolved['status'] ?? null) === ScheduleResolverService::STATUS_REST) {
+            return null;
+        }
+
         // Skip holiday status when the rotation is configured to work on holidays
         $workOnHolidays = $resolved['work_on_holidays'] ?? false;
 

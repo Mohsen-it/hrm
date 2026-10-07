@@ -9,6 +9,10 @@
  *      يجب استخدام t('key') عبر useTranslations.
  *   3. radius خارج النظام (rounded-2xl / rounded-3xl) في ui/ — القاعدة:
  *      أزرار/حقول rounded-md، بطاقات/مودالات rounded-lg، شارات rounded-full.
+ *   4. hex مبعثر في Components/Pages (P0-UX) — ألوان الرسوم يجب أن تعيش
+ *      في خريطة مركزية واحدة (Dashboard.vue: CHART_COLORS) مطابقة لتوكنز app.css.
+ *   5. جداول <table> يدوية في Pages (P1-UX) — يجب استخدام DataTable/ReportTable.
+ *   6. خصائص فيزيائية (mr-/ml-/text-left/...) بدل المنطقية (me-/ms-/text-start).
  *
  * التشغيل: npm run lint:tokens
  */
@@ -39,6 +43,45 @@ const CHECKS = [
         dirs: ['resources/js/Components/ui'],
         extensions: ['.vue'],
         pattern: /\brounded-(?:2xl|3xl)\b/,
+    },
+    {
+        id: 'scattered-hex',
+        description: 'Hardcoded hex colors outside the central chart palette (use mistral-* tokens / CHART_COLORS)',
+        dirs: ['resources/js/Components', 'resources/js/Pages'],
+        extensions: ['.vue', '.js', '.ts'],
+        pattern: /#[0-9a-fA-F]{6}\b|#[0-9a-fA-F]{3}\b/,
+        // Central palette lives in resources/js/utils/chartPalette.js (1:1
+        // with app.css mistral-* tokens). Canvas/print cannot use classes.
+        allowlistFile: ['resources/js/utils/chartPalette.js'],
+    },
+    {
+        id: 'manual-tables',
+        description: 'Manual <table> in Pages (must use DataTable / ReportTable)',
+        dirs: ['resources/js/Pages'],
+        extensions: ['.vue'],
+        pattern: /<table[\s>]/,
+        // Legitimate matrix visualizations (NOT data tables — DataTable would
+        // be the wrong component): timeline/calendar/schedule grids with
+        // sticky headers, the rotation month calendar, and the editable
+        // balances matrix (inline cell editing). They must keep scope="col"
+        // + logical alignment + translated aria-labels.
+        allowlistFile: [
+            'resources/js/Pages/Shifts/Rotations/Timeline.vue',
+            'resources/js/Pages/Shifts/Calendar/TeamCalendar.vue',
+            'resources/js/Pages/Shifts/ShiftCategories/SchedulePreview.vue',
+            'resources/js/Pages/Shifts/Absence/EmployeeMonthlyAttendance.vue',
+            'resources/js/Pages/Shifts/Rotations/Show.vue',
+            'resources/js/Pages/Vacations/Balances/Index.vue',
+        ],
+    },
+    {
+        id: 'physical-rtl',
+        description: 'Physical RTL utilities (use logical me-/ms-/ps-/pe-/start-/end-/text-start)',
+        dirs: ['resources/js/Components', 'resources/js/Pages'],
+        extensions: ['.vue'],
+        pattern: /\b(?:mr-|ml-|pl-|pr-|text-left|text-right|left-0|right-0)\b/,
+        // LTR islands (e.g. JSON <pre dir="ltr">) legitimately keep text-left.
+        allowlistLine: [/dir="ltr"/],
     },
 ];
 
@@ -72,11 +115,13 @@ for (const check of CHECKS) {
             if (!check.extensions.some((ext) => file.endsWith(ext))) continue;
             if (file.includes(`${sep}node_modules${sep}`)) continue;
 
+            const normalizedFile = file.split(sep).join('/');
+            if (check.allowlistFile?.some((frag) => normalizedFile.endsWith(frag))) continue;
             const lines = readFileSync(file, 'utf8').split('\n');
             lines.forEach((line, i) => {
-                if (check.pattern.test(line)) {
-                    violations.push({ file, line: i + 1, text: line.trim().slice(0, 120) });
-                }
+                if (!check.pattern.test(line)) return;
+                if (check.allowlistLine?.some((re) => re.test(line))) return;
+                violations.push({ file, line: i + 1, text: line.trim().slice(0, 120) });
             });
         }
     }

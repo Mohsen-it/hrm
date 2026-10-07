@@ -19,6 +19,7 @@ use Modules\Attendance\Console\Commands\RecalculateDateCommand;
 use Modules\Attendance\Console\Commands\RecalculateRangeCommand;
 use Modules\Attendance\Console\Commands\RecalculateSummariesCommand;
 use Modules\Attendance\Console\Commands\RecalculateUserCommand;
+use Modules\Attendance\Console\Commands\RepairOvernightCheckoutsCommand;
 use Modules\Attendance\Console\Commands\ResolveRawLogUsersCommand;
 use Modules\Attendance\Console\Commands\SendDailyDigestCommand;
 use Modules\Attendance\Console\Commands\SendWeeklyDigestCommand;
@@ -81,6 +82,7 @@ class AttendanceServiceProvider extends ServiceProvider
             SyncFingerprintsCommand::class,
             ResolveRawLogUsersCommand::class,
             CloseOpenSessionsCommand::class,
+            RepairOvernightCheckoutsCommand::class,
         ]);
     }
 

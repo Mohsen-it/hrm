@@ -44,6 +44,8 @@ const statusOptions = computed(() => [
     { value: 'no_fingerprint', label: t('attendance.daily_report.status_no_fingerprint') },
     { value: 'incomplete', label: t('attendance.daily_report.status_incomplete') },
     { value: 'holiday', label: t('attendance.daily_report.status_holiday') },
+    { value: 'unassigned', label: t('attendance.daily_report.status_unassigned') },
+    { value: 'evening', label: t('attendance.daily_report.status_evening') },
 ]);
 const data = computed(() => ({ data: props.report.rows || [], links: [] }));
 const columns = computed(() => [
@@ -53,6 +55,7 @@ const columns = computed(() => [
     { key: 'status_label', label: t('attendance.daily_report.col_status') },
     { key: 'check_in', label: t('attendance.daily_report.col_check_in') },
     { key: 'check_out', label: t('attendance.daily_report.col_check_out') },
+    { key: 'evening_punch', label: t('attendance.daily_report.col_evening_punch') },
     { key: 'late_minutes', label: t('attendance.daily_report.col_late_minutes') },
     { key: 'notes', label: t('attendance.daily_report.col_notes') },
 ]);
@@ -60,7 +63,7 @@ const columns = computed(() => [
 function filterParams() { return { date: date.value, cutoff_time: cutoffTime.value, branch_id: branchId.value || undefined, department_ids: departmentIds.value.length ? departmentIds.value : undefined, user_id: userId.value || undefined, status: status.value || undefined }; }
 function applyFilters() { router.get(route('attendance.daily-summaries.daily-report'), filterParams(), { preserveState: true, replace: true }); }
 function exportReport() { window.location.href = route('attendance.daily-summaries.daily-report.export', filterParams()); }
-function badgeVariant(status) { return ({ present: 'active', late: 'warning', absent: 'absent', awaiting: 'pending', leave: 'info', mission: 'primary', incomplete: 'warning', no_fingerprint: 'neutral', rest: 'neutral', holiday: 'neutral' }[status] || 'neutral'); }
+function badgeVariant(status) { return ({ present: 'active', late: 'warning', absent: 'absent', awaiting: 'pending', leave: 'info', mission: 'primary', incomplete: 'warning', no_fingerprint: 'neutral', unassigned: 'neutral', rest: 'neutral', holiday: 'neutral' }[status] || 'neutral'); }
 
 
 usePageTitle(t('attendance.daily_report.title'));
@@ -93,6 +96,11 @@ usePageTitle(t('attendance.daily_report.title'));
             <StatCard :label="t('attendance.daily_report.leave')" :value="report.stats.leave || 0" color="info" icon="fas fa-umbrella-beach" />
             <StatCard :label="t('attendance.daily_report.mission')" :value="report.stats.mission || 0" color="warning" icon="fas fa-briefcase" />
             <StatCard :label="t('attendance.daily_report.incomplete')" :value="report.stats.incomplete || 0" color="warning" icon="fas fa-fingerprint" />
+            <StatCard :label="t('attendance.daily_report.rest')" :value="report.stats.rest || 0" color="info" icon="fas fa-bed" />
+            <StatCard :label="t('attendance.daily_report.holiday')" :value="report.stats.holiday || 0" color="info" icon="fas fa-calendar-check" />
+            <StatCard :label="t('attendance.daily_report.no_fingerprint')" :value="report.stats.no_fingerprint || 0" color="danger" icon="fas fa-ban" />
+            <StatCard :label="t('attendance.daily_report.unassigned')" :value="report.stats.unassigned || 0" color="warning" icon="fas fa-user-slash" />
+            <StatCard :label="t('attendance.daily_report.evening')" :value="report.stats.evening || 0" color="warning" icon="fas fa-moon" />
         </div>
 
         <Card variant="base" padding="none" class="overflow-hidden">
@@ -102,7 +110,8 @@ usePageTitle(t('attendance.daily_report.title'));
             <DataTable :columns="columns" :data="data" storage-key="attendance-daily-report" :enable-search="true" :enable-filters="false" :enable-export="false" :enable-pagination="false">
                 <template #cell-status_label="{ row }"><Badge :text="row.status_label" :variant="badgeVariant(row.status)" dot /></template>
                 <template #cell-check_in="{ row }"><span dir="ltr">{{ row.check_in || '—' }}</span></template>
-                <template #cell-check_out="{ row }"><span dir="ltr">{{ row.check_out || '—' }}</span></template>
+                <template #cell-check_out="{ row }"><span dir="ltr">{{ row.check_out ? row.check_out + (row.check_out_next_day ? ' (+1)' : '') : '—' }}</span></template>
+                <template #cell-evening_punch="{ row }"><span dir="ltr">{{ row.evening_punch || '—' }}</span></template>
                 <template #cell-notes="{ row }"><span class="text-[12px] text-mistral-steel">{{ row.notes || '—' }}</span></template>
             </DataTable>
         </Card>

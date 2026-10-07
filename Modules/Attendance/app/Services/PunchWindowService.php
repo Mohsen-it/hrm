@@ -4,6 +4,8 @@ namespace Modules\Attendance\Services;
 
 use Carbon\CarbonImmutable;
 use DateTimeInterface;
+use Modules\Shifts\Repositories\RotationAssignmentRepository;
+use Modules\Shifts\Services\RotationEngine;
 use Modules\Shifts\Services\ScheduleResolverService;
 
 /**
@@ -14,8 +16,13 @@ class PunchWindowService
     /** @var array<string, array<string, mixed>> */
     private array $scheduleCache = [];
 
+    /** @var array<string, bool> */
+    private array $lastBlockDayCache = [];
+
     public function __construct(
         private ScheduleResolverService $scheduleResolver,
+        private RotationAssignmentRepository $assignmentRepository,
+        private RotationEngine $rotationEngine,
     ) {}
 
     /**
@@ -52,10 +59,21 @@ class PunchWindowService
                 continue;
             }
 
+            // Last work day of an overnight duty block (1-3 single day, day 3
+            // of 3-9, day 7 of 7-21): the duty ends on the departure morning,
+            // so a same-day evening punch is presence proof only (extra) and
+            // must never close the session. Mid-block days keep their
+            // same-evening checkout window so each day closes its own session.
+            $suppressSameDayCheckout = ($schedule['is_overnight'] ?? false)
+                && $this->isLastWorkDayOfBlock($employeeId, $scheduleDate, $schedule);
+
             foreach ([
                 'check_in' => ['in_ahead_margin', 'in_above_margin'],
                 'check_out' => ['out_ahead_margin', 'out_above_margin'],
             ] as $type => [$startKey, $endKey]) {
+                if ($type === 'check_out' && $suppressSameDayCheckout) {
+                    continue;
+                }
                 $start = $schedule[$startKey] ?? null;
                 $end = $schedule[$endKey] ?? null;
                 if (! $start || ! $end) {
@@ -195,5 +213,27 @@ class PunchWindowService
         $key = $employeeId.'|'.$date;
 
         return $this->scheduleCache[$key] ??= $this->scheduleResolver->resolve($employeeId, $date);
+    }
+
+    /**
+     * Whether the roster date is the last work day of the employee's current
+     * overnight duty block (the day before the departure/rest morning).
+     */
+    private function isLastWorkDayOfBlock(int $employeeId, string $date, array $schedule): bool
+    {
+        $key = $employeeId.'|'.$date;
+        if (array_key_exists($key, $this->lastBlockDayCache)) {
+            return $this->lastBlockDayCache[$key];
+        }
+
+        $result = false;
+        $assignment = $this->assignmentRepository->getAssignmentForDate($employeeId, $date);
+        $rotation = $assignment?->rotation;
+        $group = $assignment?->rotationGroup;
+        if ($rotation && $group) {
+            $result = $this->rotationEngine->isLastWorkDayOfBlock($rotation, $group, $date);
+        }
+
+        return $this->lastBlockDayCache[$key] = $result;
     }
 }

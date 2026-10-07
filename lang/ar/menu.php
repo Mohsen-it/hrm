@@ -44,6 +44,7 @@ return [
     'attendance_groups' => 'فئات الحضور',
     'attendance_shifts' => 'مناوبات الحضور',
     'group_schedules' => 'جداول الفئات',
+    'shifts_group' => 'الدوريات والجداول',
     'rotations' => 'الدوريات',
     'rotation_assignments' => 'إسناد الدوريات',
     'rotation_groups' => 'مجموعات الدوريات',

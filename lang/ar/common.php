@@ -119,4 +119,7 @@ return [
     'select_row' => 'تحديد الصف',
     'menu_opened' => 'تم فتح القائمة',
     'print' => 'طباعة',
+    'what_is_this_section' => 'ما هذا القسم؟',
+    'show_more' => 'عرض المزيد',
+    'show_less' => 'عرض أقل',
 ];

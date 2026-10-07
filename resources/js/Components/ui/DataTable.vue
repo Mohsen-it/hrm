@@ -30,6 +30,7 @@ const props = defineProps({
     enableBulkExport: { type: Boolean, default: false },
     enablePagination: { type: Boolean, default: true },
     selectableFilter: { type: Function, default: null },
+    rowClass: { type: [Function, String], default: null },
     dir: { type: String, default: 'rtl' },
     storageKey: { type: String, default: 'default' },
     perPage: { type: Number, default: 20 },
@@ -186,6 +187,11 @@ function onRowKeydown(e, row, index) {
         if (props.rowClickable) emit('row-click', row);
         if (props.selectable) table.selectRow(row.id);
     }
+}
+
+function resolveRowClass(row, rowIndex) {
+    if (typeof props.rowClass === 'function') return props.rowClass(row, rowIndex) || '';
+    return props.rowClass || '';
 }
 
 const tableWrapperRef = ref(null);
@@ -399,7 +405,9 @@ const lastVisibleColIndex = computed(() => {
                             <tr v-else-if="sortedItems.length === 0">
                                 <td :colspan="table.visibleColumns.value.length + (selectable ? 1 : 0)" class="p-0">
                                     <slot name="empty">
-                                        <EmptyState :title="emptyTitle || t('common.no_data')" :description="emptyDescription" />
+                                        <EmptyState :title="emptyTitle || t('common.no_data')" :description="emptyDescription">
+                                            <slot name="empty-actions" />
+                                        </EmptyState>
                                     </slot>
                                 </td>
                             </tr>
@@ -416,6 +424,7 @@ const lastVisibleColIndex = computed(() => {
                                         rowClickable ? 'cursor-pointer' : '',
                                         table.selectedIds.value.includes(row.id) ? 'bg-mistral-primary/5' : '',
                                         table.focusedRowIndex.value === rowIndex ? 'ring-2 ring-inset ring-mistral-primary/30' : '',
+                                        resolveRowClass(row, rowIndex),
                                     ]"
                                     @click="onRowClick(row)"
                                     @keydown="onRowKeydown($event, row, rowIndex)"

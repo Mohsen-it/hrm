@@ -127,7 +127,10 @@ export const navigationGroups = [
   },
   {
     key: 'shifts',
-    label: 'common.shifts',
+    // P0-UX: this group only exposes the Rotations system (the active one).
+    // Legacy basic Shifts screens are backend-only and intentionally absent here.
+    // Order = recommended task flow: 1) rotations 2) assign 3) fix unassigned 4) groups 5) timetables.
+    label: 'menu.shifts_group',
     items: [
     
  
@@ -147,17 +150,17 @@ export const navigationGroups = [
         permissions: ['assign-employees-to-rotation'],
       },
       {
-        id: 'shifts.rotation-groups',
-        label: 'menu.rotation_groups',
-        route: 'rotation-groups.index',
-        icon: 'fa-solid fa-users-gear',
-        permissions: ['view-rotations'],
-      },
-      {
         id: 'shifts.unassigned-rotation-employees',
         label: 'menu.rotation_unassigned_employees',
         route: 'rotations.unassigned-employees',
         icon: 'fa-solid fa-user-slash',
+        permissions: ['view-rotations'],
+      },
+      {
+        id: 'shifts.rotation-groups',
+        label: 'menu.rotation_groups',
+        route: 'rotation-groups.index',
+        icon: 'fa-solid fa-users-gear',
         permissions: ['view-rotations'],
       },
       {
@@ -383,7 +386,7 @@ export const navigationModules = [
   },
   {
     id: 'shifts',
-    label: 'common.shifts',
+    label: 'menu.shifts_group',
     icon: 'fa-solid fa-clock',
     color: 'bg-mistral-info/10 text-mistral-info',
     groupKeys: ['shifts'],

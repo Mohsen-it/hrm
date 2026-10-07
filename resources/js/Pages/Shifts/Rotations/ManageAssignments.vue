@@ -13,6 +13,7 @@ import { ref, reactive, computed, watch } from 'vue';
 import { router, Head } from '@inertiajs/vue3';
 import { PageHeader, Button, Card, FormInput, FormSelect, Badge, DataTable, EmptyState, ErrorSummary, FormModal, LoadingSpinner } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
+import { groupColorByIndex, groupColorFallback } from '@/composables/useRotationGroupColors';
 
 const { t } = useTranslations();
 
@@ -161,17 +162,32 @@ function onSelectionChange(ids) {
     selectedEmployees.value = [...retainedEmployeeIds, ...ids];
 }
 
-const groupColorClass = (groupName) => {
-    const colors = {
-        'A': 'bg-mistral-success-bg text-mistral-success border-mistral-success/20',
-        'B': 'bg-mistral-info-bg text-mistral-info border-mistral-info/20',
-        'C': 'bg-mistral-warning-bg text-mistral-warning border-mistral-warning/20',
-        'D': 'bg-mistral-danger-bg text-mistral-danger border-mistral-danger/20',
-        'E': 'bg-mistral-status-overtime/10 text-mistral-status-overtime border-mistral-status-overtime/20',
-        'F': 'bg-mistral-status-vacation/10 text-mistral-status-vacation border-mistral-status-vacation/20',
-    };
-    return colors[groupName] || 'bg-mistral-surface text-mistral-steel border-mistral-hairline';
-};
+// Colors cycle by group position (shared palette) so ANY group name
+// (A, B, الأولى، ...) gets a distinct professional color.
+const groupColorMap = computed(() => {
+    const map = {};
+    (selectedRotation.value?.groups || []).forEach((g, idx) => {
+        map[Number(g.id)] = groupColorByIndex(idx);
+    });
+    return map;
+});
+
+const groupBadgeFallback = groupColorFallback;
+
+function badgeFor(groupId) {
+    return groupColorMap.value[Number(groupId)] || groupBadgeFallback;
+}
+
+// Live per-group counts from the fetched employees (the embedded rotation prop
+// carries no counts, so the chips always showed 0).
+const employeesCountByGroup = computed(() => {
+    const map = {};
+    employees.value.forEach((e) => {
+        const gid = Number(e.rotation_group_id);
+        if (gid) map[gid] = (map[gid] || 0) + 1;
+    });
+    return map;
+});
 
 function exportExcel() {
     if (!selectedRotationId.value) return;
@@ -465,18 +481,11 @@ usePageTitle(t('shifts.manage_assignments'));
                         v-for="group in selectedRotation.groups"
                         :key="group.id"
                         class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[12px] font-medium border"
-                        :class="groupColorClass(group.name)"
+                        :class="[badgeFor(group.id).bg, badgeFor(group.id).border, badgeFor(group.id).text]"
                     >
-                        <span class="w-2 h-2 rounded-full" :class="{
-                            'bg-mistral-success': group.name === 'A',
-                            'bg-mistral-info': group.name === 'B',
-                            'bg-mistral-warning': group.name === 'C',
-                            'bg-mistral-danger': group.name === 'D',
-                            'bg-mistral-status-overtime': group.name === 'E',
-                            'bg-mistral-status-vacation': group.name === 'F',
-                        }"></span>
+                        <span class="w-2 h-2 rounded-full" :class="badgeFor(group.id).dot"></span>
                         {{ group.name }}
-                        <span class="text-mistral-muted">({{ group.active_employees_count || 0 }})</span>
+                        <span class="text-mistral-muted">({{ employeesCountByGroup[Number(group.id)] || 0 }})</span>
                     </span>
                 </div>
             </div>
@@ -588,16 +597,9 @@ usePageTitle(t('shifts.manage_assignments'));
                     <span
                         v-if="row.rotation_group_name"
                         class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[12px] font-medium border"
-                        :class="groupColorClass(row.rotation_group_name)"
+                        :class="[badgeFor(row.rotation_group_id).bg, badgeFor(row.rotation_group_id).border, badgeFor(row.rotation_group_id).text]"
                     >
-                        <span class="w-2 h-2 rounded-full" :class="{
-                            'bg-mistral-success': row.rotation_group_name === 'A',
-                            'bg-mistral-info': row.rotation_group_name === 'B',
-                            'bg-mistral-warning': row.rotation_group_name === 'C',
-                            'bg-mistral-danger': row.rotation_group_name === 'D',
-                            'bg-mistral-status-overtime': row.rotation_group_name === 'E',
-                            'bg-mistral-status-vacation': row.rotation_group_name === 'F',
-                        }"></span>
+                        <span class="w-2 h-2 rounded-full" :class="badgeFor(row.rotation_group_id).dot"></span>
                         {{ row.rotation_group_name }}
                     </span>
                     <span v-else class="text-mistral-muted text-[12px]">—</span>

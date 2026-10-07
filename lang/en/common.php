@@ -119,4 +119,7 @@ return [
     'select_row' => 'Select row',
     'menu_opened' => 'menu opened',
     'print' => 'Print',
+    'what_is_this_section' => 'What is this section?',
+    'show_more' => 'Show more',
+    'show_less' => 'Show less',
 ];

@@ -92,7 +92,7 @@ onMounted(() => {
     <!-- Search results dropdown -->
     <div
       v-if="isActive && results.length > 0 && !isCollapsed"
-      class="absolute top-full left-0 right-0 mx-2 mt-1 bg-mistral-canvas border border-mistral-hairline-soft rounded-xl shadow-lg z-50 max-h-[320px] overflow-y-auto py-1"
+      class="absolute top-full inset-x-0 mx-2 mt-1 bg-mistral-canvas border border-mistral-hairline-soft rounded-xl shadow-lg z-50 max-h-[320px] overflow-y-auto py-1"
       role="listbox"
     >
       <button
@@ -121,7 +121,7 @@ onMounted(() => {
     <!-- No results -->
     <div
       v-else-if="isActive && results.length === 0 && !isCollapsed"
-      class="absolute top-full left-0 right-0 mx-2 mt-1 bg-mistral-canvas border border-mistral-hairline-soft rounded-xl shadow-lg z-50 py-6 text-center"
+      class="absolute top-full inset-x-0 mx-2 mt-1 bg-mistral-canvas border border-mistral-hairline-soft rounded-xl shadow-lg z-50 py-6 text-center"
     >
       <i class="fa-solid fa-magnifying-glass text-mistral-muted text-[20px] mb-2 block" aria-hidden="true"></i>
       <p class="text-[13px] text-mistral-stone">{{ t('common.no_data') }}</p>

@@ -26,6 +26,10 @@ Route::middleware(['auth'])->group(function () {
         ->middleware('permission:create-backups')
         ->name('backups.store');
 
+    Route::post('backups/upload', [BackupsController::class, 'upload'])
+        ->middleware('permission:create-backups')
+        ->name('backups.upload');
+
     Route::get('backups/{id}', [BackupsController::class, 'show'])
         ->middleware('permission:view-backups')
         ->whereNumber('id')

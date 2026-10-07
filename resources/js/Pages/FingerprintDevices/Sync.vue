@@ -871,7 +871,7 @@ usePageTitle(t('fingerprint_devices.sync_title'));
                                     </div>
                                 </div>
                                 <div v-if="step.data" class="text-end text-[10px] text-mistral-stone shrink-0">
-                                    <pre class="whitespace-pre-wrap text-left">{{ JSON.stringify(step.data, null, 0) }}</pre>
+                                    <pre dir="ltr" class="whitespace-pre-wrap text-left">{{ JSON.stringify(step.data, null, 0) }}</pre>
                                 </div>
                             </li>
                         </ul>

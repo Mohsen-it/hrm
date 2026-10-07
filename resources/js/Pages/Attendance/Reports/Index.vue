@@ -37,8 +37,14 @@ function applyFilters() {
     );
 }
 
+const exporting = ref(false);
+
 function exportReport() {
+    if (exporting.value) return;
+    exporting.value = true;
     window.location.href = route('attendance.reports.export', { from: from.value, to: to.value, date: date.value });
+    // File downloads don't report completion — release the button shortly after.
+    setTimeout(() => { exporting.value = false; }, 4000);
 }
 
 const trendMax = computed(() => {
@@ -76,8 +82,8 @@ usePageTitle(t('attendance.reports_page.title'));
             :description="t('attendance.reports_page.index_description')"
         >
             <template #actions>
-                <Button variant="primary" icon="fas fa-download" @click="exportReport">
-                    {{ t('common.export') }}
+                <Button variant="primary" icon="fas fa-download" :loading="exporting" @click="exportReport">
+                    {{ exporting ? t('attendance.reports_page.exporting') : t('common.export') }}
                 </Button>
             </template>
         </PageHeader>
@@ -86,25 +92,45 @@ usePageTitle(t('attendance.reports_page.title'));
 
         <Card variant="base" padding="none" class="mb-4">
             <div class="p-5 sm:p-6">
-                <div class="flex items-center gap-3 flex-wrap">
-                    <FormInput
-                        v-model="date"
-                        type="date"
-                        :label="t('attendance.fields.date')"
-                        class="max-w-[170px]"
-                    />
-                    <FormInput
-                        v-model="from"
-                        type="date"
-                        :label="t('attendance.fields.from')"
-                        class="max-w-[170px]"
-                    />
-                    <FormInput
-                        v-model="to"
-                        type="date"
-                        :label="t('attendance.fields.to')"
-                        class="max-w-[170px]"
-                    />
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <fieldset>
+                        <legend class="text-[13px] font-semibold text-mistral-ink">
+                            {{ t('attendance.reports_page.filter_kpi_day') }}
+                        </legend>
+                        <p class="text-[11px] text-mistral-stone mt-0.5 mb-2">
+                            {{ t('attendance.reports_page.filter_kpi_day_hint') }}
+                        </p>
+                        <FormInput
+                            v-model="date"
+                            type="date"
+                            :label="t('attendance.fields.date')"
+                            class="max-w-[170px]"
+                        />
+                    </fieldset>
+                    <fieldset>
+                        <legend class="text-[13px] font-semibold text-mistral-ink">
+                            {{ t('attendance.reports_page.filter_range') }}
+                        </legend>
+                        <p class="text-[11px] text-mistral-stone mt-0.5 mb-2">
+                            {{ t('attendance.reports_page.filter_range_hint') }}
+                        </p>
+                        <div class="flex items-end gap-3 flex-wrap">
+                            <FormInput
+                                v-model="from"
+                                type="date"
+                                :label="t('attendance.fields.from')"
+                                class="max-w-[170px]"
+                            />
+                            <FormInput
+                                v-model="to"
+                                type="date"
+                                :label="t('attendance.fields.to')"
+                                class="max-w-[170px]"
+                            />
+                        </div>
+                    </fieldset>
+                </div>
+                <div class="mt-4">
                     <Button variant="primary" icon="fas fa-search" @click="applyFilters" class="self-end">
                         {{ t('common.search') }}
                     </Button>

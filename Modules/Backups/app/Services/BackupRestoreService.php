@@ -345,6 +345,10 @@ class BackupRestoreService
 
     /**
      * Decrypt + decompress the stored backup to a temp .sql file.
+     * Handles all stored variants:
+     * - `.sql.gz.enc` (encrypted + compressed — standard)
+     * - `.sql.gz` (compressed only)
+     * - `.sql` (plain text from USB / HeidiSQL uploads)
      *
      * @return string path to temp .sql (caller must unlink).
      */
@@ -361,9 +365,24 @@ class BackupRestoreService
         $tempDec = null;
 
         if ($run->encrypted) {
-            $tempDec = sys_get_temp_dir().DIRECTORY_SEPARATOR.'restore_'.uniqid().'.gz';
+            $tempDec = sys_get_temp_dir().DIRECTORY_SEPARATOR.'restore_'.uniqid().'.tmp';
             $this->crypto->decrypt($stored, $tempDec);
             $working = $tempDec;
+        }
+
+        // Plain `.sql` uploads need no decompression — stage a temp copy
+        // so the import never locks the stored original.
+        if (! $run->compressed) {
+            $tempSql = sys_get_temp_dir().DIRECTORY_SEPARATOR.'restore_'.uniqid().'.sql';
+            try {
+                $this->copyFile($working, $tempSql);
+            } finally {
+                if ($tempDec) {
+                    @unlink($tempDec);
+                }
+            }
+
+            return $tempSql;
         }
 
         $tempSql = sys_get_temp_dir().DIRECTORY_SEPARATOR.'restore_'.uniqid().'.sql';
@@ -377,6 +396,33 @@ class BackupRestoreService
         }
 
         return $tempSql;
+    }
+
+    private function copyFile(string $source, string $destination): void
+    {
+        $in = @fopen($source, 'rb');
+        if ($in === false) {
+            throw new RuntimeException("Cannot open backup for restore: {$source}");
+        }
+        $out = @fopen($destination, 'wb');
+        if ($out === false) {
+            fclose($in);
+            throw new RuntimeException("Cannot stage backup for restore: {$destination}");
+        }
+        try {
+            while (! feof($in)) {
+                $chunk = fread($in, 1024 * 1024);
+                if ($chunk === false) {
+                    throw new RuntimeException('Read failed while staging backup for restore.');
+                }
+                if ($chunk !== '' && fwrite($out, $chunk) === false) {
+                    throw new RuntimeException('Write failed while staging backup for restore.');
+                }
+            }
+        } finally {
+            fclose($in);
+            fclose($out);
+        }
     }
 
     /**

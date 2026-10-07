@@ -211,6 +211,27 @@ class RotationEngine
     }
 
     /**
+     * Whether the given date is the last work day of its duty block.
+     *
+     * A duty block is a run of consecutive work days (1 day for a 1-3
+     * rotation, 3 days for 3-9, 7 days for 7-21). The last day of the block
+     * is followed by a rest day: its checkout happens on the departure
+     * morning, so a same-day evening punch is presence proof only and must
+     * never close the session. Mid-block days close their own session with
+     * the same-evening checkout punch instead.
+     */
+    public function isLastWorkDayOfBlock(Rotation $rotation, RotationGroup $group, Carbon|string $date): bool
+    {
+        $day = Carbon::parse($date)->startOfDay();
+
+        if (! $this->isWorkDay($rotation, $group, $day)) {
+            return false;
+        }
+
+        return ! $this->isWorkDay($rotation, $group, $day->copy()->addDay());
+    }
+
+    /**
      * Build the standard resolver contract for a rotation employee.
      *
      * @return array{
@@ -234,6 +255,8 @@ class RotationEngine
      *     out_above_margin: ?string,
      *     next_day_out_ahead_margin: ?string,
      *     next_day_out_above_margin: ?string,
+     *     third_punch_start: ?string,
+     *     third_punch_end: ?string,
      *     overtime_enabled: bool,
      *     work_on_holidays: bool,
      *     is_overnight: bool,
@@ -304,7 +327,10 @@ class RotationEngine
      * (next_day_out_*): the departure morning derived from the schedule's
      * out_time ± margins. It lets the punch classifiers recognize the morning
      * punch on the first rest day after a duty as the check-out of that duty
-     * instead of a phantom new check-in.
+     * instead of a phantom new check-in. The window opens at out_time minus
+     * the wider of the schedule's out_ahead_margin and its early_margin: a
+     * checkout punch inside the tolerated early-leave minutes is a genuine
+     * exit and must never be discarded as an extra punch.
      *
      * @return array{
      *     check_in: ?string,
@@ -319,6 +345,8 @@ class RotationEngine
      *     out_above_margin: ?string,
      *     next_day_out_ahead_margin: ?string,
      *     next_day_out_above_margin: ?string,
+     *     third_punch_start: ?string,
+     *     third_punch_end: ?string,
      * }
      */
     public function resolveTimes(RotationAssignment $assignment): array
@@ -339,6 +367,8 @@ class RotationEngine
                 'in_above_margin' => $timeSchedule->in_above_margin,
                 'out_ahead_margin' => $timeSchedule->out_ahead_margin,
                 'out_above_margin' => $timeSchedule->out_above_margin,
+                'third_punch_start' => $timeSchedule->third_punch_start,
+                'third_punch_end' => $timeSchedule->third_punch_end,
                 'breaks' => $this->liveBreaks($assignment),
             ], $assignment);
         }
@@ -355,6 +385,8 @@ class RotationEngine
                 'in_above_margin' => $snapshotSchedule['in_above_margin'] ?? null,
                 'out_ahead_margin' => $snapshotSchedule['out_ahead_margin'] ?? null,
                 'out_above_margin' => $snapshotSchedule['out_above_margin'] ?? null,
+                'third_punch_start' => $snapshotSchedule['third_punch_start'] ?? null,
+                'third_punch_end' => $snapshotSchedule['third_punch_end'] ?? null,
                 'breaks' => is_array($snapshotSchedule['breaks'] ?? null)
                     ? $snapshotSchedule['breaks']
                     : $this->liveBreaks($assignment),
@@ -374,6 +406,8 @@ class RotationEngine
             'out_above_margin' => $this->legacyWindowTime($this->legacyRotationValue($assignment, 'out_above_margin')),
             'next_day_out_ahead_margin' => null,
             'next_day_out_above_margin' => null,
+            'third_punch_start' => null,
+            'third_punch_end' => null,
         ];
     }
 
@@ -431,11 +465,15 @@ class RotationEngine
                 ahead: false,
             ),
             'next_day_out_ahead_margin' => $isMultiDay
-                ? $this->relativeWindowEdge($checkOut, $schedule['out_ahead_margin'] ?? null, ahead: true)
+                ? $this->relativeWindowEdge($checkOut, $this->widestMinuteMargin($schedule['out_ahead_margin'] ?? null, $schedule['early_margin'] ?? null), ahead: true)
                 : null,
             'next_day_out_above_margin' => $isMultiDay
                 ? $this->relativeWindowEdge($checkOut, $schedule['out_above_margin'] ?? null, ahead: false)
                 : null,
+            // The explicit third (evening) punch window of overnight duties
+            // only — day schedules never carry one, even when set.
+            'third_punch_start' => $isMultiDay ? $this->formatTime($schedule['third_punch_start'] ?? null) : null,
+            'third_punch_end' => $isMultiDay ? $this->formatTime($schedule['third_punch_end'] ?? null) : null,
         ];
     }
 
@@ -537,6 +575,33 @@ class RotationEngine
         $time = $ahead ? $time->subMinutes((int) $margin) : $time->addMinutes((int) $margin);
 
         return $time->format('H:i');
+    }
+
+    /**
+     * The widest integer-minute margin of the given candidates.
+     *
+     * Absolute H:i times (legacy format) are not minute margins and are
+     * skipped, so a legacy value can never widen — or break — the window.
+     * Returns null when no candidate carries a positive minute margin.
+     */
+    private function widestMinuteMargin(mixed ...$margins): ?int
+    {
+        $best = null;
+        foreach ($margins as $margin) {
+            if ($margin === null || $margin === '') {
+                continue;
+            }
+            if (is_string($margin) && preg_match('/^\d{1,2}:\d{2}/', $margin) === 1) {
+                continue;
+            }
+            $value = (int) $margin;
+            if ($value <= 0) {
+                continue;
+            }
+            $best = $best === null ? $value : max($best, $value);
+        }
+
+        return $best;
     }
 
     /**

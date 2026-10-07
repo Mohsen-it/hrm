@@ -11,7 +11,7 @@ import { usePageTitle } from '@/composables/usePageTitle';
 
 import { reactive, ref, computed, watch } from 'vue';
 import { router, Head } from '@inertiajs/vue3';
-import { PageHeader, Button, Card, FormInput, FormSelect, FormSwitch, FormTextarea, FormSection, FormActions, ErrorSummary } from '@/Components/ui';
+import { PageHeader, Button, Card, FormInput, FormSelect, FormSwitch, FormTextarea, FormSection, FormActions, ErrorSummary, ContextHelp } from '@/Components/ui';
 import { useTranslations } from '@/composables/useTranslations';
 
 const { t } = useTranslations();
@@ -29,7 +29,6 @@ const form = reactive({
     time_schedule_id: null,
     overtime_enabled: false,
     work_on_holidays: false,
-    grace_minutes: 0,
     color: 'var(--color-mistral-primary)',
 });
 
@@ -74,15 +73,15 @@ const scheduleWindows = computed(() => {
     };
 });
 
-const presets = [
-    { label: 'Sunday-Thursday (Admin)', pattern: [1, 1, 1, 1, 1, 0, 0], groups: 1 },
-    { label: '3 On / 9 Off', pattern: [1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0], groups: 4 },
-    { label: '24 On / 24 Off', pattern: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], groups: 2 },
-    { label: '2 On / 2 Off', pattern: [1, 1, 0, 0], groups: 2 },
-    { label: '5 On / 2 Off', pattern: [1, 1, 1, 1, 1, 0, 0], groups: 1 },
-    { label: '1 On / 1 Off', pattern: [1, 0], groups: 2 },
-    { label: '7 On / 7 Off', pattern: [1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0], groups: 2 },
-];
+const presets = computed(() => [
+    { label: t('shifts.preset_admin_sun_thu'), pattern: [1, 1, 1, 1, 1, 0, 0], groups: 1 },
+    { label: t('shifts.preset_3_on_9_off'), pattern: [1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0], groups: 4 },
+    { label: t('shifts.preset_24_24'), pattern: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], groups: 2 },
+    { label: t('shifts.preset_2_on_2_off'), pattern: [1, 1, 0, 0], groups: 2 },
+    { label: t('shifts.preset_5_on_2_off'), pattern: [1, 1, 1, 1, 1, 0, 0], groups: 1 },
+    { label: t('shifts.preset_1_on_1_off'), pattern: [1, 0], groups: 2 },
+    { label: t('shifts.preset_7_on_7_off'), pattern: [1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0], groups: 2 },
+]);
 
 function applyPreset(preset) {
     form.pattern = [...preset.pattern];
@@ -137,7 +136,7 @@ function submit() {
     generalError.value = '';
 
     if (form.pattern.length < 2) {
-        generalError.value = t('shifts.pattern_min_error') || 'Pattern must have at least 2 days.';
+        generalError.value = t('shifts.pattern_min_error');
         processing.value = false;
         return;
     }
@@ -145,7 +144,9 @@ function submit() {
     router.post(route('rotations.store'), {
         ...form,
         number_of_groups: parseInt(form.number_of_groups, 10) || 1,
-        grace_minutes: parseInt(form.grace_minutes, 10) || 0,
+        // Lateness grace lives on the time schedule only (late_margin is
+        // the single source of truth) — rotations always persist 0.
+        grace_minutes: 0,
         pattern: form.pattern,
     }, {
         preserveScroll: true,
@@ -182,19 +183,18 @@ usePageTitle(t('shifts.add_rotation'));
             <ErrorSummary :errors="errors" />
 
             <div v-if="generalError" class="p-3 bg-mistral-danger/10 border border-mistral-danger/20 rounded-md text-[13px] text-mistral-danger">
-                <i class="fas fa-exclamation-circle mr-1"></i>
+                <i class="fas fa-exclamation-circle me-1"></i>
                 {{ generalError }}
             </div>
 
             <FormSection :title="t('shifts.basic_info')" icon="fas fa-info-circle" :collapsible="true" :default-open="true">
-                <div class="p-4 mb-4 bg-mistral-cream-soft border border-mistral-primary/20 rounded-lg text-sm text-mistral-ink leading-relaxed">
-                    <p class="font-semibold mb-2">ما هذا القسم؟</p>
+                <ContextHelp>
                     <ul class="list-disc list-inside space-y-1">
-                        <li><strong>اسم الدورية:</strong> اسم يُميّز هذه الدورية عن غيرها (مثال: خطوط السوريا، دورية 4-12).</li>
-                        <li><strong>مرجع الدورة (تاريخ البداية):</strong> التاريخ الذي تبدأ منه الدورة. يُستخدم كنقطة انطلاق لحساب أيام العمل والراحة. مثال: إذا كان التاريخ 09/09/2026 والنمط 4 عمل / 12 راحة، فأول يوم عمل هو 09/09.</li>
-                        <li><strong>الوصف:</strong> وصف اختياري لتفاصيل الدورية (يظهر في التقارير).</li>
+                        <li><strong>{{ t('shifts.help_rot_basic_name_t') }}</strong> {{ t('shifts.help_rot_basic_name_d') }}</li>
+                        <li><strong>{{ t('shifts.help_rot_basic_anchor_t') }}</strong> {{ t('shifts.help_rot_basic_anchor_d') }}</li>
+                        <li><strong>{{ t('shifts.help_rot_basic_desc_t') }}</strong> {{ t('shifts.help_rot_basic_desc_d') }}</li>
                     </ul>
-                </div>
+                </ContextHelp>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormInput
                         v-model="form.name"
@@ -225,18 +225,17 @@ usePageTitle(t('shifts.add_rotation'));
             </FormSection>
 
             <FormSection :title="t('shifts.pattern_builder')" icon="fas fa-th" :collapsible="true" :default-open="true">
-                <div class="p-4 mb-4 bg-mistral-cream-soft border border-mistral-primary/20 rounded-lg text-sm text-mistral-ink leading-relaxed">
-                    <p class="font-semibold mb-2">ما هذا القسم؟</p>
-                    <p class="mb-2">هنا تُنشئ نمط العمل والراحة للدورية. كل رقم يمثل يوماً واحداً في الدورة.</p>
+                <ContextHelp>
+                    <p class="mb-2">{{ t('shifts.help_rot_pattern_intro') }}</p>
                     <ul class="list-disc list-inside space-y-1">
-                        <li><strong>القوالب الجاهزة:</strong> اختار قالباً جاهزاً ليتم ملء النمط تلقائياً (مثل 4 عمل / 12 راحة).</li>
-                        <li><strong>الأرقام الخضراء (1):</strong> أيام عمل (الموظف يدوام فيها).</li>
-                        <li><strong>الأرقام الرمادية (0):</strong> أيام راحة (الموظف لا يدوام فيها).</li>
-                        <li><strong>مدة الدورة:</strong> مجموع جميع الأيام في الدورة (عمل + راحة).</li>
-                        <li><strong>عدد المجموعات:</strong> عدد فرق العمل التي تتناوب على نفس النمط. مثال: 4 مجموعات تعني كل مجموعة تبدأ الدورة بأسبوع إزاحة عن التي قبلها.</li>
+                        <li><strong>{{ t('shifts.help_rot_pattern_presets_t') }}</strong> {{ t('shifts.help_rot_pattern_presets_d') }}</li>
+                        <li><strong>{{ t('shifts.help_rot_pattern_work_t') }}</strong> {{ t('shifts.help_rot_pattern_work_d') }}</li>
+                        <li><strong>{{ t('shifts.help_rot_pattern_rest_t') }}</strong> {{ t('shifts.help_rot_pattern_rest_d') }}</li>
+                        <li><strong>{{ t('shifts.help_rot_pattern_duration_t') }}</strong> {{ t('shifts.help_rot_pattern_duration_d') }}</li>
+                        <li><strong>{{ t('shifts.help_rot_pattern_groups_t') }}</strong> {{ t('shifts.help_rot_pattern_groups_d') }}</li>
                     </ul>
-                    <p class="mt-2 text-mistral-slate text-[13px]">اضغط على أي يوم للتبديل بين العمل والراحة. استخدم أزرار + و - لإضافة أو إزالة أيام.</p>
-                </div>
+                    <p class="mt-2 text-mistral-slate text-[13px]">{{ t('shifts.help_rot_pattern_tip') }}</p>
+                </ContextHelp>
                 <div class="mb-4">
                     <label class="block text-[13px] text-mistral-slate mb-2">{{ t('shifts.quick_presets') }}</label>
                     <div class="flex flex-wrap gap-2">
@@ -316,16 +315,14 @@ usePageTitle(t('shifts.add_rotation'));
             </FormSection>
 
             <FormSection :title="t('shifts.options')" icon="fas fa-cog" :collapsible="true" :default-open="true">
-                <div class="p-4 mb-4 bg-mistral-cream-soft border border-mistral-primary/20 rounded-lg text-sm text-mistral-ink leading-relaxed">
-                    <p class="font-semibold mb-2">ما هذا القسم؟</p>
+                <ContextHelp>
                     <ul class="list-disc list-inside space-y-1">
-                        <li><strong>جدول الوقت:</strong> الجدول الذي يحدد أوقات الحضور والانصراف والاستراحات. يجب اختياره لتفعيل بصمات الحضور والانصراف.</li>
-                        <li><strong>تفعيل العمل الإضافي:</strong> عند التفعيل، يمكن للموظفين تسجيل ساعات عمل إضافية خارج الدوام الرسمي مع حسابها في الرواتب.</li>
-                        <li><strong>العمل في العطل الرسمية:</strong> عند التفعيل، يُتوقع من الموظفين العمل في الأيام الرسمية العطلة (كالعيد والأعياد).</li>
-                        <li><strong>دقائق السماح:</strong>عدد الدقائق المسموح بالتأخير فيها بعد وقت الحضور دون احتسابها كمخالفة. مثال: إذا كانت 30，فأي بصمة بين 8:00 و 8:30 تُحسب كحضور عادي (ليست تأخيراً).</li>
-                        <li><strong>اللون:</strong> لون تمييز الدورية في الجداول والتقارير.</li>
+                        <li><strong>{{ t('shifts.help_rot_options_schedule_t') }}</strong> {{ t('shifts.help_rot_options_schedule_d') }}</li>
+                        <li><strong>{{ t('shifts.help_rot_options_overtime_t') }}</strong> {{ t('shifts.help_rot_options_overtime_d') }}</li>
+                        <li><strong>{{ t('shifts.help_rot_options_holidays_t') }}</strong> {{ t('shifts.help_rot_options_holidays_d') }}</li>
+                        <li><strong>{{ t('shifts.help_rot_options_color_t') }}</strong> {{ t('shifts.help_rot_options_color_d') }}</li>
                     </ul>
-                </div>
+                </ContextHelp>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <FormSelect
                         v-model="form.time_schedule_id"
@@ -342,15 +339,6 @@ usePageTitle(t('shifts.add_rotation'));
                     </div>
                     <FormSwitch v-model="form.overtime_enabled" :label="t('shifts.overtime_enabled')" name="overtime_enabled" />
                     <FormSwitch v-model="form.work_on_holidays" :label="t('shifts.work_on_holidays')" name="work_on_holidays" />
-                    <FormInput
-                        v-model="form.grace_minutes"
-                        :label="t('shifts.grace_minutes')"
-                        name="grace_minutes"
-                        type="number"
-                        min="0"
-                        max="120"
-                        :error="errorFor('grace_minutes')"
-                    />
                     <FormInput
                         v-model="form.color"
                         :label="t('shifts.color')"

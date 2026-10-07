@@ -7,6 +7,7 @@ Route::middleware(['auth', 'permission:view-settings'])->group(function () {
     Route::prefix('settings')->name('settings.')->group(function () {
         Route::get('general', [SettingsController::class, 'general'])->name('general');
         Route::get('attendance', [SettingsController::class, 'attendance'])->name('attendance');
+        Route::get('system-status', [SettingsController::class, 'systemStatus'])->name('system-status');
 
         Route::post('bulk-update', [SettingsController::class, 'bulkUpdate'])->name('bulk-update');
         Route::post('{setting}/flush-cache', [SettingsController::class, 'flushCache'])->name('flush-cache');

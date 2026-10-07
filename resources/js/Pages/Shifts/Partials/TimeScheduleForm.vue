@@ -1,6 +1,6 @@
 <script setup>
-import { reactive, ref } from 'vue'
-import { FormInput, FormSwitch, Button, IconButton, FormSection, FormActions } from '@/Components/ui'
+import { computed, reactive, ref } from 'vue'
+import { FormInput, FormSwitch, Button, IconButton, FormSection, FormActions, ContextHelp } from '@/Components/ui'
 import { useTranslations } from '@/composables/useTranslations'
 
 const { t } = useTranslations()
@@ -44,8 +44,95 @@ function removeBreak(index) {
     breaks.value.splice(index, 1)
 }
 
+function num(value) {
+    const n = Number(value)
+    return Number.isFinite(n) && n > 0 ? n : 0
+}
+
+function toMinutes(time) {
+    if (!time || !/^\d{1,2}:\d{2}/.test(time)) return null
+    const [h, m] = time.split(':').map(Number)
+    return h * 60 + m
+}
+
+function fmtClock(mins) {
+    const m = ((mins % 1440) + 1440) % 1440
+    return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0')
+}
+
+function fmtDuration(mins) {
+    const n = Math.max(0, Math.round(Number(mins) || 0))
+    return Math.floor(n / 60) + ':' + String(n % 60).padStart(2, '0')
+}
+
+function minutesHint(value) {
+    return t('shifts.minutes') + ' · = ' + fmtDuration(value) + ' ' + t('shifts.hours_short')
+}
+
+function edgeHint(value, edge) {
+    const base = t('shifts.minutes') + ' · = ' + fmtDuration(value) + ' ' + t('shifts.hours_short')
+    return edge === null ? base : base + ' · ' + edge
+}
+
+const inMinutes = computed(() => toMinutes(form.in_time))
+const outMinutes = computed(() => toMinutes(form.out_time))
+
+const inStart = computed(() => (inMinutes.value === null ? null : fmtClock(inMinutes.value - num(form.in_ahead_margin))))
+const inEnd = computed(() => (inMinutes.value === null ? null : fmtClock(inMinutes.value + num(form.in_above_margin))))
+const outStart = computed(() => (outMinutes.value === null ? null : fmtClock(outMinutes.value - num(form.out_ahead_margin))))
+const outEnd = computed(() => (outMinutes.value === null ? null : fmtClock(outMinutes.value + num(form.out_above_margin))))
+
+const showPreview = computed(() => inStart.value !== null && outStart.value !== null)
+
+// Window edges are picked as clock times but stored as minute offsets from
+// the duty time (the engine also derives the next-day departure window from
+// integer margins, so absolute strings must never be persisted).
+const windowErrors = reactive({ in_ahead: '', in_above: '', out_ahead: '', out_above: '' })
+
+function clockToMargin(clock, anchorMin, ahead, key) {
+    const picked = toMinutes(clock)
+    if (picked === null) {
+        // Cleared input behaves like the old empty number field: zero margin.
+        windowErrors[key] = ''
+        return 0
+    }
+    if (anchorMin === null) {
+        windowErrors[key] = ''
+        return 0
+    }
+    const margin = ahead ? anchorMin - picked : picked - anchorMin
+    if (margin < 0) {
+        windowErrors[key] = t('shifts.window_time_invalid')
+        return null
+    }
+    windowErrors[key] = ''
+    return margin
+}
+
+function edgeModel(anchorComputed, marginKey, ahead, errorKey) {
+    return computed({
+        get: () => {
+            const anchor = anchorComputed.value
+            if (anchor === null) return ''
+            const margin = num(form[marginKey])
+            return fmtClock(ahead ? anchor - margin : anchor + margin)
+        },
+        set: (clock) => {
+            const anchor = anchorComputed.value
+            const margin = clockToMargin(clock, anchor, ahead, errorKey)
+            if (margin !== null) form[marginKey] = margin
+        },
+    })
+}
+
+const inStartClock = edgeModel(inMinutes, 'in_ahead_margin', true, 'in_ahead')
+const inEndClock = edgeModel(inMinutes, 'in_above_margin', false, 'in_above')
+const outStartClock = edgeModel(outMinutes, 'out_ahead_margin', true, 'out_ahead')
+const outEndClock = edgeModel(outMinutes, 'out_above_margin', false, 'out_above')
+
+const hasWindowErrors = computed(() => Object.values(windowErrors).some(Boolean))
 function handleSubmit() {
-    if (props.processing) return
+    if (props.processing || hasWindowErrors.value) return
     emit('submit', {
         name: form.name,
         in_time: form.in_time,
@@ -65,15 +152,14 @@ function handleSubmit() {
 <template>
     <form @submit.prevent="handleSubmit" class="space-y-6">
         <FormSection :title="t('shifts.basic_info')">
-            <div class="p-4 mb-4 bg-mistral-info-bg border border-mistral-info rounded-lg text-sm text-mistral-info leading-relaxed">
-                <p class="font-semibold mb-1">معلومات أساسية</p>
+            <ContextHelp>
                 <ul class="list-disc list-inside space-y-1">
-                    <li><strong>اسم الجدول:</strong> اسم يُميّز هذا الجدول عن غيره (مثال: دورية إدارية، دورية مصانع).</li>
-                    <li><strong>وقت الحضور:</strong> الوقت الرسمي لبدء الدوام. أي بصمة بعد هذا الوقت + هامش التأخير تُحسب كتأخير.</li>
-                    <li><strong>وقت الانصراف:</strong> الوقت الرسمي لانتهاء الدوام. أي بصمة قبل هذا الوقت - هامش المغادرة تُحسب كانصراف مبكر.</li>
-                    <li><strong>دوام متواصل:</strong> فعّله إذا كان الدوام يمتد لأكثر من يوم (مثل 48 ساعة متواصلة ثم 48 ساعة راحة). عند التفعيل، يُحسب الانصراف صباح أول يوم راحة.</li>
+                    <li><strong>{{ t('shifts.help_ts_basic_name_t') }}</strong> {{ t('shifts.help_ts_basic_name_d') }}</li>
+                    <li><strong>{{ t('shifts.help_ts_basic_in_t') }}</strong> {{ t('shifts.help_ts_basic_in_d') }}</li>
+                    <li><strong>{{ t('shifts.help_ts_basic_out_t') }}</strong> {{ t('shifts.help_ts_basic_out_d') }}</li>
+                    <li><strong>{{ t('shifts.help_ts_basic_multiday_t') }}</strong> {{ t('shifts.help_ts_basic_multiday_d') }}</li>
                 </ul>
-            </div>
+            </ContextHelp>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FormInput
                     v-model="form.name"
@@ -112,18 +198,17 @@ function handleSubmit() {
         </FormSection>
 
         <FormSection :title="t('shifts.margins')">
-            <div class="p-4 mb-4 bg-mistral-warning-bg border border-mistral-warning rounded-lg text-sm text-mistral-warning leading-relaxed">
-                <p class="font-semibold mb-1">هوامش التأخير والانصراف المبكر</p>
-                <p class="mb-2">هذه الإعدادات تحدد السماحية الزمنية للموظف عند التأخير أو المغادرة المبكرة.</p>
+            <ContextHelp>
+                <p class="mb-2">{{ t('shifts.help_ts_margins_intro') }}</p>
                 <ul class="list-disc list-inside space-y-1">
-                    <li><strong>هامش التأخير:</strong>عدد الدقائق المسموح بالتأخير فيها بعد وقت الحضور دون احتسابها كمخالفة. مثال: إذا كان الحضور 8:00 والهامش 30. فأي بصمة بين 8:00 و 8:30 تُحسب كحضور عادي (ليست تأخيراً).</li>
-                    <li><strong>هامش المغادرة المبكرة:</strong>عدد الدقائق المسموح بالمغادرة فيها قبل وقت الانصراف دون احتسابها كمخالفة. مثال: إذا كان الانصراف 3:00 والهامش 30. فأي بصمة بين 2:30 و 3:00 تُحسب كخروج عادي (ليست مغادرة مبكرة).</li>
-                    <li><strong>بداية نافذة الدخول:</strong>كم دقيقة قبل وقت الحضور تبدأ نافذة قبول البصمة (البصمة قبلها لا تُسجل).</li>
-                    <li><strong>نهاية نافذة الدخول:</strong>كم دقيقة بعد وقت الحضور تنتهي نافذة قبول بصمة الدخول.</li>
-                    <li><strong>بداية نافذة الخروج:</strong>كم دقيقة بعد وقت الانصراف تبدأ نافذة قبول بصمة الخروج.</li>
-                    <li><strong>نهاية نافذة الخروج:</strong>كم دقيقة بعد الانصراف تنتهي نافذة قبول بصمة الخروج (مهم للدوام المتواصل).</li>
+                    <li><strong>{{ t('shifts.help_ts_margins_late_t') }}</strong> {{ t('shifts.help_ts_margins_late_d') }}</li>
+                    <li><strong>{{ t('shifts.help_ts_margins_early_t') }}</strong> {{ t('shifts.help_ts_margins_early_d') }}</li>
+                    <li><strong>{{ t('shifts.help_ts_margins_win_in_start_t') }}</strong> {{ t('shifts.help_ts_margins_win_in_start_d') }}</li>
+                    <li><strong>{{ t('shifts.help_ts_margins_win_in_end_t') }}</strong> {{ t('shifts.help_ts_margins_win_in_end_d') }}</li>
+                    <li><strong>{{ t('shifts.help_ts_margins_win_out_start_t') }}</strong> {{ t('shifts.help_ts_margins_win_out_start_d') }}</li>
+                    <li><strong>{{ t('shifts.help_ts_margins_win_out_end_t') }}</strong> {{ t('shifts.help_ts_margins_win_out_end_d') }}</li>
                 </ul>
-            </div>
+            </ContextHelp>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FormInput
                     v-model="form.late_margin"
@@ -131,7 +216,7 @@ function handleSubmit() {
                     name="late_margin"
                     type="number"
                     min="0"
-                    :hint="t('shifts.minutes')"
+                    :hint="minutesHint(form.late_margin)"
                     :error="errors?.late_margin"
                 />
 
@@ -141,49 +226,51 @@ function handleSubmit() {
                     name="early_margin"
                     type="number"
                     min="0"
-                    :hint="t('shifts.minutes')"
+                    :hint="minutesHint(form.early_margin)"
                     :error="errors?.early_margin"
                 />
 
                 <FormInput
-                    v-model="form.in_ahead_margin"
+                    v-model="inStartClock"
                     :label="t('shifts.in_ahead_margin')"
                     name="in_ahead_margin"
-                    type="number"
-                    min="0"
-                    :hint="t('shifts.minutes')"
-                    :error="errors?.in_ahead_margin"
+                    type="time"
+                    :hint="edgeHint(form.in_ahead_margin, inStart)"
+                    :error="errors?.in_ahead_margin || windowErrors.in_ahead"
                 />
 
                 <FormInput
-                    v-model="form.in_above_margin"
+                    v-model="inEndClock"
                     :label="t('shifts.in_above_margin')"
                     name="in_above_margin"
-                    type="number"
-                    min="0"
-                    :hint="t('shifts.minutes')"
-                    :error="errors?.in_above_margin"
+                    type="time"
+                    :hint="edgeHint(form.in_above_margin, inEnd)"
+                    :error="errors?.in_above_margin || windowErrors.in_above"
                 />
 
                 <FormInput
-                    v-model="form.out_ahead_margin"
+                    v-model="outStartClock"
                     :label="t('shifts.out_ahead_margin')"
                     name="out_ahead_margin"
-                    type="number"
-                    min="0"
-                    :hint="t('shifts.minutes')"
-                    :error="errors?.out_ahead_margin"
+                    type="time"
+                    :hint="edgeHint(form.out_ahead_margin, outStart)"
+                    :error="errors?.out_ahead_margin || windowErrors.out_ahead"
                 />
 
                 <FormInput
-                    v-model="form.out_above_margin"
+                    v-model="outEndClock"
                     :label="t('shifts.out_above_margin')"
                     name="out_above_margin"
-                    type="number"
-                    min="0"
-                    :hint="t('shifts.minutes')"
-                    :error="errors?.out_above_margin"
+                    type="time"
+                    :hint="edgeHint(form.out_above_margin, outEnd)"
+                    :error="errors?.out_above_margin || windowErrors.out_above"
                 />
+            </div>
+
+            <div v-if="showPreview" class="mt-4 p-3 bg-mistral-surface rounded-lg text-[13px] leading-6">
+                <div class="font-semibold mb-1">{{ t('shifts.window_preview') }}</div>
+                <div><span class="text-mistral-muted">{{ t('shifts.check_in_window') }}:</span> <span dir="ltr">{{ inStart }} – {{ inEnd }}</span></div>
+                <div><span class="text-mistral-muted">{{ t('shifts.check_out_window') }}:</span> <span dir="ltr">{{ outStart }} – {{ outEnd }}</span></div>
             </div>
         </FormSection>
 
@@ -194,10 +281,9 @@ function handleSubmit() {
                 </Button>
             </template>
 
-            <div class="p-4 mb-4 bg-mistral-success-bg border border-mistral-success rounded-lg text-sm text-mistral-success leading-relaxed">
-                <p class="font-semibold mb-1">الاستراحات</p>
-                <p>حدد أوقات الاستراحات خلال الدوام. الاستراحة تُخصَم من ساعات العمل الرسمية ولا تُحسب كوقت عمل. يمكنك إضافة عدة استراحات أو ترك هذا القسم فارغاً إذا لم تكن هناك استراحات رسمية.</p>
-            </div>
+            <ContextHelp :collapsible="false">
+                <p>{{ t('shifts.help_ts_breaks') }}</p>
+            </ContextHelp>
 
             <div
                 v-for="(brk, index) in breaks"

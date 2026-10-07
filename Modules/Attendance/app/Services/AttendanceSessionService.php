@@ -349,6 +349,12 @@ class AttendanceSessionService
             'early_leave_minutes' => $earlyLeaveMinutes,
             'overtime_minutes' => $overtimeMinutes,
             'status' => $status,
+            // A REAL exit punch makes any historical "forgotten exit" marker
+            // false. Strip them from the previous notes, or the next morning's
+            // report would still call this a missing checkout — including for
+            // sessions the repair commands just healed with the device log.
+            // An explicit note supplied by the caller always wins.
+            'notes' => $context['notes'] ?? $this->stripFabricatedCheckoutNotes($session->notes),
         ])->save();
 
         $this->mergeRawContext($session, $context);
@@ -357,6 +363,49 @@ class AttendanceSessionService
         event(new SessionUpdated($session));
 
         return $session;
+    }
+
+    /**
+     * Remove the two historical "fabricated checkout" markers from a session's
+     * notes once a real exit punch closes it:
+     *  - the old nightly job's "أغلق تلقائياً: …" sentence;
+     *  - the earlier "انتهت المناوبة دون تسجيل بصمة خروج" wording.
+     *
+     * Both claim no exit punch was recorded. From the moment one actually
+     * was, they describe yesterday's problem on a session that has a punch
+     * today — exactly what the missing-checkout report reads to decide
+     * whether to flag the employee. Keeping anything else the operator wrote.
+     */
+    private function stripFabricatedCheckoutNotes(?string $existing): ?string
+    {
+        if (! is_string($existing) || $existing === '') {
+            return $existing;
+        }
+
+        // NOTE: \x{060C} is the real Arabic comma. Writing the literal byte
+        // sequence in a PHP string is unreliable here (normalization drift),
+        // and using it in trim("\x{...}") would be wrong anyway — trim's
+        // charlist argument is a byte set, never a character class.
+        $cleaned = preg_replace(
+            '/(أغلق تلقائياً|انتهت المناوبة دون تسجيل بصمة خروج)[^\n.\x{060C}\x{2C}]*[.\x{060C}\x{2C}]?\s*/u',
+            '',
+            $existing,
+        );
+
+        if (! is_string($cleaned)) {
+            return $existing;
+        }
+
+        // Strip wrapping whitespace / separators / direction marks from the
+        // edges. preg_replace with /u is character-aware; trim's charlist is
+        // byte-aware, which corrupted Arabic endings.
+        $cleaned = preg_replace(
+            '/^[\s\x{200F}\x{200B}\x{060C}\x{2C}]+|[\s\x{200F}\x{200B}\x{060C}\x{2C}]+$/u',
+            '',
+            $cleaned,
+        );
+
+        return (! is_string($cleaned) || $cleaned === '') ? null : $cleaned;
     }
 
     // ------------------------------------------------------------------

@@ -2,8 +2,11 @@
 
 namespace Tests\Unit\Modules\Attendance;
 
+use Carbon\Carbon;
 use Modules\Attendance\Models\AttendanceSession;
+use Modules\Attendance\Models\DailyAttendanceSummary;
 use Modules\Attendance\Models\RawAttendanceLog;
+use Modules\Attendance\Services\AttendanceSessionService;
 use Modules\Attendance\Services\DailyReportService;
 use Modules\Branches\Models\Branch;
 use Modules\Companies\Models\Company;
@@ -13,6 +16,7 @@ use Modules\Holidays\Models\Holiday;
 use Modules\Shifts\Models\Rotation;
 use Modules\Shifts\Models\RotationAssignment;
 use Modules\Shifts\Models\RotationGroup;
+use Modules\Shifts\Models\ShiftException;
 use Modules\Shifts\Models\TimeSchedule;
 use Modules\Users\Models\User;
 use Modules\Vacations\Models\UserVacationRequest;
@@ -1656,6 +1660,427 @@ class DailyReportServiceTest extends TestCase
             // 120-minute grace: the time-table deadline is 08:00 + 120 = 10:00
             // on the departure morning.
             'out_above_margin' => 120,
+        ]);
+    }
+
+    // =========================================================================
+    // Audit suite — every number the report prints must be defensible
+    // =========================================================================
+
+    /**
+     * AUDIT: the stat cards describe the WHOLE report day, never the subset
+     * the table happens to be filtered to. A manager filtering "غياب" must
+     * still read the true late/present counts.
+     */
+    public function test_stats_always_describe_the_whole_report_not_the_filtered_subset(): void
+    {
+        $present = $this->makeEmployee('EMP90001');
+        $this->assignOpenWorkEveryDay($present);
+        $this->makeCompleteSession($present, '2026-08-10 08:00:00');
+
+        $late = $this->makeEmployee('EMP90002');
+        $this->assignOpenWorkEveryDay($late);
+        RotationAssignment::where('employee_id', $late->id)->first()->rotation->update([
+            'time_schedule_id' => $this->makeTimeSchedule($late, '08:00', '17:00')->id,
+        ]);
+        $this->makeCompleteSession($late, '2026-08-10 09:25:00');
+
+        $absent = $this->makeEmployee('EMP90003');
+        $this->registerFingerprint($absent);
+        $this->assignOpenWorkEveryDay($absent);
+
+        $filtered = $this->service->build('2026-08-10', '09:00', null, null, null, 'absent');
+
+        // The TABLE is filtered...
+        $this->assertCount(1, $filtered['rows']);
+        $this->assertSame($absent->id, $filtered['rows']->first()['id']);
+
+        // ...but every CARD still describes the whole day.
+        $this->assertSame(3, $filtered['stats']['total']);
+        $this->assertSame(1, $filtered['stats']['absent']);
+        $this->assertSame(1, $filtered['stats']['late']);
+        $this->assertSame(1, $filtered['stats']['present']);
+    }
+
+    /**
+     * AUDIT: the no-fingerprint filter relabels every row it keeps. Filtering a
+     * table must never move a single number on the cards.
+     */
+    public function test_stats_survive_the_no_fingerprint_filter_rewriting_status(): void
+    {
+        $unregisteredAbsent = $this->makeEmployee('EMP90010');
+        $this->assignOpenWorkEveryDay($unregisteredAbsent);
+
+        $registered = $this->makeEmployee('EMP90011');
+        $this->registerFingerprint($registered);
+        $this->assignOpenWorkEveryDay($registered);
+        $this->makeCompleteSession($registered, '2026-08-10 08:00:00');
+
+        $all = $this->service->build('2026-08-10', '09:00');
+        $filtered = $this->service->build('2026-08-10', '09:00', null, null, null, 'no_fingerprint');
+
+        $this->assertCount(1, $filtered['rows']);
+        $this->assertSame('no_fingerprint', $filtered['rows']->first()['status']);
+        $this->assertSame($all['stats'], $filtered['stats']);
+        $this->assertSame(2, $filtered['stats']['total']);
+        $this->assertSame(1, $filtered['stats']['no_fingerprint']);
+    }
+
+    /**
+     * AUDIT: a mission exception says WHERE the employee was sent, not that
+     * they failed to attend. Someone who badged in and out is classified by
+     * their punches and stays in the حاضر/متأخر tables.
+     */
+    public function test_mission_exception_does_not_override_recorded_attendance(): void
+    {
+        $user = $this->makeEmployee('EMP90020');
+        $this->assignOpenWorkEveryDay($user);
+        RotationAssignment::where('employee_id', $user->id)->first()->rotation->update([
+            'time_schedule_id' => $this->makeTimeSchedule($user, '08:00', '17:00')->id,
+        ]);
+        $this->makeCompleteSession($user, '2026-08-10 09:25:00');
+
+        $this->makeMissionException($user, '2026-08-10');
+
+        $report = $this->service->build('2026-08-10', '09:00');
+        $row = $report['rows']->firstWhere('id', $user->id);
+
+        $this->assertSame('late', $row['status']);
+        $this->assertSame(1, $report['stats']['late']);
+        $this->assertSame(0, $report['stats']['mission'] ?? 0);
+    }
+
+    /**
+     * AUDIT: a mission exception must not turn a rotation REST day into a
+     * mission — the employee was never scheduled.
+     */
+    public function test_mission_exception_does_not_turn_a_rest_day_into_a_mission(): void
+    {
+        $user = $this->makeEmployee('EMP90021');
+        // 1 work + 3 rest anchored 08-03 => 08-10 is a rest day.
+        $this->assignOpenRotation($user, [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0], '2026-08-03');
+
+        $this->makeMissionException($user, '2026-08-10');
+
+        $report = $this->service->build('2026-08-10', '09:00');
+
+        $this->assertSame('rest', $report['rows']->firstWhere('id', $user->id)['status']);
+    }
+
+    /**
+     * AUDIT: an approved leave day is never counted as an absence, even when a
+     * stale daily summary still says "absent" for it.
+     */
+    public function test_monthly_absence_counter_excludes_approved_leave_days(): void
+    {
+        $this->travelTo('2026-08-10 12:00:00');
+
+        $user = $this->makeEmployee('EMP90040');
+        $this->registerFingerprint($user);
+        $this->assignOpenWorkEveryDay($user);
+        RotationAssignment::where('employee_id', $user->id)->first()->rotation->update([
+            'time_schedule_id' => $this->makeTimeSchedule($user, '08:00', '17:00')->id,
+        ]);
+
+        $annual = VacationType::create([
+            'code' => 'ANN90040', 'name_ar' => 'إجازة سنوية', 'name_en' => 'Annual', 'is_active' => true,
+        ]);
+        foreach (['2026-08-03', '2026-08-04'] as $day) {
+            DailyAttendanceSummary::create([
+                'user_id' => $user->id,
+                'summary_date' => $day,
+                'status' => 'absent',
+                'calculated_at' => now(),
+            ]);
+        }
+        UserVacationRequest::create([
+            'user_id' => $user->id,
+            'vacation_type_id' => $annual->id,
+            'start_date' => '2026-08-03',
+            'end_date' => '2026-08-05',
+            'days_count' => 3,
+            'working_days_count' => 3,
+            'status' => 'approved',
+        ]);
+
+        $report = $this->service->build('2026-08-10', '09:00');
+        $row = $report['rows']->firstWhere('id', $user->id);
+
+        $this->assertSame('absent', $row['status']);
+        // Only 08-10 counts: 08-03 and 08-04 are covered by the approved leave.
+        $this->assertCountNote($row['notes'], 'عدد أيام الغياب خلال الشهر', 1);
+    }
+
+    /**
+     * AUDIT: two approved requests covering the same days must not inflate the
+     * monthly vacation counter.
+     */
+    public function test_overlapping_approved_requests_count_the_month_once(): void
+    {
+        $this->travelTo('2026-08-10 12:00:00');
+
+        $user = $this->makeEmployee('EMP90041');
+        $this->assignOpenWorkEveryDay($user);
+
+        $annual = VacationType::create([
+            'code' => 'ANN90041', 'name_ar' => 'إجازة سنوية', 'name_en' => 'Annual', 'is_active' => true,
+        ]);
+        UserVacationRequest::create([
+            'user_id' => $user->id, 'vacation_type_id' => $annual->id,
+            'start_date' => '2026-08-10', 'end_date' => '2026-08-10',
+            'days_count' => 1, 'working_days_count' => 1, 'status' => 'approved',
+        ]);
+        UserVacationRequest::create([
+            'user_id' => $user->id, 'vacation_type_id' => $annual->id,
+            'start_date' => '2026-08-09', 'end_date' => '2026-08-11',
+            'days_count' => 3, 'working_days_count' => 3, 'status' => 'approved',
+        ]);
+
+        $report = $this->service->build('2026-08-10', '09:00');
+        $row = $report['rows']->firstWhere('id', $user->id);
+
+        // Distinct rotation work days in 08-01..08-10: 08-09 and 08-10 only.
+        $this->assertCountNote($row['notes'], 'عدد أيام الإجازة خلال الشهر', 2);
+    }
+
+    /**
+     * AUDIT: one violation, one message. An employee flagged for a missing
+     * checkout is never also flagged for a missing evening punch.
+     */
+    public function test_one_violation_never_produces_two_messages(): void
+    {
+        $this->travelTo('2026-08-11 18:00:00');
+
+        $user = $this->makeEmployee('EMP90052');
+        $this->assignOneDayDuty($user, '2026-08-10');
+        RotationAssignment::where('employee_id', $user->id)->first()->rotation->update([
+            'time_schedule_id' => $this->makeOvernightSchedule($user)->id,
+        ]);
+        $this->makeOpenSession($user, '2026-08-10 08:00:00');
+
+        $report = $this->service->build('2026-08-11', '09:00');
+        $row = $report['rows']->firstWhere('id', $user->id);
+
+        $this->assertTrue($row['has_incomplete_punch']);
+        $this->assertFalse($row['has_missing_evening_punch']);
+    }
+
+    /**
+     * AUDIT: an empty scope yields empty rows and zeroed cards.
+     */
+    public function test_report_over_an_empty_scope_is_empty_and_zeroed(): void
+    {
+        $report = $this->service->build('2026-08-10', '09:00', null, [999999]);
+
+        $this->assertCount(0, $report['rows']);
+        $this->assertSame(0, $report['stats']['total']);
+        foreach (['absent', 'late', 'present', 'rest', 'holiday', 'incomplete', 'evening', 'unassigned', 'awaiting'] as $key) {
+            $this->assertSame(0, $report['stats'][$key], "stat {$key} must be zero, not missing");
+        }
+    }
+
+    /**
+     * AUDIT: the status cards are mutually exclusive and add up to the total.
+     */
+    public function test_status_cards_are_mutually_exclusive_and_sum_to_the_total(): void
+    {
+        $present = $this->makeEmployee('EMP90060');
+        $this->assignOpenWorkEveryDay($present);
+        $this->makeCompleteSession($present, '2026-08-10 08:00:00');
+
+        $late = $this->makeEmployee('EMP90061');
+        $this->assignOpenWorkEveryDay($late);
+        RotationAssignment::where('employee_id', $late->id)->first()->rotation->update([
+            'time_schedule_id' => $this->makeTimeSchedule($late, '08:00', '17:00')->id,
+        ]);
+        $this->makeCompleteSession($late, '2026-08-10 09:25:00');
+
+        $rest = $this->makeEmployee('EMP90062');
+        $this->assignOpenRotation($rest, [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0], '2026-08-03');
+
+        $this->makeEmployee('EMP90063');
+
+        $report = $this->service->build('2026-08-10', '09:00');
+        $stats = $report['stats'];
+
+        $exclusive = ['present', 'late', 'absent', 'leave', 'mission', 'rest', 'holiday', 'awaiting', 'unassigned'];
+        $sum = 0;
+        foreach ($exclusive as $key) {
+            $sum += (int) ($stats[$key] ?? 0);
+        }
+
+        $this->assertSame($stats['total'], $sum);
+        $this->assertSame(1, $stats['present']);
+        $this->assertSame(1, $stats['late']);
+        $this->assertSame(1, $stats['rest']);
+        $this->assertSame(1, $stats['unassigned']);
+    }
+
+    /**
+     * AUDIT: a duty with NO resolvable exit deadline is undecidable, not a
+     * violation. The nightly cleanup job refuses to close such a session; the
+     * report must agree.
+     */
+    public function test_no_resolvable_exit_deadline_is_never_reported_as_a_violation(): void
+    {
+        $this->travelTo('2026-08-11 12:00:00');
+
+        $user = $this->makeEmployee('EMP90070');
+        $this->assignOpenWorkEveryDay($user);
+        RotationAssignment::where('employee_id', $user->id)->first()->rotation->update([
+            'out_ahead_margin' => null,
+            'out_above_margin' => null,
+        ]);
+        $this->makeOpenSession($user, '2026-08-10 08:00:00');
+
+        $report = $this->service->build('2026-08-11', '09:00');
+
+        $this->assertFalse($report['rows']->firstWhere('id', $user->id)['has_incomplete_punch']);
+    }
+
+    /**
+     * AUDIT: an exit recorded AFTER the deadline still counts as recorded. The
+     * report judges whether a punch exists, never whether it was punctual.
+     */
+    public function test_a_late_exit_is_recorded_not_treated_as_a_missing_punch(): void
+    {
+        $this->travelTo('2026-08-11 20:00:00');
+
+        $user = $this->makeEmployee('EMP90071');
+        $this->assignOpenWorkEveryDay($user);
+        RotationAssignment::where('employee_id', $user->id)->first()->rotation->update([
+            'time_schedule_id' => $this->makeTimeSchedule($user, '08:00', '15:00')->id,
+            'out_ahead_margin' => '14:30:00',
+            'out_above_margin' => '18:00:00',
+        ]);
+        $this->makeCompleteSession($user, '2026-08-10 08:00:00', '2026-08-10 17:05:00');
+
+        $report = $this->service->build('2026-08-11', '09:00');
+        $row = $report['rows']->firstWhere('id', $user->id);
+
+        $this->assertFalse($row['has_incomplete_punch']);
+        $this->assertSame('17:05', $row['prev_check_out']);
+    }
+
+    /**
+     * AUDIT: a corrupt row whose checkout precedes its check-in is not an exit.
+     */
+    public function test_exit_before_the_check_in_is_never_reported_as_an_exit(): void
+    {
+        $this->travelTo('2026-08-11 20:00:00');
+
+        $user = $this->makeEmployee('EMP90072');
+        $this->assignOpenWorkEveryDay($user);
+        RotationAssignment::where('employee_id', $user->id)->first()->rotation->update([
+            'time_schedule_id' => $this->makeTimeSchedule($user, '08:00', '15:00')->id,
+            'out_ahead_margin' => '14:30:00',
+            'out_above_margin' => '18:00:00',
+        ]);
+        AttendanceSession::create([
+            'user_id' => $user->id,
+            'attendance_date' => '2026-08-10',
+            'check_in_at' => '2026-08-10 14:00:00',
+            'check_out_at' => '2026-08-10 09:00:00',
+            'status' => 'present',
+            'session_type' => 'normal',
+            'source' => 'device',
+        ]);
+
+        $report = $this->service->build('2026-08-11', '09:00');
+
+        $this->assertSame('', $report['rows']->firstWhere('id', $user->id)['prev_check_out']);
+    }
+
+    /**
+     * AUDIT: a real exit punch CLEARS the legacy auto-close marker. Left in
+     * place, the next morning's report still called the employee "لم يسجل خروج"
+     * even after the repair command healed the session.
+     */
+    public function test_binding_a_real_exit_clears_the_legacy_auto_close_marker(): void
+    {
+        $this->travelTo('2026-08-11 12:00:00');
+
+        $user = $this->makeEmployee('EMP90080');
+        $this->assignOneDayDuty($user, '2026-08-10');
+        RotationAssignment::where('employee_id', $user->id)->first()->rotation->update([
+            'time_schedule_id' => $this->makeOvernightSchedule($user)->id,
+        ]);
+        $session = $this->makeCompleteSession($user, '2026-08-10 08:00:00', '2026-08-11 10:00:00');
+        $session->forceFill(['notes' => 'أغلق تلقائياً: موعد الخروج المتوقع حسب جدول الوقت قد انتهى'])->save();
+
+        $before = $this->service->build('2026-08-11', '09:00')['rows']->firstWhere('id', $user->id);
+        $this->assertTrue($before['has_incomplete_punch']);
+
+        app(AttendanceSessionService::class)->closeSession($session->fresh(), Carbon::parse('2026-08-11 07:55:00'));
+
+        $this->assertStringNotContainsString('أغلق تلقائياً', (string) $session->fresh()->notes);
+
+        $after = $this->service->build('2026-08-11', '09:00')['rows']->firstWhere('id', $user->id);
+        $this->assertFalse($after['has_incomplete_punch']);
+        $this->assertSame('07:55', $after['prev_check_out']);
+    }
+
+    /**
+     * AUDIT: an unrelated operator note must survive the repair — the marker is
+     * stripped as a sentence, never by keyword.
+     */
+    public function test_repair_keeps_an_unrelated_operator_note(): void
+    {
+        $this->travelTo('2026-08-11 12:00:00');
+
+        $user = $this->makeEmployee('EMP90081');
+        $this->assignOpenWorkEveryDay($user);
+        RotationAssignment::where('employee_id', $user->id)->first()->rotation->update([
+            'time_schedule_id' => $this->makeTimeSchedule($user, '08:00', '15:00')->id,
+        ]);
+        $session = $this->makeOpenSession($user, '2026-08-10 08:00:00');
+        // Explicit codepoints only: Arabic comma must be U+060C or the strip
+        // cannot find the sentence boundary.
+        $session->forceFill(['notes' => "أغلق تلقائياً: موعد الخروج المتوقع قد انتهى\u{060C} تم إبلاغ المشرف"])->save();
+        // Sanity: the literal is intact.
+        $this->assertStringStartsWith('أغلق تلقائياً', $session->fresh()->notes);
+
+        app(AttendanceSessionService::class)->closeSession($session->fresh(), Carbon::parse('2026-08-10 14:40:00'));
+
+        $this->assertSame('تم إبلاغ المشرف', $session->fresh()->notes);
+
+        // Strict equality: no dangling separator, no "ended without a punch"
+        // remnant, and no fragment of the old marker survives.
+        $this->assertDoesNotMatchRegularExpression('/أغلق|انتهت|بصمة خروج/', $session->fresh()->notes);
+    }
+
+    /**
+     * Assert a "label: <Arabic-Indic count>" note carries exactly the expected
+     * count. The report prefixes every numeral with U+200F to keep RTL order,
+     * so a literal comparison against a bare digit never matches.
+     */
+    private function assertCountNote(string $notes, string $label, int $expected): void
+    {
+        $gap = '[\s'."\u{200F}\u{200B}\u{00A0}".']*';
+        $pattern = '/'.preg_quote($label, '/').':'.$gap.preg_quote($this->toArabicDigits((string) $expected), '/').'/u';
+
+        $this->assertMatchesRegularExpression($pattern, $notes, "Expected \"{$label}\" to read {$expected} in: {$notes}");
+    }
+
+    private function toArabicDigits(string $number): string
+    {
+        return strtr($number, [
+            '0' => '٠', '1' => '١', '2' => '٢', '3' => '٣', '4' => '٤',
+            '5' => '٥', '6' => '٦', '7' => '٧', '8' => '٨', '9' => '٩',
+        ]);
+    }
+
+    /** An approved mission exception covering one calendar day. */
+    private function makeMissionException(User $user, string $date): ShiftException
+    {
+        return ShiftException::create([
+            'company_id' => $user->company_id,
+            'employee_id' => $user->id,
+            'exception_type' => 'mission',
+            'source' => 'manual',
+            'from_date' => $date,
+            'to_date' => $date,
+            'status' => 'active',
         ]);
     }
 }

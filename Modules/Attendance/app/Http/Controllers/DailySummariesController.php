@@ -127,11 +127,19 @@ class DailySummariesController extends Controller
             'department_ids' => ['nullable', 'array'],
             'department_ids.*' => ['integer', 'exists:departments,id'],
             'user_id' => ['nullable', 'integer', 'exists:users,id'],
-            'status' => ['nullable', 'in:absent,late,leave,no_fingerprint,mission,incomplete,holiday,awaiting,unassigned,evening'],
+            // 'status' is accepted but ignored on purpose: the Word template
+            // carries all SEVEN tables (غياب / متأخر / إجازة / مهمة / بصمة
+            // مسائية / عدم تسجيل البصمة / عدم تسجيل بصمة الخروج). Feeding it
+            // the on-screen table filter would empty six of them and produce
+            // a document that states there were no absences and no missing
+            // check-outs on a day that had both.
         ]);
+
+        // Always the FULL report: a Word deliverable is a signed record of the
+        // whole day, never a screenshot of one table.
         $report = $this->dailyReportService->build(
             $data['date'], $data['cutoff_time'], $data['branch_id'] ?? null, $this->resolveDepartmentIds($data),
-            $data['user_id'] ?? null, $data['status'] ?? null,
+            $data['user_id'] ?? null,
         );
         $export = new DailyReportDocxExport($report);
 

@@ -515,9 +515,24 @@ class DailyReportService
             // the pipeline never counted as a checkout still shows up here).
             $prevCheckIn = $previousMainSession?->check_in_at?->format('H:i') ?? '';
             $prevCheckOutRecorded = null;
+            // A checkout that precedes its own check-in is corrupt bookkeeping
+            // (an out-of-order device catch-up), never a departure: printing it
+            // would show an exit earlier than the entry that opened the duty.
+            $checkoutIsUsable = $previousMainSession?->check_out_at !== null
+                && ($previousMainSession->check_in_at === null
+                    || $previousMainSession->check_out_at->gte($previousMainSession->check_in_at));
+            // An overnight duty's exit lands on the DEPARTURE MORNING, a
+            // different calendar day from the duty day: the strict "same day"
+            // date test would blank a genuinely recorded exit and print the
+            // contradictory "in 08:02 / out — / لم يسجل خروج". The exit only
+            // counts for the duty it closes when that duty is overnight AND
+            // this is its last block day.
+            $isDepartureCheckout = $this->isAssignmentOvernight($previousAssignments->get($user->id))
+                && $this->isLastBlockDay($previousAssignments->get($user->id), $previousDate);
             if ($previousMainSession?->check_out_at !== null
-                && $previousMainSession->check_out_at->toDateString() === $previousDate
-                && ! (is_string($previousMainSession->notes) && str_contains($previousMainSession->notes, 'أغلق تلقائياً'))) {
+                && $checkoutIsUsable
+                && ! (is_string($previousMainSession->notes) && str_contains($previousMainSession->notes, 'أغلق تلقائياً'))
+                && ($previousMainSession->check_out_at->toDateString() === $previousDate || $isDepartureCheckout)) {
                 $prevCheckOutRecorded = $previousMainSession->check_out_at->format('H:i');
             }
             $prevLastPunch = $prevDayTimes->isNotEmpty() ? $prevDayTimes->last() : null;
@@ -1343,8 +1358,12 @@ class DailyReportService
 
         $windowEnd = $this->exitWindowEnd($dutyDate, $assignment, $session);
         if ($windowEnd === null) {
-            // Without a resolvable deadline yesterday's duty is a violation.
-            return true;
+            // NO deadline at all means the case is UNDECIDABLE, not proven:
+            // the nightly stale-session cleanup deliberately SKIPS such a
+            // session ("no resolvable exit deadline") and leaves it open for an
+            // operator to judge. The report must agree — inventing a violation
+            // here accuses an employee over unfinished configuration.
+            return false;
         }
 
         // An exit deadline that falls BEFORE the session's own check-in cannot

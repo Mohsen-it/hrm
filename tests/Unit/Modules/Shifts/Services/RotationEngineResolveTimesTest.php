@@ -310,6 +310,143 @@ class RotationEngineResolveTimesTest extends TestCase
     }
 
     /**
+     * Regression: a DAY duty's exit window is the union of the time schedule
+     * and the legacy rotation times, never the legacy ones alone.
+     *
+     * The legacy absolute window times predate the time-schedule page and go
+     * stale: an 08:00-15:00 schedule whose out_ahead_margin is 59 minutes
+     * opens the exit window at 14:01, but a leftover legacy "14:50" opened it
+     * at 14:50. Every exit punch in that dead zone was classified "extra",
+     * the session was never closed, and the daily report then flagged
+     * employees who had demonstrably badged out at 14:28-14:44.
+     */
+    public function test_day_exit_window_is_the_union_of_schedule_and_legacy_times(): void
+    {
+        [$user, $assignment] = $this->makeAssignment();
+
+        $schedule = TimeSchedule::create([
+            'company_id' => $user->company_id,
+            'name' => 'Admin Day',
+            'in_time' => '08:00',
+            'out_time' => '15:00',
+            'is_multi_day' => false,
+            'out_ahead_margin' => 59,  // window opens 14:01
+            'out_above_margin' => 180, // window closes 18:00
+        ]);
+
+        $assignment->rotation()->update([
+            'time_schedule_id' => $schedule->id,
+            // Stale legacy window: opens 49 minutes LATE, closes 6 hours late.
+            'out_ahead_margin' => '14:50:00',
+            'out_above_margin' => '23:59:00',
+        ]);
+
+        $times = $this->engine->resolveTimes($assignment->fresh(['rotation.timeSchedule']));
+
+        $this->assertFalse($times['is_overnight']);
+        // Widened, never narrowed: the schedule may open the window earlier...
+        $this->assertSame('14:01', $times['out_ahead_margin']);
+        // ...and the legacy end still extends it further.
+        $this->assertSame('23:59', $times['out_above_margin']);
+    }
+
+    /**
+     * The other direction: a legacy window that is narrower than the schedule
+     * must not shrink what the schedule allows.
+     */
+    public function test_day_exit_window_widens_when_legacy_end_is_narrower(): void
+    {
+        [$user, $assignment] = $this->makeAssignment();
+
+        $schedule = TimeSchedule::create([
+            'company_id' => $user->company_id,
+            'name' => 'Admin Day Wide',
+            'in_time' => '08:00',
+            'out_time' => '15:00',
+            'is_multi_day' => false,
+            'out_ahead_margin' => 30,  // window opens 14:30
+            'out_above_margin' => 240, // window closes 19:00
+        ]);
+
+        $assignment->rotation()->update([
+            'time_schedule_id' => $schedule->id,
+            'out_ahead_margin' => '14:30:00',
+            'out_above_margin' => '17:00:00', // legacy would reject a 17:30 exit
+        ]);
+
+        $times = $this->engine->resolveTimes($assignment->fresh(['rotation.timeSchedule']));
+
+        $this->assertSame('14:30', $times['out_ahead_margin']);
+        $this->assertSame('19:00', $times['out_above_margin']);
+    }
+
+    /**
+     * Overnight duties keep legacy priority on the exit side: their out_time
+     * is the DEPARTURE-MORNING time (next day), so the schedule margins
+     * describe the morning window - not the same-evening exit window the
+     * legacy fields carry. Widening here would swallow the evening presence
+     * punch as a check-out.
+     */
+    public function test_overnight_exit_window_keeps_legacy_priority(): void
+    {
+        [$user, $assignment] = $this->makeAssignment();
+
+        $schedule = TimeSchedule::create([
+            'company_id' => $user->company_id,
+            'name' => 'Overnight Legacy',
+            'in_time' => '08:00',
+            'out_time' => '08:00',
+            'is_multi_day' => true,
+            'out_ahead_margin' => 5,
+            'out_above_margin' => 120,
+        ]);
+
+        $assignment->rotation()->update([
+            'time_schedule_id' => $schedule->id,
+            'out_ahead_margin' => '18:30:00',
+            'out_above_margin' => '23:59:00',
+        ]);
+
+        $times = $this->engine->resolveTimes($assignment->fresh(['rotation.timeSchedule']));
+
+        $this->assertTrue($times['is_overnight']);
+        $this->assertSame('18:30', $times['out_ahead_margin']);
+        $this->assertSame('23:59', $times['out_above_margin']);
+        // The departure-morning window still comes from the schedule margins.
+        $this->assertSame('07:55', $times['next_day_out_ahead_margin']);
+        $this->assertSame('10:00', $times['next_day_out_above_margin']);
+    }
+
+    /**
+     * The check-in side is untouched by the exit-window union.
+     */
+    public function test_check_in_windows_keep_legacy_priority_for_day_duties(): void
+    {
+        [$user, $assignment] = $this->makeAssignment();
+
+        $schedule = TimeSchedule::create([
+            'company_id' => $user->company_id,
+            'name' => 'Admin In',
+            'in_time' => '08:00',
+            'out_time' => '15:00',
+            'is_multi_day' => false,
+            'in_ahead_margin' => 60,
+            'in_above_margin' => 60,
+        ]);
+
+        $assignment->rotation()->update([
+            'time_schedule_id' => $schedule->id,
+            'in_ahead_margin' => '07:00:00',
+            'in_above_margin' => '12:00:00',
+        ]);
+
+        $times = $this->engine->resolveTimes($assignment->fresh(['rotation.timeSchedule']));
+
+        $this->assertSame('07:00', $times['in_ahead_margin']);
+        $this->assertSame('12:00', $times['in_above_margin']);
+    }
+
+    /**
      * @return array{0: User, 1: RotationAssignment}
      */
     private function makeAssignment(): array

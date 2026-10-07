@@ -452,17 +452,37 @@ class RotationEngine
                 ahead: false,
                 preferSchedule: $isMultiDay,
             ),
+            // Day duties: the exit window is the UNION of both sources, never
+            // the legacy one alone. A day schedule's out_time is a same-day
+            // clock time, so its margins describe exactly the window the legacy
+            // absolute rotation times used to describe — but they are the page
+            // the user actually edits. Letting the legacy start win silently
+            // pushed the window open later than the schedule allows (e.g. an
+            // 08:00-15:00 schedule with a 59-minute out_ahead_margin opens at
+            // 14:01, while a stale legacy "14:50" opened it at 14:50): every
+            // exit punch in that dead zone was then classified "extra", the
+            // session was never closed, and the daily report flagged employees
+            // who demonstrably badged out. Widening only — the window start is
+            // the earlier of the two and the window end the later — so no punch
+            // that used to be accepted can be rejected after this change.
+            //
+            // Overnight duties keep legacy priority on the exit side: their
+            // out_time is the DEPARTURE-MORNING time (e.g. 08:00 next day), so
+            // the schedule margins describe the morning window, not the
+            // same-evening exit window the legacy fields carry.
             'out_ahead_margin' => $this->resolveWindowEdge(
                 $checkOut,
                 $schedule['out_ahead_margin'] ?? null,
                 $this->legacyRotationValue($assignment, 'out_ahead_margin'),
                 ahead: true,
+                widenWithSchedule: ! $isMultiDay,
             ),
             'out_above_margin' => $this->resolveWindowEdge(
                 $checkOut,
                 $schedule['out_above_margin'] ?? null,
                 $this->legacyRotationValue($assignment, 'out_above_margin'),
                 ahead: false,
+                widenWithSchedule: ! $isMultiDay,
             ),
             'next_day_out_ahead_margin' => $isMultiDay
                 ? $this->relativeWindowEdge($checkOut, $this->widestMinuteMargin($schedule['out_ahead_margin'] ?? null, $schedule['early_margin'] ?? null), ahead: true)
@@ -503,14 +523,31 @@ class RotationEngine
      * schedule margins define the actual entry window (legacy rotations carry
      * a same-day 09:30-12:00 window that misses the real 07:30-08:00 duty
      * check-ins), while the same-day exit window keeps legacy priority.
+     *
+     * Day duties pass widenWithSchedule=true on the exit side: both sources
+     * describe the same same-day exit window, so the result is their UNION
+     * (earliest start, latest end) rather than the legacy edge alone. The time
+     * schedule is the page the user edits, so a stale legacy time may widen the
+     * window but must never narrow what the schedule allows — narrowing is what
+     * silently turned legitimate exit punches into "extra" punches.
      */
-    private function resolveWindowEdge(?string $anchor, mixed $scheduleMargin, mixed $legacyMargin, bool $ahead, bool $preferSchedule = false): ?string
-    {
+    private function resolveWindowEdge(
+        ?string $anchor,
+        mixed $scheduleMargin,
+        mixed $legacyMargin,
+        bool $ahead,
+        bool $preferSchedule = false,
+        bool $widenWithSchedule = false,
+    ): ?string {
         // Legacy absolute window time (e.g. "07:00:00") wins when present —
         // unless the schedule explicitly takes priority for this edge.
         if (! $preferSchedule && $legacyMargin !== null && $legacyMargin !== '') {
             if (is_string($legacyMargin) && preg_match('/^\d{1,2}:\d{2}/', $legacyMargin) === 1) {
-                return substr($legacyMargin, 0, 5);
+                $legacyEdge = substr($legacyMargin, 0, 5);
+
+                return $widenWithSchedule
+                    ? $this->widestEdge($legacyEdge, $this->marginEdge($anchor, $scheduleMargin, $ahead), $ahead)
+                    : $legacyEdge;
             }
         }
 
@@ -542,6 +579,53 @@ class RotationEngine
         $time = $ahead ? $time->subMinutes($minutes) : $time->addMinutes($minutes);
 
         return $time->format('H:i');
+    }
+
+    /**
+     * Resolve a single margin value (absolute H:i legacy time OR integer
+     * minutes relative to an anchor) into one H:i window edge.
+     */
+    private function marginEdge(?string $anchor, mixed $margin, bool $ahead): ?string
+    {
+        if ($margin === null || $margin === '') {
+            return null;
+        }
+
+        if (is_string($margin) && preg_match('/^\d{1,2}:\d{2}/', $margin) === 1) {
+            return substr($margin, 0, 5);
+        }
+
+        $minutes = (int) $margin;
+
+        if ($minutes <= 0 || ! $anchor || preg_match('/^\d{1,2}:\d{2}/', $anchor) !== 1) {
+            return null;
+        }
+
+        $time = Carbon::createFromFormat('H:i', $anchor);
+
+        if (! $time) {
+            return null;
+        }
+
+        return ($ahead ? $time->subMinutes($minutes) : $time->addMinutes($minutes))->format('H:i');
+    }
+
+    /**
+     * Combine two window edges into the widest one: the earlier start (ahead)
+     * or the later end (not ahead). Never narrows — a punch the legacy edge
+     * already accepted keeps being accepted after the schedule is consulted.
+     */
+    private function widestEdge(?string $legacyEdge, ?string $scheduleEdge, bool $ahead): ?string
+    {
+        if ($legacyEdge === null) {
+            return $scheduleEdge;
+        }
+
+        if ($scheduleEdge === null) {
+            return $legacyEdge;
+        }
+
+        return $ahead ? min($legacyEdge, $scheduleEdge) : max($legacyEdge, $scheduleEdge);
     }
 
     /**

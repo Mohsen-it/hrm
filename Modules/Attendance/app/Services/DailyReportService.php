@@ -161,11 +161,21 @@ class DailyReportService
             ->whereDate('summary_date', '<', $date)
             ->get(['user_id', 'summary_date'])
             ->groupBy('user_id');
+        // Every day the employee was legitimately away: approved leave and
+        // approved shift exceptions. A daily summary is built nightly, so a
+        // retroactive approval leaves stale "absent" rows behind — counting
+        // those would report one day as BOTH an absence and a leave.
+        $excusedDates = $this->excusedDatesByUser($userIds, $monthFrom, $date);
         $monthlyAbsenceCounts = $monthlyAbsentDates->map(
             fn (Collection $rows, int $userId) => $rows
                 ->map(fn ($row) => substr((string) $row->summary_date, 0, 10))
                 ->unique()
-                ->filter(fn (string $day) => $isWorkDayOn((int) $userId, $day))
+                // contains(), not has(): has() tests collection KEYS, which a
+                // list of date strings never has — it silently passed every
+                // day and counted leave days as absences.
+                ->filter(fn (string $day) => $isWorkDayOn((int) $userId, $day)
+                    && ! $excusedDates->get((int) $userId, collect())->contains($day)
+                    && ! $this->isHolidayOn($day, $users->get($userId), $holidays, $assignmentForDate((int) $userId, $day)))
                 ->count()
         );
         // Use the same source as the "Unregistered Employees" fingerprint
@@ -182,9 +192,24 @@ class DailyReportService
             ->overlapping($monthFrom, $date)
             ->get()
             ->groupBy('user_id')
-            ->map(fn (Collection $requests, int $userId) => $requests->sum(
-                fn (UserVacationRequest $request) => $this->workDaysOverlappingPeriod($request, $monthFrom, $date, (int) $userId, $isWorkDayOn)
-            ));
+            // Counted as DISTINCT rotation work days, never as a sum over
+            // requests: two approved requests overlapping on the same days must
+            // not report the same day twice.
+            ->map(function (Collection $requests, int $userId) use ($monthFrom, $date, $isWorkDayOn): int {
+                $days = collect();
+                foreach ($requests as $request) {
+                    $cursor = Carbon::parse(max($monthFrom, substr((string) $request->start_date, 0, 10)))->startOfDay();
+                    $end = Carbon::parse(min($date, substr((string) $request->end_date, 0, 10)))->startOfDay();
+                    while ($cursor->lte($end)) {
+                        if ($isWorkDayOn($userId, $cursor->toDateString())) {
+                            $days->push($cursor->toDateString());
+                        }
+                        $cursor->addDay();
+                    }
+                }
+
+                return $days->unique()->count();
+            });
         $exceptions = ShiftException::active()->whereIn('employee_id', $userIds)
             ->whereIn('exception_type', ['leave', 'mission', 'training', 'swap'])
             ->overlapping($date)->get()->groupBy('employee_id');
@@ -210,7 +235,16 @@ class DailyReportService
             $rawTimes = $rawTimesByUser->get($user->id, []);
             $hasRawPunch = ! $hasCheckedIn && $rawTimes !== []
                 && ! $this->absenceService->isOvernightCheckoutOnly($user->id, $rawTimes, $day->copy(), $previousAssignments);
-            $onMission = $exception?->exception_type === 'mission' || $this->isMission($vacation);
+            // A mission says WHERE the employee was sent, not that they failed
+            // to attend, so it obeys the same two guards as a vacation or it
+            // contradicts the row it sits next to: it is meaningless on a
+            // rotation rest day (nobody was scheduled), and someone who
+            // demonstrably badged in is classified by their punches. A stale
+            // exception must never erase a real attendance and hide the
+            // employee from حاضر/متأخر.
+            $onMission = $expected->has($user->id)
+                && ! $hasCheckedIn
+                && ($exception?->exception_type === 'mission' || $this->isMission($vacation));
             // The vacations table must reflect only the employees who are
             // genuinely on vacation on the report day. An approved vacation
             // only matters on a day the employee was expected to work: on one
@@ -240,7 +274,9 @@ class DailyReportService
             // Previous-day punch times (app timezone) shared by the checkout
             // and evening evaluations below.
             $prevDayTimes = collect($prevRawTimesByUser->get($user->id, []))
-                ->map(fn (Carbon $t) => $t->format('H:i'))->sort()->values();
+                ->sortBy(fn (Carbon $t) => $t->getTimestamp())
+                ->map(fn (Carbon $t) => $t->format('H:i'))
+                ->values();
             // Prefer the session that actually recorded a check-out: a real
             // exit punch anywhere on the duty day proves the employee left
             // (an earlier stray open session — e.g. a mid-night punch — must
@@ -505,7 +541,10 @@ class DailyReportService
             // checkout, which already has its own column. Display only, it
             // never changes check-in/check-out or the status. Day duties
             // never carry one.
-            $dayPunchTimes = collect($rawTimes)->map(fn (Carbon $t) => $t->format('H:i'))->sort()->values();
+            $dayPunchTimes = collect($rawTimes)
+                ->sortBy(fn (Carbon $t) => $t->getTimestamp())
+                ->map(fn (Carbon $t) => $t->format('H:i'))
+                ->values();
             $checkOutSameDay = $checkOutAt !== null && ! $checkOutNextDay ? $checkOutAt->format('H:i') : null;
             $eveningPunch = null;
             if ($this->isAssignmentOvernight($assignment)) {
@@ -543,11 +582,21 @@ class DailyReportService
                 'late_minutes' => $late && $mainSession?->check_in_at ? (int) Carbon::parse($date.' '.$lateThreshold)->diffInMinutes($mainSession->check_in_at, true) : 0,
                 'notes' => implode('، ', $notes),
             ];
-        })->when($statusFilter, function (Collection $collection) use ($statusFilter): Collection {
+        });
+
+        // The counters describe the REPORT DAY, never the subset the on-screen
+        // table happens to be filtered to. A manager filtering "غياب" must
+        // still read the true late/present counts, so every stat is derived
+        // from the unfiltered roster and the filter is applied afterwards.
+        $stats = $this->buildStats($rows);
+
+        $rows = $rows->when($statusFilter, function (Collection $collection) use ($statusFilter): Collection {
             return match ($statusFilter) {
                 'no_fingerprint' => $collection->where('has_no_fingerprint', true)
                     ->map(fn (array $row) => [
                         ...$row,
+                        // A display-only relabel for this table. The counters
+                        // above were already computed, so it cannot reach them.
                         'status' => 'no_fingerprint',
                         'status_label' => 'لا توجد بصمة مسجلة',
                     ]),
@@ -564,20 +613,42 @@ class DailyReportService
             };
         })->values();
 
-        $stats = $rows->countBy('status')->all();
-        // Keep the غياب counter in sync with the غياب table: unregistered
-        // employees are listed under "عدم تسجيل البصمة على الجهاز", not here.
+        return ['date' => $date, 'cutoff_time' => $cutoffTime, 'rows' => $rows, 'stats' => $stats];
+    }
+
+    /**
+     * The report's headline counters, derived from the UNFILTERED roster.
+     *
+     * Every card is always present (zero rather than a missing key), the nine
+     * mutually exclusive status cards sum to the total, and the three
+     * cross-cutting cards (بصمة مسائية / عدم تسجيل بصمة الخروج / بدون بصمة) are
+     * counted independently because an employee can carry one of them on top
+     * of any status.
+     *
+     * @param  Collection<int, array<string, mixed>>  $rows
+     * @return array<string, int>
+     */
+    private function buildStats(Collection $rows): array
+    {
+        $statuses = [
+            'present', 'late', 'absent', 'leave', 'mission',
+            'rest', 'holiday', 'awaiting', 'unassigned',
+        ];
+
+        $stats = ['total' => $rows->count()];
+        foreach ($statuses as $status) {
+            $stats[$status] = $rows->where('status', $status)->count();
+        }
+
+        // Unregistered employees are listed under "عدم تسجيل البصمة على
+        // الجهاز", never as absences they can never avoid: with no enrolled
+        // template, no device could ever record their arrival.
         $stats['absent'] = $rows->where('status', 'absent')->where('has_no_fingerprint', false)->count();
-        $stats['awaiting'] = $rows->where('status', 'awaiting')->count();
         $stats['no_fingerprint'] = $rows->where('has_no_fingerprint', true)->count();
         $stats['incomplete'] = $rows->where('has_incomplete_punch', true)->count();
         $stats['evening'] = $rows->where('has_missing_evening_punch', true)->count();
-        $stats['unassigned'] = $rows->where('status', 'unassigned')->count();
-        $stats['rest'] = $rows->where('status', 'rest')->count();
-        $stats['holiday'] = $rows->where('status', 'holiday')->count();
-        $stats['total'] = $rows->count();
 
-        return ['date' => $date, 'cutoff_time' => $cutoffTime, 'rows' => $rows, 'stats' => $stats];
+        return $stats;
     }
 
     private function isMission(?UserVacationRequest $request): bool
@@ -590,6 +661,79 @@ class DailyReportService
         return str_contains(mb_strtolower(($type->code ?? '').' '.($type->name_ar ?? '').' '.($type->name_en ?? '')), 'مهم')
             || str_contains(mb_strtolower(($type->code ?? '').' '.($type->name_ar ?? '').' '.($type->name_en ?? '')), 'mission')
             || str_contains(mb_strtolower(($type->code ?? '').' '.($type->name_ar ?? '').' '.($type->name_en ?? '')), 'travel');
+    }
+
+    /**
+     * Every calendar day of the period each employee was legitimately away:
+     * approved vacation requests plus approved leave/mission/training/swap
+     * exceptions, as a set of "Y-m-d" strings per employee.
+     *
+     * @param  Collection<int, int>|array<int, int>  $userIds
+     * @return Collection<int, Collection<int, string>>
+     */
+    private function excusedDatesByUser(Collection|array $userIds, string $from, string $to): Collection
+    {
+        $ids = $userIds instanceof Collection ? $userIds->all() : $userIds;
+        if ($ids === []) {
+            return collect();
+        }
+
+        $days = collect();
+
+        foreach (UserVacationRequest::approved()->whereIn('user_id', $ids)
+            ->overlapping($from, $to)->get(['user_id', 'start_date', 'end_date']) as $request) {
+            // put(), never merge(): array_merge() renumbers integer keys, which
+            // would silently collapse every employee onto index 0 and destroy
+            // the per-employee index the caller reads.
+            $days->put((int) $request->user_id, $this->datesBetween(
+                $from,
+                $to,
+                substr((string) $request->start_date, 0, 10),
+                substr((string) $request->end_date, 0, 10),
+            ));
+        }
+
+        foreach (ShiftException::active()->whereIn('employee_id', $ids)
+            ->whereIn('exception_type', ['leave', 'mission', 'training', 'swap'])
+            ->overlapping($from)->get(['employee_id', 'from_date', 'to_date']) as $exception) {
+            $days->put((int) $exception->employee_id, $this->datesBetween(
+                $from,
+                $to,
+                substr((string) $exception->from_date, 0, 10),
+                substr((string) $exception->to_date, 0, 10),
+            ));
+        }
+
+        return $days->map(fn (Collection $dates) => $dates->unique()->values());
+    }
+
+    /**
+     * The inclusive calendar days of one request clipped to a period.
+     *
+     * @return Collection<int, string>
+     */
+    private function datesBetween(string $from, string $to, string $start, string $end): Collection
+    {
+        $cursor = Carbon::parse(max($from, $start))->startOfDay();
+        $last = Carbon::parse(min($to, $end))->startOfDay();
+
+        $days = collect();
+        while ($cursor->lte($last)) {
+            $days->push($cursor->toDateString());
+            $cursor->addDay();
+        }
+
+        return $days;
+    }
+
+    /**
+     * Whether an official holiday covers this employee on that day.
+     *
+     * @param  Collection<int, Holiday>  $holidays
+     */
+    private function isHolidayOn(string $date, ?User $user, Collection $holidays, mixed $assignment): bool
+    {
+        return $user !== null && $this->isOfficialHoliday($date, $user, $holidays, $assignment);
     }
 
     /** Count the inclusive vacation days that fall within a report period. */

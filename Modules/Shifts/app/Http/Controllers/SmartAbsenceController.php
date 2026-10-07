@@ -19,6 +19,7 @@ use Modules\Shifts\Repositories\RotationRepository;
 use Modules\Shifts\Services\AbsenceCalculationService;
 use Modules\Shifts\Services\RotationEngine;
 use Symfony\Component\HttpFoundation\Response as HttpResponse;
+use Modules\Branches\Models\Branch;
 
 class SmartAbsenceController extends Controller
 {
@@ -39,12 +40,13 @@ class SmartAbsenceController extends Controller
         $date = $request->input('date') ? Carbon::parse($request->input('date')) : now();
         $dateStr = $date->toDateString();
         $departmentId = $request->input('department_id') ? (int) $request->input('department_id') : null;
+        $branchId = $request->input('branch_id') ? (int) $request->input('branch_id') : $this->getDefaultBranchId();
         $rotationIds = $this->parseIdList($request->input('rotation_ids', $request->input('rotation_id')));
         $rotationGroupIds = $this->parseIdList($request->input('rotation_group_ids', $request->input('rotation_group_id')));
-        $includeAwaiting = $request->boolean('include_awaiting');
+        $includeAwaiting = $request->boolean('include_awaiting', true);
         $search = trim((string) $request->input('search', ''));
 
-        $report = $this->buildDailyReport($date, $dateStr, $departmentId, $rotationIds, $rotationGroupIds, $includeAwaiting);
+        $report = $this->buildDailyReport($date, $dateStr, $departmentId, $branchId, $rotationIds, $rotationGroupIds, $includeAwaiting);
 
         $absentDetails = $report['absentDetails'];
         if ($search !== '') {
@@ -64,7 +66,7 @@ class SmartAbsenceController extends Controller
 
         $unassigned = $this->buildUnassignedDetails($date, $dateStr);
 
-        $statusCounts = $this->absenceService->getDailyStatusBreakdown($date, $departmentId, $rotationIds, $rotationGroupIds);
+        $statusCounts = $this->absenceService->getDailyStatusBreakdown($date, $departmentId, $branchId, $rotationIds, $rotationGroupIds);
 
         $totalExpected = $report['expected']->count();
         $totalAbsent = $report['absent']->count();
@@ -106,10 +108,12 @@ class SmartAbsenceController extends Controller
             // skip these queries entirely. Same payload on full loads.
             'rotations' => fn () => $this->buildRotationOptions(),
             'departments' => fn () => $this->buildDepartmentOptions(),
+            'branches' => fn () => $this->buildBranchOptions(),
             'monthlyData' => [],
             'monthlyReportData' => [],
             'filters' => [
                 'department_id' => $departmentId,
+                'branch_id' => $branchId,
                 'rotation_ids' => $rotationIds,
                 'rotation_group_ids' => $rotationGroupIds,
                 'date' => $dateStr,
@@ -133,11 +137,12 @@ class SmartAbsenceController extends Controller
         [$from, $to] = $this->parseRangeDates($request);
 
         $departmentId = $request->input('department_id') ? (int) $request->input('department_id') : null;
+        $branchId = $request->input('branch_id') ? (int) $request->input('branch_id') : null;
         $rotationIds = $this->parseIdList($request->input('rotation_ids', $request->input('rotation_id')));
         $rotationGroupIds = $this->parseIdList($request->input('rotation_group_ids', $request->input('rotation_group_id')));
         $search = trim((string) $request->input('search', ''));
 
-        $report = $this->absenceService->getMonthlyAbsenceReport($from, $to, $departmentId, $rotationIds, $rotationGroupIds, $search ?: null);
+        $report = $this->absenceService->getMonthlyAbsenceReport($from, $to, $departmentId, $branchId, $rotationIds, $rotationGroupIds, $search ?: null);
 
         $absentDetails = $this->buildMonthlyAbsentDetails($report);
 
@@ -198,10 +203,12 @@ class SmartAbsenceController extends Controller
             ],
             'rotations' => fn () => $this->buildRotationOptions(),
             'departments' => fn () => $this->buildDepartmentOptions(),
+            'branches' => fn () => $this->buildBranchOptions(),
             'filters' => [
                 'from_date' => $from->toDateString(),
                 'to_date' => $to->toDateString(),
                 'department_id' => $departmentId,
+                'branch_id' => $branchId,
                 'rotation_ids' => $rotationIds,
                 'rotation_group_ids' => $rotationGroupIds,
                 'search' => $search !== '' ? $search : null,
@@ -222,11 +229,12 @@ class SmartAbsenceController extends Controller
         [$from, $to] = $this->parseRangeDates($request);
 
         $departmentId = $request->input('department_id') ? (int) $request->input('department_id') : null;
+        $branchId = $request->input('branch_id') ? (int) $request->input('branch_id') : null;
         $rotationIds = $this->parseIdList($request->input('rotation_ids', $request->input('rotation_id')));
         $rotationGroupIds = $this->parseIdList($request->input('rotation_group_ids', $request->input('rotation_group_id')));
         $search = trim((string) $request->input('search', ''));
 
-        $report = $this->absenceService->getMonthlyAbsenceReport($from, $to, $departmentId, $rotationIds, $rotationGroupIds, $search ?: null);
+        $report = $this->absenceService->getMonthlyAbsenceReport($from, $to, $departmentId, $branchId, $rotationIds, $rotationGroupIds, $search ?: null);
 
         $employees = $this->buildMonthlyAbsentDetails($report);
 
@@ -391,6 +399,35 @@ class SmartAbsenceController extends Controller
     }
 
     /**
+     * Active branch options used by the report filter bars.
+     *
+     * @return array<int, array{id: int, name: string}>
+     */
+    private function buildBranchOptions(): array
+    {
+        return DB::table('branches')
+            ->where('status', 1)
+            ->orderBy('branch_name')
+            ->get(['id', 'branch_name'])
+            ->map(fn ($branch) => ['id' => (int) $branch->id, 'name' => $branch->branch_name])
+            ->all();
+    }
+
+    /**
+     * Get the default branch ID (الطيران مدني) for the smart absence report.
+     *
+     * @return int|null
+     */
+    private function getDefaultBranchId(): ?int
+    {
+        return DB::table('branches')
+            ->where('status', 1)
+            ->where('branch_name', 'like', '%الطيران%')
+            ->orderBy('id')
+            ->value('id') ?: null;
+    }
+
+    /**
      * Export the daily smart-absence report as a fully-formatted .xlsx file
      * with Arabic / RTL support.
      */
@@ -401,10 +438,11 @@ class SmartAbsenceController extends Controller
         $date = $request->input('date') ? Carbon::parse($request->input('date')) : now();
         $dateStr = $date->toDateString();
         $departmentId = $request->input('department_id') ? (int) $request->input('department_id') : null;
+        $branchId = $request->input('branch_id') ? (int) $request->input('branch_id') : null;
         $rotationIds = $this->parseIdList($request->input('rotation_ids', $request->input('rotation_id')));
         $rotationGroupIds = $this->parseIdList($request->input('rotation_group_ids', $request->input('rotation_group_id')));
 
-        $report = $this->buildDailyReport($date, $dateStr, $departmentId, $rotationIds, $rotationGroupIds, $request->boolean('include_awaiting'));
+        $report = $this->buildDailyReport($date, $dateStr, $departmentId, $branchId, $rotationIds, $rotationGroupIds, $request->boolean('include_awaiting', true));
 
         $export = new SmartAbsenceDailyExport(
             date: $date,
@@ -458,19 +496,20 @@ class SmartAbsenceController extends Controller
         Carbon $date,
         string $dateStr,
         ?int $departmentId,
+        ?int $branchId,
         array $rotationIds,
         array $rotationGroupIds,
         bool $includeAwaiting = false,
     ): array {
-        $expected = $this->absenceService->getExpectedEmployees($date, $departmentId, $rotationIds, $rotationGroupIds);
-        $absent = $this->absenceService->getAbsentEmployees($date, $departmentId, $rotationIds, $rotationGroupIds);
+        $expected = $this->absenceService->getExpectedEmployees($date, $departmentId, $branchId, $rotationIds, $rotationGroupIds);
+        $absent = $this->absenceService->getAbsentEmployees($date, $departmentId, $branchId, $rotationIds, $rotationGroupIds);
 
         // Optionally append the employees still inside their arrival window
         // (current-day mornings), flagged with an awaiting status so the
         // table explains itself instead of rendering empty.
         $awaiting = collect();
         if ($includeAwaiting) {
-            $awaiting = $this->absenceService->getAwaitingArrivalEmployees($date, $departmentId, $rotationIds, $rotationGroupIds)
+            $awaiting = $this->absenceService->getAwaitingArrivalEmployees($date, $departmentId, $branchId, $rotationIds, $rotationGroupIds)
                 ->diff($absent)
                 ->values();
         }

@@ -25,6 +25,7 @@ const props = defineProps({
     monthlyReportData: { type: Object, default: () => ({ employees: { data: [], links: [] }, total_expected_days: 0, total_absent_days: 0, total_present_days: 0, attendance_rate: 100, from_date: '', to_date: '' }) },
     rotations: { type: Array, default: () => [] },
     departments: { type: Array, default: () => [] },
+    branches: { type: Array, default: () => [] },
     filters: { type: Object, default: () => ({}) },
 })
 
@@ -32,11 +33,14 @@ const activeTab = ref(props.dailyData?.date ? 'daily' : 'monthly')
 
 const selectedDate = ref(props.filters?.date || new Date().toISOString().split('T')[0])
 const selectedDepartmentId = ref(props.filters?.department_id || null)
+// Branch filter: default value comes from the controller (الطيران مدني)
+const selectedBranchId = ref(props.filters?.branch_id || null)
 const selectedRotationIds = ref(Array.isArray(props.filters?.rotation_ids) ? props.filters.rotation_ids : (props.filters?.rotation_id ? [props.filters.rotation_id] : []))
 const selectedRotationGroupIds = ref(Array.isArray(props.filters?.rotation_group_ids) ? props.filters.rotation_group_ids : (props.filters?.rotation_group_id ? [props.filters.rotation_group_id] : []))
 // Show employees still inside their arrival window in the daily table
 // (current-day mornings would otherwise render an empty absent list).
-const includeAwaiting = ref(Boolean(props.filters?.include_awaiting))
+// Enabled by default for better UX.
+const includeAwaiting = ref(props.filters?.include_awaiting !== undefined ? Boolean(props.filters?.include_awaiting) : true)
 
 const today = new Date()
 const selectedMonth = ref(Number(props.filters?.month) || today.getMonth() + 1)
@@ -83,6 +87,11 @@ const departmentOptions = computed(() => [
     ...props.departments.map((d) => ({ value: d.id, label: d.name })),
 ])
 
+const branchOptions = computed(() => [
+    { value: '', label: t('shifts.all_branches') },
+    ...props.branches.map((b) => ({ value: b.id, label: b.name })),
+])
+
 const multiRotationOptions = computed(() =>
     props.rotations.map((r) => ({ value: r.id, label: r.name }))
 )
@@ -103,6 +112,7 @@ const multiGroupOptions = computed(() => {
 const filterParams = computed(() => ({
     date: selectedDate.value,
     department_id: selectedDepartmentId.value || null,
+    branch_id: selectedBranchId.value || null,
     rotation_ids: selectedRotationIds.value,
     rotation_group_ids: selectedRotationGroupIds.value,
     include_awaiting: includeAwaiting.value || null,
@@ -123,6 +133,7 @@ const monthlyFilterParams = computed(() => ({
     from_date: fromDate.value,
     to_date: toDate.value,
     department_id: selectedDepartmentId.value || null,
+    branch_id: selectedBranchId.value || null,
     rotation_ids: selectedRotationIds.value,
     rotation_group_ids: selectedRotationGroupIds.value,
     search: searchQuery.value || null,
@@ -130,6 +141,7 @@ const monthlyFilterParams = computed(() => ({
 
 const hasActiveFilters = computed(() =>
     selectedDepartmentId.value
+    || selectedBranchId.value
     || selectedRotationIds.value.length > 0
     || selectedRotationGroupIds.value.length > 0
 )
@@ -204,6 +216,10 @@ watch(selectedDepartmentId, () => {
     reloadActiveTab()
 })
 
+watch(selectedBranchId, () => {
+    reloadActiveTab()
+})
+
 watch(includeAwaiting, () => {
     reloadActiveTab()
 })
@@ -218,11 +234,12 @@ watch([fromDate, toDate], () => {
 })
 
 function loadDaily() {
-    // Partial reload: rotations/departments filter options are static after
+    // Partial reload: rotations/departments/branches filter options are static after
     // the first load, so only the report data + filters are refreshed.
     router.get(route('smart-absence.daily'), {
         date: selectedDate.value,
         department_id: selectedDepartmentId.value || null,
+        branch_id: selectedBranchId.value || null,
         rotation_ids: selectedRotationIds.value,
         rotation_group_ids: selectedRotationGroupIds.value,
         include_awaiting: includeAwaiting.value ? 1 : null,
@@ -235,6 +252,7 @@ function loadMonthly() {
         from_date: fromDate.value,
         to_date: toDate.value,
         department_id: selectedDepartmentId.value || null,
+        branch_id: selectedBranchId.value || null,
         rotation_ids: selectedRotationIds.value,
         rotation_group_ids: selectedRotationGroupIds.value,
         search: searchQuery.value || null,
@@ -265,6 +283,7 @@ function onTableSearch(q) {
 
 function clearFilters() {
     selectedDepartmentId.value = null
+    selectedBranchId.value = props.filters?.branch_id || null
     selectedRotationIds.value = []
     selectedRotationGroupIds.value = []
     searchQuery.value = ''
@@ -348,6 +367,7 @@ function buildExportParams() {
     const params = new URLSearchParams()
     params.set('date', selectedDate.value)
     if (selectedDepartmentId.value) params.set('department_id', String(selectedDepartmentId.value))
+    if (selectedBranchId.value) params.set('branch_id', String(selectedBranchId.value))
     selectedRotationIds.value.forEach((id) => params.append('rotation_ids[]', String(id)))
     selectedRotationGroupIds.value.forEach((id) => params.append('rotation_group_ids[]', String(id)))
     if (includeAwaiting.value) params.set('include_awaiting', '1')
@@ -367,6 +387,7 @@ function buildMonthlyExportParams() {
     params.set('from_date', fromDate.value)
     params.set('to_date', toDate.value)
     if (selectedDepartmentId.value) params.set('department_id', String(selectedDepartmentId.value))
+    if (selectedBranchId.value) params.set('branch_id', String(selectedBranchId.value))
     selectedRotationIds.value.forEach((id) => params.append('rotation_ids[]', String(id)))
     selectedRotationGroupIds.value.forEach((id) => params.append('rotation_group_ids[]', String(id)))
     if (searchQuery.value) params.set('search', searchQuery.value)
@@ -473,6 +494,10 @@ const filterPills = computed(() => {
     if (selectedDepartmentId.value) {
         const dept = props.departments.find((d) => d.id === selectedDepartmentId.value)
         if (dept) pills.push({ key: 'department', label: dept.name, clear: () => { selectedDepartmentId.value = null } })
+    }
+    if (selectedBranchId.value) {
+        const branch = props.branches.find((b) => b.id === selectedBranchId.value)
+        if (branch) pills.push({ key: 'branch', label: branch.name, clear: () => { selectedBranchId.value = getDefaultBranchId() } })
     }
     selectedRotationIds.value.forEach((id) => {
         const r = props.rotations.find((rot) => rot.id === id)
@@ -606,6 +631,12 @@ usePageTitle(t('shifts.smart_absence_report'));
                             :label="t('shifts.department')"
                             name="department_id"
                             :options="departmentOptions"
+                        />
+                        <FormSelect
+                            v-model="selectedBranchId"
+                            :label="t('shifts.branch')"
+                            name="branch_id"
+                            :options="branchOptions"
                         />
                         <FormMultiSelect
                             v-model="selectedRotationIds"
@@ -968,6 +999,12 @@ usePageTitle(t('shifts.smart_absence_report'));
                             :label="t('shifts.department')"
                             name="department_id"
                             :options="departmentOptions"
+                        />
+                        <FormSelect
+                            v-model="selectedBranchId"
+                            :label="t('shifts.branch')"
+                            name="branch_id"
+                            :options="branchOptions"
                         />
                         <FormMultiSelect
                             v-model="selectedRotationIds"

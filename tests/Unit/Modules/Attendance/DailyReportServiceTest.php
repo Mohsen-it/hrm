@@ -1813,9 +1813,9 @@ class DailyReportServiceTest extends TestCase
 
     /**
      * AUDIT: two approved requests covering the same days must not inflate the
-     * monthly vacation counter.
+     * vacation-day counter — the same calendar day is one day off, not two.
      */
-    public function test_overlapping_approved_requests_count_the_month_once(): void
+    public function test_overlapping_approved_requests_count_each_day_once(): void
     {
         $this->travelTo('2026-08-10 12:00:00');
 
@@ -1839,8 +1839,179 @@ class DailyReportServiceTest extends TestCase
         $report = $this->service->build('2026-08-10', '09:00');
         $row = $report['rows']->firstWhere('id', $user->id);
 
-        // Distinct rotation work days in 08-01..08-10: 08-09 and 08-10 only.
-        $this->assertCountNote($row['notes'], 'عدد أيام الإجازة خلال الشهر', 2);
+        // Distinct days up to the report day: 08-09 and 08-10. The 08-10 request
+        // adds nothing — 08-10 is already covered by the other one — and 08-11
+        // has not happened yet, so the two never report the same day twice.
+        $this->assertCountNote($row['notes'], 'عدد أيام الإجازة خلال السنة', 2);
+    }
+
+    /**
+     * The leaves table reports the DAYS TAKEN, never the number of requests.
+     *
+     * An employee holding a 1-day leave plus a 3-day leave has taken four days.
+     * Counting requests answered "2", which a reviewer reads as "two days off"
+     * and which silently under-reports everyone with more than one leave.
+     */
+    public function test_leave_note_sums_the_days_of_every_approved_request(): void
+    {
+        $this->travelTo('2026-08-10 12:00:00');
+
+        $user = $this->makeEmployee('EMP90042');
+        $this->assignOpenWorkEveryDay($user);
+
+        $annual = VacationType::create([
+            'code' => 'ANN90042', 'name_ar' => 'إجازة سنوية', 'name_en' => 'Annual', 'is_active' => true,
+        ]);
+        // One 1-day leave in a PREVIOUS month of the same year: it must still be
+        // part of the total, because the counter is the year to date, not the
+        // month the report happens to be looking at.
+        UserVacationRequest::create([
+            'user_id' => $user->id, 'vacation_type_id' => $annual->id,
+            'start_date' => '2026-07-30', 'end_date' => '2026-07-30',
+            'days_count' => 1, 'working_days_count' => 1, 'status' => 'approved',
+        ]);
+        UserVacationRequest::create([
+            'user_id' => $user->id, 'vacation_type_id' => $annual->id,
+            'start_date' => '2026-08-08', 'end_date' => '2026-08-10',
+            'days_count' => 3, 'working_days_count' => 3, 'status' => 'approved',
+        ]);
+
+        $report = $this->service->build('2026-08-10', '09:00');
+        $row = $report['rows']->firstWhere('id', $user->id);
+
+        $this->assertSame('leave', $row['status']);
+        // 1 + 3 = 4 days taken, NOT 2 requests.
+        $this->assertCountNote($row['notes'], 'عدد أيام الإجازة خلال السنة', 4);
+    }
+
+    /**
+     * The counter is scoped to the report's YEAR, matching how the leave
+     * balance is accounted (keyed by year and refreshed annually).
+     *
+     * A lifetime counter would keep climbing for the length of an employee's
+     * service, and — far worse — count days from a FUTURE year into this
+     * year's report.
+     */
+    public function test_leave_days_never_carry_over_into_the_next_year(): void
+    {
+        $this->travelTo('2026-08-10 12:00:00');
+
+        $user = $this->makeEmployee('EMP90045');
+        $this->assignOpenWorkEveryDay($user);
+
+        $annual = VacationType::create([
+            'code' => 'ANN90045', 'name_ar' => 'إجازة سنوية', 'name_en' => 'Annual', 'is_active' => true,
+        ]);
+        UserVacationRequest::create([
+            'user_id' => $user->id, 'vacation_type_id' => $annual->id,
+            'start_date' => '2026-08-08', 'end_date' => '2026-08-10',
+            'days_count' => 3, 'working_days_count' => 3, 'status' => 'approved',
+        ]);
+        // Last year's leave, already approved: it belongs to the 2025 report.
+        UserVacationRequest::create([
+            'user_id' => $user->id, 'vacation_type_id' => $annual->id,
+            'start_date' => '2025-12-28', 'end_date' => '2025-12-30',
+            'days_count' => 3, 'working_days_count' => 3, 'status' => 'approved',
+        ]);
+        // Next year's approved leave must not leak into this year's report.
+        UserVacationRequest::create([
+            'user_id' => $user->id, 'vacation_type_id' => $annual->id,
+            'start_date' => '2027-01-05', 'end_date' => '2027-01-09',
+            'days_count' => 5, 'working_days_count' => 5, 'status' => 'approved',
+        ]);
+
+        $report = $this->service->build('2026-08-10', '09:00');
+        $row = $report['rows']->firstWhere('id', $user->id);
+
+        // Only the three 2026 days: not last year's, not next year's.
+        $this->assertCountNote($row['notes'], 'عدد أيام الإجازة خلال السنة', 3);
+    }
+
+    /**
+     * The report documents what has HAPPENED: a day of an approved leave that
+     * has not arrived yet is not counted as a day taken.
+     */
+    public function test_leave_days_stop_at_the_report_date(): void
+    {
+        $this->travelTo('2026-08-10 12:00:00');
+
+        $user = $this->makeEmployee('EMP90046');
+        $this->assignOpenWorkEveryDay($user);
+
+        $annual = VacationType::create([
+            'code' => 'ANN90046', 'name_ar' => 'إجازة سنوية', 'name_en' => 'Annual', 'is_active' => true,
+        ]);
+        // 08-08..08-12 approved, but the report only covers up to 08-10.
+        UserVacationRequest::create([
+            'user_id' => $user->id, 'vacation_type_id' => $annual->id,
+            'start_date' => '2026-08-08', 'end_date' => '2026-08-12',
+            'days_count' => 5, 'working_days_count' => 5, 'status' => 'approved',
+        ]);
+
+        $report = $this->service->build('2026-08-10', '09:00');
+        $row = $report['rows']->firstWhere('id', $user->id);
+
+        $this->assertSame('leave', $row['status']);
+        // 08-08, 08-09 and 08-10 — the report day itself still counts.
+        $this->assertCountNote($row['notes'], 'عدد أيام الإجازة خلال السنة', 3);
+    }
+
+    /**
+     * A rotation employee's leave days are counted only on the days their
+     * rotation actually scheduled them to work.
+     */
+    public function test_leave_days_skip_the_rotation_rest_days(): void
+    {
+        $this->travelTo('2026-08-10 12:00:00');
+
+        $user = $this->makeEmployee('EMP90043');
+        // 1-day duty then 11 rest days: 08-10 is a duty day, 08-11..08-20 are not.
+        $this->assignOneDayDuty($user, '2026-08-10');
+
+        $annual = VacationType::create([
+            'code' => 'ANN90043', 'name_ar' => 'إجازة سنوية', 'name_en' => 'Annual', 'is_active' => true,
+        ]);
+        // Covers the duty day plus four of that employee's rest days.
+        UserVacationRequest::create([
+            'user_id' => $user->id, 'vacation_type_id' => $annual->id,
+            'start_date' => '2026-08-10', 'end_date' => '2026-08-14',
+            'days_count' => 5, 'working_days_count' => 1, 'status' => 'approved',
+        ]);
+
+        $report = $this->service->build('2026-08-10', '09:00');
+        $row = $report['rows']->firstWhere('id', $user->id);
+
+        $this->assertSame('leave', $row['status']);
+        // 08-10 is the only scheduled day in that window.
+        $this->assertCountNote($row['notes'], 'عدد أيام الإجازة خلال السنة', 1);
+    }
+
+    /**
+     * A rotation employee never enters the leaves table on one of their own
+     * rest days: nobody takes leave on a day they were never scheduled to work.
+     */
+    public function test_rotation_employee_on_a_rest_day_is_absent_from_the_leaves_table(): void
+    {
+        $this->travelTo('2026-08-10 12:00:00');
+
+        $user = $this->makeEmployee('EMP90044');
+        // Duty on 08-03, so 08-10 is a rest day.
+        $this->assignOneDayDuty($user, '2026-08-03');
+
+        $annual = VacationType::create([
+            'code' => 'ANN90044', 'name_ar' => 'إجازة سنوية', 'name_en' => 'Annual', 'is_active' => true,
+        ]);
+        UserVacationRequest::create([
+            'user_id' => $user->id, 'vacation_type_id' => $annual->id,
+            'start_date' => '2026-08-10', 'end_date' => '2026-08-10',
+            'days_count' => 1, 'working_days_count' => 1, 'status' => 'approved',
+        ]);
+
+        $report = $this->service->build('2026-08-10', '09:00');
+        $row = $report['rows']->firstWhere('id', $user->id);
+
+        $this->assertSame('rest', $row['status']);
+        $this->assertStringNotContainsString('عدد أيام الإجازة خلال السنة', $row['notes']);
     }
 
     /**

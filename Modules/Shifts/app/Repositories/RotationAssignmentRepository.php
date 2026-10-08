@@ -186,8 +186,13 @@ class RotationAssignmentRepository
      * Unlike getAssignmentsForDate (which only returns assignments active on a
      * single day), this captures assignments that start or end mid-range so
      * monthly schedule generation covers them correctly.
+     *
+     * @param  array<int, int>|null  $employeeIds  Restrict to these employees. Reports scope a
+     *                                             whole branch/department roster, so filtering in
+     *                                             the database instead of after the fact keeps a
+     *                                             wide window (a whole leave history) cheap.
      */
-    public function getAssignmentsOverlapping(string $from, string $to): Collection
+    public function getAssignmentsOverlapping(string $from, string $to, ?array $employeeIds = null): Collection
     {
         return $this->query()
             ->with($this->defaultWith)
@@ -196,6 +201,7 @@ class RotationAssignmentRepository
                 $q->whereNull('end_date')
                     ->orWhere('end_date', '>=', $from);
             })
+            ->when($employeeIds !== null && $employeeIds !== [], fn (Builder $q) => $q->whereIn('employee_id', $employeeIds))
             ->orderByDesc('start_date')
             ->orderByDesc('id')
             ->get();

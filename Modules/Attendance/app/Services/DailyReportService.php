@@ -39,6 +39,11 @@ class DailyReportService
         $day = Carbon::parse($date)->startOfDay();
         $date = $day->toDateString();
         $monthFrom = $day->copy()->startOfMonth()->toDateString();
+        // Leave is accounted per CALENDAR YEAR: user_vacation_balances is keyed
+        // by (user_id, vacation_type_id, year) and refreshed every year, so the
+        // report's leave counter follows the same unit instead of growing
+        // without bound across an employee's whole service.
+        $yearFrom = $day->copy()->startOfYear()->toDateString();
         $departmentIds = $departmentIds === null || is_array($departmentIds)
             ? ($departmentIds ?? [])
             : [$departmentIds];
@@ -132,8 +137,13 @@ class DailyReportService
         // as absent/vacation (e.g. a leave recorded on a Friday-Saturday rest)
         // must never inflate the monthly counter. Each absent date is verified
         // against the historically active assignment via RotationEngine.
-        $monthAssignments = $this->rotationAssignmentRepository->getAssignmentsOverlapping($monthFrom, $date)
-            ->whereIn('employee_id', $userIds->all())
+        //
+        // The window opens at the start of the YEAR, not the month: the leave
+        // counter covers the whole year to date, so $assignmentForDate must
+        // resolve the rotation that was active back in January in order to
+        // recognise its rest days.
+        $monthAssignments = $this->rotationAssignmentRepository
+            ->getAssignmentsOverlapping($yearFrom, $date, $userIds->all())
             ->groupBy('employee_id');
         $assignmentForDate = function (int $employeeId, string $day) use ($monthAssignments): mixed {
             foreach ($monthAssignments->get($employeeId, collect()) as $candidate) {
@@ -153,6 +163,18 @@ class DailyReportService
             }
 
             return $this->rotationEngine->isWorkDay($candidate->rotation, $candidate->rotationGroup, $day);
+        };
+        // The mirror of $isWorkDayOn: a day is a REST day only when a rotation
+        // covering it explicitly says so. A day with no assignment at all (never
+        // assigned, or assigned later/closed earlier) is NOT a rest day — there
+        // is no roster excusing it, so an approved leave covering it still counts.
+        $isRestDayOn = function (int $employeeId, string $day) use ($assignmentForDate): bool {
+            $candidate = $assignmentForDate($employeeId, $day);
+            if (! $candidate || ! $candidate->rotation || ! $candidate->rotationGroup) {
+                return false;
+            }
+
+            return ! $this->rotationEngine->isWorkDay($candidate->rotation, $candidate->rotationGroup, $day);
         };
         $monthlyAbsentDates = DailyAttendanceSummary::query()
             ->whereIn('user_id', $userIds)
@@ -188,23 +210,36 @@ class DailyReportService
             ->flip();
         $vacations = UserVacationRequest::approved()->whereIn('user_id', $userIds)
             ->overlapping($date, $date)->with('vacationType')->get()->keyBy('user_id');
-        $monthlyVacationDays = UserVacationRequest::approved()->whereIn('user_id', $userIds)
-            ->overlapping($monthFrom, $date)
-            ->get()
+        // "عدد أيام الإجازة خلال السنة" is the number of leave DAYS the employee
+        // has actually taken THIS YEAR — never the number of requests. An
+        // employee holding a 1-day leave plus a 3-day leave has taken FOUR
+        // days, and the report must say ٤. Counting requests answered "2",
+        // which a reviewer reads as "two days off" and which silently
+        // under-reports everyone with more than one approved leave.
+        //
+        // Scoped to the report's calendar year, matching how the leave balance
+        // is actually accounted (user_vacation_balances is keyed by year and
+        // refreshed annually): a lifetime counter would keep climbing across
+        // years and, worse, add days from a FUTURE year into this year's
+        // report. Clipped at the report date too, so a day that has not
+        // happened yet is never counted as leave taken.
+        //
+        // Days are DISTINCT (two overlapping requests covering the same dates
+        // count once) and a rotation REST day never counts: nobody takes leave
+        // on a day they were never scheduled to work.
+        $totalVacationDays = UserVacationRequest::approved()->whereIn('user_id', $userIds)
+            ->overlapping($yearFrom, $date)
+            ->get(['user_id', 'start_date', 'end_date'])
             ->groupBy('user_id')
-            // Counted as DISTINCT rotation work days, never as a sum over
-            // requests: two approved requests overlapping on the same days must
-            // not report the same day twice.
-            ->map(function (Collection $requests, int $userId) use ($monthFrom, $date, $isWorkDayOn): int {
+            ->map(function (Collection $requests, int $userId) use ($yearFrom, $date, $isRestDayOn): int {
                 $days = collect();
                 foreach ($requests as $request) {
-                    $cursor = Carbon::parse(max($monthFrom, substr((string) $request->start_date, 0, 10)))->startOfDay();
-                    $end = Carbon::parse(min($date, substr((string) $request->end_date, 0, 10)))->startOfDay();
-                    while ($cursor->lte($end)) {
-                        if ($isWorkDayOn($userId, $cursor->toDateString())) {
-                            $days->push($cursor->toDateString());
+                    $start = substr((string) $request->start_date, 0, 10);
+                    $end = substr((string) $request->end_date, 0, 10);
+                    foreach ($this->datesBetween($yearFrom, $date, $start, $end) as $day) {
+                        if (! $isRestDayOn($userId, $day)) {
+                            $days->push($day);
                         }
-                        $cursor->addDay();
                     }
                 }
 
@@ -214,7 +249,7 @@ class DailyReportService
             ->whereIn('exception_type', ['leave', 'mission', 'training', 'swap'])
             ->overlapping($date)->get()->groupBy('employee_id');
 
-        $rows = $users->map(function (User $user) use ($date, $day, $cutoffTime, $expected, $assignments, $sessions, $previousSessions, $previousExpected, $previousAssignments, $previousDate, $monthSessions, $monthlyAbsenceCounts, $monthlyVacationDays, $unregisteredFingerprintIds, $vacations, $exceptions, $rawTimesByUser, $prevRawTimesByUser, $prevVacations, $prevExceptions, $awaitingIds, $holidays, $assignmentForDate): array {
+        $rows = $users->map(function (User $user) use ($date, $day, $cutoffTime, $expected, $assignments, $sessions, $previousSessions, $previousExpected, $previousAssignments, $previousDate, $monthSessions, $monthlyAbsenceCounts, $totalVacationDays, $unregisteredFingerprintIds, $vacations, $exceptions, $rawTimesByUser, $prevRawTimesByUser, $prevVacations, $prevExceptions, $awaitingIds, $holidays, $assignmentForDate): array {
             $userSessions = $sessions->get($user->id, collect());
             $assignment = $assignments->get($user->id);
             $rotation = $assignment?->rotation?->name
@@ -474,8 +509,8 @@ class DailyReportService
                 $notes[] = 'عدد أيام الغياب خلال الشهر: '.$this->arabicNumber($absenceCount);
             }
             if ($status === 'leave' && $vacation !== null) {
-                $leaveDays = (int) $monthlyVacationDays->get($user->id, 0);
-                $notes[] = 'عدد أيام الإجازة خلال الشهر: '.$this->arabicNumber($leaveDays);
+                $leaveDays = (int) $totalVacationDays->get($user->id, 0);
+                $notes[] = 'عدد أيام الإجازة خلال السنة: '.$this->arabicNumber($leaveDays);
             }
             if ($earlyExitNote !== null) {
                 $notes[] = $earlyExitNote;

@@ -1738,7 +1738,7 @@ class DailyReportServiceTest extends TestCase
      * they failed to attend. Someone who badged in and out is classified by
      * their punches and stays in the حاضر/متأخر tables.
      */
-    public function test_mission_exception_does_not_override_recorded_attendance(): void
+    public function test_mission_exception_outranks_recorded_attendance(): void
     {
         $user = $this->makeEmployee('EMP90020');
         $this->assignOpenWorkEveryDay($user);
@@ -1752,9 +1752,14 @@ class DailyReportServiceTest extends TestCase
         $report = $this->service->build('2026-08-10', '09:00');
         $row = $report['rows']->firstWhere('id', $user->id);
 
-        $this->assertSame('late', $row['status']);
-        $this->assertSame(1, $report['stats']['late']);
-        $this->assertSame(0, $report['stats']['mission'] ?? 0);
+        // The approved mission is the record of that day, so the employee
+        // belongs in the missions table; the punch is reported in the notes
+        // instead of silently turning them into "متأخر".
+        $this->assertSame('mission', $row['status']);
+        $this->assertSame(1, $report['stats']['mission']);
+        $this->assertSame(0, $report['stats']['late']);
+        $this->assertStringContainsString('سجّل بصمة الحضور رغم المهمة', $row['notes']);
+        $this->assertStringContainsString('09:25', $row['notes']);
     }
 
     /**
@@ -1932,6 +1937,64 @@ class DailyReportServiceTest extends TestCase
 
         // Only the three 2026 days: not last year's, not next year's.
         $this->assertCountNote($row['notes'], 'عدد أيام الإجازة خلال السنة', 3);
+    }
+
+    /**
+     * A MISSION-type request never belongs in the leaves table.
+     *
+     * A mission is its own table: an approved mission covering the report day
+     * makes the employee "مهمة سفر", and their punch (they may well have come
+     * back before the mission ended) is reported in the notes rather than
+     * filed as a vacation or as lateness.
+     */
+    public function test_mission_type_request_never_lands_in_the_leaves_table(): void
+    {
+        $this->travelTo('2026-08-10 12:00:00');
+
+        $mission = $this->makeEmployee('EMP90047');
+        $this->assignOpenWorkEveryDay($mission);
+        $this->makeCompleteSession($mission, '2026-08-10 08:15:00');
+
+        $type = VacationType::create([
+            'code' => 'TRV90047', 'name_ar' => 'مهمة سفر', 'name_en' => 'Travel Mission', 'is_active' => true,
+        ]);
+        UserVacationRequest::create([
+            'user_id' => $mission->id, 'vacation_type_id' => $type->id,
+            'start_date' => '2026-08-10', 'end_date' => '2026-08-12',
+            'days_count' => 3, 'working_days_count' => 3, 'status' => 'approved',
+        ]);
+
+        $row = $this->service->build('2026-08-10', '09:00')['rows']->firstWhere('id', $mission->id);
+
+        // Their own table, never the leaves one.
+        $this->assertNotSame('leave', $row['status']);
+        $this->assertSame('mission', $row['status']);
+        $this->assertStringNotContainsString('عدد أيام الإجازة', $row['notes']);
+        $this->assertStringContainsString('سجّل بصمة الحضور رغم المهمة', $row['notes']);
+    }
+
+    /**
+     * A mission with NO punch still belongs in the missions table.
+     */
+    public function test_mission_without_a_punch_is_reported_as_a_mission(): void
+    {
+        $this->travelTo('2026-08-10 12:00:00');
+
+        $mission = $this->makeEmployee('EMP90048');
+        $this->assignOpenWorkEveryDay($mission);
+
+        $type = VacationType::create([
+            'code' => 'TRV90048', 'name_ar' => 'مهمة سفر', 'name_en' => 'Travel Mission', 'is_active' => true,
+        ]);
+        UserVacationRequest::create([
+            'user_id' => $mission->id, 'vacation_type_id' => $type->id,
+            'start_date' => '2026-08-10', 'end_date' => '2026-08-12',
+            'days_count' => 3, 'working_days_count' => 3, 'status' => 'approved',
+        ]);
+
+        $row = $this->service->build('2026-08-10', '09:00')['rows']->firstWhere('id', $mission->id);
+
+        $this->assertSame('mission', $row['status']);
     }
 
     /**

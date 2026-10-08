@@ -270,15 +270,17 @@ class DailyReportService
             $rawTimes = $rawTimesByUser->get($user->id, []);
             $hasRawPunch = ! $hasCheckedIn && $rawTimes !== []
                 && ! $this->absenceService->isOvernightCheckoutOnly($user->id, $rawTimes, $day->copy(), $previousAssignments);
-            // A mission says WHERE the employee was sent, not that they failed
-            // to attend, so it obeys the same two guards as a vacation or it
-            // contradicts the row it sits next to: it is meaningless on a
-            // rotation rest day (nobody was scheduled), and someone who
-            // demonstrably badged in is classified by their punches. A stale
-            // exception must never erase a real attendance and hide the
-            // employee from حاضر/متأخر.
+            // A mission approved for the report day puts the employee in the missions
+            // table, exactly like an approved leave puts them in the leaves
+            // table: the approval is the record of that day. A mission
+            // frequently spans several days and the employee may well come back
+            // before it ends and badge in — he is still officially on the
+            // mission that day, so the punch must not turn him into "متأخر".
+            // The punch is reported in the notes instead.
+            //
+            // The rest-day guard is kept: a mission is meaningless on a day the
+            // rotation never scheduled them (nobody was due at work).
             $onMission = $expected->has($user->id)
-                && ! $hasCheckedIn
                 && ($exception?->exception_type === 'mission' || $this->isMission($vacation));
             // The leaves table lists the employees genuinely on vacation on the
             // report day. An approved vacation only matters on a day the
@@ -293,7 +295,17 @@ class DailyReportService
             // looking at the leaves table must still be able to see that the
             // employee physically showed up (typically because the leave was
             // approved retroactively, after they had already arrived).
+            //
+            // Missions are the deliberate exception and stay on the old rule:
+            // "a mission" states WHERE the employee was sent, and someone who
+            // demonstrably badged in was demonstrably not sent away, so their
+            // punches classify them (حاضر/متأخر). An approved leave is a
+            // different animal — the day is officially theirs regardless of
+            // the punch, which is why only it outranks attendance.
             $onLeave = $expected->has($user->id)
+                // A mission-type request is NOT a leave: it must never land in
+                // the leaves table, whatever the punches say.
+                && ! $this->isMission($vacation)
                 && ($vacation !== null || in_array($exception?->exception_type, ['leave', 'training', 'swap'], true));
             // Lateness is judged against the stricter of the report's cutoff
             // and the employee's own arrival deadline (check-in + grace): a
@@ -533,12 +545,14 @@ class DailyReportService
                 $leaveDays = (int) $totalVacationDays->get($user->id, 0);
                 $notes[] = 'عدد أيام الإجازة خلال السنة: '.$this->arabicNumber($leaveDays);
             }
-            // The approved leave moved this employee into the leaves table, so
-            // the fact that they also badged in has to be stated here — the
-            // lateness table no longer shows them, and silently dropping the
-            // punch would leave the record claiming they never came.
-            if ($status === 'leave' && $hasCheckedIn) {
-                $notes[] = 'سجّل بصمة الحضور رغم الإجازة'.($mainSession?->check_in_at ? ' ('.$mainSession->check_in_at->format('H:i').')' : '');
+            // An approved leave or mission moved this employee out of the
+            // attendance tables, so the fact that they also badged in has to be
+            // stated here — the lateness table no longer shows them, and
+            // silently dropping the punch would leave the record claiming they
+            // never came.
+            if ($hasCheckedIn && ($status === 'leave' || $status === 'mission')) {
+                $notes[] = ($status === 'mission' ? 'سجّل بصمة الحضور رغم المهمة' : 'سجّل بصمة الحضور رغم الإجازة')
+                    .($mainSession?->check_in_at ? ' ('.$mainSession->check_in_at->format('H:i').')' : '');
             }
             if ($earlyExitNote !== null) {
                 $notes[] = $earlyExitNote;

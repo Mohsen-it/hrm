@@ -280,17 +280,21 @@ class DailyReportService
             $onMission = $expected->has($user->id)
                 && ! $hasCheckedIn
                 && ($exception?->exception_type === 'mission' || $this->isMission($vacation));
-            // The vacations table must reflect only the employees who are
-            // genuinely on vacation on the report day. An approved vacation
-            // only matters on a day the employee was expected to work: on one
-            // of their rotation rest days (e.g. a 1-work / 3-rest pattern) the
-            // vacation is meaningless and they must stay in the "rest" group
-            // instead. Someone who attended work (recorded a check-in) is
-            // classified by their actual attendance rather than listed as on
-            // leave.
+            // The leaves table lists the employees genuinely on vacation on the
+            // report day. An approved vacation only matters on a day the
+            // employee was expected to work: on one of their rotation rest days
+            // (e.g. a 1-work / 3-rest pattern) the vacation is meaningless and
+            // they must stay in the "rest" group instead.
+            //
+            // An APPROVED leave outranks a recorded check-in: the approval is
+            // the administrative record of that day, so the employee belongs
+            // in the leaves table and leaves the lateness table. Their punch is
+            // not discarded — it is reported in the notes, because a reviewer
+            // looking at the leaves table must still be able to see that the
+            // employee physically showed up (typically because the leave was
+            // approved retroactively, after they had already arrived).
             $onLeave = $expected->has($user->id)
-                && ($vacation !== null || in_array($exception?->exception_type, ['leave', 'training', 'swap'], true))
-                && ! $hasCheckedIn;
+                && ($vacation !== null || in_array($exception?->exception_type, ['leave', 'training', 'swap'], true));
             // Lateness is judged against the stricter of the report's cutoff
             // and the employee's own arrival deadline (check-in + grace): a
             // 10:00 shift arriving at 09:30 is on time for its rotation even
@@ -528,6 +532,13 @@ class DailyReportService
             if ($status === 'leave' && $vacation !== null) {
                 $leaveDays = (int) $totalVacationDays->get($user->id, 0);
                 $notes[] = 'عدد أيام الإجازة خلال السنة: '.$this->arabicNumber($leaveDays);
+            }
+            // The approved leave moved this employee into the leaves table, so
+            // the fact that they also badged in has to be stated here — the
+            // lateness table no longer shows them, and silently dropping the
+            // punch would leave the record claiming they never came.
+            if ($status === 'leave' && $hasCheckedIn) {
+                $notes[] = 'سجّل بصمة الحضور رغم الإجازة'.($mainSession?->check_in_at ? ' ('.$mainSession->check_in_at->format('H:i').')' : '');
             }
             if ($earlyExitNote !== null) {
                 $notes[] = $earlyExitNote;

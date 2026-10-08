@@ -35,12 +35,14 @@ class DailyReportServiceTest extends TestCase
     }
 
     /**
-     * The vacations table must list only the employees who are genuinely on
-     * vacation on the report day: an employee with an approved vacation who
-     * still attended work (has sessions) is classified by their actual
-     * attendance instead of being listed as on leave.
+     * An APPROVED leave outranks a recorded check-in: the approval is the
+     * administrative record of that day, so the employee belongs in the
+     * leaves table and leaves the lateness table — even when they badged in
+     * (typically because the leave was approved retroactively, after they had
+     * already arrived). The punch must not vanish: it is stated in the notes
+     * so the record still shows the employee physically came.
      */
-    public function test_vacation_table_excludes_employees_who_attended_work(): void
+    public function test_approved_leave_outranks_a_recorded_check_in(): void
     {
         $onVacation = $this->makeEmployee('EMP20007');
         $this->assignOpenWorkEveryDay($onVacation);
@@ -73,8 +75,13 @@ class DailyReportServiceTest extends TestCase
         $rowAttended = $report['rows']->firstWhere('id', $attendedWhileOnVacation->id);
 
         $this->assertSame('leave', $rowOnVacation['status'], 'An employee on vacation without attendance stays in the vacations table.');
-        $this->assertNotSame('leave', $rowAttended['status'], 'An employee with an approved vacation who attended work must not be in the vacations table.');
-        $this->assertSame('present', $rowAttended['status']);
+        $this->assertSame('leave', $rowAttended['status'], 'An approved leave outranks the check-in, so the employee is on leave.');
+
+        // The punch is reported, not discarded.
+        $this->assertStringContainsString('سجّل بصمة الحضور رغم الإجازة', $rowAttended['notes']);
+        $this->assertStringContainsString('08:50', $rowAttended['notes']);
+        // …and a leave with no attendance carries no such note.
+        $this->assertStringNotContainsString('سجّل بصمة الحضور', $rowOnVacation['notes']);
     }
 
     /**

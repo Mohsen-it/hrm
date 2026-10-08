@@ -461,6 +461,7 @@ class DailyReportService
 
             $status = 'present';
             $label = 'حاضر';
+            $unassignedPuncherNote = null;
             // The status always describes the REPORT day itself: today's
             // sessions decide present/late/absent. Yesterday's missing
             // check-out stays visible through has_incomplete_punch and the
@@ -474,6 +475,19 @@ class DailyReportService
             } elseif ($onLeave) {
                 $status = 'leave';
                 $label = 'إجازة';
+            } elseif (! $assignment && ($hasCheckedIn || $hasRawPunch)) {
+                // Employee without any rotation assignment who STILL punched:
+                // their attendance is real, so classify them by their actual
+                // punches (present/late) and keep the missing rotation as a
+                // note instead of hiding their attendance behind 'unassigned'.
+                if ($late) {
+                    $status = 'late';
+                    $label = 'متأخر';
+                } else {
+                    $status = 'present';
+                    $label = 'حاضر';
+                }
+                $unassignedPuncherNote = 'الموظف بلا إسناد دورية (يظهر الحضور الفعلي مع التنبيه لتحديث الإسناد)';
             } elseif (! $assignment) {
                 // No rotation assignment at all: the employee punches outside
                 // every roster (never expected, never absent). This is NOT a
@@ -498,6 +512,9 @@ class DailyReportService
             }
 
             $notes = [];
+            if ($unassignedPuncherNote !== null) {
+                $notes[] = $unassignedPuncherNote;
+            }
             if ($status === 'late') {
                 $notes[] = 'عدد مرات التأخر خلال الشهر: '.$this->arabicNumber($lateCount);
             }

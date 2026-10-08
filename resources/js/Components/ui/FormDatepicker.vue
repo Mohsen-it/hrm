@@ -14,6 +14,10 @@ const props = defineProps({
     autofocus: { type: Boolean, default: false },
     min: { type: String, default: null },
     max: { type: String, default: null },
+    // 'top' matches the design-system text-input spec (label above the field,
+    // like FormInput/FormSelect) so mixed form rows stay aligned. 'floating'
+    // keeps the legacy in-field floating label.
+    labelPosition: { type: String, default: 'top', validator: (v) => ['top', 'floating'].includes(v) },
     dir: { type: String, default: 'rtl' },
 });
 
@@ -30,6 +34,7 @@ const hasValue = computed(() => {
 });
 
 const isFloating = computed(() => isFocused.value || hasValue.value);
+const isExternalLabel = computed(() => props.labelPosition === 'top');
 
 function onInput(e) {
     emit('update:modelValue', e.target.value);
@@ -52,6 +57,14 @@ defineExpose({ focus });
 
 <template>
     <div class="w-full text-start" :dir="dir">
+        <label
+            v-if="label && isExternalLabel"
+            :for="inputId"
+            class="mb-1.5 flex items-center gap-1 text-[13px] font-medium leading-5 text-mistral-ink"
+        >
+            {{ label }}
+            <span v-if="required" class="text-mistral-danger" aria-hidden="true">*</span>
+        </label>
         <div class="relative" @click="focus">
             <input
                 :id="inputId"
@@ -59,7 +72,7 @@ defineExpose({ focus });
                 :name="name"
                 type="date"
                 :value="modelValue"
-                :placeholder="isFloating ? placeholder : ''"
+                :placeholder="isExternalLabel || isFloating ? placeholder : ''"
                 :required="required"
                 :disabled="disabled"
                 :min="min"
@@ -68,8 +81,8 @@ defineExpose({ focus });
                 :aria-invalid="!!error"
                 :aria-describedby="error ? `${inputId}-error` : hint ? `${inputId}-hint` : undefined"
                 :class="[
-                    'peer w-full h-11 pt-3 pb-1 px-3 text-[14px] text-mistral-ink bg-mistral-canvas border rounded-md transition-all duration-200',
-                    'placeholder:text-transparent',
+                    'peer w-full h-11 px-3 text-[14px] text-mistral-ink bg-mistral-canvas border rounded-md transition-all duration-200',
+                    isExternalLabel ? '' : 'pt-3 pb-1 placeholder:text-transparent',
                     'focus:outline-none focus:ring-2 focus:ring-mistral-primary/20 focus:border-mistral-primary',
                     'disabled:bg-mistral-surface disabled:text-mistral-muted disabled:cursor-not-allowed',
                     error
@@ -81,10 +94,10 @@ defineExpose({ focus });
                 @blur="onBlur"
             />
             <label
-                v-if="label"
+                v-if="label && !isExternalLabel"
                 :for="inputId"
                 :class="[
-                    'absolute text-[13px] font-medium pointer-events-none transition-all duration-200 origin-top-start z-10',
+                    'absolute font-medium pointer-events-none transition-all duration-200 origin-top-start z-10',
                     isFloating
                         ? 'top-1.5 start-3 text-[11px]'
                         : 'top-2.5 start-3 text-[14px]',

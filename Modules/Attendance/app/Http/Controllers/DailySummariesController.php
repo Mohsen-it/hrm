@@ -89,7 +89,7 @@ class DailySummariesController extends Controller
             'department_ids' => ['nullable', 'array'],
             'department_ids.*' => ['integer', 'exists:departments,id'],
             'user_id' => ['nullable', 'integer', 'exists:users,id'],
-            'status' => ['nullable', 'in:absent,late,leave,no_fingerprint,mission,incomplete,holiday,awaiting,unassigned,evening'],
+            'status' => ['nullable', 'in:present,absent,late,leave,no_fingerprint,mission,incomplete,holiday,awaiting,unassigned,evening,rest'],
         ]);
         $departmentIds = $this->resolveDepartmentIds($data);
         $report = $this->dailyReportService->build(

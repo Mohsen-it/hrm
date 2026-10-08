@@ -19,6 +19,10 @@ const props = defineProps({
     name: { type: String, default: '' },
     id: { type: String, default: '' },
     maxVisibleTags: { type: Number, default: 3 },
+    // 'top' matches the design-system text-input spec (label above the field,
+    // like FormInput/FormSelect) so mixed filter rows stay aligned. 'floating'
+    // keeps the legacy in-field floating label.
+    labelPosition: { type: String, default: 'top', validator: (v) => ['top', 'floating'].includes(v) },
     dir: { type: String, default: 'rtl' },
 });
 
@@ -49,6 +53,7 @@ const filteredOptions = computed(() => {
 
 const hasValue = computed(() => selectedCount.value > 0);
 const isFloating = computed(() => isFocused.value || hasValue.value);
+const isExternalLabel = computed(() => props.labelPosition === 'top');
 
 function isSelected(value) {
     return props.modelValue.includes(value);
@@ -125,6 +130,14 @@ watch(() => props.disabled, (val) => { if (val) close(); });
 
 <template>
     <div class="w-full text-start relative" :dir="dir">
+        <label
+            v-if="label && isExternalLabel"
+            :for="inputId"
+            class="mb-1.5 flex items-center gap-1 text-[13px] font-medium leading-5 text-mistral-ink"
+        >
+            {{ label }}
+            <span v-if="required" class="text-mistral-danger" aria-hidden="true">*</span>
+        </label>
         <div ref="triggerRef" class="relative">
             <button
                 type="button"
@@ -138,7 +151,8 @@ watch(() => props.disabled, (val) => { if (val) close(); });
                 :aria-haspopup="true"
                 :aria-invalid="!!error"
                 :class="[
-                    'peer w-full min-h-[44px] pt-5 pb-1.5 px-3 text-start text-[14px] bg-mistral-canvas border rounded-md transition-all duration-200',
+                    'peer w-full min-h-[44px] px-3 text-start text-[14px] bg-mistral-canvas border rounded-md transition-all duration-200',
+                    isExternalLabel ? 'py-2.5' : 'pt-5 pb-1.5',
                     'focus:outline-none focus:ring-2 focus:ring-mistral-primary/20 focus:border-mistral-primary',
                     'disabled:bg-mistral-surface disabled:text-mistral-muted disabled:cursor-not-allowed',
                     error
@@ -148,7 +162,7 @@ watch(() => props.disabled, (val) => { if (val) close(); });
                 ]"
             >
                 <div v-if="selectedCount === 0" class="text-mistral-muted text-[14px]">
-                    {{ placeholder }}
+                    {{ isExternalLabel || isFloating ? placeholder : '' }}
                 </div>
                 <div v-else class="flex flex-wrap items-center gap-1.5">
                     <span
@@ -176,10 +190,10 @@ watch(() => props.disabled, (val) => { if (val) close(); });
             </button>
 
             <label
-                v-if="label"
+                v-if="label && !isExternalLabel"
                 :for="inputId"
                 :class="[
-                    'absolute text-[13px] font-medium pointer-events-none transition-all duration-200 origin-top-start z-10',
+                    'absolute font-medium pointer-events-none transition-all duration-200 origin-top-start z-10',
                     isFloating
                         ? 'top-1.5 start-3 text-[11px]'
                         : 'top-2.5 start-3 text-[14px]',
